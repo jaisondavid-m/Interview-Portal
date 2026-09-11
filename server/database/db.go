@@ -31,11 +31,24 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 		logLevel = logger.Error
 	}
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logLevel),
-	})
+	var db *gorm.DB
+	var err error
+	maxRetries := 10
+	retryInterval := 2 * time.Second
+
+	for i := 1; i <= maxRetries; i++ {
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+			Logger: logger.Default.LogMode(logLevel),
+		})
+		if err == nil {
+			break
+		}
+		log.Printf("[WARN] Attempt %d/%d: Failed to connect to MySQL database: %v. Retrying in %v...\n", i, maxRetries, err, retryInterval)
+		time.Sleep(retryInterval)
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MySQL database: %w", err)
+		return nil, fmt.Errorf("failed to connect to MySQL database after %d attempts: %w", maxRetries, err)
 	}
 
 	// Configure connection pool

@@ -295,56 +295,54 @@ func GetInterviewSession(c *gin.Context) {
 		return
 	}
 
-	// Identify role and peer
+	// Identify current user role
 	currentUserRole := "interviewee"
-	var peerUser *models.User
-
 	if session.InterviewerID == currentUserID {
 		currentUserRole = "interviewer"
-		peerUser = session.Interviewee
-	} else {
-		peerUser = session.Interviewer
 	}
 
 	type UserSummary struct {
-		ID         uint   `json:"id"`
 		Name       string `json:"name"`
-		Email      string `json:"email"`
-		RollNo     string `json:"roll_no"`
-		Department string `json:"department"`
+		Email      string `json:"email,omitempty"`
+		RollNo     string `json:"roll_no,omitempty"`
+		Department string `json:"department,omitempty"`
 	}
 
+	// Double-blind peer anonymity:
+	// A student only receives their own real profile. The peer's personal information
+	// (real name, email, roll number, department) is securely anonymized on the backend.
 	var peerSummary *UserSummary
-	if peerUser != nil {
-		peerSummary = &UserSummary{
-			ID:         peerUser.ID,
-			Name:       peerUser.Name,
-			Email:      peerUser.Email,
-			RollNo:     peerUser.RollNo,
-			Department: peerUser.Department,
-		}
-	}
-
 	var interviewerSummary *UserSummary
-	if session.Interviewer != nil {
+	var intervieweeSummary *UserSummary
+
+	if currentUserRole == "interviewer" {
+		// Current user is the interviewer -> show self details to self, anonymize candidate peer
 		interviewerSummary = &UserSummary{
-			ID:         session.Interviewer.ID,
 			Name:       session.Interviewer.Name,
 			Email:      session.Interviewer.Email,
 			RollNo:     session.Interviewer.RollNo,
 			Department: session.Interviewer.Department,
 		}
-	}
-
-	var intervieweeSummary *UserSummary
-	if session.Interviewee != nil {
 		intervieweeSummary = &UserSummary{
-			ID:         session.Interviewee.ID,
+			Name:       "Peer Candidate",
+			RollNo:     "CANDIDATE",
+			Department: "Student Peer",
+		}
+		peerSummary = intervieweeSummary
+	} else {
+		// Current user is the interviewee -> show self details to self, anonymize interviewer peer
+		intervieweeSummary = &UserSummary{
 			Name:       session.Interviewee.Name,
 			Email:      session.Interviewee.Email,
 			RollNo:     session.Interviewee.RollNo,
 			Department: session.Interviewee.Department,
 		}
+		interviewerSummary = &UserSummary{
+			Name:       "Peer Interviewer",
+			RollNo:     "INTERVIEWER",
+			Department: "Student Assessor",
+		}
+		peerSummary = interviewerSummary
 	}
 
 	c.JSON(http.StatusOK, gin.H{

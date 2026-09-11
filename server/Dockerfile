@@ -5,15 +5,20 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Install CA certificates, tzdata and git for private/public modules
+ENV GOTOOLCHAIN=auto
+
+# Install CA certificates, tzdata, and git
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Download dependencies first for caching
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy module files first
+COPY go.mod ./
+COPY go.sum* ./
 
-# Copy application source
+# Copy all source files
 COPY . .
+
+# Ensure dependencies are tidied and downloaded cleanly
+RUN go mod tidy && go mod download
 
 # Build lightweight, static binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server main.go
