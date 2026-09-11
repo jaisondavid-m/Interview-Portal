@@ -27,13 +27,9 @@ export default function Sidebar() {
   const menuItems = isAdmin
     ? [
         { name: 'User Management', path: '/admin/users', icon: Users },
-        { name: 'Student Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Peer Audio Room', path: '/interview', icon: Mic },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Peer Audio Room', path: '/interview', icon: Mic },
-        { name: 'Peer Feedback & Logs', path: '/history', icon: History },
       ];
 
   return (

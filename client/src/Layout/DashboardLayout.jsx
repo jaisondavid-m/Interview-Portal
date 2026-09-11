@@ -20,13 +20,9 @@ export default function DashboardLayout() {
   const mobileNavItems = isAdmin
     ? [
         { name: 'Users', path: '/admin/users', icon: Users },
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Audio Room', path: '/interview', icon: Mic },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Audio Room', path: '/interview', icon: Mic },
-        { name: 'Feedback', path: '/history', icon: History },
       ];
 
   return (
