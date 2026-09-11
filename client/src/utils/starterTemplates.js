@@ -2,7 +2,17 @@
 
 export function getStarterTemplate(question, language = 'javascript') {
   const title = question?.title || '';
-  const payload = question?.payload || {};
+  let payload = question?.payload || {};
+  if (typeof question?.payload_json === 'string' && question.payload_json) {
+    try {
+      payload = { ...payload, ...JSON.parse(question.payload_json) };
+    } catch (e) {}
+  }
+
+  // 1. Priority: Check if admin configured a custom starter template for this specific language
+  if (payload?.starter_templates && payload.starter_templates[language] && payload.starter_templates[language].trim()) {
+    return payload.starter_templates[language];
+  }
 
   // If question title matches Two Sum
   if (title.toLowerCase().includes('two sum')) {

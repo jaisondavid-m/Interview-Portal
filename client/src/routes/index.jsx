@@ -13,6 +13,7 @@ import Login from '../Pages/Login';
 import AdminUsers from '../Pages/AdminUsers';
 import AdminInterviewConfig from '../Pages/AdminInterviewConfig';
 import AdminInterviewHistory from '../Pages/AdminInterviewHistory';
+import AdminQuestionEditor from '../Pages/AdminQuestionEditor';
 import StudentInterviews from '../Pages/StudentInterviews';
 import InterviewRoom from '../Pages/InterviewRoom';
 import NotFound from '../Pages/NotFound';
@@ -85,6 +86,14 @@ export const router = createBrowserRouter([
           {
             path: 'admin/interviews/:trackId/levels/:levelId/questions',
             element: <AdminInterviewConfig />,
+          },
+          {
+            path: 'admin/interviews/:trackId/levels/:levelId/questions/new',
+            element: <AdminQuestionEditor />,
+          },
+          {
+            path: 'admin/interviews/:trackId/levels/:levelId/questions/:questionId/edit',
+            element: <AdminQuestionEditor />,
           },
           {
             path: 'admin/interviews/:trackId/levels/:levelId/questions/:questionId',

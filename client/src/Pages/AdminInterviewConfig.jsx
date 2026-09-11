@@ -527,7 +527,7 @@ export default function AdminInterviewConfig() {
                   <span>Back to Levels</span>
                 </button>
                 <button
-                  onClick={openNewQuestionModal}
+                  onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/new`)}
                   className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)]"
                 >
                   <Plus className="w-4 h-4" />
@@ -883,7 +883,7 @@ export default function AdminInterviewConfig() {
                   No questions uploaded for this level yet.
                 </p>
                 <button
-                  onClick={openNewQuestionModal}
+                  onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/new`)}
                   className="btn btn-primary text-xs py-2 px-4"
                 >
                   <Plus className="w-4 h-4" />
@@ -926,7 +926,7 @@ export default function AdminInterviewConfig() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openEditQuestionModal(q);
+                          navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${q.id}/edit`);
                         }}
                         className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded border border-transparent hover:border-[var(--border)] transition"
                         title="Edit Question"
@@ -1016,11 +1016,11 @@ export default function AdminInterviewConfig() {
                         <span>Back to Questions</span>
                       </button>
                       <button
-                        onClick={() => openEditQuestionModal(currentQuestion)}
+                        onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${currentQuestion.id}/edit`)}
                         className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
-                        <span>Edit</span>
+                        <span>Edit Question</span>
                       </button>
                       <button
                         onClick={() => {
