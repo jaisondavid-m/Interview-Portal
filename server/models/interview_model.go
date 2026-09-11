@@ -76,24 +76,31 @@ type MatchmakingQueueEntry struct {
 
 // InterviewSession represents a live peer-to-peer interview room between two students
 type InterviewSession struct {
-	ID            uint            `gorm:"primaryKey" json:"id"`
-	TrackID       uint            `gorm:"not null;index" json:"track_id"`
-	Track         *InterviewTrack `gorm:"foreignKey:TrackID" json:"track,omitempty"`
-	LevelID       uint            `gorm:"default:0" json:"level_id"`
-	Level         *InterviewLevel `gorm:"foreignKey:LevelID" json:"level,omitempty"`
-	InterviewerID uint            `gorm:"not null;index" json:"interviewer_id"`
-	Interviewer   *User           `gorm:"foreignKey:InterviewerID" json:"interviewer,omitempty"`
-	IntervieweeID uint            `gorm:"not null;index" json:"interviewee_id"`
-	Interviewee   *User           `gorm:"foreignKey:IntervieweeID" json:"interviewee,omitempty"`
-	Status        string          `gorm:"size:50;default:'in_progress';index" json:"status"` // in_progress, completed, cancelled
-	RolesSwitched bool            `gorm:"default:false" json:"roles_switched"`
-	SwitchCount   int             `gorm:"default:0" json:"switch_count"`
-	CurrentQIndex int             `gorm:"default:0" json:"current_question_index"`
-	Notes         string          `gorm:"type:text" json:"notes"`
-	StartedAt     time.Time       `json:"started_at"`
-	EndedAt       *time.Time      `json:"ended_at"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt  `gorm:"index" json:"-"`
+	ID                uint               `gorm:"primaryKey" json:"id"`
+	TrackID           uint               `gorm:"not null;index" json:"track_id"`
+	Track             *InterviewTrack    `gorm:"foreignKey:TrackID" json:"track,omitempty"`
+	LevelID           uint               `gorm:"default:0" json:"level_id"`
+	Level             *InterviewLevel    `gorm:"foreignKey:LevelID" json:"level,omitempty"`
+	InterviewerID     uint               `gorm:"not null;index" json:"interviewer_id"`
+	Interviewer       *User              `gorm:"foreignKey:InterviewerID" json:"interviewer,omitempty"`
+	IntervieweeID     uint               `gorm:"not null;index" json:"interviewee_id"`
+	Interviewee       *User              `gorm:"foreignKey:IntervieweeID" json:"interviewee,omitempty"`
+	Status            string             `gorm:"size:50;default:'in_progress';index" json:"status"` // in_progress, completed, cancelled
+	Round             int                `gorm:"default:1" json:"round"`                            // 1 = Round 1 (Student A interviewing), 2 = Round 2 (Student B interviewing)
+	CurrentQuestionID uint               `gorm:"default:0;index" json:"current_question_id"`
+	CurrentQuestion   *InterviewQuestion `gorm:"foreignKey:CurrentQuestionID" json:"current_question,omitempty"`
+	Round1QuestionID  uint               `gorm:"default:0" json:"round1_question_id"`
+	Round2QuestionID  uint               `gorm:"default:0" json:"round2_question_id"`
+	CandidateCode     string             `gorm:"type:longtext" json:"candidate_code"`
+	CandidateLang     string             `gorm:"size:50;default:'javascript'" json:"candidate_lang"`
+	RolesSwitched     bool               `gorm:"default:false" json:"roles_switched"`
+	SwitchCount       int                `gorm:"default:0" json:"switch_count"` // Strictly 0 or 1 (max 1 one-time switch)
+	CurrentQIndex     int                `gorm:"default:0" json:"current_question_index"`
+	Notes             string             `gorm:"type:text" json:"notes"`
+	StartedAt         time.Time          `json:"started_at"`
+	EndedAt           *time.Time         `json:"ended_at"`
+	CreatedAt         time.Time          `json:"created_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
+	DeletedAt         gorm.DeletedAt     `gorm:"index" json:"-"`
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Video,
@@ -14,9 +14,19 @@ import {
   Loader2,
   ArrowRight,
   Shield,
-  HelpCircle
+  HelpCircle,
+  Code2,
+  Lightbulb,
+  CheckSquare,
+  FileText,
+  Eye,
+  Lock,
+  ChevronRight,
+  Check
 } from 'lucide-react';
 import api from '../api/axios';
+import CodeEditor from '../Components/CodeEditor';
+import TestCasesConsole from '../Components/TestCasesConsole';
 
 export default function InterviewRoom() {
   const { sessionId } = useParams();
@@ -30,11 +40,24 @@ export default function InterviewRoom() {
   const [switching, setSwitching] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
 
+  // Active interviewer tab
+  const [interviewerTab, setInterviewerTab] = useState('problem'); // 'problem' | 'hints' | 'solution' | 'testcases'
+
+  // Code editor local state
+  const [code, setCode] = useState('');
+  const [language, setLanguage] = useState('javascript');
+  const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [runResults, setRunResults] = useState(null);
+  const [submissionResult, setSubmissionResult] = useState(null);
+
   const pollRef = useRef(null);
   const timerRef = useRef(null);
+  const syncTimeoutRef = useRef(null);
+  const lastSyncCodeRef = useRef('');
 
   // Fetch session data
-  const fetchSession = async () => {
+  const fetchSession = useCallback(async () => {
     try {
       const res = await api.get(`/interviews/sessions/${sessionId}`);
       const data = res?.data || res;
@@ -44,9 +67,13 @@ export default function InterviewRoom() {
         setPeerUser(data.peer || null);
         setError('');
 
-        if (data.session.status === 'completed') {
-          // If completed by peer
-          setError('This interview session has ended.');
+        // If candidate code is received from server and user is Interviewer (or code was initialized), update editor
+        if (data.current_user_role === 'interviewer') {
+          setCode(data.session.candidate_code || '');
+          setLanguage(data.session.candidate_lang || 'javascript');
+        } else if (!code && data.session.candidate_code) {
+          setCode(data.session.candidate_code);
+          setLanguage(data.session.candidate_lang || 'javascript');
         }
       }
     } catch (err) {
@@ -54,12 +81,12 @@ export default function InterviewRoom() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId, code]);
 
   useEffect(() => {
     fetchSession();
 
-    // Poll session state every 2 seconds to synchronize role switches & session status
+    // Poll session state every 2 seconds to synchronize candidate code, role switch, and status
     pollRef.current = setInterval(() => {
       fetchSession();
     }, 2000);
@@ -67,7 +94,7 @@ export default function InterviewRoom() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [sessionId]);
+  }, [fetchSession]);
 
   // Session elapsed timer
   useEffect(() => {
@@ -81,15 +108,80 @@ export default function InterviewRoom() {
     };
   }, []);
 
-  // Format seconds -> MM:SS
-  const formatTime = (secs) => {
-    const mins = Math.floor(secs / 60);
-    const rem = secs % 60;
-    return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+  // Sync candidate code to server (debounced)
+  const handleCodeChange = (newCode) => {
+    setCode(newCode);
+    if (currentUserRole !== 'interviewee') return;
+
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(async () => {
+      if (newCode !== lastSyncCodeRef.current) {
+        lastSyncCodeRef.current = newCode;
+        try {
+          await api.post(`/interviews/sessions/${sessionId}/code`, {
+            code: newCode,
+            lang: language,
+          });
+        } catch (e) {
+          // ignore transient sync error
+        }
+      }
+    }, 800);
   };
 
-  // Switch Roles action
+  const handleLanguageChange = async (newLang) => {
+    setLanguage(newLang);
+    if (currentUserRole === 'interviewee') {
+      try {
+        await api.post(`/interviews/sessions/${sessionId}/code`, {
+          code: code,
+          lang: newLang,
+        });
+      } catch (e) {
+        // ignore
+      }
+    }
+  };
+
+  // Run Code
+  const handleRunCode = async (options = { isCustom: false, customInput: '' }) => {
+    setIsRunning(true);
+    try {
+      const res = await api.post(`/interviews/sessions/${sessionId}/run`, {
+        code,
+        lang: language,
+        is_custom: options.isCustom,
+        custom_input: options.customInput,
+      });
+      const data = res?.data || res;
+      setRunResults(data);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Execution error');
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  // Submit Code
+  const handleSubmitCode = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await api.post(`/interviews/sessions/${sessionId}/submit`, {
+        code,
+        lang: language,
+      });
+      const data = res?.data || res;
+      setSubmissionResult(data);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Submission error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Switch Roles action (Allowed strictly ONCE)
   const handleSwitchRoles = async () => {
+    if (!window.confirm('Finish Round 1 and switch roles to Round 2? A new question will be assigned to the new candidate.')) return;
     try {
       setSwitching(true);
       const res = await api.post(`/interviews/sessions/${sessionId}/switch-roles`);
@@ -97,6 +189,8 @@ export default function InterviewRoom() {
       if (data?.current_user_role) {
         setCurrentUserRole(data.current_user_role);
       }
+      setRunResults(null);
+      setSubmissionResult(null);
       await fetchSession();
     } catch (err) {
       alert(err.response?.data?.message || err.message || 'Failed to switch roles.');
@@ -107,13 +201,20 @@ export default function InterviewRoom() {
 
   // End Interview Session
   const handleEndSession = async () => {
-    if (!window.confirm('Are you sure you want to end this interview session?')) return;
+    if (!window.confirm('Are you sure you want to finish and end this interview session?')) return;
     try {
       await api.post(`/interviews/sessions/${sessionId}/end`);
       navigate('/interviews');
     } catch (e) {
       navigate('/interviews');
     }
+  };
+
+  // Format seconds -> MM:SS
+  const formatTime = (secs) => {
+    const mins = Math.floor(secs / 60);
+    const rem = secs % 60;
+    return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
   };
 
   if (loading) {
@@ -143,39 +244,76 @@ export default function InterviewRoom() {
 
   const track = sessionData?.track;
   const level = sessionData?.level;
-  const questions = level?.questions || [];
-  const interviewer = sessionData?.interviewer;
-  const interviewee = sessionData?.interviewee;
+  const question = sessionData?.current_question;
+  const payload = question?.payload || {};
+  const currentRound = sessionData?.round || 1;
+  const switchCount = sessionData?.switch_count || 0;
+  const isCompleted = sessionData?.status === 'completed';
+
+  // Extract open test cases
+  const openCases = payload?.open_test_cases || payload?.test_cases || [
+    { input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' },
+    { input: 'nums = [3,2,4], target = 6', output: '[1,2]' },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Top Header Bar */}
-      <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="pb-4 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-[var(--green)] animate-pulse"></span>
+          <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex-wrap">
+            <span className="w-2.5 h-2.5 rounded-full bg-[var(--green)] animate-pulse" />
             <span className="font-bold text-[var(--green)]">Live Peer Session</span>
             <span>•</span>
             <span>Room #{sessionId}</span>
+            <span>•</span>
+            <span className={`px-2 py-0.5 rounded font-bold ${
+              currentRound === 1
+                ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]'
+                : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+            }`}>
+              Round {currentRound} of 2 {switchCount >= 1 ? '(Final Round)' : ''}
+            </span>
           </div>
-          <h1 className="text-[22px] font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-[20px] font-bold text-[var(--text-primary)] tracking-tight">
             {track?.title || 'Mock Interview Domain'}
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
             Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{level?.mode || 'coding'}</strong>
           </p>
         </div>
 
-        {/* Live Timer & End Button */}
-        <div className="flex items-center gap-3 self-start md:self-auto flex-wrap">
-          <div className="bg-[var(--bg-card)] px-3.5 py-2 rounded-[var(--radius-sm)] border border-[var(--border)] flex items-center gap-2 font-mono text-[13px] text-[var(--text-primary)] shadow-[var(--shadow-sm)]">
-            <Clock className="w-4 h-4 text-[var(--accent)]" />
+        {/* Live Timer, Switch Role Button & End Button */}
+        <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
+          <div className="bg-[var(--bg-card)] px-3 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] flex items-center gap-2 font-mono text-[12px] text-[var(--text-primary)] shadow-[var(--shadow-sm)]">
+            <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Session: <strong>{formatTime(elapsedSecs)}</strong></span>
           </div>
 
+          {/* ONE-TIME ROLE SWAP BUTTON */}
+          {switchCount === 0 && !isCompleted ? (
+            <button
+              onClick={handleSwitchRoles}
+              disabled={switching}
+              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-[var(--shadow-sm)] border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)]"
+              title="Finish Round 1 and switch roles to Round 2 (Once only)"
+            >
+              {switching ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
+              ) : (
+                <Repeat className="w-3.5 h-3.5 text-[var(--accent)]" />
+              )}
+              <span>Finish Round 1 & Swap Roles</span>
+            </button>
+          ) : (
+            <span className="text-[11px] font-mono text-[var(--text-muted)] px-2.5 py-1 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
+              {isCompleted ? 'Session Ended' : 'Final Round (Swap Locked)'}
+            </span>
+          )}
+
           <button
             onClick={handleEndSession}
-            className="btn btn-danger text-xs py-2 px-3.5 flex items-center gap-1.5"
+            className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>End Interview</span>
@@ -183,149 +321,295 @@ export default function InterviewRoom() {
         </div>
       </div>
 
-      {/* Role Announcement Banner */}
-      <div className={`p-4 rounded-[var(--radius-md)] border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+      {/* Role Banner */}
+      <div className={`p-3 rounded-[var(--radius-sm)] border flex items-center justify-between text-xs transition-all ${
         currentUserRole === 'interviewer'
           ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--text-primary)]'
           : 'bg-[var(--green-bg)] border-[var(--green)]/30 text-[var(--text-primary)]'
       }`}>
-        <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-[var(--radius-sm)] shadow-[var(--shadow-sm)] ${
-            currentUserRole === 'interviewer'
-              ? 'bg-[var(--accent)] text-white'
-              : 'bg-[var(--green)] text-white'
-          }`}>
-            {currentUserRole === 'interviewer' ? <Shield className="w-5 h-5" /> : <Award className="w-5 h-5" />}
-          </div>
-          <div>
-            <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-[var(--text-muted)]">
-              Your Current Role
-            </span>
-            <h3 className="text-[16px] font-bold">
-              {currentUserRole === 'interviewer' ? 'Interviewer (Assessor)' : 'Candidate (Interviewee)'}
-            </h3>
-            <p className="text-[12px] text-[var(--text-secondary)]">
-              {currentUserRole === 'interviewer'
-                ? 'You are conducting the interview. Ask questions, observe candidate logic, and provide constructive guidance.'
-                : 'You are answering. Explain your thought process, solve problems step by step, and collaborate with your interviewer.'}
-            </p>
-          </div>
-        </div>
-
-        {/* Switch Roles Button */}
-        <button
-          onClick={handleSwitchRoles}
-          disabled={switching}
-          className="btn btn-secondary text-xs py-2.5 px-4 flex items-center gap-2 font-bold shadow-[var(--shadow-sm)] hover:border-[var(--accent)] transition-all shrink-0"
-        >
-          {switching ? (
-            <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)]" />
+        <div className="flex items-center gap-2.5">
+          {currentUserRole === 'interviewer' ? (
+            <Shield className="w-4 h-4 text-[var(--accent)]" />
           ) : (
-            <Repeat className="w-4 h-4 text-[var(--accent)]" />
+            <Award className="w-4 h-4 text-[var(--green)]" />
           )}
-          <span>Switch Roles</span>
-          {sessionData?.switch_count > 0 && (
-            <span className="text-[10px] font-mono bg-[var(--bg-raised)] px-1.5 py-0.5 rounded border border-[var(--border)]">
-              {sessionData.switch_count}x
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Participants Dual Cards (Anonymized for peer privacy) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Card 1: Interviewer */}
-        <div className={`panel-card p-5 border-2 transition-all ${
-          currentUserRole === 'interviewer' ? 'border-[var(--accent)] bg-[var(--bg-card)]' : 'border-[var(--border)] bg-[var(--bg-raised)]'
-        }`}>
-          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] mb-3">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-              <Shield className="w-3.5 h-3.5" />
-              <span>Interviewer</span>
-            </span>
-            {currentUserRole === 'interviewer' ? (
-              <span className="text-[11px] font-mono text-[var(--accent)] font-bold">
-                (You)
-              </span>
-            ) : (
-              <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                Peer
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center font-bold text-[16px] text-[var(--accent)]">
-              {currentUserRole === 'interviewer' ? 'ME' : 'P1'}
-            </div>
-            <div className="space-y-0.5">
-              <h4 className="text-[15px] font-bold text-[var(--text-primary)]">
-                {currentUserRole === 'interviewer' ? 'You (Interviewer)' : 'Peer Interviewer'}
-              </h4>
-              <p className="text-[12px] font-mono text-[var(--text-muted)]">
-                {currentUserRole === 'interviewer' ? 'Conducting Assessment' : 'Assessing Session'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Interviewee / Candidate */}
-        <div className={`panel-card p-5 border-2 transition-all ${
-          currentUserRole === 'interviewee' ? 'border-[var(--green)] bg-[var(--bg-card)]' : 'border-[var(--border)] bg-[var(--bg-raised)]'
-        }`}>
-          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] mb-3">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
-              <Award className="w-3.5 h-3.5" />
-              <span>Candidate</span>
-            </span>
-            {currentUserRole === 'interviewee' ? (
-              <span className="text-[11px] font-mono text-[var(--green)] font-bold">
-                (You)
-              </span>
-            ) : (
-              <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                Peer
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-full bg-[var(--green-bg)] border border-[var(--green)]/30 flex items-center justify-center font-bold text-[16px] text-[var(--green)]">
-              {currentUserRole === 'interviewee' ? 'ME' : 'P2'}
-            </div>
-            <div className="space-y-0.5">
-              <h4 className="text-[15px] font-bold text-[var(--text-primary)]">
-                {currentUserRole === 'interviewee' ? 'You (Candidate)' : 'Peer Candidate'}
-              </h4>
-              <p className="text-[12px] font-mono text-[var(--text-muted)]">
-                {currentUserRole === 'interviewee' ? 'Answering Assessment' : 'Interviewee'}
-              </p>
-            </div>
-          </div>
+          <span>
+            You are currently the <strong>{currentUserRole === 'interviewer' ? 'Interviewer (Assessor)' : 'Candidate (Interviewee)'}</strong> in Round {currentRound}.
+            {currentUserRole === 'interviewer'
+              ? ' You have full visibility into the solutions, rubrics, hints, and test cases.'
+              : ' Write and execute your code in the shared workspace. Your interviewer is observing live.'}
+          </span>
         </div>
       </div>
 
-      {/* Workspace / Stage Container */}
-      <div className="panel-card p-8 text-center space-y-4 bg-[var(--bg-card)] border border-[var(--border)]">
-        <div className="w-14 h-14 rounded-2xl bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center text-[var(--accent)] mx-auto shadow-[var(--shadow-sm)]">
-          <Sparkles className="w-7 h-7" />
-        </div>
-        <div className="space-y-1.5 max-w-lg mx-auto">
-          <h3 className="text-[18px] font-bold text-[var(--text-primary)]">
-            Connected to Peer Workspace
-          </h3>
-          <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-            Both peers are connected in real-time. You can practice domain assessment, communicate, and swap roles at any time using the <strong>Switch Roles</strong> button.
-          </p>
+      {/* Main Dual-Panel Workspace Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        {/* ============================================================ */}
+        {/* LEFT PANEL: Problem & Assessor Guide */}
+        {/* ============================================================ */}
+        <div className="lg:col-span-5 flex flex-col space-y-3">
+          {/* INTERVIEWER PERSPECTIVE */}
+          {currentUserRole === 'interviewer' ? (
+            <div className="panel-card overflow-hidden border border-[var(--border)]">
+              {/* Interviewer Navigation Tabs */}
+              <div className="flex items-center gap-1 p-2 bg-[var(--bg-raised)] border-b border-[var(--border)] text-[11px] font-mono font-bold uppercase tracking-wider overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setInterviewerTab('problem')}
+                  className={`px-2.5 py-1.5 rounded transition ${
+                    interviewerTab === 'problem'
+                      ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Overview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInterviewerTab('hints')}
+                  className={`px-2.5 py-1.5 rounded transition ${
+                    interviewerTab === 'hints'
+                      ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Hints & Tips
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInterviewerTab('solution')}
+                  className={`px-2.5 py-1.5 rounded transition ${
+                    interviewerTab === 'solution'
+                      ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Approach & Rubrics
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInterviewerTab('testcases')}
+                  className={`px-2.5 py-1.5 rounded transition ${
+                    interviewerTab === 'testcases'
+                      ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  All Cases ({openCases.length + (payload.hidden_test_cases?.length || 2)})
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="p-4 space-y-4 max-h-[560px] overflow-y-auto text-[13px]">
+                {/* 1. Problem Overview */}
+                {interviewerTab === 'problem' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
+                        {question?.title || 'Coding Problem Assessment'}
+                      </h3>
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-bold">
+                        {question?.difficulty || 'Medium'}
+                      </span>
+                    </div>
+
+                    <div className="text-[13px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
+                      {question?.prompt || 'No prompt provided.'}
+                    </div>
+
+                    {payload?.constraints && (
+                      <div className="bg-[var(--bg-raised)] p-3 rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
+                        <span className="font-bold text-[var(--text-primary)] block">Constraints & Limits:</span>
+                        <div className="text-[var(--text-muted)] whitespace-pre-line">
+                          {payload.constraints}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. Hints & Guiding Questions */}
+                {interviewerTab === 'hints' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5 text-[12px] font-bold text-[var(--accent)]">
+                      <Lightbulb className="w-4 h-4" />
+                      <span>Assessor Hints (Share as needed if candidate struggles)</span>
+                    </div>
+
+                    {payload?.hints && payload.hints.length > 0 ? (
+                      <div className="space-y-2">
+                        {payload.hints.map((hint, i) => (
+                          <div key={i} className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                            <span className="font-bold text-[var(--accent)] block mb-1">Hint {i + 1}:</span>
+                            {hint}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[12px] text-[var(--text-muted)] italic">
+                        No specific hints defined. Probe on brute force vs optimal lookup tradeoffs.
+                      </p>
+                    )}
+
+                    {payload?.interview_tips && (
+                      <div className="p-3 bg-[var(--accent-dim)] rounded border border-[var(--border-accent)] text-[12px] space-y-1">
+                        <span className="font-bold text-[var(--accent)] block">Interview Tips:</span>
+                        <ul className="list-disc pl-4 space-y-1 text-[var(--text-secondary)]">
+                          {payload.interview_tips.map((tip, idx) => (
+                            <li key={idx}>{tip}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. Expected Approach & Rubrics */}
+                {interviewerTab === 'solution' && (
+                  <div className="space-y-3">
+                    {payload?.expected_approach && (
+                      <div className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] space-y-1">
+                        <span className="font-bold text-[var(--green)] text-[12px] block">Expected Optimal Approach:</span>
+                        <div className="text-[12px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
+                          {payload.expected_approach}
+                        </div>
+                      </div>
+                    )}
+
+                    {payload?.expected_complexity && (
+                      <div className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
+                        <span className="font-bold text-[var(--text-primary)] block">Expected Complexity:</span>
+                        <div className="text-[var(--text-muted)] whitespace-pre-line">
+                          {payload.expected_complexity}
+                        </div>
+                      </div>
+                    )}
+
+                    {payload?.rubrics && (
+                      <div className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] space-y-1">
+                        <span className="font-bold text-[var(--accent)] text-[12px] block">Evaluation Rubrics:</span>
+                        <ul className="list-disc pl-4 space-y-1 text-[12px] text-[var(--text-secondary)]">
+                          {payload.rubrics.map((r, i) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 4. All Test Cases (Open & Hidden) */}
+                {interviewerTab === 'testcases' && (
+                  <div className="space-y-3 font-mono text-[12px]">
+                    <div>
+                      <span className="font-bold text-[var(--text-muted)] text-[11px] uppercase block mb-1">
+                        Open Sample Test Cases:
+                      </span>
+                      {openCases.map((tc, idx) => (
+                        <div key={idx} className="p-2.5 bg-[var(--bg-raised)] rounded border border-[var(--border)] mb-2 space-y-1">
+                          <div className="text-[var(--text-secondary)]">Input: {tc.input}</div>
+                          <div className="text-[var(--green)] font-bold">Expected: {tc.output}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {payload?.hidden_test_cases && (
+                      <div>
+                        <span className="font-bold text-[var(--accent)] text-[11px] uppercase block mb-1">
+                          Hidden Verification Test Cases:
+                        </span>
+                        {payload.hidden_test_cases.map((tc, idx) => (
+                          <div key={idx} className="p-2.5 bg-[var(--accent-dim)] rounded border border-[var(--border-accent)] mb-2 space-y-1">
+                            <div className="text-[var(--text-secondary)]">Input: {tc.input}</div>
+                            <div className="text-[var(--accent)] font-bold">Expected: {tc.output}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ============================================================ */
+            /* CANDIDATE PERSPECTIVE (Stripped problem description only) */
+            /* ============================================================ */
+            <div className="panel-card p-5 border border-[var(--border)] space-y-4 max-h-[560px] overflow-y-auto">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
+                  Question #{question?.id || 1} • {question?.difficulty || 'Medium'}
+                </span>
+                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                  Mode: {question?.type || 'coding'}
+                </span>
+              </div>
+
+              <h2 className="text-[18px] font-bold text-[var(--text-primary)]">
+                {question?.title || 'Problem Description'}
+              </h2>
+
+              <div className="text-[13px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
+                {question?.prompt || 'No prompt provided.'}
+              </div>
+
+              {payload?.constraints && (
+                <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)] font-mono text-[11px] space-y-1">
+                  <span className="font-bold text-[var(--text-primary)] block">Constraints & Limits:</span>
+                  <div className="text-[var(--text-muted)] whitespace-pre-line">
+                    {payload.constraints}
+                  </div>
+                </div>
+              )}
+
+              {/* Open Sample Cases */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-mono uppercase font-bold text-[var(--text-muted)] block">
+                  Sample Test Cases:
+                </span>
+                {openCases.map((tc, idx) => (
+                  <div key={idx} className="bg-[var(--bg-raised)] p-3 rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
+                    <span className="font-bold text-[var(--accent)] block">Example {idx + 1}:</span>
+                    <div><span className="text-[var(--text-muted)]">Input:</span> {tc.input}</div>
+                    <div><span className="text-[var(--text-muted)]">Output:</span> <strong className="text-[var(--green)]">{tc.output}</strong></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
-          <div className="bg-[var(--bg-raised)] px-4 py-2 rounded-[var(--radius-sm)] border border-[var(--border)] text-[12px] font-mono text-[var(--text-muted)]">
-            Available Questions: <strong>{questions.length}</strong>
+        {/* ============================================================ */}
+        {/* RIGHT PANEL: Shared CodeMirror 6 Editor & Test Console */}
+        {/* ============================================================ */}
+        <div className="lg:col-span-7 flex flex-col space-y-3">
+          {/* CodeMirror 6 Editor */}
+          <div className="h-[360px]">
+            <CodeEditor
+              code={code}
+              onChange={handleCodeChange}
+              language={language}
+              onLanguageChange={handleLanguageChange}
+              isEditable={currentUserRole === 'interviewee'}
+              onResetCode={() => {
+                if (payload?.starter_code) {
+                  handleCodeChange(payload.starter_code);
+                }
+              }}
+              starterCode={payload?.starter_code}
+            />
           </div>
-          <div className="bg-[var(--bg-raised)] px-4 py-2 rounded-[var(--radius-sm)] border border-[var(--border)] text-[12px] font-mono text-[var(--text-muted)]">
-            Mode: <strong className="uppercase">{level?.mode || 'coding'}</strong>
-          </div>
+
+          {/* Test Cases Runner Console */}
+          <TestCasesConsole
+            openTestCases={openCases}
+            onRunCode={handleRunCode}
+            onSubmitCode={handleSubmitCode}
+            isRunning={isRunning}
+            isSubmitting={isSubmitting}
+            isCandidate={currentUserRole === 'interviewee'}
+            runResults={runResults}
+            submissionResult={submissionResult}
+          />
         </div>
       </div>
     </div>
