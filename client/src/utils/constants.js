@@ -1,16 +1,16 @@
 export const APP_NAME = 'MockMate';
+export const COLLEGE_PORTAL_NAME = 'Campus Mock Interview Portal';
 
 export const NAV_LINKS = [
-  { name: 'Home', path: '/' },
   { name: 'Dashboard', path: '/dashboard' },
-  { name: 'Find Peer & Practice', path: '/interview' },
-  { name: 'Peer Feedback & History', path: '/history' },
+  { name: 'Peer Audio Room', path: '/interview' },
+  { name: 'Feedback & Logs', path: '/history' },
 ];
 
 export const INTERVIEW_TRACKS = [
-  { id: 'fullstack', title: 'Full Stack Web Development', peersOnline: 24, level: 'Intermediate' },
-  { id: 'golang', title: 'Go Backend & Systems', peersOnline: 18, level: 'Advanced' },
-  { id: 'dsa', title: 'Data Structures & Algorithms', peersOnline: 42, level: 'All Levels' },
-  { id: 'system-design', title: 'System Design & Architecture', peersOnline: 15, level: 'Senior' },
-  { id: 'behavioral', title: 'Behavioral & Leadership Rounds', peersOnline: 19, level: 'All Levels' },
+  { id: 'fullstack', title: 'Full Stack Web Development', peersOnline: 14, level: 'Intermediate' },
+  { id: 'golang', title: 'Go Backend & Systems', peersOnline: 8, level: 'Advanced' },
+  { id: 'dsa', title: 'Data Structures & Algorithms', peersOnline: 26, level: 'All Batches' },
+  { id: 'system-design', title: 'System Design & Architecture', peersOnline: 7, level: 'Final Year' },
+  { id: 'behavioral', title: 'Campus Placement HR & Behavioral', peersOnline: 18, level: 'All Batches' },
 ];

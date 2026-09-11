@@ -1,24 +1,31 @@
 import React, { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
-import { Mic, Menu, X, Users, Sparkles } from 'lucide-react';
-import { NAV_LINKS, APP_NAME } from '../utils/constants';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Mic, Menu, X, LogOut, GraduationCap, User } from 'lucide-react';
+import { NAV_LINKS, APP_NAME, COLLEGE_PORTAL_NAME } from '../utils/constants';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
 
   return (
     <nav className="sticky top-0 z-50 bg-[var(--bg-card)]/90 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)]">
       <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center justify-between">
         
-        {/* Brand Logo with accent dot */}
+        {/* Brand Logo & College Badge */}
         <Link 
-          to="/" 
+          to="/dashboard" 
           className="font-mono font-semibold text-[13px] tracking-[0.06em] text-[var(--accent)] flex items-center gap-2 no-underline group"
         >
           <span className="w-2 h-2 rounded-full bg-[var(--accent)] group-hover:scale-125 transition-transform" />
           <span className="font-bold tracking-tight">{APP_NAME}</span>
-          <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/20 ml-1">
-            PEER AUDIO
+          <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] ml-1 flex items-center gap-1">
+            <GraduationCap className="w-3 h-3" />
+            <span>CAMPUS PORTAL</span>
           </span>
         </Link>
 
@@ -28,7 +35,6 @@ export default function Navbar() {
             <NavLink
               key={link.path}
               to={link.path}
-              end={link.path === '/'}
               className={({ isActive }) =>
                 `px-3.5 py-1.5 rounded-[var(--radius-sm)] text-[13px] font-medium font-ui transition-all duration-150 ${
                   isActive
@@ -45,18 +51,21 @@ export default function Navbar() {
         {/* Action CTA Buttons */}
         <div className="hidden md:flex items-center gap-3">
           <Link
-            to="/login"
-            className="px-3 py-1.5 text-[13px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded-[var(--radius-sm)] transition"
-          >
-            Sign In
-          </Link>
-          <Link
             to="/interview"
             className="btn btn-primary text-[13px] py-1.5 px-3.5"
           >
             <Mic className="w-3.5 h-3.5" />
             <span>Match Peer</span>
           </Link>
+
+          <button
+            onClick={handleLogout}
+            className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] rounded-[var(--radius-sm)] transition flex items-center gap-1.5 text-[12px] font-medium"
+            title="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
         </div>
 
         {/* Mobile Hamburger Button */}
@@ -92,13 +101,6 @@ export default function Navbar() {
           ))}
           <div className="pt-3 border-t border-[var(--border)] flex flex-col gap-2">
             <Link
-              to="/login"
-              onClick={() => setIsOpen(false)}
-              className="btn btn-secondary w-full text-xs py-2"
-            >
-              Sign In
-            </Link>
-            <Link
               to="/interview"
               onClick={() => setIsOpen(false)}
               className="btn btn-primary w-full text-xs py-2"
@@ -106,6 +108,16 @@ export default function Navbar() {
               <Mic className="w-3.5 h-3.5" />
               <span>Match Student Interview</span>
             </Link>
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                handleLogout();
+              }}
+              className="btn btn-secondary w-full text-xs py-2 text-[var(--red)]"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       )}

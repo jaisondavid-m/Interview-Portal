@@ -1,56 +1,32 @@
-import { createBrowserRouter } from 'react-router-dom';
+import React from 'react';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 // Layouts
-import RootLayout from '../Layout/RootLayout';
 import DashboardLayout from '../Layout/DashboardLayout';
 import AuthLayout from '../Layout/AuthLayout';
 
 // Pages
-import Home from '../Pages/Home';
 import Dashboard from '../Pages/Dashboard';
 import MockInterview from '../Pages/MockInterview';
 import History from '../Pages/History';
 import Login from '../Pages/Login';
 import Register from '../Pages/Register';
-import NotFound from '../Pages/NotFound';
+import ProtectedRoute from '../Components/ProtectedRoute';
+
+// Helper component for root redirect
+function RootRedirect() {
+  const token = localStorage.getItem('token');
+  return <Navigate to={token ? '/dashboard' : '/login'} replace />;
+}
 
 export const router = createBrowserRouter([
-  // Main Public Routes with standard Navbar & Footer
+  // Root Redirect -> Directly go to login or dashboard
   {
     path: '/',
-    element: <RootLayout />,
-    children: [
-      {
-        index: true,
-        element: <Home />,
-      },
-      {
-        path: 'history',
-        element: <History />,
-      },
-      {
-        path: '*',
-        element: <NotFound />,
-      },
-    ],
+    element: <RootRedirect />,
   },
 
-  // Authenticated / App Workspace Routes with Sidebar
-  {
-    element: <DashboardLayout />,
-    children: [
-      {
-        path: 'dashboard',
-        element: <Dashboard />,
-      },
-      {
-        path: 'interview',
-        element: <MockInterview />,
-      },
-    ],
-  },
-
-  // Auth Routes (Sign In / Sign Up)
+  // Auth Routes (College Student Login / Registration)
   {
     element: <AuthLayout />,
     children: [
@@ -63,5 +39,35 @@ export const router = createBrowserRouter([
         element: <Register />,
       },
     ],
+  },
+
+  // Protected Internal College Workspace (Requires Login)
+  {
+    element: <ProtectedRoute />,
+    children: [
+      {
+        element: <DashboardLayout />,
+        children: [
+          {
+            path: 'dashboard',
+            element: <Dashboard />,
+          },
+          {
+            path: 'interview',
+            element: <MockInterview />,
+          },
+          {
+            path: 'history',
+            element: <History />,
+          },
+        ],
+      },
+    ],
+  },
+
+  // Fallback -> Redirect to root (login)
+  {
+    path: '*',
+    element: <RootRedirect />,
   },
 ]);

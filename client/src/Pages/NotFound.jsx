@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Home } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
 
 export default function NotFound() {
   return (
@@ -13,16 +13,16 @@ export default function NotFound() {
           Page Not Found
         </h2>
         <p className="text-[13px] text-[var(--text-secondary)] max-w-sm mx-auto">
-          The link you followed may be broken, or the page may have been removed.
+          The requested campus page does not exist or you do not have permission to view it.
         </p>
       </div>
       <div className="pt-2">
         <Link
-          to="/"
+          to="/dashboard"
           className="btn btn-primary text-xs py-2 px-4 shadow-[var(--shadow-sm)]"
         >
-          <Home className="w-3.5 h-3.5" />
-          <span>Back to Home</span>
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          <span>Go to Dashboard</span>
         </Link>
       </div>
     </div>
