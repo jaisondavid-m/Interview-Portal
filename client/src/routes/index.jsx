@@ -11,6 +11,7 @@ import MockInterview from '../Pages/MockInterview';
 import History from '../Pages/History';
 import Login from '../Pages/Login';
 import AdminUsers from '../Pages/AdminUsers';
+import AdminInterviewConfig from '../Pages/AdminInterviewConfig';
 import NotFound from '../Pages/NotFound';
 
 // Route Guards
@@ -65,6 +66,10 @@ export const router = createBrowserRouter([
           {
             path: 'admin/users',
             element: <AdminUsers />,
+          },
+          {
+            path: 'admin/interviews',
+            element: <AdminInterviewConfig />,
           },
         ],
       },

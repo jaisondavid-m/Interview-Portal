@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Mic, History, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, SlidersHorizontal } from 'lucide-react';
 import api from '../api/axios';
 
 export default function Sidebar() {
@@ -27,6 +27,7 @@ export default function Sidebar() {
   const menuItems = isAdmin
     ? [
         { name: 'User Management', path: '/admin/users', icon: Users },
+        { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },

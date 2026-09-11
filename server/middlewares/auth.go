@@ -102,18 +102,37 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// RequireAdmin ensures the authenticated user is an administrator
-func RequireAdmin() gin.HandlerFunc {
+// RequireRole ensures the authenticated user possesses one of the allowed roles
+func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, exists := c.Get("userRole")
-		if !exists || role != "admin" {
+		roleVal, exists := c.Get("userRole")
+		if !exists {
 			c.JSON(http.StatusForbidden, gin.H{
 				"status":  "error",
-				"message": "Access restricted to administrators only",
+				"message": "Access denied. User role not identified.",
 			})
 			c.Abort()
 			return
 		}
-		c.Next()
+
+		userRole := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", roleVal)))
+		for _, allowed := range allowedRoles {
+			if userRole == strings.ToLower(strings.TrimSpace(allowed)) {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{
+			"status":  "error",
+			"message": "Access restricted. You do not have permission to access this resource.",
+		})
+		c.Abort()
 	}
 }
+
+// RequireAdmin ensures the authenticated user is strictly an administrator
+func RequireAdmin() gin.HandlerFunc {
+	return RequireRole("admin")
+}
+

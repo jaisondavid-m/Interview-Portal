@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Mic, History, Users } from 'lucide-react';
+import { LayoutDashboard, Users, SlidersHorizontal } from 'lucide-react';
 import Navbar from '../Components/Navbar';
 import Sidebar from '../Components/Sidebar';
 
@@ -20,6 +20,7 @@ export default function DashboardLayout() {
   const mobileNavItems = isAdmin
     ? [
         { name: 'Users', path: '/admin/users', icon: Users },
+        { name: 'Interviews', path: '/admin/interviews', icon: SlidersHorizontal },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },

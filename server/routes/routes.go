@@ -33,11 +33,30 @@ func SetupRouter() *gin.Engine {
 		admin := g.Group("/admin")
 		admin.Use(middlewares.AuthMiddleware(), middlewares.RequireAdmin())
 		{
+			// User Management
 			admin.GET("/users", controllers.AdminGetUsers)
 			admin.GET("/users/:id", controllers.AdminGetUserByID)
 			admin.POST("/users", controllers.AdminCreateUser)
 			admin.PUT("/users/:id", controllers.AdminUpdateUser)
 			admin.DELETE("/users/:id", controllers.AdminDeleteUser)
+
+			// Interview Configuration: Tracks
+			admin.GET("/interviews/tracks", controllers.AdminGetTracks)
+			admin.POST("/interviews/tracks", controllers.AdminCreateTrack)
+			admin.PUT("/interviews/tracks/:id", controllers.AdminUpdateTrack)
+			admin.DELETE("/interviews/tracks/:id", controllers.AdminDeleteTrack)
+
+			// Interview Configuration: Levels
+			admin.GET("/interviews/tracks/:trackId/levels", controllers.AdminGetLevels)
+			admin.POST("/interviews/tracks/:trackId/levels", controllers.AdminCreateLevel)
+			admin.PUT("/interviews/levels/:id", controllers.AdminUpdateLevel)
+			admin.DELETE("/interviews/levels/:id", controllers.AdminDeleteLevel)
+
+			// Interview Configuration: Questions
+			admin.GET("/interviews/levels/:levelId/questions", controllers.AdminGetQuestions)
+			admin.POST("/interviews/levels/:levelId/questions", controllers.AdminCreateQuestion)
+			admin.PUT("/interviews/questions/:id", controllers.AdminUpdateQuestion)
+			admin.DELETE("/interviews/questions/:id", controllers.AdminDeleteQuestion)
 		}
 	}
 
