@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
   Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
@@ -10,7 +11,7 @@ import api from '../api/axios';
 const INTERVIEW_MODES = [
   {
     id: 'coding',
-    label: 'Coding & Algorithm',
+    label: 'Coding',
     icon: Code,
     color: 'text-[var(--accent)]',
     bg: 'bg-[var(--accent-dim)]',
@@ -24,11 +25,11 @@ const INTERVIEW_MODES = [
     color: 'text-[var(--amber)]',
     bg: 'bg-[var(--amber-bg)]',
     border: 'border-[var(--amber)]/20',
-    desc: 'Audio discussion with ideal response rubrics and key point evaluation.',
+    desc: 'Conceptual & theoretical questions with model answers and evaluation rubrics.',
   },
   {
     id: 'mcq',
-    label: 'MCQ Screening',
+    label: 'MCQ',
     icon: CheckSquare,
     color: 'text-[var(--green)]',
     bg: 'bg-[var(--green-bg)]',
@@ -37,23 +38,22 @@ const INTERVIEW_MODES = [
   },
   {
     id: 'discussion',
-    label: 'System Discussion',
+    label: 'Discussion',
     icon: MessageSquare,
     color: 'text-sky-600',
     bg: 'bg-sky-500/10',
     border: 'border-sky-500/20',
-    desc: 'Architectural scenarios, tradeoffs, and design talking points.',
+    desc: 'System architecture, design scenarios, and technical tradeoff analysis.',
   },
 ];
 
 export default function AdminInterviewConfig() {
+  const { trackId, levelId } = useParams();
+  const navigate = useNavigate();
+
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Hierarchy Navigation State
-  const [selectedTrack, setSelectedTrack] = useState(null);
-  const [selectedLevel, setSelectedLevel] = useState(null);
 
   // Modals State
   const [showTrackModal, setShowTrackModal] = useState(false);
@@ -98,16 +98,6 @@ export default function AdminInterviewConfig() {
       const res = await api.get('/admin/interviews/tracks');
       if (res && res.data) {
         setTracks(res.data);
-        if (selectedTrack) {
-          const updatedTrack = res.data.find((t) => t.id === selectedTrack.id);
-          if (updatedTrack) {
-            setSelectedTrack(updatedTrack);
-            if (selectedLevel) {
-              const updatedLevel = updatedTrack.levels?.find((l) => l.id === selectedLevel.id);
-              if (updatedLevel) setSelectedLevel(updatedLevel);
-            }
-          }
-        }
       }
     } catch (err) {
       console.warn('Backend offline or error, using local fallback:', err);
@@ -264,6 +254,10 @@ export default function AdminInterviewConfig() {
     fetchTracks();
   }, []);
 
+  // Compute selected track and level from route params
+  const selectedTrack = trackId ? tracks.find((t) => String(t.id) === String(trackId)) : null;
+  const selectedLevel = levelId && selectedTrack ? selectedTrack.levels?.find((l) => String(l.id) === String(levelId)) : null;
+
   // Filter Tracks solely by title/description
   const filteredTracks = tracks.filter((t) => {
     return (
@@ -378,13 +372,12 @@ export default function AdminInterviewConfig() {
       if (deleteTarget.type === 'track') {
         await api.delete(`/admin/interviews/tracks/${deleteTarget.data.id}`);
         if (selectedTrack?.id === deleteTarget.data.id) {
-          setSelectedTrack(null);
-          setSelectedLevel(null);
+          navigate('/admin/interviews');
         }
       } else if (deleteTarget.type === 'level') {
         await api.delete(`/admin/interviews/levels/${deleteTarget.data.id}`);
         if (selectedLevel?.id === deleteTarget.data.id) {
-          setSelectedLevel(null);
+          navigate(`/admin/interviews/${selectedTrack.id}/levels`);
         }
       } else if (deleteTarget.type === 'question') {
         await api.delete(`/admin/interviews/questions/${deleteTarget.data.id}`);
@@ -453,16 +446,13 @@ export default function AdminInterviewConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Dynamic Header with Interactive Breadcrumbs */}
+      {/* Dynamic Header with Interactive Breadcrumbs and Deep Links */}
       <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           {/* Breadcrumb path */}
           <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
             <button
-              onClick={() => {
-                setSelectedTrack(null);
-                setSelectedLevel(null);
-              }}
+              onClick={() => navigate('/admin/interviews')}
               className={`hover:text-[var(--accent)] transition ${!selectedTrack ? 'font-bold text-[var(--accent)]' : ''}`}
             >
               Interview Configuration
@@ -471,7 +461,7 @@ export default function AdminInterviewConfig() {
               <>
                 <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />
                 <button
-                  onClick={() => setSelectedLevel(null)}
+                  onClick={() => navigate(`/admin/interviews/${selectedTrack.id}/levels`)}
                   className={`hover:text-[var(--accent)] transition ${!selectedLevel ? 'font-bold text-[var(--accent)]' : ''}`}
                 >
                   {selectedTrack.title}
@@ -509,7 +499,7 @@ export default function AdminInterviewConfig() {
           {selectedLevel ? (
             <>
               <button
-                onClick={() => setSelectedLevel(null)}
+                onClick={() => navigate(`/admin/interviews/${selectedTrack.id}/levels`)}
                 className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -526,7 +516,7 @@ export default function AdminInterviewConfig() {
           ) : selectedTrack ? (
             <>
               <button
-                onClick={() => setSelectedTrack(null)}
+                onClick={() => navigate('/admin/interviews')}
                 className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -568,7 +558,7 @@ export default function AdminInterviewConfig() {
       </div>
 
       {/* ============================================================ */}
-      {/* VIEW 1: TRACKS OVERVIEW */}
+      {/* VIEW 1: TRACKS OVERVIEW (/admin/interviews) */}
       {/* ============================================================ */}
       {!selectedTrack && (
         <div className="space-y-5">
@@ -597,7 +587,7 @@ export default function AdminInterviewConfig() {
                 <div
                   key={track.id}
                   className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer"
-                  onClick={() => setSelectedTrack(track)}
+                  onClick={() => navigate(`/admin/interviews/${track.id}/levels`)}
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-2">
@@ -665,7 +655,7 @@ export default function AdminInterviewConfig() {
       )}
 
       {/* ============================================================ */}
-      {/* VIEW 2: LEVELS OVERVIEW FOR SELECTED TRACK */}
+      {/* VIEW 2: LEVELS OVERVIEW FOR SELECTED TRACK (/admin/interviews/:trackId/levels) */}
       {/* ============================================================ */}
       {selectedTrack && !selectedLevel && (
         <div className="space-y-6">
@@ -732,7 +722,7 @@ export default function AdminInterviewConfig() {
                 return (
                   <div
                     key={level.id}
-                    onClick={() => setSelectedLevel(level)}
+                    onClick={() => navigate(`/admin/interviews/${selectedTrack.id}/levels/${level.id}/questions`)}
                     className="panel-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all group"
                   >
                     <div className="flex items-start gap-4">
@@ -817,7 +807,7 @@ export default function AdminInterviewConfig() {
       )}
 
       {/* ============================================================ */}
-      {/* VIEW 3: QUESTIONS MANAGEMENT FOR SELECTED LEVEL */}
+      {/* VIEW 3: QUESTIONS MANAGEMENT (/admin/interviews/:trackId/levels/:levelId/questions) */}
       {/* ============================================================ */}
       {selectedTrack && selectedLevel && (
         <div className="space-y-6">

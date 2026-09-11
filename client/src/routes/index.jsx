@@ -71,6 +71,14 @@ export const router = createBrowserRouter([
             path: 'admin/interviews',
             element: <AdminInterviewConfig />,
           },
+          {
+            path: 'admin/interviews/:trackId/levels',
+            element: <AdminInterviewConfig />,
+          },
+          {
+            path: 'admin/interviews/:trackId/levels/:levelId/questions',
+            element: <AdminInterviewConfig />,
+          },
         ],
       },
     ],
