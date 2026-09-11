@@ -5,6 +5,7 @@
 *.so
 *.dylib
 bin/
+vendor/
 
 # Environment files
 .env

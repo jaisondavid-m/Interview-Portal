@@ -45,6 +45,8 @@ lerna-debug.log*
 server/*.exe
 bin/
 server/bin/
+vendor/
+server/vendor/
 
 # ==========================================
 # IDE & System Files
