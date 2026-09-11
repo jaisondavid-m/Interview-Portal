@@ -1,102 +1,120 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Mic, Users, MessageSquareText, ShieldCheck, ArrowRight, Radio, Volume2 } from 'lucide-react';
-import { INTERVIEW_TRACKS } from '../utils/constants';
+import { Mic, Users, MessageSquareText, ShieldCheck, ArrowRight, Radio, Sparkles } from 'lucide-react';
+import { INTERVIEW_TRACKS, APP_NAME } from '../utils/constants';
 
 export default function Home() {
   return (
-    <div className="space-y-24 py-12">
+    <div className="space-y-20 py-12">
       {/* Hero Section */}
-      <section className="relative px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8">
-        <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium">
-          <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-          <span>Live 1-on-1 Student Peer Audio Mock Interviews</span>
+      <section className="relative max-w-[1280px] mx-auto px-6 text-center space-y-6">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] text-[12px] font-mono font-semibold">
+          <span className="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse" />
+          <span>LIVE 1-ON-1 STUDENT VOICE MOCK PLATFORM</span>
         </div>
 
-        <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight max-w-4xl mx-auto">
+        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-[var(--text-primary)] tracking-tight leading-[1.15] max-w-4xl mx-auto">
           Practice Technical Interviews with{' '}
-          <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Real Student Peers Over Voice
-          </span>
+          <span className="text-[var(--accent)] underline decoration-[var(--border-accent)] underline-offset-8">
+            Real Student Peers
+          </span>{' '}
+          Over Voice
         </h1>
 
-        <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          Match with fellow students preparing for tech roles. Take turns being the interviewer and candidate with live voice calls, shared questions, and honest feedback.
+        <p className="text-base sm:text-lg text-[var(--text-secondary)] max-w-2xl mx-auto leading-relaxed">
+          Match with university students preparing for software engineering roles. Practice DSA, System Design, and Behavioral rounds in live voice rooms with shared notes and constructive feedback.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <Link
             to="/interview"
-            className="w-full sm:w-auto inline-flex items-center justify-center space-x-3 px-8 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-xl shadow-indigo-500/25 hover:from-indigo-600 hover:to-purple-700 hover:shadow-indigo-500/40 transition transform active:scale-95"
+            className="btn btn-primary text-[14px] py-3 px-6 shadow-[var(--shadow-md)]"
           >
-            <Mic className="w-5 h-5" />
-            <span>Find a Peer to Practice</span>
-            <ArrowRight className="w-5 h-5" />
+            <Mic className="w-4 h-4" />
+            <span>Match with a Peer</span>
+            <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
             to="/dashboard"
-            className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 rounded-xl font-semibold bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white border border-slate-700 transition"
+            className="btn btn-secondary text-[14px] py-3 px-6"
           >
-            View Dashboard
+            Explore Dashboard
           </Link>
         </div>
       </section>
 
-      {/* How It Works Grid */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16 space-y-4">
-          <h2 className="text-3xl font-bold text-white">How Student Mock Mates Work</h2>
-          <p className="text-slate-400 max-w-xl mx-auto">
-            A collaborative 3-step peer-learning experience designed for serious job seekers.
+      {/* 3-Step Process Cards */}
+      <section className="max-w-[1280px] mx-auto px-6">
+        <div className="text-center mb-12 space-y-2">
+          <span className="badge-kicker">Collaborative Learning</span>
+          <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
+            How MockMate Works
+          </h2>
+          <p className="text-[14px] text-[var(--text-secondary)] max-w-xl mx-auto">
+            Take turns being the interviewer and candidate for authentic, two-way interview experience.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-indigo-500/40 transition space-y-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-              <Users className="w-6 h-6" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="data-card p-6 flex flex-col justify-between space-y-4 data-card-interactive">
+            <div className="space-y-3">
+              <div className="card-avatar">
+                01
+              </div>
+              <h3 className="text-[17px] font-bold text-[var(--text-primary)] font-ui">
+                1. Select Track & Queue
+              </h3>
+              <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                Choose your focus topic (DSA, Backend, System Design) and get paired with an active student at your difficulty tier.
+              </p>
             </div>
-            <h3 className="text-xl font-semibold text-white">1. Instant Peer Matching</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Select your track (DSA, Full Stack, Backend, Behavioral) and get matched with an active student at your skill level.
-            </p>
+            <span className="status-pill status-active self-start">Instant Match</span>
           </div>
 
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-purple-500/40 transition space-y-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-              <Mic className="w-6 h-6" />
+          <div className="data-card p-6 flex flex-col justify-between space-y-4 data-card-interactive">
+            <div className="space-y-3">
+              <div className="card-avatar">
+                02
+              </div>
+              <h3 className="text-[17px] font-bold text-[var(--text-primary)] font-ui">
+                2. Live 1-on-1 Audio Room
+              </h3>
+              <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                Hop into a crystal-clear WebRTC voice call. Use the collaborative scratchpad to write pseudocode while thinking out loud.
+              </p>
             </div>
-            <h3 className="text-xl font-semibold text-white">2. Live 1-on-1 Audio Room</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Connect over low-latency audio. Take turns asking curated interview questions and solving problems out loud in real time.
-            </p>
+            <span className="status-pill status-accent self-start">Low Latency Audio</span>
           </div>
 
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-pink-500/40 transition space-y-4">
-            <div className="w-12 h-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
-              <MessageSquareText className="w-6 h-6" />
+          <div className="data-card p-6 flex flex-col justify-between space-y-4 data-card-interactive">
+            <div className="space-y-3">
+              <div className="card-avatar">
+                03
+              </div>
+              <h3 className="text-[17px] font-bold text-[var(--text-primary)] font-ui">
+                3. Mutual Peer Rating
+              </h3>
+              <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                Exchange detailed feedback on communication clarity, edge-case analysis, and algorithmic correctness.
+              </p>
             </div>
-            <h3 className="text-xl font-semibold text-white">3. Mutual Peer Feedback</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Rate your peer on technical depth, problem breakdown, and communication clarity. Receive constructive notes to improve.
-            </p>
+            <span className="status-pill status-pending self-start">Constructive Review</span>
           </div>
         </div>
       </section>
 
-      {/* Live Peer Tracks */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-gradient-to-br from-indigo-900/30 to-slate-900/60 border border-indigo-500/20 rounded-3xl p-8 sm:p-12">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white">Active Student Practice Rooms</h2>
-              <p className="text-slate-400 text-sm mt-1">Join a queue and start practicing voice interviews in minutes.</p>
+      {/* Active Tracks Panel */}
+      <section className="max-w-[1280px] mx-auto px-6">
+        <div className="panel-card p-8 sm:p-10 border border-[var(--border-strong)] bg-[var(--bg-card)]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+            <div className="space-y-1">
+              <span className="badge-kicker">Live Rooms</span>
+              <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
+                Active Student Practice Tracks
+              </h2>
             </div>
-            <Link
-              to="/interview"
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition"
-            >
-              Start Matching
+            <Link to="/interview" className="btn btn-primary text-xs py-2 px-4 self-start sm:self-auto">
+              Join Live Queue →
             </Link>
           </div>
 
@@ -104,20 +122,22 @@ export default function Home() {
             {INTERVIEW_TRACKS.map((track) => (
               <div
                 key={track.id}
-                className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 hover:border-indigo-500/50 transition cursor-pointer group space-y-3"
+                className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] hover:border-[var(--border-accent)] hover:bg-[var(--bg-card)] transition-all flex items-center justify-between group cursor-pointer"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium px-2 py-1 rounded bg-slate-800 text-indigo-400">
-                    {track.level}
-                  </span>
-                  <span className="text-xs text-emerald-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    {track.peersOnline} students active
-                  </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] font-semibold text-[var(--text-muted)] uppercase">
+                      {track.level}
+                    </span>
+                  </div>
+                  <h4 className="text-[14px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition mt-1">
+                    {track.title}
+                  </h4>
                 </div>
-                <h4 className="text-base font-semibold text-white group-hover:text-indigo-400 transition">
-                  {track.title}
-                </h4>
+                <span className="status-pill status-green">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)]" />
+                  <span>{track.peersOnline} Online</span>
+                </span>
               </div>
             ))}
           </div>

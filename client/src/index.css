@@ -1,27 +1,327 @@
 @import "tailwindcss";
 
+/* ============================================================
+   DESIGN SYSTEM TOKENS (CSS Variables)
+   ============================================================ */
+:root {
+  /* Surface & Background Colors (Light, Soft Pastel) */
+  --bg:        #f5f4fa;  /* Base background */
+  --bg-raised: #faf9ff;  /* Slightly elevated sections */
+  --bg-card:   #ffffff;  /* Primary card container */
+  --bg-input:  #f0eef8;  /* Form field fills */
+  --bg-hover:  #ebe8f5;  /* Subtle hover states */
+
+  /* Borders & Dividers */
+  --border:        rgba(110, 86, 207, 0.10); /* Soft divider */
+  --border-strong: rgba(110, 86, 207, 0.20); /* Card / Input boundary */
+  --border-accent: rgba(110, 86, 207, 0.40); /* Focused highlight */
+
+  /* Typography Colors */
+  --text-primary:   #1e1a30; /* High contrast navy-charcoal */
+  --text-secondary: #6b6589; /* Subtitle / label text */
+  --text-muted:     #a89fc4; /* Captions / placeholders */
+  --text-accent:    #6e56cf; /* Accent highlight text */
+
+  /* Primary Accent & Brand (Purple Violet) */
+  --accent:       #6e56cf;
+  --accent-dim:   rgba(110, 86, 207, 0.10);
+  --accent-glow:  rgba(110, 86, 207, 0.20);
+
+  /* Semantic Feedback Colors */
+  --red:       #d14d72;
+  --red-bg:    rgba(209, 77, 114, 0.08);
+  --amber:     #c47d1e;
+  --amber-bg:  rgba(196, 125, 30, 0.08);
+  --green:     #2ea043;
+  --green-bg:  rgba(46, 160, 67, 0.08);
+
+  /* Font Families */
+  --font-ui:   'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Border Radii */
+  --radius-sm: 6px;   /* Small elements (buttons, inputs) */
+  --radius-md: 10px;  /* Medium components (row items, dropdowns) */
+  --radius-lg: 14px;  /* Modals / Large cards */
+  --radius-xl: 20px;  /* Auth containers / Hero elements */
+
+  /* Motion & Transitions */
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Multi-layered Soft Shadows (Violet-tinted) */
+  --shadow-sm: 0 1px 4px rgba(110, 86, 207, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(110, 86, 207, 0.10), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 40px rgba(110, 86, 207, 0.14), 0 4px 8px rgba(0, 0, 0, 0.04);
+}
+
 @layer base {
+  * {
+    border-color: var(--border);
+  }
   body {
-    @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-600 selection:text-white;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* Custom sleek scrollbar */
+/* ============================================================
+   TYPOGRAPHY UTILITIES
+   ============================================================ */
+.font-ui { font-family: var(--font-ui); }
+.font-mono { font-family: var(--font-mono); }
+
+/* ============================================================
+   CONTAINER & SPATIAL RULES
+   ============================================================ */
+.app-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all var(--transition);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(110, 86, 207, 0.30);
+}
+.btn-primary:hover {
+  opacity: 0.94;
+  box-shadow: 0 6px 20px rgba(110, 86, 207, 0.38);
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(209, 77, 114, 0.30);
+}
+.btn-danger:hover {
+  opacity: 0.94;
+  box-shadow: 0 6px 20px rgba(209, 77, 114, 0.38);
+}
+
+/* ============================================================
+   STATUS PILLS & BADGES
+   ============================================================ */
+.status-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.status-active, .status-green {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.status-pending, .status-amber {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.status-error, .status-red {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.status-accent {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.badge-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.badge-kicker::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+/* ============================================================
+   DATA CARDS & PANELS
+   ============================================================ */
+.panel-card, .data-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+
+.data-card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+.card-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  border: 1px solid var(--border-accent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   FORM INPUTS
+   ============================================================ */
+.custom-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.custom-form label span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-family: var(--font-ui);
+}
+.custom-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition), background-color var(--transition);
+  width: 100%;
+}
+.custom-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+  background: var(--bg-card);
+}
+.custom-input::placeholder { color: var(--text-muted); }
+
+/* ============================================================
+   AUTH TABS
+   ============================================================ */
+.auth-tabs {
+  display: flex;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 2px;
+}
+.auth-tabs button {
+  flex: 1;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+.auth-tabs button.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ============================================================
+   ANIMATIONS & SCROLLBAR
+   ============================================================ */
+@keyframes slideUp {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slideUp 250ms cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+
+/* Custom soft pastel scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: var(--bg);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--border-strong);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--accent);
 }

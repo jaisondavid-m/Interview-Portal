@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Mic, History, Users, Radio } from 'lucide-react';
+import { LayoutDashboard, Mic, History, Radio } from 'lucide-react';
 
 export default function Sidebar() {
   const menuItems = [
@@ -10,15 +10,18 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 min-h-[calc(100vh-4rem)]">
+    <aside className="w-64 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col justify-between p-4 min-h-[calc(100vh-3.5rem)] shadow-[var(--shadow-sm)]">
       <div className="space-y-6">
-        <div className="px-3 py-2 flex items-center justify-between">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Navigation</p>
-          <span className="flex items-center space-x-1 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-            <Radio className="w-3 h-3 animate-pulse" />
-            <span>Live Peers</span>
+        <div className="px-2 py-1 flex items-center justify-between">
+          <span className="font-mono text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+            Workspace
+          </span>
+          <span className="status-pill status-green">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)] animate-pulse" />
+            <span>Peers Online</span>
           </span>
         </div>
+
         <nav className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -27,14 +30,14 @@ export default function Sidebar() {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                  `flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm)] text-[13px] font-medium font-ui transition-all ${
                     isActive
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                      ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-semibold border border-[var(--border-accent)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                   }`
                 }
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-4 h-4" />
                 <span>{item.name}</span>
               </NavLink>
             );
@@ -42,14 +45,14 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <div className="pt-4 border-t border-slate-800 space-y-2">
-        <div className="flex items-center space-x-3 px-3 py-2 text-slate-300 rounded-lg hover:bg-slate-800 cursor-pointer transition">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs">
+      <div className="pt-4 border-t border-[var(--border)]">
+        <div className="flex items-center gap-3 p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] cursor-pointer transition">
+          <div className="card-avatar">
             JS
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-white truncate">Student Candidate</p>
-            <p className="text-[11px] text-slate-400 truncate">student@university.edu</p>
+            <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate font-ui">Student Candidate</p>
+            <p className="text-[11px] text-[var(--text-muted)] truncate font-mono">student@university.edu</p>
           </div>
         </div>
       </div>

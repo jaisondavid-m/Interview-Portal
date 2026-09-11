@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -16,77 +16,74 @@ export default function Register() {
 
   return (
     <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-white">Create Your Account</h2>
-        <p className="text-sm text-slate-400 mt-1">
-          Start accelerating your career with MockMate
+      {/* Copy Section */}
+      <div className="space-y-2">
+        <span className="badge-kicker">Student Network</span>
+        <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
+          Create Account
+        </h1>
+        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+          Join fellow engineering students practicing live 1-on-1 audio interviews.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-            Full Name
-          </label>
-          <div className="relative">
-            <User className="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Alex Johnson"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
+      {/* Segmented Tab Switcher */}
+      <div className="auth-tabs">
+        <button type="button" onClick={() => navigate('/login')}>
+          Sign In
+        </button>
+        <button type="button" className="active">
+          Register
+        </button>
+      </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-            Email Address
-          </label>
-          <div className="relative">
-            <Mail className="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="candidate@example.com"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="custom-form space-y-4">
+        <label>
+          <span>Full Name</span>
+          <input
+            type="text"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Alex Johnson"
+            className="custom-input"
+          />
+        </label>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-            Password
-          </label>
-          <div className="relative">
-            <Lock className="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
+        <label>
+          <span>Email Address</span>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="student@university.edu"
+            className="custom-input"
+          />
+        </label>
 
-        <button
-          type="submit"
-          className="w-full inline-flex items-center justify-center space-x-2 py-3 rounded-xl font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25 transition"
-        >
-          <span>Get Started Free</span>
+        <label>
+          <span>Create Password</span>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            className="custom-input"
+          />
+        </label>
+
+        <button type="submit" className="btn btn-primary w-full py-2.5 mt-2">
+          <span>Create Account</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </form>
 
-      <div className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800">
-        Already have an account?{' '}
-        <Link to="/login" className="text-indigo-400 font-semibold hover:underline">
+      <div className="text-center text-[12px] text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
+        Already registered?{' '}
+        <Link to="/login" className="text-[var(--accent)] font-semibold hover:underline">
           Sign In
         </Link>
       </div>

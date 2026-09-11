@@ -1,92 +1,109 @@
 import React from 'react';
-import { Calendar, Star, Users, UserCheck, MessageSquareQuote } from 'lucide-react';
+import { Calendar, Star, Users, MessageSquareQuote, FileText } from 'lucide-react';
 
 export default function History() {
   const peerFeedbackList = [
     {
-      id: 'session-802',
-      topic: 'Full Stack & React Internals',
+      id: 'MOCK-802',
+      topic: 'Full Stack Web & React Internals',
       peerName: 'Rahul K. (IIT Bombay)',
+      avatar: 'RK',
       date: 'Sep 10, 2026',
       rating: 4.9,
       duration: '45 mins',
-      peerNotes: 'Great explanation of React Virtual DOM & reconciliation. Handled concurrency questions smoothly. Recommended practicing edge case handling in Golang channels.',
+      peerNotes: 'Great explanation of React Fiber reconciliation and state batching. Handled concurrency questions smoothly. Recommended practicing edge-case handling in Golang channels.',
       myRole: 'Candidate',
     },
     {
-      id: 'session-801',
+      id: 'MOCK-801',
       topic: 'DSA: Graphs & Dynamic Programming',
       peerName: 'Sneha M. (NIT Surathkal)',
+      avatar: 'SM',
       date: 'Sep 07, 2026',
       rating: 4.7,
       duration: '38 mins',
-      peerNotes: 'Strong communication during whiteboard walk-through. Clear topological sort implementation.',
+      peerNotes: 'Strong communication during whiteboard walk-through. Clear topological sort implementation and Big-O runtime analysis.',
       myRole: 'Interviewer & Candidate (Swapped)',
     },
     {
-      id: 'session-794',
+      id: 'MOCK-794',
       topic: 'System Design: URL Shortener & Redis Caching',
       peerName: 'Aman V. (BITS Pilani)',
+      avatar: 'AV',
       date: 'Sep 03, 2026',
       rating: 4.5,
       duration: '50 mins',
-      peerNotes: 'Good understanding of base62 encoding and DB sharding. Could elaborate more on cache eviction policies.',
+      peerNotes: 'Good understanding of base62 encoding and DB sharding strategies. Could elaborate further on distributed cache eviction policies.',
       myRole: 'Candidate',
     },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="pb-6 border-b border-slate-800">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white">Peer Feedback & Mock History</h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Review written feedback and performance ratings given by student peers after each 1-on-1 audio mock session.
+      {/* Header */}
+      <div className="pb-6 border-b border-[var(--border)]">
+        <span className="badge-kicker">Peer Review Archive</span>
+        <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight mt-1">
+          Peer Feedback & Session Logs
+        </h1>
+        <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          Review ratings and constructive notes given by fellow student interviewers after each 1-on-1 audio mock session.
         </p>
       </div>
 
+      {/* Cards List */}
       <div className="space-y-4">
         {peerFeedbackList.map((item) => (
           <div
             key={item.id}
-            className="p-6 bg-slate-900 border border-slate-800 rounded-2xl hover:border-slate-700 transition space-y-4"
+            className="data-card data-card-interactive p-6 flex flex-col md:flex-row gap-5 items-start"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <div className="card-avatar">
+              {item.avatar}
+            </div>
+
+            <div className="flex-1 min-w-0 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-dim)] px-2 py-0.5 rounded-[var(--radius-sm)] border border-[var(--border-accent)]">
+                      #{item.id}
+                    </span>
+                    <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                      Role: {item.myRole}
+                    </span>
+                  </div>
+                  <h3 className="card-title text-[16px] font-bold mt-1">
                     {item.topic}
-                  </span>
-                  <span className="text-xs text-slate-400">Duration: {item.duration}</span>
+                  </h3>
+                  <p className="text-[12px] text-[var(--text-secondary)]">
+                    Interviewer: <strong className="text-[var(--text-primary)]">{item.peerName}</strong>
+                  </p>
                 </div>
-                <h3 className="text-base font-bold text-white mt-2 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-indigo-400" />
-                  <span>Peer: {item.peerName}</span>
-                </h3>
-              </div>
-              
-              <div className="flex items-center space-x-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-                <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                <span className="text-sm font-bold text-white">{item.rating}</span>
-                <span className="text-xs text-slate-500">/ 5.0</span>
-              </div>
-            </div>
 
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
-              <div className="flex items-center space-x-2 text-xs text-indigo-400 font-semibold">
-                <MessageSquareQuote className="w-4 h-4" />
-                <span>Peer's Written Review & Tips:</span>
+                <div className="flex items-center gap-1.5 self-start sm:self-auto status-pill status-amber">
+                  <Star className="w-3.5 h-3.5 fill-[var(--amber)] text-[var(--amber)]" />
+                  <span className="font-bold text-[12px]">{item.rating}</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">/ 5.0</span>
+                </div>
               </div>
-              <p className="text-sm text-slate-300 leading-relaxed italic pl-6">
+
+              {/* Review Quote Box */}
+              <div className="p-3.5 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                <span className="font-semibold text-[var(--accent)] text-[11px] uppercase tracking-wider block mb-1">
+                  Peer Feedback:
+                </span>
                 "{item.peerNotes}"
-              </p>
-            </div>
+              </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-800/50">
-              <span className="flex items-center space-x-1">
-                <Calendar className="w-3.5 h-3.5" />
-                <span>{item.date}</span>
-              </span>
-              <span className="text-slate-400 font-medium">Role: {item.myRole}</span>
+              {/* Footer Meta */}
+              <div className="card-footer-meta">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-[var(--text-muted)]" />
+                  <span>{item.date}</span>
+                </span>
+                <span>Duration: {item.duration}</span>
+              </div>
             </div>
           </div>
         ))}

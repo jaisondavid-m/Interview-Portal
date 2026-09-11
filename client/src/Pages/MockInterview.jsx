@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Mic, MicOff, Volume2, VolumeX, PhoneOff, Send, 
-  RotateCw, Play, Clock, MessageSquare, Code, CheckCircle, Shield 
+  RotateCw, Play, Clock, MessageSquare, Code, CheckCircle, Shield, Radio 
 } from 'lucide-react';
 import { INTERVIEW_TRACKS } from '../utils/constants';
 
@@ -13,7 +13,7 @@ export default function MockInterview() {
   const [myRole, setMyRole] = useState('interviewer'); // 'interviewer' | 'candidate'
   const [callDuration, setCallDuration] = useState(0);
   const [sharedNotes, setSharedNotes] = useState(
-    "// Shared Scratchpad - both students see changes in real time\n\nfunction findTwoSum(nums, target) {\n  const map = new Map();\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (map.has(complement)) {\n      return [map.get(complement), i];\n    }\n    map.set(nums[i], i);\n  }\n  return [];\n}"
+    "// Shared Scratchpad - both students see live changes\n\nfunction findTwoSum(nums, target) {\n  const map = new Map();\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (map.has(complement)) {\n      return [map.get(complement), i];\n    }\n    map.set(nums[i], i);\n  }\n  return [];\n}"
   );
 
   const sampleQuestions = [
@@ -42,55 +42,70 @@ export default function MockInterview() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[var(--border)]">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Student 1-on-1 Audio Mock Room</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Connect over voice with a fellow student. Practice real interview questions with shared scratchpad & feedback.
+          <span className="badge-kicker">Live Voice Space</span>
+          <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight mt-1">
+            Student 1-on-1 Audio Room
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+            Connect over audio with a fellow student. Practice technical problems with a synchronized scratchpad.
           </p>
         </div>
       </div>
 
       {!inRoom ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
-          <h2 className="text-lg font-semibold text-white">1. Select Practice Track & Join Peer Queue</h2>
+        <div className="panel-card p-6 sm:p-8 space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-[18px] font-bold text-[var(--text-primary)]">
+              1. Select Practice Track & Join Queue
+            </h2>
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              Pick a domain to get matched with an active peer.
+            </p>
+          </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {INTERVIEW_TRACKS.map((track) => (
               <div
                 key={track.id}
                 onClick={() => setSelectedTrack(track.id)}
-                className={`p-5 rounded-xl border cursor-pointer transition ${
+                className={`p-5 rounded-[var(--radius-md)] border cursor-pointer transition-all ${
                   selectedTrack === track.id
-                    ? 'bg-indigo-950/40 border-indigo-500 text-white'
-                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-[var(--bg-raised)] border-[var(--accent)] shadow-[var(--shadow-sm)]'
+                    : 'bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--border-strong)]'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-white">{track.title}</h3>
-                  {selectedTrack === track.id && <CheckCircle className="w-5 h-5 text-indigo-400" />}
+                  <h3 className="font-semibold text-[15px] text-[var(--text-primary)] font-ui">
+                    {track.title}
+                  </h3>
+                  {selectedTrack === track.id && (
+                    <CheckCircle className="w-5 h-5 text-[var(--accent)]" />
+                  )}
                 </div>
-                <div className="flex items-center justify-between mt-3 text-xs">
-                  <span className="text-slate-400">Level: {track.level}</span>
-                  <span className="text-emerald-400 font-medium">● {track.peersOnline} Online</span>
+                <div className="flex items-center justify-between mt-3 text-[12px] font-mono">
+                  <span className="text-[var(--text-secondary)]">Level: {track.level}</span>
+                  <span className="status-pill status-green">● {track.peersOnline} Online</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center space-x-3 text-sm text-slate-300">
-            <Shield className="w-5 h-5 text-indigo-400 shrink-0" />
+          <div className="p-4 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] flex items-center gap-3 text-[13px] text-[var(--text-secondary)]">
+            <Shield className="w-5 h-5 text-[var(--accent)] shrink-0" />
             <span>
-              Both peers will join the <strong>voice room</strong> directly with microphone permissions. You can switch interviewer/candidate roles during the session.
+              Microphone access is enabled automatically on entry. You can swap between Interviewer and Candidate roles at any time.
             </span>
           </div>
 
           <div className="pt-2 flex justify-end">
             <button
               onClick={() => setInRoom(true)}
-              className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/30 transition"
+              className="btn btn-primary py-2.5 px-6 shadow-[var(--shadow-md)]"
             >
-              <Mic className="w-5 h-5" />
+              <Mic className="w-4 h-4" />
               <span>Match & Enter Audio Room</span>
             </button>
           </div>
@@ -98,134 +113,130 @@ export default function MockInterview() {
       ) : (
         <div className="space-y-6">
           {/* Top Audio Call Control Bar */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="panel-card p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[var(--shadow-md)]">
             {/* Peer Info */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center font-bold text-white text-sm shadow-md">
+                <div className="card-avatar">
                   RK
                 </div>
-                <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-[var(--green)] border-2 border-white rounded-full"></span>
               </div>
               <div>
-                <div className="flex items-center space-x-2">
-                  <h3 className="font-semibold text-white">Rahul K. (Student Peer)</h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-[14px] text-[var(--text-primary)] font-ui">Rahul K.</h3>
+                  <span className="font-mono text-[11px] px-2 py-0.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)]">
                     4th Year CS
                   </span>
                 </div>
-                <p className="text-xs text-emerald-400 flex items-center gap-1.5 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Connected via WebRTC Audio • Latency: 28ms
+                <p className="text-[12px] text-[var(--green)] flex items-center gap-1.5 mt-0.5 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)] animate-pulse"></span>
+                  WebRTC Audio Connected • 24ms
                 </p>
               </div>
             </div>
 
-            {/* Audio Wave & Timer */}
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-mono text-slate-300">
-                <Clock className="w-3.5 h-3.5 text-indigo-400" />
+            {/* Audio Wave & Timer & Role Switcher */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-[var(--bg-input)] px-3 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] text-[12px] font-mono text-[var(--text-primary)] font-semibold">
+                <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
                 <span>{formatTime(callDuration)}</span>
               </div>
 
-              {/* Role Switcher */}
-              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-medium">
+              {/* Role Switcher Tabs */}
+              <div className="auth-tabs p-1">
                 <button
+                  type="button"
                   onClick={() => setMyRole('interviewer')}
-                  className={`px-3 py-1 rounded-lg transition ${
-                    myRole === 'interviewer' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                  }`}
+                  className={myRole === 'interviewer' ? 'active' : ''}
                 >
-                  Interviewer Role
+                  Interviewer
                 </button>
                 <button
+                  type="button"
                   onClick={() => setMyRole('candidate')}
-                  className={`px-3 py-1 rounded-lg transition ${
-                    myRole === 'candidate' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                  }`}
+                  className={myRole === 'candidate' ? 'active' : ''}
                 >
-                  Candidate Role
+                  Candidate
                 </button>
               </div>
             </div>
 
             {/* Audio Action Buttons */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsMuted(!isMuted)}
-                className={`p-3 rounded-xl border transition ${
-                  isMuted
-                    ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
-                    : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                }`}
-                title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
+                className={`btn ${isMuted ? 'btn-danger' : 'btn-secondary'} p-2.5`}
+                title={isMuted ? 'Unmute Microphone' : 'Mute Microphone'}
               >
-                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </button>
 
               <button
                 onClick={() => setIsDeafened(!isDeafened)}
-                className={`p-3 rounded-xl border transition ${
-                  isDeafened
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                    : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                }`}
-                title={isDeafened ? 'Enable Sound' : 'Deafen Audio'}
+                className={`btn ${isDeafened ? 'btn-danger' : 'btn-secondary'} p-2.5`}
+                title={isDeafened ? 'Enable Sound' : 'Deafen Sound'}
               >
-                {isDeafened ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                {isDeafened ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
 
               <button
                 onClick={() => {
-                  if (confirm('End peer audio interview session? You will be prompted to leave peer feedback.')) {
+                  if (confirm('Leave peer audio session? You will be prompted for peer feedback.')) {
                     setInRoom(false);
                   }
                 }}
-                className="inline-flex items-center space-x-2 px-4 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold transition text-xs shadow-lg shadow-rose-600/30"
+                className="btn btn-danger text-xs py-2 px-3.5"
               >
-                <PhoneOff className="w-4 h-4" />
-                <span>Leave Session</span>
+                <PhoneOff className="w-3.5 h-3.5" />
+                <span>Leave</span>
               </button>
             </div>
           </div>
 
           {/* Workspace Area: Questions Sheet + Shared Coding Scratchpad */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Suggested Questions & Prompts */}
-            <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <h3 className="font-semibold text-white text-sm flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-indigo-400" />
-                  <span>Curated Interview Questions</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left: Suggested Questions & Prompts (4 Cols) */}
+            <div className="lg:col-span-4 panel-card p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+                <h3 className="font-bold text-[14px] text-[var(--text-primary)] flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-[var(--accent)]" />
+                  <span>Curated Questions</span>
                 </h3>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                  {myRole === 'interviewer' ? 'Ask Peer' : 'Peer is Asking'}
+                <span className="status-pill status-accent text-[10px]">
+                  {myRole === 'interviewer' ? 'Asking' : 'Answering'}
                 </span>
               </div>
 
               <div className="space-y-3">
                 {sampleQuestions.map((q, idx) => (
-                  <div key={idx} className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 text-xs text-slate-300 leading-relaxed space-y-2">
+                  <div 
+                    key={idx} 
+                    className="p-3 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] text-[12px] text-[var(--text-secondary)] leading-relaxed"
+                  >
                     <p>{q}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Right: Collaborative Real-Time Scratchpad */}
-            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                <span className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                  <Code className="w-4 h-4 text-indigo-400" />
-                  <span>Shared Live Scratchpad & Solution Space</span>
+            {/* Right: Collaborative Real-Time Scratchpad (8 Cols) */}
+            <div className="lg:col-span-8 panel-card p-5 flex flex-col space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                <span className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <Code className="w-4 h-4 text-[var(--accent)]" />
+                  <span>Shared Live Scratchpad</span>
                 </span>
-                <span className="text-xs text-slate-400 font-mono">Sync: Live</span>
+                <span className="font-mono text-[11px] text-[var(--green)] flex items-center gap-1 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)]"></span>
+                  Live Sync
+                </span>
               </div>
               <textarea
                 value={sharedNotes}
                 onChange={(e) => setSharedNotes(e.target.value)}
-                rows={14}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none leading-relaxed"
+                rows={13}
+                className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] p-4 text-[13px] text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-dim)] resize-none leading-relaxed transition"
               />
             </div>
           </div>

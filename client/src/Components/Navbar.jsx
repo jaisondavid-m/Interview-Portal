@@ -1,112 +1,110 @@
 import React, { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Users, Menu, X, Mic, Volume2 } from 'lucide-react';
+import { Mic, Menu, X, Users, Sparkles } from 'lucide-react';
 import { NAV_LINKS, APP_NAME } from '../utils/constants';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-50 backdrop-blur-md bg-slate-900/80 border-b border-slate-800 text-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Brand Logo */}
-          <Link to="/" className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200">
-              <Users className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-              {APP_NAME}
-            </span>
-            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-              <Mic className="w-2.5 h-2.5" />
-              <span>Peer Audio</span>
-            </span>
-          </Link>
+    <nav className="sticky top-0 z-50 bg-[var(--bg-card)]/90 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)]">
+      <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center justify-between">
+        
+        {/* Brand Logo with accent dot */}
+        <Link 
+          to="/" 
+          className="font-mono font-semibold text-[13px] tracking-[0.06em] text-[var(--accent)] flex items-center gap-2 no-underline group"
+        >
+          <span className="w-2 h-2 rounded-full bg-[var(--accent)] group-hover:scale-125 transition-transform" />
+          <span className="font-bold tracking-tight">{APP_NAME}</span>
+          <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/20 ml-1">
+            PEER AUDIO
+          </span>
+        </Link>
 
-          {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center space-x-1">
-            {NAV_LINKS.map((link) => (
-              <NavLink
-                key={link.path}
-                to={link.path}
-                end={link.path === '/'}
-                className={({ isActive }) =>
-                  `px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${
-                    isActive
-                      ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                  }`
-                }
-              >
-                {link.name}
-              </NavLink>
-            ))}
-          </div>
-
-          {/* Action CTA Buttons */}
-          <div className="hidden md:flex items-center space-x-3">
-            <Link
-              to="/login"
-              className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition"
-            >
-              Sign In
-            </Link>
-            <Link
-              to="/interview"
-              className="inline-flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/25 hover:from-indigo-600 hover:to-purple-700 hover:shadow-indigo-500/40 transition transform active:scale-95"
-            >
-              <Mic className="w-4 h-4" />
-              <span>Match Peer</span>
-            </Link>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none"
-              aria-label="Toggle Menu"
-            >
-              {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Drawer */}
-      {isOpen && (
-        <div className="md:hidden bg-slate-900 border-b border-slate-800 px-4 pt-2 pb-6 space-y-2">
+        {/* Desktop Navigation Links */}
+        <div className="hidden md:flex items-center gap-1">
           {NAV_LINKS.map((link) => (
             <NavLink
               key={link.path}
               to={link.path}
-              onClick={() => setIsOpen(false)}
+              end={link.path === '/'}
               className={({ isActive }) =>
-                `block px-3 py-2 rounded-md text-base font-medium ${
+                `px-3.5 py-1.5 rounded-[var(--radius-sm)] text-[13px] font-medium font-ui transition-all duration-150 ${
                   isActive
-                    ? 'bg-indigo-600/20 text-indigo-400 font-semibold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'text-[var(--accent)] bg-[var(--accent-dim)] font-semibold'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                 }`
               }
             >
               {link.name}
             </NavLink>
           ))}
-          <div className="pt-4 border-t border-slate-800 flex flex-col space-y-2">
+        </div>
+
+        {/* Action CTA Buttons */}
+        <div className="hidden md:flex items-center gap-3">
+          <Link
+            to="/login"
+            className="px-3 py-1.5 text-[13px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded-[var(--radius-sm)] transition"
+          >
+            Sign In
+          </Link>
+          <Link
+            to="/interview"
+            className="btn btn-primary text-[13px] py-1.5 px-3.5"
+          >
+            <Mic className="w-3.5 h-3.5" />
+            <span>Match Peer</span>
+          </Link>
+        </div>
+
+        {/* Mobile Hamburger Button */}
+        <div className="md:hidden flex items-center">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-2 rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            aria-label="Toggle navigation"
+          >
+            {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Drawer */}
+      {isOpen && (
+        <div className="md:hidden bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4 space-y-2 animate-slide-up">
+          {NAV_LINKS.map((link) => (
+            <NavLink
+              key={link.path}
+              to={link.path}
+              onClick={() => setIsOpen(false)}
+              className={({ isActive }) =>
+                `block px-3 py-2 rounded-[var(--radius-sm)] text-sm font-medium font-ui ${
+                  isActive
+                    ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-semibold'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                }`
+              }
+            >
+              {link.name}
+            </NavLink>
+          ))}
+          <div className="pt-3 border-t border-[var(--border)] flex flex-col gap-2">
             <Link
               to="/login"
               onClick={() => setIsOpen(false)}
-              className="w-full text-center px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 rounded-lg hover:bg-slate-700"
+              className="btn btn-secondary w-full text-xs py-2"
             >
               Sign In
             </Link>
             <Link
               to="/interview"
               onClick={() => setIsOpen(false)}
-              className="w-full text-center px-4 py-2 text-sm font-medium bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg"
+              className="btn btn-primary w-full text-xs py-2"
             >
-              Match Student Interview
+              <Mic className="w-3.5 h-3.5" />
+              <span>Match Student Interview</span>
             </Link>
           </div>
         </div>
