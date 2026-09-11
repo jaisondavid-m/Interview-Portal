@@ -1,9 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, UserPlus, Search, Filter, Edit2, Trash2, Shield, 
-  GraduationCap, Check, X, AlertCircle, RefreshCw, KeyRound 
+  GraduationCap, Check, X, AlertCircle, RefreshCw, KeyRound, SlidersHorizontal, RotateCcw
 } from 'lucide-react';
 import api from '../api/axios';
+import SearchableSelect from '../Components/SearchableSelect';
+
+const DEPARTMENT_OPTIONS = [
+  { value: 'ALL', label: 'All Departments' },
+  { value: 'CSE', label: 'CSE', badge: 'Comp Sci' },
+  { value: 'IT', label: 'IT', badge: 'Info Tech' },
+  { value: 'ECE', label: 'ECE', badge: 'Electronics' },
+  { value: 'EEE', label: 'EEE', badge: 'Electrical' },
+  { value: 'AI&DS', label: 'AI & DS', badge: 'AI & Data Sci' },
+  { value: 'Administration', label: 'Administration', badge: 'Admin Staff' },
+];
+
+const ROLE_OPTIONS = [
+  { value: 'ALL', label: 'All Roles' },
+  { value: 'student', label: 'Student' },
+  { value: 'admin', label: 'Administrator' },
+];
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -216,59 +233,104 @@ export default function AdminUsers() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="panel-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Search */}
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by Name, Roll No, Email..."
-            className="custom-input pl-9 text-[12px] py-2"
-          />
+      <div className="panel-card p-4 space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+          {/* Search Bar */}
+          <div className="relative w-full lg:w-96">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)] flex items-center">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by Name, Roll No, Email..."
+              className="custom-input search-input text-[12px] py-2"
+              style={{ paddingLeft: '2.4rem', paddingRight: '2.2rem' }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Searchable Select Filters */}
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+            {/* Department Searchable Select */}
+            <SearchableSelect
+              options={DEPARTMENT_OPTIONS}
+              value={deptFilter}
+              onChange={setDeptFilter}
+              placeholder="All Departments"
+              searchPlaceholder="Filter departments (e.g. CSE, IT)..."
+              label="Dept:"
+              icon={Filter}
+              clearable={true}
+              menuWidth="w-72"
+            />
+
+            {/* Role Searchable Select */}
+            <SearchableSelect
+              options={ROLE_OPTIONS}
+              value={roleFilter}
+              onChange={setRoleFilter}
+              placeholder="All Roles"
+              searchPlaceholder="Filter roles (Student, Admin)..."
+              label="Role:"
+              icon={Shield}
+              clearable={true}
+              menuWidth="w-56"
+            />
+
+            {/* Reset Filters button if active */}
+            {(searchTerm || deptFilter !== 'ALL' || roleFilter !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setDeptFilter('ALL');
+                  setRoleFilter('ALL');
+                }}
+                className="btn btn-secondary text-[11px] py-1.5 px-2.5 flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--accent)]"
+                title="Reset all filters"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
+
+            {/* Refresh Button */}
+            <button
+              onClick={fetchUsers}
+              className={`btn btn-secondary p-2 transition ${loading ? 'opacity-50' : ''}`}
+              title="Refresh Users"
+              disabled={loading}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] font-medium">
-            <Filter className="w-3.5 h-3.5" />
-            <span>Dept:</span>
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="custom-input text-[12px] py-1.5 px-2.5 bg-[var(--bg-card)] w-auto"
-            >
-              <option value="ALL">All Departments</option>
-              <option value="CSE">CSE</option>
-              <option value="IT">IT</option>
-              <option value="ECE">ECE</option>
-              <option value="EEE">EEE</option>
-              <option value="AI&DS">AI & DS</option>
-              <option value="Administration">Administration</option>
-            </select>
+        {/* Active Filter Summary Bar */}
+        <div className="flex items-center justify-between pt-2 border-t border-[var(--border)] text-[11px] text-[var(--text-muted)] font-mono">
+          <div className="flex items-center gap-2">
+            <span>Results: <strong className="text-[var(--text-primary)]">{filteredUsers.length}</strong> of {users.length} accounts</span>
+            {(deptFilter !== 'ALL' || roleFilter !== 'ALL' || searchTerm) && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-[var(--accent)]">
+                • (Filters applied)
+              </span>
+            )}
           </div>
-
-          <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] font-medium">
-            <span>Role:</span>
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="custom-input text-[12px] py-1.5 px-2.5 bg-[var(--bg-card)] w-auto"
-            >
-              <option value="ALL">All Roles</option>
-              <option value="student">Student</option>
-              <option value="admin">Administrator</option>
-            </select>
-          </div>
-
-          <button
-            onClick={fetchUsers}
-            className="btn btn-secondary p-2"
-            title="Refresh Users"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
+          {searchTerm && (
+            <span className="truncate max-w-[200px] text-[var(--text-secondary)]">
+              Matching: "{searchTerm}"
+            </span>
+          )}
         </div>
       </div>
 

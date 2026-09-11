@@ -255,6 +255,22 @@
 }
 .custom-input::placeholder { color: var(--text-muted); }
 
+.search-input {
+  padding-left: 2.35rem !important;
+  padding-right: 2.2rem !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
 /* ============================================================
    AUTH TABS
    ============================================================ */
