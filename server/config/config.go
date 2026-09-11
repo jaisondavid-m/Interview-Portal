@@ -1,7 +1,6 @@
 package config
 
 import (
-	"log"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -16,6 +15,7 @@ type Config struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
+	JWTSecret  string
 }
 
 // AppConfig is the global configuration instance
@@ -23,10 +23,10 @@ var AppConfig *Config
 
 // LoadConfig initializes application configuration from .env or environment variables
 func LoadConfig() *Config {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("[INFO] .env file not found or could not be loaded, using system environment variables and defaults")
-	}
+	// Attempt to load .env from current directory or parent directory
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../.env")
+	_ = godotenv.Load("../../.env")
 
 	AppConfig = &Config{
 		Port:       getEnv("PORT", "8080"),
@@ -36,6 +36,7 @@ func LoadConfig() *Config {
 		DBUser:     getEnv("DB_USER", "root"),
 		DBPassword: getEnv("DB_PASSWORD", "jaison"),
 		DBName:     getEnv("DB_NAME", "mock_mate"),
+		JWTSecret:  getEnv("JWT_SECRET", "mock_mate_secure_jwt_secret_2026"),
 	}
 
 	return AppConfig

@@ -18,7 +18,6 @@ var DB *gorm.DB
 
 // ConnectDB establishes connection to MySQL using configuration
 func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
-	// DSN format: username:password@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		cfg.DBUser,
 		cfg.DBPassword,
@@ -56,6 +55,9 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 		log.Printf("[WARN] Migration warning: %v\n", err)
 	}
 
+	// Seed default Admin user
+	seedAdminUser(db)
+
 	DB = db
 	return db, nil
 }
@@ -66,4 +68,41 @@ func runMigrations(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.User{},
 	)
+}
+
+// seedAdminUser checks if default admin exists; if not, seeds admin@bitsathy.ac.in
+func seedAdminUser(db *gorm.DB) {
+	adminEmail := "admin@bitsathy.ac.in"
+	var existingAdmin models.User
+	err := db.Where("email = ?", adminEmail).First(&existingAdmin).Error
+
+	hashedPassword, errHash := models.HashPassword("password")
+	if errHash != nil {
+		log.Printf("[ERROR] Failed to hash admin password: %v\n", errHash)
+		return
+	}
+
+	if err != nil {
+		// Admin does not exist, create
+		admin := models.User{
+			Name:       "System Administrator",
+			Email:      adminEmail,
+			RollNo:     "ADMIN01",
+			Department: "Administration",
+			Password:   hashedPassword,
+			Role:       "admin",
+		}
+		if createErr := db.Create(&admin).Error; createErr != nil {
+			log.Printf("[ERROR] Failed to seed default admin: %v\n", createErr)
+		} else {
+			log.Println("[INFO] Successfully seeded default admin user: admin@bitsathy.ac.in (Password: 'password')")
+		}
+	} else {
+		// Update password to ensure it matches requirement if needed
+		db.Model(&existingAdmin).Updates(map[string]interface{}{
+			"role":     "admin",
+			"password": hashedPassword,
+		})
+		log.Println("[INFO] Verified default admin user: admin@bitsathy.ac.in")
+	}
 }

@@ -10,23 +10,41 @@ import Dashboard from '../Pages/Dashboard';
 import MockInterview from '../Pages/MockInterview';
 import History from '../Pages/History';
 import Login from '../Pages/Login';
-import Register from '../Pages/Register';
+import AdminUsers from '../Pages/AdminUsers';
+import NotFound from '../Pages/NotFound';
+
+// Route Guards
 import ProtectedRoute from '../Components/ProtectedRoute';
+import AdminRoute from '../Components/AdminRoute';
 
 // Helper component for root redirect
 function RootRedirect() {
   const token = localStorage.getItem('token');
-  return <Navigate to={token ? '/dashboard' : '/login'} replace />;
+  const userStr = localStorage.getItem('user');
+
+  if (token && userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user.role === 'admin') {
+        return <Navigate to="/admin/users" replace />;
+      }
+      return <Navigate to="/dashboard" replace />;
+    } catch (e) {
+      return <Navigate to="/login" replace />;
+    }
+  }
+
+  return <Navigate to="/login" replace />;
 }
 
 export const router = createBrowserRouter([
-  // Root Redirect -> Directly go to login or dashboard
+  // Root Redirect -> Directly go to login or appropriate dashboard
   {
     path: '/',
     element: <RootRedirect />,
   },
 
-  // Auth Routes (College Student Login / Registration)
+  // Auth Routes (Login Only)
   {
     element: <AuthLayout />,
     children: [
@@ -34,14 +52,26 @@ export const router = createBrowserRouter([
         path: 'login',
         element: <Login />,
       },
+    ],
+  },
+
+  // Protected Admin Routes
+  {
+    element: <AdminRoute />,
+    children: [
       {
-        path: 'register',
-        element: <Register />,
+        element: <DashboardLayout />,
+        children: [
+          {
+            path: 'admin/users',
+            element: <AdminUsers />,
+          },
+        ],
       },
     ],
   },
 
-  // Protected Internal College Workspace (Requires Login)
+  // Protected Student & Campus Workspace Routes
   {
     element: <ProtectedRoute />,
     children: [
@@ -65,9 +95,9 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Fallback -> Redirect to root (login)
+  // Fallback -> Redirect
   {
     path: '*',
-    element: <RootRedirect />,
+    element: <NotFound />,
   },
 ]);

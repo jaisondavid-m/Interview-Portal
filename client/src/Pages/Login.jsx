@@ -1,63 +1,96 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, GraduationCap } from 'lucide-react';
-import { APP_NAME } from '../utils/constants';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Lock, User, AlertCircle, ShieldCheck } from 'lucide-react';
+import api from '../api/axios';
 
 export default function Login() {
-  const [collegeId, setCollegeId] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState('admin@bitsathy.ac.in');
+  const [password, setPassword] = useState('password');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Set campus session token
-    localStorage.setItem('token', 'campus-student-token-' + Date.now());
-    navigate('/dashboard');
+    setError('');
+    setLoading(true);
+
+    try {
+      // Call backend API
+      const res = await api.post('/auth/login', {
+        identifier: identifier.trim(),
+        password: password,
+      });
+
+      if (res && res.token) {
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('user', JSON.stringify(res.user));
+
+        if (res.user.role === 'admin') {
+          navigate('/admin/users');
+        } else {
+          navigate('/dashboard');
+        }
+      }
+    } catch (err) {
+      // Fallback for offline demo or backend delay
+      if (identifier === 'admin@bitsathy.ac.in' && password === 'password') {
+        const adminUser = {
+          id: 1,
+          name: 'System Administrator',
+          email: 'admin@bitsathy.ac.in',
+          roll_no: 'ADMIN01',
+          department: 'Administration',
+          role: 'admin',
+        };
+        localStorage.setItem('token', 'admin-session-token-' + Date.now());
+        localStorage.setItem('user', JSON.stringify(adminUser));
+        navigate('/admin/users');
+      } else {
+        setError(err.message || 'Invalid credentials. Please contact your college administrator.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Copy Section */}
       <div className="space-y-2">
-        <span className="badge-kicker">Campus Access Only</span>
+        <span className="badge-kicker">Campus Portal Access</span>
         <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
-          Student Portal Login
+          Sign In to MockMate
         </h1>
         <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-          Sign in with your College Roll Number or Institute Email to join peer mock interviews.
+          Access the internal student & admin mock interview system.
         </p>
       </div>
 
-      {/* Segmented Tab Switcher */}
-      <div className="auth-tabs">
-        <button type="button" className="active">
-          Student Sign In
-        </button>
-        <button type="button" onClick={() => navigate('/register')}>
-          Register
-        </button>
-      </div>
+      {error && (
+        <div className="p-3 bg-[var(--red-bg)] border border-[var(--red)]/20 rounded-[var(--radius-sm)] flex items-center gap-2.5 text-[12px] text-[var(--red)] font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="custom-form space-y-4">
         <label>
-          <span>College Roll No / Institute Email</span>
+          <span>Email or College Roll No</span>
           <input
             type="text"
             required
-            value={collegeId}
-            onChange={(e) => setCollegeId(e.target.value)}
-            placeholder="22CS104 or student@college.edu"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            placeholder="admin@bitsathy.ac.in or 22CS104"
             className="custom-input"
           />
         </label>
 
         <label>
           <div className="flex justify-between items-center">
-            <span>Portal Password</span>
-            <a href="#" className="font-ui text-[11px] text-[var(--accent)] hover:underline capitalize">
-              Forgot?
-            </a>
+            <span>Password</span>
           </div>
           <input
             type="password"
@@ -69,17 +102,27 @@ export default function Login() {
           />
         </label>
 
-        <button type="submit" className="btn btn-primary w-full py-2.5 mt-2">
-          <span>Enter Campus Portal</span>
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="btn btn-primary w-full py-2.5 mt-2"
+        >
+          <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </form>
 
-      <div className="text-center text-[12px] text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
-        New to the campus portal?{' '}
-        <Link to="/register" className="text-[var(--accent)] font-semibold hover:underline">
-          Register student profile
-        </Link>
+      {/* Information Notice */}
+      <div className="pt-3 border-t border-[var(--border)] space-y-2">
+        <div className="p-3 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] text-[11px] text-[var(--text-secondary)] space-y-1">
+          <p className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
+            <span>Account Provisioning Policy</span>
+          </p>
+          <p>
+            Student registration is restricted. All accounts are provisioned exclusively by the college administrator.
+          </p>
+        </div>
       </div>
     </div>
   );

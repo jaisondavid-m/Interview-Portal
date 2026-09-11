@@ -5,10 +5,11 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Automatically send & receive HTTP cookies for JWT authentication
   timeout: 10000,
 });
 
-// Request interceptor
+// Request interceptor (Optional fallback token if stored)
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -24,6 +25,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // If session expired (401), clear local storage
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
     const message = error.response?.data?.message || error.message || 'Something went wrong';
     return Promise.reject(new Error(message));
   }

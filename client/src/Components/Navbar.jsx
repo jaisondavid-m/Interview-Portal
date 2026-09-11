@@ -1,37 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Mic, Menu, X, LogOut, GraduationCap, User } from 'lucide-react';
-import { NAV_LINKS, APP_NAME, COLLEGE_PORTAL_NAME } from '../utils/constants';
+import { Mic, Menu, X, LogOut, GraduationCap, ShieldCheck, Users } from 'lucide-react';
+import { APP_NAME } from '../utils/constants';
+import api from '../api/axios';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        setUser(JSON.parse(userStr));
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {}
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     navigate('/login');
   };
+
+  const isAdmin = user?.role === 'admin';
+
+  const navLinks = isAdmin
+    ? [
+        { name: 'User Management', path: '/admin/users' },
+        { name: 'Student Dashboard', path: '/dashboard' },
+        { name: 'Audio Rooms', path: '/interview' },
+      ]
+    : [
+        { name: 'Dashboard', path: '/dashboard' },
+        { name: 'Peer Audio Room', path: '/interview' },
+        { name: 'Feedback & Logs', path: '/history' },
+      ];
 
   return (
     <nav className="sticky top-0 z-50 bg-[var(--bg-card)]/90 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)]">
       <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center justify-between">
         
-        {/* Brand Logo & College Badge */}
+        {/* Brand Logo & Portal Badge */}
         <Link 
-          to="/dashboard" 
+          to={isAdmin ? "/admin/users" : "/dashboard"} 
           className="font-mono font-semibold text-[13px] tracking-[0.06em] text-[var(--accent)] flex items-center gap-2 no-underline group"
         >
           <span className="w-2 h-2 rounded-full bg-[var(--accent)] group-hover:scale-125 transition-transform" />
           <span className="font-bold tracking-tight">{APP_NAME}</span>
-          <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] ml-1 flex items-center gap-1">
-            <GraduationCap className="w-3 h-3" />
-            <span>CAMPUS PORTAL</span>
+          <span className={`font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full ml-1 flex items-center gap-1 ${
+            isAdmin 
+              ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]' 
+              : 'bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/20'
+          }`}>
+            {isAdmin ? <ShieldCheck className="w-3 h-3" /> : <GraduationCap className="w-3 h-3" />}
+            <span>{isAdmin ? 'ADMIN PORTAL' : 'CAMPUS PORTAL'}</span>
           </span>
         </Link>
 
         {/* Desktop Navigation Links */}
         <div className="hidden md:flex items-center gap-1">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <NavLink
               key={link.path}
               to={link.path}
@@ -48,15 +81,25 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Action CTA Buttons */}
+        {/* Action Buttons & Logout */}
         <div className="hidden md:flex items-center gap-3">
-          <Link
-            to="/interview"
-            className="btn btn-primary text-[13px] py-1.5 px-3.5"
-          >
-            <Mic className="w-3.5 h-3.5" />
-            <span>Match Peer</span>
-          </Link>
+          {isAdmin ? (
+            <Link
+              to="/admin/users"
+              className="btn btn-primary text-[12px] py-1.5 px-3"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Manage Users</span>
+            </Link>
+          ) : (
+            <Link
+              to="/interview"
+              className="btn btn-primary text-[12px] py-1.5 px-3"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>Match Peer</span>
+            </Link>
+          )}
 
           <button
             onClick={handleLogout}
@@ -83,7 +126,7 @@ export default function Navbar() {
       {/* Mobile Drawer */}
       {isOpen && (
         <div className="md:hidden bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4 space-y-2 animate-slide-up">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <NavLink
               key={link.path}
               to={link.path}
@@ -100,14 +143,6 @@ export default function Navbar() {
             </NavLink>
           ))}
           <div className="pt-3 border-t border-[var(--border)] flex flex-col gap-2">
-            <Link
-              to="/interview"
-              onClick={() => setIsOpen(false)}
-              className="btn btn-primary w-full text-xs py-2"
-            >
-              <Mic className="w-3.5 h-3.5" />
-              <span>Match Student Interview</span>
-            </Link>
             <button
               onClick={() => {
                 setIsOpen(false);

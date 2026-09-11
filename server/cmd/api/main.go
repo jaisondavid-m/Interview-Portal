@@ -18,14 +18,14 @@ func main() {
 	// 2. Set Gin mode
 	gin.SetMode(cfg.GinMode)
 
-	// 3. Connect to MySQL Database
+	// 3. Connect to MySQL Database & Run Auto-Migrations / Admin Seeding
 	_, err := database.ConnectDB(cfg)
 	if err != nil {
 		log.Printf("[WARN] Database connection failed: %v\n", err)
 		log.Println("[WARN] Server will start, but database-dependent endpoints may fail. Please ensure MySQL is running.")
 	}
 
-	// 4. Setup routes
+	// 4. Setup routes (including Auth, Admin User Management, Health checks)
 	router := routes.SetupRouter()
 
 	// 5. Start HTTP Server
