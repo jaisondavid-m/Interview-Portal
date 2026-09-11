@@ -5,36 +5,27 @@ import api from '../api/axios';
 
 const QUICK_ACCOUNTS = [
   {
-    tag: 'Admin',
-    name: 'System Administrator',
+    title: 'Admin',
     email: 'admin@bitsathy.ac.in',
     password: 'password',
-    badge: 'ADMIN',
-    badgeStyle: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]',
     icon: ShieldCheck,
-    subtitle: 'Admin Portal & Configuration',
+    badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]',
     role: 'admin',
   },
   {
-    tag: 'Student 1',
-    name: 'Jaison David M',
+    title: 'Student 1',
     email: 'jaisondavidm.cs25@bitsathy.ac.in',
     password: 'password',
-    badge: 'STUDENT 1',
-    badgeStyle: 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/30',
     icon: GraduationCap,
-    subtitle: 'CSE • 7376251CS221',
+    badgeStyle: 'text-[var(--green)] bg-[var(--green-bg)] border-[var(--green)]/30',
     role: 'student',
   },
   {
-    tag: 'Student 2',
-    name: 'Mani M R S',
+    title: 'Student 2',
     email: 'manimozhichelvanmrs.ad25@bitsathy.ac.in',
     password: 'password',
-    badge: 'STUDENT 2',
-    badgeStyle: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
     icon: GraduationCap,
-    subtitle: 'AI&DS • 7376252AD230',
+    badgeStyle: 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20',
     role: 'student',
   },
 ];
@@ -84,11 +75,11 @@ export default function Login() {
       );
       if (quickMatch) {
         const dummyUser = {
-          id: quickMatch.role === 'admin' ? 1 : (quickMatch.tag === 'Student 1' ? 2 : 3),
-          name: quickMatch.name,
+          id: quickMatch.role === 'admin' ? 1 : (quickMatch.title === 'Student 1' ? 2 : 3),
+          name: quickMatch.role === 'admin' ? 'System Administrator' : (quickMatch.title === 'Student 1' ? 'Jaison David M' : 'Mani M R S'),
           email: quickMatch.email,
-          roll_no: quickMatch.role === 'admin' ? 'ADMIN01' : (quickMatch.tag === 'Student 1' ? '7376251CS221' : '7376252AD230'),
-          department: quickMatch.role === 'admin' ? 'Administration' : (quickMatch.tag === 'Student 1' ? 'CSE' : 'AI&DS'),
+          roll_no: quickMatch.role === 'admin' ? 'ADMIN01' : (quickMatch.title === 'Student 1' ? '7376251CS221' : '7376252AD230'),
+          department: quickMatch.role === 'admin' ? 'Administration' : (quickMatch.title === 'Student 1' ? 'CSE' : 'AI&DS'),
           role: quickMatch.role,
         };
         localStorage.setItem('token', 'session-token-' + Date.now());
@@ -125,7 +116,7 @@ export default function Login() {
           <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
           <span>Quick Login</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-3 gap-2.5">
           {QUICK_ACCOUNTS.map((acc) => {
             const IconComponent = acc.icon;
             const isSelected = selectedQuick === acc.email || identifier === acc.email;
@@ -134,26 +125,18 @@ export default function Login() {
                 key={acc.email}
                 type="button"
                 onClick={() => handleQuickSelect(acc)}
-                className={`p-3 rounded-[var(--radius-sm)] border text-left transition-all relative flex flex-col justify-between ${
+                className={`py-3 px-2 rounded-[var(--radius-sm)] border text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
                   isSelected
                     ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-sm)]'
-                    : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-raised)]'
+                    : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)]/50 hover:bg-[var(--bg-raised)]'
                 }`}
               >
-                <div className="flex items-start justify-between gap-1 mb-2">
-                  <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${acc.badgeStyle}`}>
-                    {acc.badge}
-                  </span>
-                  <IconComponent className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+                <div className={`p-1.5 rounded-full border ${acc.badgeStyle}`}>
+                  <IconComponent className="w-4 h-4" />
                 </div>
-                <div className="space-y-0.5">
-                  <div className="text-[12px] font-bold text-[var(--text-primary)] truncate">
-                    {acc.name}
-                  </div>
-                  <div className="text-[10px] font-mono text-[var(--text-muted)] truncate">
-                    {acc.subtitle}
-                  </div>
-                </div>
+                <span className="text-[12px] font-bold text-[var(--text-primary)]">
+                  {acc.title}
+                </span>
               </button>
             );
           })}
@@ -218,19 +201,6 @@ export default function Login() {
           <ArrowRight className="w-4 h-4" />
         </button>
       </form>
-
-      {/* Information Notice */}
-      <div className="pt-3 border-t border-[var(--border)] space-y-2">
-        <div className="p-3 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] text-[11px] text-[var(--text-secondary)] space-y-1">
-          <p className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
-            <span>Account Provisioning Policy</span>
-          </p>
-          <p>
-            Student registration is restricted. All accounts are provisioned exclusively by the college administrator.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
