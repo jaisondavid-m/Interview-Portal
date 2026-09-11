@@ -53,7 +53,6 @@ type InterviewQuestion struct {
 	Prompt      string         `gorm:"type:text;not null" json:"prompt" binding:"required"`
 	Difficulty  string         `gorm:"size:50;default:'Medium'" json:"difficulty"`
 	Type        InterviewMode  `gorm:"size:50;not null" json:"type"`
-	PayloadJSON string         `gorm:"type:longtext" json:"payload_json,omitempty"` // Retained for compatibility/fallback
 
 	// Relational associations
 	Detail      *InterviewQuestionDetail        `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE" json:"detail,omitempty"`

@@ -19,19 +19,15 @@ import (
 // Global mutex to avoid race conditions during queue pairings
 var queueMutex sync.Mutex
 
-// Helper to extract starter code from question payload
-func extractStarterCode(payloadJSON string, defaultCode string) string {
-	if payloadJSON == "" {
-		if defaultCode != "" {
-			return defaultCode
+// Helper to extract starter code from question templates
+func extractStarterCode(q models.InterviewQuestion, defaultCode string) string {
+	for _, t := range q.Templates {
+		if t.Language == "javascript" && t.StarterCode != "" {
+			return t.StarterCode
 		}
-		return "// Write your solution here\n"
 	}
-	var data map[string]interface{}
-	if err := json.Unmarshal([]byte(payloadJSON), &data); err == nil {
-		if sc, ok := data["starter_code"].(string); ok && sc != "" {
-			return sc
-		}
+	if len(q.Templates) > 0 && q.Templates[0].StarterCode != "" {
+		return q.Templates[0].StarterCode
 	}
 	if defaultCode != "" {
 		return defaultCode
@@ -60,7 +56,7 @@ func sanitizeQuestionForCandidate(q models.InterviewQuestion) gin.H {
 		}
 	}
 
-	// 3. Extract details
+	// 3. Extract detail fields
 	constraints := ""
 	scenario := ""
 	if q.Detail != nil {
@@ -75,33 +71,6 @@ func sanitizeQuestionForCandidate(q models.InterviewQuestion) gin.H {
 			"id":   opt.OptionKey,
 			"text": opt.OptionText,
 		})
-	}
-
-	// Fallback to JSON payload if relations were not loaded
-	if len(openTestCases) == 0 && q.PayloadJSON != "" {
-		var payload map[string]interface{}
-		_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
-		if payload != nil {
-			if sc, ok := payload["starter_code"].(string); ok && starterCode == "" {
-				starterCode = sc
-			}
-			if otc, ok := payload["open_test_cases"].([]interface{}); ok {
-				for _, tc := range otc {
-					if tcMap, ok := tc.(map[string]interface{}); ok {
-						openTestCases = append(openTestCases, gin.H{
-							"input":  tcMap["input"],
-							"output": tcMap["output"],
-						})
-					}
-				}
-			}
-			if c, ok := payload["constraints"].(string); ok && constraints == "" {
-				constraints = c
-			}
-			if s, ok := payload["scenario"].(string); ok && scenario == "" {
-				scenario = s
-			}
-		}
 	}
 
 	sanitizedPayload := gin.H{
@@ -378,16 +347,7 @@ func JoinMatchmaking(c *gin.Context) {
 		if selectedLevel != nil && len(selectedLevel.Questions) > 0 {
 			initialQ := selectedLevel.Questions[0]
 			initialQID = initialQ.ID
-			if len(initialQ.Templates) > 0 {
-				for _, t := range initialQ.Templates {
-					if t.Language == "javascript" {
-						starterCode = t.StarterCode
-						break
-					}
-				}
-			} else {
-				starterCode = extractStarterCode(initialQ.PayloadJSON, starterCode)
-			}
+			starterCode = extractStarterCode(initialQ, starterCode)
 		}
 
 		session := models.InterviewSession{
@@ -570,16 +530,7 @@ func GetInterviewSession(c *gin.Context) {
 		session.CurrentQuestion = &session.Level.Questions[0]
 		session.Round1QuestionID = session.Level.Questions[0].ID
 		if session.CandidateCode == "" {
-			if len(session.CurrentQuestion.Templates) > 0 {
-				for _, t := range session.CurrentQuestion.Templates {
-					if t.Language == "javascript" {
-						session.CandidateCode = t.StarterCode
-						break
-					}
-				}
-			} else {
-				session.CandidateCode = extractStarterCode(session.CurrentQuestion.PayloadJSON, "")
-			}
+			session.CandidateCode = extractStarterCode(*session.CurrentQuestion, "")
 		}
 		database.DB.Model(&session).Updates(map[string]interface{}{
 			"current_question_id": session.CurrentQuestionID,
@@ -784,11 +735,7 @@ func RunSessionCode(c *gin.Context) {
 		return
 	}
 
-	// Extract test cases from question
-	var payload map[string]interface{}
-	if session.CurrentQuestion != nil {
-		_ = json.Unmarshal([]byte(session.CurrentQuestion.PayloadJSON), &payload)
-	}
+	// Code execution test cases
 
 	type TestCaseResult struct {
 		Index       int    `json:"index"`
@@ -1079,19 +1026,7 @@ func performRoleSwitchInternal(session *models.InterviewSession) error {
 	if nextQ.ID > 0 {
 		session.CurrentQuestionID = nextQ.ID
 		session.Round2QuestionID = nextQ.ID
-		starterCode := ""
-		if len(nextQ.Templates) > 0 {
-			for _, t := range nextQ.Templates {
-				if t.Language == "javascript" {
-					starterCode = t.StarterCode
-					break
-				}
-			}
-		}
-		if starterCode == "" {
-			starterCode = extractStarterCode(nextQ.PayloadJSON, "")
-		}
-		session.CandidateCode = starterCode
+		session.CandidateCode = extractStarterCode(nextQ, "")
 	}
 
 	return database.DB.Save(session).Error

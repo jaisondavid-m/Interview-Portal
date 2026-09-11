@@ -96,267 +96,168 @@ func runMigrations(db *gorm.DB) error {
 		&models.InterviewSession{},
 	)
 	if err == nil {
+		migrateAndDropLegacyPayloadJSONColumn(db)
 		seedInterviewData(db)
-		syncAllQuestionRelationalData(db)
 	}
 	return err
 }
 
-// syncAllQuestionRelationalData ensures all questions have populated normalized relational rows
-func syncAllQuestionRelationalData(db *gorm.DB) {
-	var questions []models.InterviewQuestion
-	db.Find(&questions)
-
-	for _, q := range questions {
-		// 1. Sync Detail
-		var detailCount int64
-		db.Model(&models.InterviewQuestionDetail{}).Where("question_id = ?", q.ID).Count(&detailCount)
-		if detailCount == 0 {
-			var payload map[string]interface{}
-			if q.PayloadJSON != "" {
-				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
-			}
-			constraints := ""
-			approach := ""
-			complexity := ""
-			idealAnswer := ""
-			scenario := ""
-			correctOpt := "A"
-			explanation := ""
-			if payload != nil {
-				if v, ok := payload["constraints"].(string); ok {
-					constraints = v
-				}
-				if v, ok := payload["expected_approach"].(string); ok {
-					approach = v
-				}
-				if v, ok := payload["expected_complexity"].(string); ok {
-					complexity = v
-				}
-				if v, ok := payload["ideal_answer"].(string); ok {
-					idealAnswer = v
-				}
-				if v, ok := payload["scenario"].(string); ok {
-					scenario = v
-				}
-				if v, ok := payload["correct_option"].(string); ok {
-					correctOpt = v
-				}
-				if v, ok := payload["explanation"].(string); ok {
-					explanation = v
-				}
-			}
-			db.Create(&models.InterviewQuestionDetail{
-				QuestionID:         q.ID,
-				Constraints:        constraints,
-				ExpectedApproach:   approach,
-				ExpectedComplexity: complexity,
-				IdealAnswer:        idealAnswer,
-				Scenario:           scenario,
-				CorrectOption:      correctOpt,
-				Explanation:        explanation,
-			})
+// migrateAndDropLegacyPayloadJSONColumn migrates any unmigrated JSON records then permanently drops payload_json column
+func migrateAndDropLegacyPayloadJSONColumn(db *gorm.DB) {
+	if db.Migrator().HasColumn(&models.InterviewQuestion{}, "payload_json") {
+		log.Println("[INFO] Detected legacy payload_json column. Migrating contents to relational tables before dropping column...")
+		type RawQuestion struct {
+			ID          uint
+			Type        models.InterviewMode
+			PayloadJSON string
 		}
+		var rawQuestions []RawQuestion
+		db.Raw("SELECT id, type, payload_json FROM interview_questions WHERE payload_json IS NOT NULL AND payload_json != ''").Scan(&rawQuestions)
 
-		// 2. Sync Code Templates (for coding questions)
-		var tmplCount int64
-		db.Model(&models.InterviewQuestionCodeTemplate{}).Where("question_id = ?", q.ID).Count(&tmplCount)
-		if tmplCount == 0 && q.Type == models.ModeCoding {
+		for _, rq := range rawQuestions {
 			var payload map[string]interface{}
-			if q.PayloadJSON != "" {
-				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
-			}
-			jsStarter := "/**\n * @param {any} input\n * @return {any}\n */\nfunction solution(input) {\n    // Write your solution here\n    \n}\n"
-			pyStarter := "def solution(input):\n    # Write your solution here\n    pass\n"
-			cppStarter := "#include <iostream>\n#include <vector>\nusing namespace std;\n\n// Write your solution here\n"
-			javaStarter := "class Solution {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n"
+			if err := json.Unmarshal([]byte(rq.PayloadJSON), &payload); err == nil && payload != nil {
+				// 1. Detail
+				var detailCount int64
+				db.Model(&models.InterviewQuestionDetail{}).Where("question_id = ?", rq.ID).Count(&detailCount)
+				if detailCount == 0 {
+					detail := models.InterviewQuestionDetail{QuestionID: rq.ID}
+					if v, ok := payload["constraints"].(string); ok { detail.Constraints = v }
+					if v, ok := payload["expected_approach"].(string); ok { detail.ExpectedApproach = v }
+					if v, ok := payload["expected_complexity"].(string); ok { detail.ExpectedComplexity = v }
+					if v, ok := payload["ideal_answer"].(string); ok { detail.IdealAnswer = v }
+					if v, ok := payload["scenario"].(string); ok { detail.Scenario = v }
+					if v, ok := payload["correct_option"].(string); ok { detail.CorrectOption = v }
+					if v, ok := payload["explanation"].(string); ok { detail.Explanation = v }
+					db.Create(&detail)
+				}
 
-			if payload != nil {
-				if sc, ok := payload["starter_code"].(string); ok && sc != "" {
-					jsStarter = sc
-				}
-				if sc, ok := payload["starter_code_js"].(string); ok && sc != "" {
-					jsStarter = sc
-				}
-				if sc, ok := payload["starter_code_py"].(string); ok && sc != "" {
-					pyStarter = sc
-				}
-				if sc, ok := payload["starter_code_cpp"].(string); ok && sc != "" {
-					cppStarter = sc
-				}
-				if sc, ok := payload["starter_code_java"].(string); ok && sc != "" {
-					javaStarter = sc
-				}
-			}
-
-			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "javascript", StarterCode: jsStarter})
-			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "python", StarterCode: pyStarter})
-			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "cpp", StarterCode: cppStarter})
-			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "java", StarterCode: javaStarter})
-		}
-
-		// 3. Sync Test Cases
-		var tcCount int64
-		db.Model(&models.InterviewQuestionTestCase{}).Where("question_id = ?", q.ID).Count(&tcCount)
-		if tcCount == 0 && q.Type == models.ModeCoding {
-			var payload map[string]interface{}
-			if q.PayloadJSON != "" {
-				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
-			}
-			order := 1
-			if payload != nil {
-				// Open sample cases
-				if otc, ok := payload["open_test_cases"].([]interface{}); ok && len(otc) > 0 {
-					for _, tc := range otc {
-						if tcMap, ok := tc.(map[string]interface{}); ok {
-							inStr, _ := tcMap["input"].(string)
-							outStr, _ := tcMap["output"].(string)
-							db.Create(&models.InterviewQuestionTestCase{
-								QuestionID:     q.ID,
-								Input:          inStr,
-								ExpectedOutput: outStr,
-								IsHidden:       false,
-								OrderIndex:     order,
-							})
-							order++
-						}
-					}
-				} else if tcList, ok := payload["test_cases"].([]interface{}); ok && len(tcList) > 0 {
-					for _, tc := range tcList {
-						if tcMap, ok := tc.(map[string]interface{}); ok {
-							inStr, _ := tcMap["input"].(string)
-							outStr, _ := tcMap["output"].(string)
-							db.Create(&models.InterviewQuestionTestCase{
-								QuestionID:     q.ID,
-								Input:          inStr,
-								ExpectedOutput: outStr,
-								IsHidden:       false,
-								OrderIndex:     order,
-							})
-							order++
+				// 2. Templates
+				var tmplCount int64
+				db.Model(&models.InterviewQuestionCodeTemplate{}).Where("question_id = ?", rq.ID).Count(&tmplCount)
+				if tmplCount == 0 && rq.Type == models.ModeCoding {
+					for _, l := range []string{"javascript", "python", "cpp", "java"} {
+						k := "starter_code_" + l
+						if l == "javascript" { k = "starter_code" }
+						sc := ""
+						if v, ok := payload[k].(string); ok && v != "" { sc = v }
+						if sc != "" {
+							db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: rq.ID, Language: l, StarterCode: sc})
 						}
 					}
 				}
 
-				// Hidden verification cases
-				if htc, ok := payload["hidden_test_cases"].([]interface{}); ok && len(htc) > 0 {
-					for _, tc := range htc {
-						if tcMap, ok := tc.(map[string]interface{}); ok {
-							inStr, _ := tcMap["input"].(string)
-							outStr, _ := tcMap["output"].(string)
-							db.Create(&models.InterviewQuestionTestCase{
-								QuestionID:     q.ID,
-								Input:          inStr,
-								ExpectedOutput: outStr,
-								IsHidden:       true,
-								OrderIndex:     order,
-							})
-							order++
+				// 3. Test Cases
+				var tcCount int64
+				db.Model(&models.InterviewQuestionTestCase{}).Where("question_id = ?", rq.ID).Count(&tcCount)
+				if tcCount == 0 && rq.Type == models.ModeCoding {
+					order := 1
+					if otc, ok := payload["open_test_cases"].([]interface{}); ok {
+						for _, tc := range otc {
+							if tcMap, ok := tc.(map[string]interface{}); ok {
+								inStr, _ := tcMap["input"].(string)
+								outStr, _ := tcMap["output"].(string)
+								db.Create(&models.InterviewQuestionTestCase{
+									QuestionID: rq.ID, Input: inStr, ExpectedOutput: outStr, IsHidden: false, OrderIndex: order,
+								})
+								order++
+							}
+						}
+					}
+					if htc, ok := payload["hidden_test_cases"].([]interface{}); ok {
+						for _, tc := range htc {
+							if tcMap, ok := tc.(map[string]interface{}); ok {
+								inStr, _ := tcMap["input"].(string)
+								outStr, _ := tcMap["output"].(string)
+								db.Create(&models.InterviewQuestionTestCase{
+									QuestionID: rq.ID, Input: inStr, ExpectedOutput: outStr, IsHidden: true, OrderIndex: order,
+								})
+								order++
+							}
 						}
 					}
 				}
-			}
 
-			// If still 0, create default sample & hidden
-			if order == 1 {
-				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [2,7,11,15], target = 9", ExpectedOutput: "[0,1]", IsHidden: false, OrderIndex: 1})
-				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [3,2,4], target = 6", ExpectedOutput: "[1,2]", IsHidden: false, OrderIndex: 2})
-				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [3,3], target = 6", ExpectedOutput: "[0,1]", IsHidden: true, OrderIndex: 3})
-				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [-1,-2,-3,-4,-5], target = -8", ExpectedOutput: "[2,4]", IsHidden: true, OrderIndex: 4})
-			}
-		}
+				// 4. Hints
+				var hintCount int64
+				db.Model(&models.InterviewQuestionHint{}).Where("question_id = ?", rq.ID).Count(&hintCount)
+				if hintCount == 0 {
+					order := 1
+					if hints, ok := payload["hints"].([]interface{}); ok {
+						for _, h := range hints {
+							if hs, ok := h.(string); ok && hs != "" {
+								db.Create(&models.InterviewQuestionHint{QuestionID: rq.ID, Type: "hint", Content: hs, OrderIndex: order})
+								order++
+							}
+						}
+					}
+					if tips, ok := payload["interview_tips"].([]interface{}); ok {
+						for _, t := range tips {
+							if ts, ok := t.(string); ok && ts != "" {
+								db.Create(&models.InterviewQuestionHint{QuestionID: rq.ID, Type: "interview_tip", Content: ts, OrderIndex: order})
+								order++
+							}
+						}
+					}
+					if rubrics, ok := payload["rubrics"].([]interface{}); ok {
+						for _, r := range rubrics {
+							if rs, ok := r.(string); ok && rs != "" {
+								db.Create(&models.InterviewQuestionHint{QuestionID: rq.ID, Type: "rubric", Content: rs, OrderIndex: order})
+								order++
+							}
+						}
+					}
+					if tps, ok := payload["talking_points"].([]interface{}); ok {
+						for _, tp := range tps {
+							if tpsStr, ok := tp.(string); ok && tpsStr != "" {
+								db.Create(&models.InterviewQuestionHint{QuestionID: rq.ID, Type: "talking_point", Content: tpsStr, OrderIndex: order})
+								order++
+							}
+						}
+					}
+					if trs, ok := payload["tradeoffs"].([]interface{}); ok {
+						for _, tr := range trs {
+							if trStr, ok := tr.(string); ok && trStr != "" {
+								db.Create(&models.InterviewQuestionHint{QuestionID: rq.ID, Type: "tradeoff", Content: trStr, OrderIndex: order})
+								order++
+							}
+						}
+					}
+				}
 
-		// 4. Sync Hints, Rubrics, Tips
-		var hintCount int64
-		db.Model(&models.InterviewQuestionHint{}).Where("question_id = ?", q.ID).Count(&hintCount)
-		if hintCount == 0 {
-			var payload map[string]interface{}
-			if q.PayloadJSON != "" {
-				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
-			}
-			if payload != nil {
-				hOrder := 1
-				if hints, ok := payload["hints"].([]interface{}); ok {
-					for _, h := range hints {
-						if hs, ok := h.(string); ok && hs != "" {
-							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "hint", Content: hs, OrderIndex: hOrder})
-							hOrder++
-						}
-					}
-				}
-				if tips, ok := payload["interview_tips"].([]interface{}); ok {
-					for _, t := range tips {
-						if ts, ok := t.(string); ok && ts != "" {
-							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "interview_tip", Content: ts, OrderIndex: hOrder})
-							hOrder++
-						}
-					}
-				}
-				if rubrics, ok := payload["rubrics"].([]interface{}); ok {
-					for _, r := range rubrics {
-						if rs, ok := r.(string); ok && rs != "" {
-							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "rubric", Content: rs, OrderIndex: hOrder})
-							hOrder++
-						}
-					}
-				}
-				if tps, ok := payload["talking_points"].([]interface{}); ok {
-					for _, tp := range tps {
-						if tpsStr, ok := tp.(string); ok && tpsStr != "" {
-							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "talking_point", Content: tpsStr, OrderIndex: hOrder})
-							hOrder++
-						}
-					}
-				}
-				if tradeoffs, ok := payload["tradeoffs"].([]interface{}); ok {
-					for _, tr := range tradeoffs {
-						if trStr, ok := tr.(string); ok && trStr != "" {
-							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "tradeoff", Content: trStr, OrderIndex: hOrder})
-							hOrder++
+				// 5. MCQ Options
+				var mcqCount int64
+				db.Model(&models.InterviewQuestionMCQOption{}).Where("question_id = ?", rq.ID).Count(&mcqCount)
+				if mcqCount == 0 && rq.Type == models.ModeMCQ {
+					correctOpt := "A"
+					if co, ok := payload["correct_option"].(string); ok { correctOpt = co }
+					if opts, ok := payload["options"].([]interface{}); ok {
+						for _, opt := range opts {
+							if optMap, ok := opt.(map[string]interface{}); ok {
+								optID, _ := optMap["id"].(string)
+								optText, _ := optMap["text"].(string)
+								db.Create(&models.InterviewQuestionMCQOption{
+									QuestionID: rq.ID, OptionKey: optID, OptionText: optText, IsCorrect: optID == correctOpt,
+								})
+							}
 						}
 					}
 				}
 			}
 		}
 
-		// 5. Sync MCQ Options (for MCQ mode)
-		var mcqCount int64
-		db.Model(&models.InterviewQuestionMCQOption{}).Where("question_id = ?", q.ID).Count(&mcqCount)
-		if mcqCount == 0 && q.Type == models.ModeMCQ {
-			var payload map[string]interface{}
-			if q.PayloadJSON != "" {
-				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
-			}
-			correctOpt := "A"
-			if payload != nil {
-				if co, ok := payload["correct_option"].(string); ok {
-					correctOpt = co
-				}
-				if opts, ok := payload["options"].([]interface{}); ok {
-					for _, opt := range opts {
-						if optMap, ok := opt.(map[string]interface{}); ok {
-							optID, _ := optMap["id"].(string)
-							optText, _ := optMap["text"].(string)
-							db.Create(&models.InterviewQuestionMCQOption{
-								QuestionID: q.ID,
-								OptionKey:  optID,
-								OptionText: optText,
-								IsCorrect:  optID == correctOpt,
-							})
-						}
-					}
-				}
-			}
-		}
+		log.Println("[INFO] Permanently dropping payload_json column from interview_questions...")
+		_ = db.Migrator().DropColumn(&models.InterviewQuestion{}, "payload_json")
+		_ = db.Exec("ALTER TABLE interview_questions DROP COLUMN payload_json")
 	}
 }
 
-// seedInterviewData creates standard initial interview tracks, levels, and questions if none exist
+// seedInterviewData creates standard initial interview tracks, levels, and relational questions
 func seedInterviewData(db *gorm.DB) {
 	var count int64
 	db.Model(&models.InterviewTrack{}).Count(&count)
 	if count == 0 {
-		log.Println("[INFO] Seeding default interview tracks and levels...")
+		log.Println("[INFO] Seeding default interview tracks, levels, and questions...")
 
 		// 1. DSA Track
 		dsaTrack := models.InterviewTrack{
@@ -378,14 +279,53 @@ func seedInterviewData(db *gorm.DB) {
 		}
 		db.Create(&level1DSA)
 
-		db.Create(&models.InterviewQuestion{
+		twoSum := models.InterviewQuestion{
 			LevelID:    level1DSA.ID,
 			Title:      "Two Sum with Target Index Lookup",
 			Prompt:     "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.",
 			Difficulty: "Easy",
 			Type:       models.ModeCoding,
-			PayloadJSON: `{"starter_code":"func twoSum(nums []int, target int) []int {\n    // Write your solution here\n    return nil\n}","open_test_cases":[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"},{"input":"nums = [3,2,4], target = 6","output":"[1,2]"}],"hidden_test_cases":[{"input":"nums = [3,3], target = 6","output":"[0,1]"},{"input":"nums = [-1,-2,-3,-4,-5], target = -8","output":"[2,4]"}],"test_cases":[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"},{"input":"nums = [3,2,4], target = 6","output":"[1,2]"}],"constraints":"2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9","hints":["Hint 1: A brute force approach checks all pairs in O(N^2) time. Can you do this in a single pass with extra space?","Hint 2: As you iterate through the array, consider what value is needed to sum to the target (complement = target - num).","Hint 3: Use a Hash Map to store numbers you have already visited along with their indices for instant O(1) lookup."],"expected_approach":"Use a Single-Pass Hash Map:\n1. Initialize an empty hash map (num -> index).\n2. Iterate through 'nums' with index 'i'.\n3. Calculate 'complement = target - nums[i]'.\n4. If 'complement' exists in the map, return [map[complement], i].\n5. Otherwise, insert 'nums[i]: i' into the map.","expected_complexity":"Time Complexity: O(N) — Single linear scan over array of N elements.\nSpace Complexity: O(N) — At most N elements stored in the hash map.","interview_tips":["Clarify input constraints: Can numbers be negative? Are duplicate numbers allowed?","Start by explaining the brute force O(N^2) approach before presenting the O(N) hash map optimization.","Walk through a dry run on a sample input like nums=[2,7,11,15], target=9 before writing the final code."]}`,
+		}
+		db.Create(&twoSum)
+
+		db.Create(&models.InterviewQuestionDetail{
+			QuestionID:         twoSum.ID,
+			Constraints:        "2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9",
+			ExpectedApproach:   "Use a Single-Pass Hash Map:\n1. Initialize an empty hash map (num -> index).\n2. Iterate through 'nums' with index 'i'.\n3. Calculate 'complement = target - nums[i]'.\n4. If 'complement' exists in the map, return [map[complement], i].\n5. Otherwise, insert 'nums[i]: i' into the map.",
+			ExpectedComplexity: "Time Complexity: O(N) — Single linear scan over array of N elements.\nSpace Complexity: O(N) — At most N elements stored in the hash map.",
 		})
+
+		db.Create(&models.InterviewQuestionCodeTemplate{
+			QuestionID:  twoSum.ID,
+			Language:    "javascript",
+			StarterCode: "function twoSum(nums, target) {\n    // Write your solution here\n    const map = new Map();\n    for (let i = 0; i < nums.length; i++) {\n        const complement = target - nums[i];\n        if (map.has(complement)) {\n            return [map.get(complement), i];\n        }\n        map.set(nums[i], i);\n    }\n    return [];\n}",
+		})
+		db.Create(&models.InterviewQuestionCodeTemplate{
+			QuestionID:  twoSum.ID,
+			Language:    "python",
+			StarterCode: "def twoSum(nums: list[int], target: int) -> list[int]:\n    # Write your solution here\n    seen = {}\n    for i, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            return [seen[complement], i]\n        seen[num] = i\n    return []",
+		})
+		db.Create(&models.InterviewQuestionCodeTemplate{
+			QuestionID:  twoSum.ID,
+			Language:    "cpp",
+			StarterCode: "#include <vector>\n#include <unordered_map>\n\nstd::vector<int> twoSum(std::vector<int>& nums, int target) {\n    // Write your solution here\n    std::unordered_map<int, int> seen;\n    for (int i = 0; i < nums.size(); i++) {\n        int comp = target - nums[i];\n        if (seen.find(comp) != seen.end()) return {seen[comp], i};\n        seen[nums[i]] = i;\n    }\n    return {};\n}",
+		})
+		db.Create(&models.InterviewQuestionCodeTemplate{
+			QuestionID:  twoSum.ID,
+			Language:    "java",
+			StarterCode: "import java.util.HashMap;\n\nclass Solution {\n    public int[] twoSum(int[] nums, int target) {\n        // Write your solution here\n        HashMap<Integer, Integer> map = new HashMap<>();\n        for (int i = 0; i < nums.length; i++) {\n            int comp = target - nums[i];\n            if (map.containsKey(comp)) return new int[]{map.get(comp), i};\n            map.put(nums[i], i);\n        }\n        return new int[]{};\n    }\n}",
+		})
+
+		db.Create(&models.InterviewQuestionTestCase{QuestionID: twoSum.ID, Input: "nums = [2,7,11,15], target = 9", ExpectedOutput: "[0,1]", IsHidden: false, OrderIndex: 1})
+		db.Create(&models.InterviewQuestionTestCase{QuestionID: twoSum.ID, Input: "nums = [3,2,4], target = 6", ExpectedOutput: "[1,2]", IsHidden: false, OrderIndex: 2})
+		db.Create(&models.InterviewQuestionTestCase{QuestionID: twoSum.ID, Input: "nums = [3,3], target = 6", ExpectedOutput: "[0,1]", IsHidden: true, OrderIndex: 3})
+		db.Create(&models.InterviewQuestionTestCase{QuestionID: twoSum.ID, Input: "nums = [-1,-2,-3,-4,-5], target = -8", ExpectedOutput: "[2,4]", IsHidden: true, OrderIndex: 4})
+
+		db.Create(&models.InterviewQuestionHint{QuestionID: twoSum.ID, Type: "hint", Content: "Hint 1: A brute force approach checks all pairs in O(N^2) time. Can you do this in a single pass with extra space?", OrderIndex: 1})
+		db.Create(&models.InterviewQuestionHint{QuestionID: twoSum.ID, Type: "hint", Content: "Hint 2: As you iterate through the array, consider what value is needed to sum to the target (complement = target - num).", OrderIndex: 2})
+		db.Create(&models.InterviewQuestionHint{QuestionID: twoSum.ID, Type: "hint", Content: "Hint 3: Use a Hash Map to store numbers you have already visited along with their indices for instant O(1) lookup.", OrderIndex: 3})
+		db.Create(&models.InterviewQuestionHint{QuestionID: twoSum.ID, Type: "interview_tip", Content: "Clarify input constraints: Can numbers be negative? Are duplicate numbers allowed?", OrderIndex: 4})
+		db.Create(&models.InterviewQuestionHint{QuestionID: twoSum.ID, Type: "interview_tip", Content: "Start by explaining the brute force O(N^2) approach before presenting the O(N) hash map optimization.", OrderIndex: 5})
 
 		level2DSA := models.InterviewLevel{
 			TrackID:     dsaTrack.ID,
@@ -417,14 +357,25 @@ func seedInterviewData(db *gorm.DB) {
 		}
 		db.Create(&level1Sys)
 
-		db.Create(&models.InterviewQuestion{
+		rateLimiter := models.InterviewQuestion{
 			LevelID:    level1Sys.ID,
 			Title:      "Design a Distributed Rate Limiter",
 			Prompt:     "Walk me through designing an API rate limiter capable of handling 100,000 requests per second across multiple regional data centers.",
 			Difficulty: "Medium",
 			Type:       models.ModeDiscussion,
-			PayloadJSON: `{"scenario":"High-throughput global API gateway requiring strict IP and token-based rate limits.","talking_points":["Token Bucket vs Leaky Bucket vs Sliding Window Log","Redis distributed cache with atomic Lua scripts","Handling Redis failover and clock skew drift"],"tradeoffs":["Consistency vs Latency in multi-region deployments","Local in-memory token buffering vs centralized Redis calls"],"interview_tips":["Probe candidate on how they handle race conditions when two requests arrive at the exact same millisecond.","Ask how the system behaves if Redis goes down — Fail Open (availability) vs Fail Closed (protection).","Evaluate whether candidate asks for clarification on RPS requirements and user burst limits."]}`,
+		}
+		db.Create(&rateLimiter)
+
+		db.Create(&models.InterviewQuestionDetail{
+			QuestionID: rateLimiter.ID,
+			Scenario:   "High-throughput global API gateway requiring strict IP and token-based rate limits.",
 		})
+		db.Create(&models.InterviewQuestionHint{QuestionID: rateLimiter.ID, Type: "talking_point", Content: "Token Bucket vs Leaky Bucket vs Sliding Window Log", OrderIndex: 1})
+		db.Create(&models.InterviewQuestionHint{QuestionID: rateLimiter.ID, Type: "talking_point", Content: "Redis distributed cache with atomic Lua scripts", OrderIndex: 2})
+		db.Create(&models.InterviewQuestionHint{QuestionID: rateLimiter.ID, Type: "talking_point", Content: "Handling Redis failover and clock skew drift", OrderIndex: 3})
+		db.Create(&models.InterviewQuestionHint{QuestionID: rateLimiter.ID, Type: "tradeoff", Content: "Consistency vs Latency in multi-region deployments", OrderIndex: 4})
+		db.Create(&models.InterviewQuestionHint{QuestionID: rateLimiter.ID, Type: "tradeoff", Content: "Local in-memory token buffering vs centralized Redis calls", OrderIndex: 5})
+		db.Create(&models.InterviewQuestionHint{QuestionID: rateLimiter.ID, Type: "interview_tip", Content: "Probe candidate on how they handle race conditions when two requests arrive at the exact same millisecond.", OrderIndex: 6})
 
 		// 3. Core CS Verbal Q&A Track
 		coreTrack := models.InterviewTrack{
@@ -446,14 +397,23 @@ func seedInterviewData(db *gorm.DB) {
 		}
 		db.Create(&level1Core)
 
-		db.Create(&models.InterviewQuestion{
+		goroutines := models.InterviewQuestion{
 			LevelID:    level1Core.ID,
 			Title:      "Goroutines vs Operating System Threads",
 			Prompt:     "Explain how lightweight green threads (such as Go goroutines) differ from standard OS kernel threads in terms of memory footprint, stack growth, and context-switching overhead.",
 			Difficulty: "Medium",
 			Type:       models.ModeVerbalQA,
-			PayloadJSON: `{"ideal_answer":"Goroutines start with tiny 2KB stack that grows/shrinks dynamically vs 1-2MB fixed OS threads. Context switching is managed in user-space by the Go M:N scheduler without entering kernel mode.","rubrics":["Mentions memory footprint (2KB vs 1MB+)","Explains user-space runtime scheduler vs kernel context switch","Mentions channel/mutex synchronization mechanisms"],"interview_tips":["Check if the candidate understands the distinction between User Space vs Kernel Space context switches.","Follow up on Go runtime work-stealing scheduler (GMP model: Goroutines, Machines, Processors).","Ask what happens if a goroutine blocks on a system call."]}`,
+		}
+		db.Create(&goroutines)
+
+		db.Create(&models.InterviewQuestionDetail{
+			QuestionID:  goroutines.ID,
+			IdealAnswer: "Goroutines start with tiny 2KB stack that grows/shrinks dynamically vs 1-2MB fixed OS threads. Context switching is managed in user-space by the Go M:N scheduler without entering kernel mode.",
 		})
+		db.Create(&models.InterviewQuestionHint{QuestionID: goroutines.ID, Type: "rubric", Content: "Mentions memory footprint (2KB vs 1MB+)", OrderIndex: 1})
+		db.Create(&models.InterviewQuestionHint{QuestionID: goroutines.ID, Type: "rubric", Content: "Explains user-space runtime scheduler vs kernel context switch", OrderIndex: 2})
+		db.Create(&models.InterviewQuestionHint{QuestionID: goroutines.ID, Type: "rubric", Content: "Mentions channel/mutex synchronization mechanisms", OrderIndex: 3})
+		db.Create(&models.InterviewQuestionHint{QuestionID: goroutines.ID, Type: "interview_tip", Content: "Check if candidate understands User Space vs Kernel Space context switches.", OrderIndex: 4})
 
 		// 4. Campus Placement MCQ Track
 		mcqTrack := models.InterviewTrack{
@@ -475,27 +435,28 @@ func seedInterviewData(db *gorm.DB) {
 		}
 		db.Create(&level1MCQ)
 
-		db.Create(&models.InterviewQuestion{
+		mcqQ := models.InterviewQuestion{
 			LevelID:    level1MCQ.ID,
 			Title:      "Time Complexity of Hash Table Rehashing",
 			Prompt:     "When an open-addressing or chained hash table reaches its load factor limit and doubles in capacity, what is the amortized time complexity per insertion?",
 			Difficulty: "Easy",
 			Type:       models.ModeMCQ,
-			PayloadJSON: `{"options":[{"id":"A","text":"O(1) Amortized"},{"id":"B","text":"O(N) Strict Worst Case"},{"id":"C","text":"O(log N)"},{"id":"D","text":"O(N^2)"}],"correct_option":"A","explanation":"While resizing itself takes O(N) work, because it occurs exponentially less frequently (doubling capacity), the amortized cost per single insert operation remains O(1).","interview_tips":["Remind candidates that 'Amortized' analysis averages the worst-case operation over a long sequence of frequent cheap operations.","Common pitfall: Confusing worst-case single insert O(N) during a resizing event with overall amortized complexity O(1)."]}`,
+		}
+		db.Create(&mcqQ)
+
+		db.Create(&models.InterviewQuestionDetail{
+			QuestionID:    mcqQ.ID,
+			CorrectOption: "A",
+			Explanation:   "While resizing itself takes O(N) work, because it occurs exponentially less frequently (doubling capacity), the amortized cost per single insert operation remains O(1).",
 		})
+		db.Create(&models.InterviewQuestionMCQOption{QuestionID: mcqQ.ID, OptionKey: "A", OptionText: "O(1) Amortized", IsCorrect: true})
+		db.Create(&models.InterviewQuestionMCQOption{QuestionID: mcqQ.ID, OptionKey: "B", OptionText: "O(N) Strict Worst Case", IsCorrect: false})
+		db.Create(&models.InterviewQuestionMCQOption{QuestionID: mcqQ.ID, OptionKey: "C", OptionText: "O(log N)", IsCorrect: false})
+		db.Create(&models.InterviewQuestionMCQOption{QuestionID: mcqQ.ID, OptionKey: "D", OptionText: "O(N^2)", IsCorrect: false})
+		db.Create(&models.InterviewQuestionHint{QuestionID: mcqQ.ID, Type: "interview_tip", Content: "Remind candidates that 'Amortized' analysis averages the worst-case operation over a long sequence of frequent cheap operations.", OrderIndex: 1})
 
 		log.Println("[INFO] Seeding completed for interview tracks, levels, and questions.")
 	}
-
-	// Update existing questions in the database with rich hints, approach, complexity, and tips if not present
-	dsaPayload := `{"starter_code":"func twoSum(nums []int, target int) []int {\n    // Write your solution here\n    return nil\n}","open_test_cases":[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"},{"input":"nums = [3,2,4], target = 6","output":"[1,2]"}],"hidden_test_cases":[{"input":"nums = [3,3], target = 6","output":"[0,1]"},{"input":"nums = [-1,-2,-3,-4,-5], target = -8","output":"[2,4]"}],"test_cases":[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"},{"input":"nums = [3,2,4], target = 6","output":"[1,2]"}],"constraints":"2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9","hints":["Hint 1: A brute force approach checks all pairs in O(N^2) time. Can you do this in a single pass with extra space?","Hint 2: As you iterate through the array, consider what value is needed to sum to the target (complement = target - num).","Hint 3: Use a Hash Map to store numbers you have already visited along with their indices for instant O(1) lookup."],"expected_approach":"Use a Single-Pass Hash Map:\n1. Initialize an empty hash map (num -> index).\n2. Iterate through 'nums' with index 'i'.\n3. Calculate 'complement = target - nums[i]'.\n4. If 'complement' exists in the map, return [map[complement], i].\n5. Otherwise, insert 'nums[i]: i' into the map.","expected_complexity":"Time Complexity: O(N) — Single linear scan over array of N elements.\nSpace Complexity: O(N) — At most N elements stored in the hash map.","interview_tips":["Clarify input constraints: Can numbers be negative? Are duplicate numbers allowed?","Start by explaining the brute force O(N^2) approach before presenting the O(N) hash map optimization.","Walk through a dry run on a sample input like nums=[2,7,11,15], target=9 before writing the final code."]}`
-	db.Exec("UPDATE interview_questions SET payload_json = ? WHERE title LIKE '%Two Sum%' AND (payload_json NOT LIKE '%hints%' OR payload_json NOT LIKE '%expected_approach%')", dsaPayload)
-
-	sysPayload := `{"scenario":"High-throughput global API gateway requiring strict IP and token-based rate limits.","talking_points":["Token Bucket vs Leaky Bucket vs Sliding Window Log","Redis distributed cache with atomic Lua scripts","Handling Redis failover and clock skew drift"],"tradeoffs":["Consistency vs Latency in multi-region deployments","Local in-memory token buffering vs centralized Redis calls"],"interview_tips":["Probe candidate on how they handle race conditions when two requests arrive at the exact same millisecond.","Ask how the system behaves if Redis goes down — Fail Open (availability) vs Fail Closed (protection).","Evaluate whether candidate asks for clarification on RPS requirements and user burst limits."]}`
-	db.Exec("UPDATE interview_questions SET payload_json = ? WHERE title LIKE '%Rate Limiter%' AND (payload_json NOT LIKE '%interview_tips%' OR payload_json LIKE '%tradeoffs_to_evaluate%')", sysPayload)
-
-	corePayload := `{"ideal_answer":"Goroutines start with tiny 2KB stack that grows/shrinks dynamically vs 1-2MB fixed OS threads. Context switching is managed in user-space by the Go M:N scheduler without entering kernel mode.","rubrics":["Mentions memory footprint (2KB vs 1MB+)","Explains user-space runtime scheduler vs kernel context switch","Mentions channel/mutex synchronization mechanisms"],"interview_tips":["Check if the candidate understands the distinction between User Space vs Kernel Space context switches.","Follow up on Go runtime work-stealing scheduler (GMP model: Goroutines, Machines, Processors).","Ask what happens if a goroutine blocks on a system call."]}`
-	db.Exec("UPDATE interview_questions SET payload_json = ? WHERE title LIKE '%Goroutines%' AND (payload_json NOT LIKE '%interview_tips%' OR payload_json LIKE '%rubric_criteria%')", corePayload)
 
 	// Ensure Valid Palindrome exists in Level 1 DSA
 	var dsaLevel models.InterviewLevel
@@ -505,30 +466,81 @@ func seedInterviewData(db *gorm.DB) {
 		var palCount int64
 		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%Valid Palindrome%'", dsaLevel.ID).Count(&palCount)
 		if palCount == 0 {
-			palindromePayload := `{"starter_code":"func isPalindrome(s string) bool {\n    // Write your solution here\n    return false\n}","open_test_cases":[{"input":"s = \"A man, a plan, a canal: Panama\"","output":"true"},{"input":"s = \"race a car\"","output":"false"},{"input":"s = \" \"","output":"true"}],"hidden_test_cases":[{"input":"s = \"0P\"","output":"false"},{"input":"s = \"ab_a\"","output":"true"},{"input":"s = \"No 'x' in Nixon\"","output":"true"}],"test_cases":[{"input":"s = \"A man, a plan, a canal: Panama\"","output":"true"},{"input":"s = \"race a car\"","output":"false"}],"constraints":"1 <= s.length <= 2 * 10^5\ns consists only of printable ASCII characters.","hints":["Hint 1: A brute force approach creates a filtered string and checks if it equals its reverse. Can you do this without extra space in O(1) memory?","Hint 2: Consider using a Two-Pointer technique with left = 0 and right = len(s) - 1.","Hint 3: While left < right, skip non-alphanumeric characters using ASCII checks, compare the lowercase characters, and move inward."],"expected_approach":"Use Two Pointers (In-Place):\n1. Initialize left = 0, right = len(s) - 1.\n2. While left < right:\n   a. While left < right and !isAlphanumeric(s[left]), left++.\n   b. While left < right and !isAlphanumeric(s[right]), right--.\n   c. If toLower(s[left]) != toLower(s[right]), return false.\n   d. left++, right--.\n3. Return true if loop finishes.","expected_complexity":"Time Complexity: O(N) — Single linear pass over the string.\nSpace Complexity: O(1) — In-place two-pointer checks with zero extra memory allocation.","interview_tips":["Ask candidate if alphanumeric includes numbers (e.g. '0P' is false).","Check if candidate handles empty or space-only string properly.","Assess whether candidate creates an auxiliary filtered string (O(N) space) or achieves O(1) in-place pointers."]}"`
-			db.Create(&models.InterviewQuestion{
-				LevelID:     dsaLevel.ID,
-				Title:       "Valid Palindrome with Two Pointers",
-				Prompt:      "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward. Alphanumeric characters include letters and numbers.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.",
-				Difficulty:  "Easy",
-				Type:        models.ModeCoding,
-				PayloadJSON: palindromePayload,
+			palQ := models.InterviewQuestion{
+				LevelID:    dsaLevel.ID,
+				Title:      "Valid Palindrome with Two Pointers",
+				Prompt:     "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward. Alphanumeric characters include letters and numbers.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.",
+				Difficulty: "Easy",
+				Type:       models.ModeCoding,
+			}
+			db.Create(&palQ)
+
+			db.Create(&models.InterviewQuestionDetail{
+				QuestionID:         palQ.ID,
+				Constraints:        "1 <= s.length <= 2 * 10^5\ns consists only of printable ASCII characters.",
+				ExpectedApproach:   "Use Two Pointers (In-Place):\n1. Initialize left = 0, right = len(s) - 1.\n2. While left < right:\n   a. Skip non-alphanumeric.\n   b. Compare lowercase chars.\n3. Return true.",
+				ExpectedComplexity: "Time Complexity: O(N) — Single linear pass.\nSpace Complexity: O(1) — In-place pointers.",
 			})
+
+			db.Create(&models.InterviewQuestionCodeTemplate{
+				QuestionID:  palQ.ID,
+				Language:    "javascript",
+				StarterCode: "function isPalindrome(s) {\n    // Write your solution here\n    let left = 0, right = s.length - 1;\n    while (left < right) {\n        while (left < right && !/[a-zA-Z0-9]/.test(s[left])) left++;\n        while (left < right && !/[a-zA-Z0-9]/.test(s[right])) right--;\n        if (s[left].toLowerCase() !== s[right].toLowerCase()) return false;\n        left++;\n        right--;\n    }\n    return true;\n}",
+			})
+			db.Create(&models.InterviewQuestionCodeTemplate{
+				QuestionID:  palQ.ID,
+				Language:    "python",
+				StarterCode: "def isPalindrome(s: str) -> bool:\n    # Write your solution here\n    left, right = 0, len(s) - 1\n    while left < right:\n        while left < right and not s[left].isalnum(): left += 1\n        while left < right and not s[right].isalnum(): right -= 1\n        if s[left].lower() != s[right].lower(): return False\n        left += 1\n        right -= 1\n    return True",
+			})
+
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: palQ.ID, Input: "s = \"A man, a plan, a canal: Panama\"", ExpectedOutput: "true", IsHidden: false, OrderIndex: 1})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: palQ.ID, Input: "s = \"race a car\"", ExpectedOutput: "false", IsHidden: false, OrderIndex: 2})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: palQ.ID, Input: "s = \" \"", ExpectedOutput: "true", IsHidden: false, OrderIndex: 3})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: palQ.ID, Input: "s = \"0P\"", ExpectedOutput: "false", IsHidden: true, OrderIndex: 4})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: palQ.ID, Input: "s = \"ab_a\"", ExpectedOutput: "true", IsHidden: true, OrderIndex: 5})
+
+			db.Create(&models.InterviewQuestionHint{QuestionID: palQ.ID, Type: "hint", Content: "Hint 1: Consider using a Two-Pointer technique with left = 0 and right = len(s) - 1.", OrderIndex: 1})
+			db.Create(&models.InterviewQuestionHint{QuestionID: palQ.ID, Type: "interview_tip", Content: "Ask candidate if alphanumeric includes numbers.", OrderIndex: 2})
 			log.Println("[INFO] Successfully seeded question: 'Valid Palindrome with Two Pointers' in Level 1 DSA")
 		}
 
 		var anagramCount int64
 		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%Valid Anagram%'", dsaLevel.ID).Count(&anagramCount)
 		if anagramCount == 0 {
-			anagramPayload := `{"starter_code":"func isAnagram(s string, t string) bool {\n    // Write your solution here\n    return false\n}","open_test_cases":[{"input":"s = \"anagram\", t = \"nagaram\"","output":"true"},{"input":"s = \"rat\", t = \"car\"","output":"false"},{"input":"s = \"a\", t = \"a\"","output":"true"}],"hidden_test_cases":[{"input":"s = \"ab\", t = \"a\"","output":"false"},{"input":"s = \"listen\", t = \"silent\"","output":"true"},{"input":"s = \"aa\", t = \"bb\"","output":"false"},{"input":"s = \"triangle\", t = \"integral\"","output":"true"}],"test_cases":[{"input":"s = \"anagram\", t = \"nagaram\"","output":"true"},{"input":"s = \"rat\", t = \"car\"","output":"false"}],"constraints":"1 <= s.length, t.length <= 5 * 10^4\ns and t consist of lowercase English letters.","hints":["Hint 1: If the lengths of s and t are different, they cannot be anagrams. Use this as an early return check.","Hint 2: An anagram means both strings have the exact same character frequencies. Can you count character frequencies using a fixed-size integer array of size 26?","Hint 3: Iterate through both strings: increment count for s[i] and decrement count for t[i]. If all 26 buckets remain 0, return true."],"expected_approach":"Use Fixed-Size Frequency Array (26 letters):\n1. Check if len(s) != len(t); if so, return false immediately.\n2. Initialize int array 'counts[26]' to 0.\n3. Loop i from 0 to len(s) - 1:\n   counts[s[i] - 'a']++\n   counts[t[i] - 'a']--\n4. Loop through counts: if any element != 0, return false.\n5. Return true.","expected_complexity":"Time Complexity: O(N) — Single linear pass over string length N.\nSpace Complexity: O(1) — Constant memory using a 26-element array for alphabet frequencies.","interview_tips":["Ask candidate how they would adapt the solution if the input contained Unicode / UTF-8 characters (e.g. switch from fixed array to a hash map).","Check whether candidate remembers the early-exit length validation check.","Evaluate code cleanliness and avoidance of unnecessary string allocations."]}"`
-			db.Create(&models.InterviewQuestion{
-				LevelID:     dsaLevel.ID,
-				Title:       "Valid Anagram Detection",
-				Prompt:      "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn **Anagram** is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
-				Difficulty:  "Easy",
-				Type:        models.ModeCoding,
-				PayloadJSON: anagramPayload,
+			anagramQ := models.InterviewQuestion{
+				LevelID:    dsaLevel.ID,
+				Title:      "Valid Anagram Detection",
+				Prompt:     "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn **Anagram** is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
+				Difficulty: "Easy",
+				Type:       models.ModeCoding,
+			}
+			db.Create(&anagramQ)
+
+			db.Create(&models.InterviewQuestionDetail{
+				QuestionID:         anagramQ.ID,
+				Constraints:        "1 <= s.length, t.length <= 5 * 10^4\ns and t consist of lowercase English letters.",
+				ExpectedApproach:   "Use Fixed-Size Frequency Array (26 letters):\n1. Check if len(s) != len(t).\n2. Count frequency diff.\n3. Return true if all counts are 0.",
+				ExpectedComplexity: "Time Complexity: O(N) — Single linear pass.\nSpace Complexity: O(1) — 26-element array.",
 			})
+
+			db.Create(&models.InterviewQuestionCodeTemplate{
+				QuestionID:  anagramQ.ID,
+				Language:    "javascript",
+				StarterCode: "function isAnagram(s, t) {\n    // Write your solution here\n    if (s.length !== t.length) return false;\n    const count = {};\n    for (let c of s) count[c] = (count[c] || 0) + 1;\n    for (let c of t) {\n        if (!count[c]) return false;\n        count[c]--;\n    }\n    return true;\n}",
+			})
+			db.Create(&models.InterviewQuestionCodeTemplate{
+				QuestionID:  anagramQ.ID,
+				Language:    "python",
+				StarterCode: "def isAnagram(s: str, t: str) -> bool:\n    # Write your solution here\n    if len(s) != len(t): return False\n    count = {}\n    for c in s: count[c] = count.get(c, 0) + 1\n    for c in t:\n        if c not in count or count[c] == 0: return False\n        count[c] -= 1\n    return True",
+			})
+
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: anagramQ.ID, Input: "s = \"anagram\", t = \"nagaram\"", ExpectedOutput: "true", IsHidden: false, OrderIndex: 1})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: anagramQ.ID, Input: "s = \"rat\", t = \"car\"", ExpectedOutput: "false", IsHidden: false, OrderIndex: 2})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: anagramQ.ID, Input: "s = \"a\", t = \"a\"", ExpectedOutput: "true", IsHidden: false, OrderIndex: 3})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: anagramQ.ID, Input: "s = \"ab\", t = \"a\"", ExpectedOutput: "false", IsHidden: true, OrderIndex: 4})
+			db.Create(&models.InterviewQuestionTestCase{QuestionID: anagramQ.ID, Input: "s = \"listen\", t = \"silent\"", ExpectedOutput: "true", IsHidden: true, OrderIndex: 5})
+
+			db.Create(&models.InterviewQuestionHint{QuestionID: anagramQ.ID, Type: "hint", Content: "Hint 1: If lengths are different, return false immediately.", OrderIndex: 1})
 			log.Println("[INFO] Successfully seeded question: 'Valid Anagram Detection' in Level 1 DSA")
 		}
 	}
