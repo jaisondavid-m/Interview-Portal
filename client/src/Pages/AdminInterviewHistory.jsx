@@ -14,7 +14,8 @@ import {
   Loader2,
   Calendar,
   Filter,
-  Eye
+  Eye,
+  GraduationCap
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -200,8 +201,8 @@ export default function AdminInterviewHistory() {
                 <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
                   <th className="py-3 px-4">Room #</th>
                   <th className="py-3 px-4">Domain & Mode</th>
-                  <th className="py-3 px-4">Interviewer (Student A)</th>
-                  <th className="py-3 px-4">Candidate (Student B)</th>
+                  <th className="py-3 px-4">Student A</th>
+                  <th className="py-3 px-4">Student B</th>
                   <th className="py-3 px-4">Switches</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Started / Duration</th>
@@ -238,12 +239,14 @@ export default function AdminInterviewHistory() {
                         </div>
                       </td>
 
-                      {/* Interviewer */}
+                      {/* Student A */}
                       <td className="py-3.5 px-4">
                         {s.interviewer ? (
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5">
-                              <Shield className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+                              <span className="w-4 h-4 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] text-[9px] font-bold font-mono flex items-center justify-center shrink-0">
+                                A
+                              </span>
                               <span className="font-semibold text-[var(--text-primary)]">
                                 {s.interviewer.name}
                               </span>
@@ -257,12 +260,14 @@ export default function AdminInterviewHistory() {
                         )}
                       </td>
 
-                      {/* Candidate */}
+                      {/* Student B */}
                       <td className="py-3.5 px-4">
                         {s.interviewee ? (
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5">
-                              <Award className="w-3.5 h-3.5 text-[var(--green)] shrink-0" />
+                              <span className="w-4 h-4 rounded-full bg-[var(--green-bg)] border border-[var(--green)]/30 text-[var(--green)] text-[9px] font-bold font-mono flex items-center justify-center shrink-0">
+                                B
+                              </span>
                               <span className="font-semibold text-[var(--text-primary)]">
                                 {s.interviewee.name}
                               </span>
@@ -411,15 +416,15 @@ export default function AdminInterviewHistory() {
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Interviewer */}
+                    {/* Student A */}
                     <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-dim)] space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
-                          <Shield className="w-3.5 h-3.5" />
-                          <span>Interviewer</span>
+                          <GraduationCap className="w-3.5 h-3.5" />
+                          <span>Student A</span>
                         </span>
-                        <span className="text-[10px] font-mono bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border)]">
-                          Role 1
+                        <span className="text-[10px] font-mono bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border)] font-bold">
+                          Peer 1
                         </span>
                       </div>
 
@@ -439,19 +444,19 @@ export default function AdminInterviewHistory() {
                           </p>
                         </div>
                       ) : (
-                        <p className="text-[13px] text-[var(--text-muted)] italic">No interviewer profile.</p>
+                        <p className="text-[13px] text-[var(--text-muted)] italic">No student profile.</p>
                       )}
                     </div>
 
-                    {/* Candidate */}
+                    {/* Student B */}
                     <div className="p-4 rounded-[var(--radius-md)] border border-[var(--green)]/30 bg-[var(--green-bg)] space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--green)]">
-                          <Award className="w-3.5 h-3.5" />
-                          <span>Candidate</span>
+                          <GraduationCap className="w-3.5 h-3.5" />
+                          <span>Student B</span>
                         </span>
-                        <span className="text-[10px] font-mono bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border)]">
-                          Role 2
+                        <span className="text-[10px] font-mono bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border)] font-bold">
+                          Peer 2
                         </span>
                       </div>
 
@@ -471,7 +476,7 @@ export default function AdminInterviewHistory() {
                           </p>
                         </div>
                       ) : (
-                        <p className="text-[13px] text-[var(--text-muted)] italic">No candidate profile.</p>
+                        <p className="text-[13px] text-[var(--text-muted)] italic">No student profile.</p>
                       )}
                     </div>
                   </div>
