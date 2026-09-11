@@ -1,13 +1,15 @@
 # ==========================================
-# Build Stage
+# MockMate Client - High Performance Nginx Production Image
 # ==========================================
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package.json package-lock.json ./
-RUN npm ci
+ENV NODE_ENV=development
+
+# Copy package manifests and install dependencies
+COPY package.json package-lock.json* ./
+RUN npm install
 
 # Copy client source files
 COPY . .
@@ -19,17 +21,17 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # ==========================================
-# Production Stage
+# Production Stage - Nginx
 # ==========================================
 FROM nginx:alpine
 
-# Remove default nginx html and configs
+# Clean default nginx templates and assets
 RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*
 
-# Copy custom Nginx configuration
+# Copy custom reverse proxy & SPA configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy compiled static files from builder
+# Copy pre-compiled Vite production bundle from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80

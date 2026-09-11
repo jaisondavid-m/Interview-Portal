@@ -241,8 +241,26 @@ func seedInterviewData(db *gorm.DB) {
 	corePayload := `{"ideal_answer":"Goroutines start with tiny 2KB stack that grows/shrinks dynamically vs 1-2MB fixed OS threads. Context switching is managed in user-space by the Go M:N scheduler without entering kernel mode.","rubrics":["Mentions memory footprint (2KB vs 1MB+)","Explains user-space runtime scheduler vs kernel context switch","Mentions channel/mutex synchronization mechanisms"],"interview_tips":["Check if the candidate understands the distinction between User Space vs Kernel Space context switches.","Follow up on Go runtime work-stealing scheduler (GMP model: Goroutines, Machines, Processors).","Ask what happens if a goroutine blocks on a system call."]}`
 	db.Exec("UPDATE interview_questions SET payload_json = ? WHERE title LIKE '%Goroutines%' AND (payload_json NOT LIKE '%interview_tips%' OR payload_json LIKE '%rubric_criteria%')", corePayload)
 
-	mcqPayload := `{"options":[{"id":"A","text":"O(1) Amortized"},{"id":"B","text":"O(N) Strict Worst Case"},{"id":"C","text":"O(log N)"},{"id":"D","text":"O(N^2)"}],"correct_option":"A","explanation":"While resizing itself takes O(N) work, because it occurs exponentially less frequently (doubling capacity), the amortized cost per single insert operation remains O(1).","interview_tips":["Remind candidates that 'Amortized' analysis averages the worst-case operation over a long sequence of frequent cheap operations.","Common pitfall: Confusing worst-case single insert O(N) during a resizing event with overall amortized complexity O(1)."]}`
-	db.Exec("UPDATE interview_questions SET payload_json = ? WHERE title LIKE '%Rehashing%' AND payload_json NOT LIKE '%interview_tips%'", mcqPayload)
+	// Ensure Valid Palindrome exists in Level 1 DSA
+	var dsaLevel models.InterviewLevel
+	if err := db.Joins("JOIN interview_tracks ON interview_tracks.id = interview_levels.track_id").
+		Where("interview_tracks.slug = 'dsa' AND interview_levels.level_number = 1").
+		First(&dsaLevel).Error; err == nil {
+		var palCount int64
+		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%Valid Palindrome%'", dsaLevel.ID).Count(&palCount)
+		if palCount == 0 {
+			palindromePayload := `{"starter_code":"func isPalindrome(s string) bool {\n    // Write your solution here\n    return false\n}","open_test_cases":[{"input":"s = \"A man, a plan, a canal: Panama\"","output":"true"},{"input":"s = \"race a car\"","output":"false"},{"input":"s = \" \"","output":"true"}],"hidden_test_cases":[{"input":"s = \"0P\"","output":"false"},{"input":"s = \"ab_a\"","output":"true"},{"input":"s = \"No 'x' in Nixon\"","output":"true"}],"test_cases":[{"input":"s = \"A man, a plan, a canal: Panama\"","output":"true"},{"input":"s = \"race a car\"","output":"false"}],"constraints":"1 <= s.length <= 2 * 10^5\ns consists only of printable ASCII characters.","hints":["Hint 1: A brute force approach creates a filtered string and checks if it equals its reverse. Can you do this without extra space in O(1) memory?","Hint 2: Consider using a Two-Pointer technique with left = 0 and right = len(s) - 1.","Hint 3: While left < right, skip non-alphanumeric characters using ASCII checks, compare the lowercase characters, and move inward."],"expected_approach":"Use Two Pointers (In-Place):\n1. Initialize left = 0, right = len(s) - 1.\n2. While left < right:\n   a. While left < right and !isAlphanumeric(s[left]), left++.\n   b. While left < right and !isAlphanumeric(s[right]), right--.\n   c. If toLower(s[left]) != toLower(s[right]), return false.\n   d. left++, right--.\n3. Return true if loop finishes.","expected_complexity":"Time Complexity: O(N) — Single linear pass over the string.\nSpace Complexity: O(1) — In-place two-pointer checks with zero extra memory allocation.","interview_tips":["Ask candidate if alphanumeric includes numbers (e.g. '0P' is false).","Check if candidate handles empty or space-only string properly.","Assess whether candidate creates an auxiliary filtered string (O(N) space) or achieves O(1) in-place pointers."]}"`
+			db.Create(&models.InterviewQuestion{
+				LevelID:     dsaLevel.ID,
+				Title:       "Valid Palindrome with Two Pointers",
+				Prompt:      "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward. Alphanumeric characters include letters and numbers.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.",
+				Difficulty:  "Easy",
+				Type:        models.ModeCoding,
+				PayloadJSON: palindromePayload,
+			})
+			log.Println("[INFO] Successfully seeded question: 'Valid Palindrome with Two Pointers' in Level 1 DSA")
+		}
+	}
 }
 
 // seedAdminAndStudents checks and seeds default admin and demo student accounts
