@@ -310,12 +310,62 @@ export default function AdminInterviewConfig() {
         };
       }
 
+      const detail = {
+        constraints: questionForm.constraints || '',
+        expected_approach: questionForm.expected_approach || '',
+        expected_complexity: questionForm.expected_complexity || '',
+        ideal_answer: questionForm.ideal_answer || '',
+        scenario: questionForm.scenario || '',
+        correct_option: questionForm.correct_option || '',
+        explanation: questionForm.explanation || '',
+      };
+
+      const templates = [
+        { language: 'javascript', starter_code: questionForm.starter_code || '' },
+      ];
+
+      const openTCs = (questionForm.open_test_cases || [])
+        .filter((tc) => tc.input || tc.output)
+        .map((tc, idx) => ({
+          input: tc.input,
+          expected_output: tc.output,
+          is_hidden: false,
+          order_index: idx + 1,
+        }));
+
+      const hiddenTCs = (questionForm.hidden_test_cases || [])
+        .filter((tc) => tc.input || tc.output)
+        .map((tc, idx) => ({
+          input: tc.input,
+          expected_output: tc.output,
+          is_hidden: true,
+          order_index: openTCs.length + idx + 1,
+        }));
+
+      const hintsList = [
+        ...(questionForm.hints || []).filter((h) => h.trim()).map((h, i) => ({ type: 'hint', content: h.trim(), order_index: i + 1 })),
+        ...(questionForm.interview_tips || []).filter((t) => t.trim()).map((t, i) => ({ type: 'interview_tip', content: t.trim(), order_index: i + 1 })),
+        ...(questionForm.rubrics || []).filter((r) => r.trim()).map((r, i) => ({ type: 'rubric', content: r.trim(), order_index: i + 1 })),
+        ...(questionForm.talking_points || []).filter((tp) => tp.trim()).map((tp, i) => ({ type: 'talking_point', content: tp.trim(), order_index: i + 1 })),
+        ...(questionForm.tradeoffs || []).filter((tr) => tr.trim()).map((tr, i) => ({ type: 'tradeoff', content: tr.trim(), order_index: i + 1 })),
+      ];
+
+      const mcqOpts = (questionForm.options || []).map((opt) => ({
+        option_key: opt.id,
+        option_text: opt.text,
+        is_correct: opt.id === questionForm.correct_option,
+      }));
+
       const postBody = {
         title: questionForm.title,
         prompt: questionForm.prompt,
         difficulty: questionForm.difficulty,
         type: currentLevel.mode,
-        payload_json: JSON.stringify(payloadObj),
+        detail,
+        templates,
+        test_cases: [...openTCs, ...hiddenTCs],
+        hints: hintsList,
+        mcq_options: mcqOpts,
       };
 
       if (questionForm.id) {
@@ -377,22 +427,28 @@ export default function AdminInterviewConfig() {
     }
   };
 
-  // Helper to open Question Form with parsed payload
+  // Helper to open Question Form with relational records
   const openEditQuestionModal = (q) => {
-    let parsed = {};
-    try {
-      parsed = JSON.parse(q.payload_json || '{}');
-    } catch (e) {}
+    const detail = q.detail || {};
+    const templates = q.templates || [];
+    const jsTmpl = templates.find((t) => t.language === 'javascript');
+    const openCases = (q.test_cases || [])
+      .filter((tc) => !tc.is_hidden)
+      .map((tc) => ({ input: tc.input, output: tc.expected_output }));
+    const hiddenCases = (q.test_cases || [])
+      .filter((tc) => tc.is_hidden)
+      .map((tc) => ({ input: tc.input, output: tc.expected_output }));
 
-    const openCases = parsed.open_test_cases?.length
-      ? parsed.open_test_cases
-      : (parsed.test_cases?.length ? parsed.test_cases : [{ input: '', output: '' }]);
-    const hiddenCases = parsed.hidden_test_cases?.length
-      ? parsed.hidden_test_cases
-      : [{ input: '', output: '' }];
+    const hints = (q.hints || []).filter((h) => h.type === 'hint').map((h) => h.content);
+    const tips = (q.hints || []).filter((h) => h.type === 'interview_tip').map((h) => h.content);
+    const rubrics = (q.hints || []).filter((h) => h.type === 'rubric').map((h) => h.content);
+    const talkingPoints = (q.hints || []).filter((h) => h.type === 'talking_point').map((h) => h.content);
+    const tradeoffs = (q.hints || []).filter((h) => h.type === 'tradeoff').map((h) => h.content);
 
-    const hints = parsed.hints?.length ? parsed.hints : [''];
-    const tips = parsed.interview_tips?.length ? parsed.interview_tips : [''];
+    const options = (q.mcq_options || []).map((opt) => ({
+      id: opt.option_key,
+      text: opt.option_text,
+    }));
 
     setQuestionForm({
       id: q.id,
@@ -400,22 +456,22 @@ export default function AdminInterviewConfig() {
       prompt: q.prompt || '',
       difficulty: q.difficulty || 'Medium',
       type: q.type || currentLevel?.mode || 'coding',
-      starter_code: parsed.starter_code || '',
-      open_test_cases: openCases,
-      hidden_test_cases: hiddenCases,
-      constraints: parsed.constraints || '',
-      hints: hints,
-      expected_approach: parsed.expected_approach || '',
-      expected_complexity: parsed.expected_complexity || '',
-      interview_tips: tips,
-      ideal_answer: parsed.ideal_answer || '',
-      rubrics: parsed.rubrics?.length ? parsed.rubrics : [''],
-      options: parsed.options?.length ? parsed.options : [{ id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }],
-      correct_option: parsed.correct_option || 'A',
-      explanation: parsed.explanation || '',
-      scenario: parsed.scenario || '',
-      talking_points: parsed.talking_points?.length ? parsed.talking_points : [''],
-      tradeoffs: parsed.tradeoffs?.length ? parsed.tradeoffs : [''],
+      starter_code: jsTmpl ? jsTmpl.starter_code : '',
+      open_test_cases: openCases.length > 0 ? openCases : [{ input: '', output: '' }],
+      hidden_test_cases: hiddenCases.length > 0 ? hiddenCases : [{ input: '', output: '' }],
+      constraints: detail.constraints || '',
+      hints: hints.length > 0 ? hints : [''],
+      expected_approach: detail.expected_approach || '',
+      expected_complexity: detail.expected_complexity || '',
+      interview_tips: tips.length > 0 ? tips : [''],
+      ideal_answer: detail.ideal_answer || '',
+      rubrics: rubrics.length > 0 ? rubrics : [''],
+      options: options.length > 0 ? options : [{ id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }],
+      correct_option: detail.correct_option || 'A',
+      explanation: detail.explanation || '',
+      scenario: detail.scenario || '',
+      talking_points: talkingPoints.length > 0 ? talkingPoints : [''],
+      tradeoffs: tradeoffs.length > 0 ? tradeoffs : [''],
     });
     setFormError('');
     setShowQuestionModal(true);
@@ -973,17 +1029,40 @@ export default function AdminInterviewConfig() {
               </button>
             </div>
           ) : (() => {
-            let parsed = {};
-            try {
-              parsed = JSON.parse(currentQuestion.payload_json || '{}');
-            } catch (e) {}
+            const detail = currentQuestion.detail || {};
+            const templates = currentQuestion.templates || [];
+            const jsTmpl = templates.find((t) => t.language === 'javascript');
+            const hints = (currentQuestion.hints || []).filter((h) => h.type === 'hint').map((h) => h.content);
+            const interviewTips = (currentQuestion.hints || []).filter((h) => h.type === 'interview_tip').map((h) => h.content);
+            const rubrics = (currentQuestion.hints || []).filter((h) => h.type === 'rubric').map((h) => h.content);
+            const talkingPoints = (currentQuestion.hints || []).filter((h) => h.type === 'talking_point').map((h) => h.content);
+            const tradeoffs = (currentQuestion.hints || []).filter((h) => h.type === 'tradeoff').map((h) => h.content);
 
             const modeMeta = INTERVIEW_MODES.find((m) => m.id === currentLevel?.mode) || INTERVIEW_MODES[0];
             const ModeIcon = modeMeta.icon;
-            const openCases = parsed.open_test_cases?.length
-              ? parsed.open_test_cases
-              : (parsed.test_cases?.length ? parsed.test_cases : []);
-            const hiddenCases = parsed.hidden_test_cases || [];
+            const openCases = (currentQuestion.test_cases || [])
+              .filter((tc) => !tc.is_hidden)
+              .map((tc) => ({ input: tc.input, output: tc.expected_output }));
+            const hiddenCases = (currentQuestion.test_cases || [])
+              .filter((tc) => tc.is_hidden)
+              .map((tc) => ({ input: tc.input, output: tc.expected_output }));
+
+            const parsed = {
+              starter_code: jsTmpl ? jsTmpl.starter_code : '',
+              constraints: detail.constraints,
+              expected_approach: detail.expected_approach,
+              expected_complexity: detail.expected_complexity,
+              ideal_answer: detail.ideal_answer,
+              scenario: detail.scenario,
+              correct_option: detail.correct_option,
+              explanation: detail.explanation,
+              hints,
+              interview_tips: interviewTips,
+              rubrics,
+              talking_points: talkingPoints,
+              tradeoffs,
+              options: (currentQuestion.mcq_options || []).map((o) => ({ id: o.option_key, text: o.option_text, is_correct: o.is_correct })),
+            };
 
             return (
               <div className="space-y-6">

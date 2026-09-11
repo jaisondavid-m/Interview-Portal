@@ -47,7 +47,16 @@ export default function ConfirmModal({
   };
 
   const styles = getVariantStyles();
-  const IconComponent = icon || styles.defaultIcon;
+
+  const renderIcon = () => {
+    if (React.isValidElement(icon)) return icon;
+    if (typeof icon === 'function') {
+      const CustomIcon = icon;
+      return <CustomIcon className="w-5 h-5" />;
+    }
+    const DefaultIcon = styles.defaultIcon;
+    return DefaultIcon ? <DefaultIcon className="w-5 h-5" /> : null;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -67,7 +76,7 @@ export default function ConfirmModal({
         {/* Modal Header */}
         <div className="flex items-start gap-3.5">
           <div className={`p-3 rounded-full border shrink-0 ${styles.iconBg}`}>
-            <IconComponent className="w-5 h-5" />
+            {renderIcon()}
           </div>
           <div className="space-y-1 pr-6">
             <h3 className="text-[17px] font-bold text-[var(--text-primary)] leading-snug">

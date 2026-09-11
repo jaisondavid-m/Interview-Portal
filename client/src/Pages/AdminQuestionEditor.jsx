@@ -129,14 +129,9 @@ export default function AdminQuestionEditor() {
             setDifficulty(qData.difficulty || 'Medium');
             setType(qData.type || lvl?.mode || 'coding');
 
-            // Parse relational detail and payload fallback
+            // Parse relational detail
             const detail = qData.detail || {};
-            let payload = qData.payload || {};
-            if (typeof qData.payload_json === 'string' && qData.payload_json) {
-              try {
-                payload = { ...payload, ...JSON.parse(qData.payload_json) };
-              } catch (e) {}
-            }
+            const payload = qData.payload || {};
 
             // Load multi-language templates (from relational templates table first, then payload)
             const relationalTemplates = {};
@@ -435,15 +430,12 @@ export default function AdminQuestionEditor() {
         is_correct: opt.id === correctOption,
       }));
 
-      const payloadJSON = JSON.stringify(payloadObj);
-
       const requestBody = {
         level_id: Number(levelId),
         title: title.trim(),
         prompt: prompt.trim(),
         difficulty,
         type,
-        payload_json: payloadJSON,
         detail,
         templates,
         test_cases: testCases,

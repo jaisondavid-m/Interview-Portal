@@ -5,7 +5,7 @@ import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { RotateCcw, Copy, Check } from 'lucide-react';
+import { RotateCcw, Copy, Check, Lock } from 'lucide-react';
 import { getStarterTemplate } from '../utils/starterTemplates';
 
 const LANGUAGE_CONFIGS = [

@@ -2,12 +2,7 @@
 
 export function getStarterTemplate(question, language = 'javascript') {
   const title = question?.title || '';
-  let payload = question?.payload || {};
-  if (typeof question?.payload_json === 'string' && question.payload_json) {
-    try {
-      payload = { ...payload, ...JSON.parse(question.payload_json) };
-    } catch (e) {}
-  }
+  const payload = question?.payload || {};
 
   // 1. Priority: Check relational templates array (question.templates)
   if (Array.isArray(question?.templates)) {
