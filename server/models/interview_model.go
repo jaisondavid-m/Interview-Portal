@@ -169,6 +169,7 @@ type InterviewSession struct {
 	RolesSwitched        bool               `gorm:"default:false" json:"roles_switched"`
 	SwitchCount          int                `gorm:"default:0" json:"switch_count"` // Strictly 0 or 1 (max 1 one-time switch)
 	SwitchRequestedBy    uint               `gorm:"default:0" json:"switch_requested_by"` // UserID who initiated the role swap request
+	EndRequestedBy       uint               `gorm:"default:0" json:"end_requested_by"`    // UserID who initiated the end interview request
 	CurrentQIndex        int                `gorm:"default:0" json:"current_question_index"`
 	Notes                string             `gorm:"type:text" json:"notes"`
 	StartedAt            time.Time          `json:"started_at"`

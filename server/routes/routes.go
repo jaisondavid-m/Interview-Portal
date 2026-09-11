@@ -49,8 +49,10 @@ func SetupRouter() *gin.Engine {
 			interviews.POST("/sessions/:id/switch-roles", controllers.SwitchSessionRoles)
 			interviews.POST("/sessions/:id/request-switch", controllers.RequestSessionRoleSwitch)
 			interviews.POST("/sessions/:id/accept-switch", controllers.AcceptSessionRoleSwitch)
-			interviews.POST("/sessions/:id/decline-switch", controllers.DeclineSessionRoleSwitch)
 			interviews.POST("/sessions/:id/end", controllers.EndInterviewSession)
+			interviews.POST("/sessions/:id/request-end", controllers.RequestSessionEndInterview)
+			interviews.POST("/sessions/:id/accept-end", controllers.AcceptSessionEndInterview)
+			interviews.POST("/sessions/:id/decline-end", controllers.DeclineSessionEndInterview)
 		}
 
 		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)

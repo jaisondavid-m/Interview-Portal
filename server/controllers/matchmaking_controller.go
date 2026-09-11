@@ -427,25 +427,28 @@ func GetMatchmakingStatus(c *gin.Context) {
 	}
 	currentUserID := rawUserID.(uint)
 
+	// Check if user has a matched entry
 	var entry models.MatchmakingQueueEntry
-	err := database.DB.Where("user_id = ? AND status = 'matched'", currentUserID).
-		Order("updated_at desc").
-		First(&entry).Error
-
+	err := database.DB.Where("user_id = ? AND status = 'matched'", currentUserID).Order("id DESC").First(&entry).Error
 	if err == nil && entry.MatchedSessionID > 0 {
 		var session models.InterviewSession
 		if sErr := database.DB.First(&session, entry.MatchedSessionID).Error; sErr == nil {
-			role := "interviewee"
-			if session.InterviewerID == currentUserID {
-				role = "interviewer"
+			if session.Status == "in_progress" {
+				role := "interviewee"
+				if session.InterviewerID == currentUserID {
+					role = "interviewer"
+				}
+				c.JSON(http.StatusOK, gin.H{
+					"status":     "matched",
+					"matched":    true,
+					"session_id": session.ID,
+					"role":       role,
+				})
+				return
+			} else {
+				// Old session is completed/cancelled, update this queue entry
+				database.DB.Model(&entry).Update("status", "completed")
 			}
-			c.JSON(http.StatusOK, gin.H{
-				"status":     "matched",
-				"matched":    true,
-				"session_id": session.ID,
-				"role":       role,
-			})
-			return
 		}
 	}
 
@@ -647,6 +650,7 @@ func GetInterviewSession(c *gin.Context) {
 				"roles_switched":         session.RolesSwitched,
 				"switch_count":           session.SwitchCount,
 				"switch_requested_by":    session.SwitchRequestedBy,
+				"end_requested_by":       session.EndRequestedBy,
 				"started_at":             session.StartedAt,
 				"ended_at":               session.EndedAt,
 			},
@@ -1202,8 +1206,8 @@ func SwitchSessionRoles(c *gin.Context) {
 	RequestSessionRoleSwitch(c)
 }
 
-// EndInterviewSession marks the session as completed
-func EndInterviewSession(c *gin.Context) {
+// RequestSessionEndInterview initiates an end interview request requiring peer confirmation
+func RequestSessionEndInterview(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
@@ -1223,15 +1227,136 @@ func EndInterviewSession(c *gin.Context) {
 		return
 	}
 
+	if session.Status == "completed" {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "success",
+			"ended":   true,
+			"message": "Interview session has already ended.",
+		})
+		return
+	}
+
+	// If peer already requested to end the interview, mutual confirmation reached!
+	if session.EndRequestedBy != 0 && session.EndRequestedBy != currentUserID {
+		now := time.Now()
+		session.Status = "completed"
+		session.EndedAt = &now
+		session.EndRequestedBy = 0
+		database.DB.Save(&session)
+
+		// Clean up matched queue entries
+		database.DB.Model(&models.MatchmakingQueueEntry{}).
+			Where("matched_session_id = ?", session.ID).
+			Update("status", "completed")
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "success",
+			"ended":   true,
+			"message": "Both students agreed to complete the interview.",
+		})
+		return
+	}
+
+	// Otherwise, record end request and wait for peer confirmation
+	session.EndRequestedBy = currentUserID
+	database.DB.Model(&session).Update("end_requested_by", currentUserID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":           "pending",
+		"ended":            false,
+		"end_requested_by": currentUserID,
+		"message":          "End interview requested. Waiting for peer student to confirm...",
+	})
+}
+
+// AcceptSessionEndInterview confirms and marks the session as completed
+func AcceptSessionEndInterview(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	if session.EndRequestedBy == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "No pending end interview request found.",
+		})
+		return
+	}
+
+	if session.EndRequestedBy == currentUserID {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "You cannot accept your own end request. Waiting for peer.",
+		})
+		return
+	}
+
 	now := time.Now()
 	session.Status = "completed"
 	session.EndedAt = &now
+	session.EndRequestedBy = 0
 	database.DB.Save(&session)
+
+	// Clean up matched queue entries
+	database.DB.Model(&models.MatchmakingQueueEntry{}).
+		Where("matched_session_id = ?", session.ID).
+		Update("status", "completed")
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
-		"message": "Interview session finished successfully",
+		"ended":   true,
+		"message": "Interview completed successfully.",
 	})
+}
+
+// DeclineSessionEndInterview cancels the pending end interview request
+func DeclineSessionEndInterview(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	session.EndRequestedBy = 0
+	database.DB.Model(&session).Update("end_requested_by", 0)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "End interview request was declined.",
+	})
+}
+
+// EndInterviewSession aliases to RequestSessionEndInterview
+func EndInterviewSession(c *gin.Context) {
+	RequestSessionEndInterview(c)
 }
 
 // AdminGetInterviewSessions returns all interview history with full participant identities

@@ -41,6 +41,7 @@ export default function InterviewRoom() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [switching, setSwitching] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(() => {
     try {
       const cachedStart = sessionStorage.getItem(`interview_started_${sessionId}`);
@@ -407,25 +408,96 @@ export default function InterviewRoom() {
     }
   };
 
-  // End Interview Session
-  const handleEndSession = () => {
+  // Request End Interview (Requires peer acceptance)
+  const handleRequestEnd = () => {
     openModal({
-      title: 'End Interview Assessment',
-      message: 'Are you sure you want to conclude and end this live interview session? You will be navigated back to the assessment directory.',
-      confirmText: 'End Assessment',
+      title: 'Request to End Interview',
+      message: 'Are you sure you want to conclude the interview? Both participants must confirm to end the session. A confirmation request will be sent to your peer.',
+      confirmText: 'Send End Request',
       cancelText: 'Stay in Room',
       variant: 'danger',
       icon: LogOut,
       onConfirm: async () => {
         closeModal();
         try {
-          await api.post(`/interviews/sessions/${sessionId}/end`);
-          navigate('/interviews');
-        } catch (e) {
-          navigate('/interviews');
+          setEnding(true);
+          const res = await api.post(`/interviews/sessions/${sessionId}/request-end`);
+          const data = res?.data || res;
+          if (data?.ended) {
+            navigate('/interviews');
+            return;
+          }
+          await fetchSession();
+        } catch (err) {
+          openModal({
+            title: 'End Session Notice',
+            message: err.response?.data?.message || err.message || 'Failed to request session end.',
+            variant: 'warning',
+            icon: AlertCircle,
+            showCancel: false,
+            confirmText: 'OK',
+            onConfirm: closeModal,
+          });
+        } finally {
+          setEnding(false);
         }
       },
     });
+  };
+
+  // Accept End Interview from Peer
+  const handleAcceptEnd = async () => {
+    try {
+      setEnding(true);
+      const res = await api.post(`/interviews/sessions/${sessionId}/accept-end`);
+      const data = res?.data || res;
+      await fetchSession();
+      openModal({
+        title: 'Interview Concluded',
+        message: 'Both participants have agreed to conclude the interview session. You can now return to the interview dashboard.',
+        confirmText: 'Go to Dashboard',
+        showCancel: false,
+        variant: 'primary',
+        icon: Award,
+        onConfirm: () => {
+          closeModal();
+          navigate('/interviews');
+        },
+      });
+    } catch (err) {
+      openModal({
+        title: 'End Session Notice',
+        message: err.response?.data?.message || err.message || 'Failed to accept session end.',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        confirmText: 'OK',
+        onConfirm: closeModal,
+      });
+    } finally {
+      setEnding(false);
+    }
+  };
+
+  // Decline or Cancel End Interview
+  const handleDeclineEnd = async () => {
+    try {
+      setEnding(true);
+      await api.post(`/interviews/sessions/${sessionId}/decline-end`);
+      await fetchSession();
+    } catch (err) {
+      openModal({
+        title: 'End Session Notice',
+        message: err.response?.data?.message || err.message || 'Failed to decline end request.',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        confirmText: 'OK',
+        onConfirm: closeModal,
+      });
+    } finally {
+      setEnding(false);
+    }
   };
 
   // Format seconds -> MM:SS or HH:MM:SS
@@ -479,6 +551,11 @@ export default function InterviewRoom() {
   const isSwitchRequestedByMe = switchRequestedBy > 0 && switchRequestedBy === myUserId;
   const isSwitchRequestedByPeer = switchRequestedBy > 0 && switchRequestedBy !== myUserId;
 
+  // Mutual end interview state calculations
+  const endRequestedBy = sessionData?.end_requested_by || 0;
+  const isEndRequestedByMe = endRequestedBy > 0 && endRequestedBy === myUserId;
+  const isEndRequestedByPeer = endRequestedBy > 0 && endRequestedBy !== myUserId;
+
   // Extract open test cases
   const openCases = payload?.open_test_cases || payload?.test_cases || [
     { input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' },
@@ -491,13 +568,17 @@ export default function InterviewRoom() {
       <div className="pb-4 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex-wrap">
-            <span className="w-2.5 h-2.5 rounded-full bg-[var(--green)] animate-pulse" />
-            <span className="font-bold text-[var(--green)]">Live Peer Session</span>
+            <span className={`w-2.5 h-2.5 rounded-full ${isCompleted ? 'bg-[var(--text-muted)]' : 'bg-[var(--green)] animate-pulse'}`} />
+            <span className={`font-bold ${isCompleted ? 'text-[var(--text-muted)]' : 'text-[var(--green)]'}`}>
+              {isCompleted ? 'Concluded Session' : 'Live Peer Session'}
+            </span>
             <span>•</span>
             <span>Room #{sessionId}</span>
             <span>•</span>
             <span className={`px-2 py-0.5 rounded font-bold ${
-              currentRound === 1
+              isCompleted
+                ? 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]'
+                : currentRound === 1
                 ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]'
                 : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
             }`}>
@@ -512,7 +593,7 @@ export default function InterviewRoom() {
           </p>
         </div>
 
-        {/* Live Timer, Switch Role Button & End Button */}
+        {/* Live Timer, Switch Role Button & Mutual End Button */}
         <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
           <div className="bg-[var(--bg-card)] px-3 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] flex items-center gap-2 font-mono text-[12px] text-[var(--text-primary)] shadow-[var(--shadow-sm)]">
             <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -557,8 +638,8 @@ export default function InterviewRoom() {
             ) : (
               <button
                 onClick={handleRequestSwitch}
-                disabled={switching}
-                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-[var(--shadow-sm)] border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer"
+                disabled={switching || isEndRequestedByMe || isEndRequestedByPeer}
+                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-[var(--shadow-sm)] border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer disabled:opacity-50"
                 title="Request to finish Round 1 and swap roles to Round 2 (Requires peer confirmation)"
               >
                 {switching ? (
@@ -575,17 +656,67 @@ export default function InterviewRoom() {
             </span>
           )}
 
-          <button
-            onClick={handleEndSession}
-            className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>End Interview</span>
-          </button>
+          {/* MUTUAL CONSENT END INTERVIEW BUTTON */}
+          {isCompleted ? (
+            <button
+              onClick={() => navigate('/interviews')}
+              className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Exit Session</span>
+            </button>
+          ) : isEndRequestedByMe ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-mono text-[var(--red)] px-2.5 py-1.5 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-1.5 font-bold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--red)]" />
+                <span>Waiting for Peer to Confirm End...</span>
+              </span>
+              <button
+                onClick={handleDeclineEnd}
+                disabled={ending}
+                className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--red)] underline px-1 cursor-pointer"
+                title="Cancel end request"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : isEndRequestedByPeer ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleAcceptEnd}
+                disabled={ending}
+                className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-sm animate-pulse cursor-pointer"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Confirm End Interview</span>
+              </button>
+              <button
+                onClick={handleDeclineEnd}
+                disabled={ending}
+                className="btn btn-secondary text-xs py-1.5 px-2.5 cursor-pointer"
+              >
+                <span>Decline</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleRequestEnd}
+              disabled={ending || isSwitchRequestedByMe}
+              className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Request mutual consent to conclude and end the interview"
+            >
+              {ending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <LogOut className="w-3.5 h-3.5" />
+              )}
+              <span>End Interview</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* MUTUAL CONSENT MODAL / PROMPT BANNER FOR PEER */}
+      {/* MUTUAL CONSENT MODAL / PROMPT BANNER FOR PEER (ROLE SWITCH) */}
       {isSwitchRequestedByPeer && switchCount === 0 && !isCompleted && (
         <div className="p-4 rounded-[var(--radius-md)] border-2 border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-md)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
           <div className="flex items-start gap-3">
@@ -619,6 +750,76 @@ export default function InterviewRoom() {
               className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1 font-medium cursor-pointer"
             >
               <span>Not Ready</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MUTUAL CONSENT MODAL / PROMPT BANNER FOR PEER (END INTERVIEW) */}
+      {isEndRequestedByPeer && !isCompleted && (
+        <div className="p-4 rounded-[var(--radius-md)] border-2 border-[var(--red)] bg-red-500/10 dark:bg-red-950/20 shadow-[var(--shadow-md)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-full bg-[var(--red)] text-white shrink-0 mt-0.5 sm:mt-0">
+              <LogOut className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Peer Requested to Conclude & End Interview</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--red)] text-white uppercase font-bold">
+                  Action Required
+                </span>
+              </h4>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+                Your peer has requested to end the live interview session. Both participants must confirm to conclude the session and finalize results.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              onClick={handleAcceptEnd}
+              disabled={ending}
+              className="btn btn-danger text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
+            >
+              {ending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              <span>Accept & Conclude Interview</span>
+            </button>
+            <button
+              onClick={handleDeclineEnd}
+              disabled={ending}
+              className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1 font-medium cursor-pointer"
+            >
+              <span>Keep Practicing</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* COMPLETED BANNER */}
+      {isCompleted && (
+        <div className="p-4 rounded-[var(--radius-md)] border-2 border-[var(--border-accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-md)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-full bg-[var(--accent)] text-white shrink-0 mt-0.5 sm:mt-0">
+              <Award className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Interview Session Concluded</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--accent)] text-white uppercase font-bold">
+                  Completed
+                </span>
+              </h4>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+                Both participants have concluded this peer interview session. You can review your history or return to the dashboard.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              onClick={() => navigate('/interviews')}
+              className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Return to Dashboard</span>
             </button>
           </div>
         </div>
