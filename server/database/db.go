@@ -260,6 +260,21 @@ func seedInterviewData(db *gorm.DB) {
 			})
 			log.Println("[INFO] Successfully seeded question: 'Valid Palindrome with Two Pointers' in Level 1 DSA")
 		}
+
+		var anagramCount int64
+		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%Valid Anagram%'", dsaLevel.ID).Count(&anagramCount)
+		if anagramCount == 0 {
+			anagramPayload := `{"starter_code":"func isAnagram(s string, t string) bool {\n    // Write your solution here\n    return false\n}","open_test_cases":[{"input":"s = \"anagram\", t = \"nagaram\"","output":"true"},{"input":"s = \"rat\", t = \"car\"","output":"false"},{"input":"s = \"a\", t = \"a\"","output":"true"}],"hidden_test_cases":[{"input":"s = \"ab\", t = \"a\"","output":"false"},{"input":"s = \"listen\", t = \"silent\"","output":"true"},{"input":"s = \"aa\", t = \"bb\"","output":"false"},{"input":"s = \"triangle\", t = \"integral\"","output":"true"}],"test_cases":[{"input":"s = \"anagram\", t = \"nagaram\"","output":"true"},{"input":"s = \"rat\", t = \"car\"","output":"false"}],"constraints":"1 <= s.length, t.length <= 5 * 10^4\ns and t consist of lowercase English letters.","hints":["Hint 1: If the lengths of s and t are different, they cannot be anagrams. Use this as an early return check.","Hint 2: An anagram means both strings have the exact same character frequencies. Can you count character frequencies using a fixed-size integer array of size 26?","Hint 3: Iterate through both strings: increment count for s[i] and decrement count for t[i]. If all 26 buckets remain 0, return true."],"expected_approach":"Use Fixed-Size Frequency Array (26 letters):\n1. Check if len(s) != len(t); if so, return false immediately.\n2. Initialize int array 'counts[26]' to 0.\n3. Loop i from 0 to len(s) - 1:\n   counts[s[i] - 'a']++\n   counts[t[i] - 'a']--\n4. Loop through counts: if any element != 0, return false.\n5. Return true.","expected_complexity":"Time Complexity: O(N) — Single linear pass over string length N.\nSpace Complexity: O(1) — Constant memory using a 26-element array for alphabet frequencies.","interview_tips":["Ask candidate how they would adapt the solution if the input contained Unicode / UTF-8 characters (e.g. switch from fixed array to a hash map).","Check whether candidate remembers the early-exit length validation check.","Evaluate code cleanliness and avoidance of unnecessary string allocations."]}"`
+			db.Create(&models.InterviewQuestion{
+				LevelID:     dsaLevel.ID,
+				Title:       "Valid Anagram Detection",
+				Prompt:      "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn **Anagram** is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
+				Difficulty:  "Easy",
+				Type:        models.ModeCoding,
+				PayloadJSON: anagramPayload,
+			})
+			log.Println("[INFO] Successfully seeded question: 'Valid Anagram Detection' in Level 1 DSA")
+		}
 	}
 }
 

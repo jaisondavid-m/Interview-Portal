@@ -91,16 +91,22 @@ type InterviewSession struct {
 	CurrentQuestion   *InterviewQuestion `gorm:"foreignKey:CurrentQuestionID" json:"current_question,omitempty"`
 	Round1QuestionID  uint               `gorm:"default:0" json:"round1_question_id"`
 	Round2QuestionID  uint               `gorm:"default:0" json:"round2_question_id"`
-	CandidateCode     string             `gorm:"type:longtext" json:"candidate_code"`
-	CandidateLang     string             `gorm:"size:50;default:'javascript'" json:"candidate_lang"`
-	RolesSwitched     bool               `gorm:"default:false" json:"roles_switched"`
-	SwitchCount       int                `gorm:"default:0" json:"switch_count"` // Strictly 0 or 1 (max 1 one-time switch)
-	CurrentQIndex     int                `gorm:"default:0" json:"current_question_index"`
-	Notes             string             `gorm:"type:text" json:"notes"`
-	StartedAt         time.Time          `json:"started_at"`
-	EndedAt           *time.Time         `json:"ended_at"`
-	CreatedAt         time.Time          `json:"created_at"`
-	UpdatedAt         time.Time          `json:"updated_at"`
+	CandidateCode        string             `gorm:"type:longtext" json:"candidate_code"`
+	CandidateLang        string             `gorm:"size:50;default:'javascript'" json:"candidate_lang"`
+	LastExecutionJSON    string             `gorm:"type:longtext" json:"last_execution_json"`
+	LastExecutionType    string             `gorm:"size:50" json:"last_execution_type"`       // "run" | "submit"
+	LastExecutionVerdict string             `gorm:"size:100" json:"last_execution_verdict"`   // "Accepted", "Wrong Answer", "All Sample Cases Passed"
+	LastExecutionPassed  int                `gorm:"default:0" json:"last_execution_passed"`
+	LastExecutionTotal   int                `gorm:"default:0" json:"last_execution_total"`
+	LastExecutedAt       *time.Time         `json:"last_executed_at"`
+	RolesSwitched        bool               `gorm:"default:false" json:"roles_switched"`
+	SwitchCount          int                `gorm:"default:0" json:"switch_count"` // Strictly 0 or 1 (max 1 one-time switch)
+	CurrentQIndex        int                `gorm:"default:0" json:"current_question_index"`
+	Notes                string             `gorm:"type:text" json:"notes"`
+	StartedAt            time.Time          `json:"started_at"`
+	EndedAt              *time.Time         `json:"ended_at"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
 	DeletedAt         gorm.DeletedAt     `gorm:"index" json:"-"`
 }
 

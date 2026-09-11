@@ -499,6 +499,12 @@ func GetInterviewSession(c *gin.Context) {
 				"level_questions":        levelQuestions,
 				"candidate_code":         session.CandidateCode,
 				"candidate_lang":         session.CandidateLang,
+				"last_execution_type":    session.LastExecutionType,
+				"last_execution_verdict": session.LastExecutionVerdict,
+				"last_execution_passed":  session.LastExecutionPassed,
+				"last_execution_total":   session.LastExecutionTotal,
+				"last_executed_at":       session.LastExecutedAt,
+				"last_execution_json":    session.LastExecutionJSON,
 				"roles_switched":         session.RolesSwitched,
 				"switch_count":           session.SwitchCount,
 				"started_at":             session.StartedAt,
@@ -666,6 +672,34 @@ func RunSessionCode(c *gin.Context) {
 		}
 	}
 
+	// Persist execution for interviewer real-time synchronization
+	runJSON, _ := json.Marshal(gin.H{
+		"type":        "run",
+		"all_passed":  allPassed,
+		"results":     results,
+		"total_cases": len(results),
+	})
+	now := time.Now()
+	verdict := "All Sample Cases Passed"
+	passedCount := 0
+	for _, r := range results {
+		if r.Passed {
+			passedCount++
+		}
+	}
+	if !allPassed {
+		verdict = "Some Cases Failed"
+	}
+
+	database.DB.Model(&session).Updates(map[string]interface{}{
+		"last_execution_json":    string(runJSON),
+		"last_execution_type":    "run",
+		"last_execution_verdict": verdict,
+		"last_execution_passed":  passedCount,
+		"last_execution_total":   len(results),
+		"last_executed_at":       &now,
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":      "success",
 		"all_passed":  allPassed,
@@ -729,8 +763,9 @@ func SubmitSessionCode(c *gin.Context) {
 		verdict = "Wrong Answer"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	subData := gin.H{
 		"status":        "success",
+		"type":          "submit",
 		"verdict":       verdict,
 		"passed_cases":  passedCases,
 		"total_cases":   totalCases,
@@ -739,7 +774,20 @@ func SubmitSessionCode(c *gin.Context) {
 		"runtime_ms":    rand.Intn(40) + 20,
 		"memory_mb":     "14.2 MB",
 		"round":         session.Round,
+	}
+	subJSON, _ := json.Marshal(subData)
+	now := time.Now()
+
+	database.DB.Model(&session).Updates(map[string]interface{}{
+		"last_execution_json":    string(subJSON),
+		"last_execution_type":    "submit",
+		"last_execution_verdict": verdict,
+		"last_execution_passed":  passedCases,
+		"last_execution_total":   totalCases,
+		"last_executed_at":       &now,
 	})
+
+	c.JSON(http.StatusOK, subData)
 }
 
 // SwitchSessionRoles performs the one-time role swap and loads a random new question for Round 2
@@ -779,6 +827,12 @@ func SwitchSessionRoles(c *gin.Context) {
 	session.RolesSwitched = true
 	session.SwitchCount = 1
 	session.Round = 2
+	session.LastExecutionJSON = ""
+	session.LastExecutionType = ""
+	session.LastExecutionVerdict = ""
+	session.LastExecutionPassed = 0
+	session.LastExecutionTotal = 0
+	session.LastExecutedAt = nil
 
 	// 2. Load random next question for Round 2 (different from Round 1 question)
 	var allQuestions []models.InterviewQuestion

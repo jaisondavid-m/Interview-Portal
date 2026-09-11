@@ -71,6 +71,20 @@ export default function InterviewRoom() {
         if (data.current_user_role === 'interviewer') {
           setCode(data.session.candidate_code || '');
           setLanguage(data.session.candidate_lang || 'javascript');
+
+          // Synchronize candidate execution state for interviewer
+          if (data.session.last_execution_json) {
+            try {
+              const execData = JSON.parse(data.session.last_execution_json);
+              if (data.session.last_execution_type === 'run') {
+                setRunResults(execData);
+              } else if (data.session.last_execution_type === 'submit') {
+                setSubmissionResult(execData);
+              }
+            } catch (e) {
+              // ignore parse error
+            }
+          }
         } else if (!code && data.session.candidate_code) {
           setCode(data.session.candidate_code);
           setLanguage(data.session.candidate_lang || 'javascript');
@@ -322,16 +336,16 @@ export default function InterviewRoom() {
       </div>
 
       {/* Role Banner */}
-      <div className={`p-3 rounded-[var(--radius-sm)] border flex items-center justify-between text-xs transition-all ${
+      <div className={`p-3 rounded-[var(--radius-sm)] border flex flex-col sm:flex-row sm:items-center justify-between text-xs transition-all gap-2 ${
         currentUserRole === 'interviewer'
           ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--text-primary)]'
           : 'bg-[var(--green-bg)] border-[var(--green)]/30 text-[var(--text-primary)]'
       }`}>
         <div className="flex items-center gap-2.5">
           {currentUserRole === 'interviewer' ? (
-            <Shield className="w-4 h-4 text-[var(--accent)]" />
+            <Shield className="w-4 h-4 text-[var(--accent)] shrink-0" />
           ) : (
-            <Award className="w-4 h-4 text-[var(--green)]" />
+            <Award className="w-4 h-4 text-[var(--green)] shrink-0" />
           )}
           <span>
             You are currently the <strong>{currentUserRole === 'interviewer' ? 'Interviewer (Assessor)' : 'Candidate (Interviewee)'}</strong> in Round {currentRound}.
@@ -340,6 +354,20 @@ export default function InterviewRoom() {
               : ' Write and execute your code in the shared workspace. Your interviewer is observing live.'}
           </span>
         </div>
+
+        {/* Live Execution Telemetry Status Pill for Interviewer */}
+        {currentUserRole === 'interviewer' && sessionData?.last_execution_verdict && (
+          <div className={`px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border shrink-0 ${
+            sessionData.last_execution_verdict === 'Accepted' || sessionData.last_execution_verdict === 'All Sample Cases Passed'
+              ? 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/40'
+              : 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/40'
+          }`}>
+            <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+            <span>
+              Candidate {sessionData.last_execution_type === 'submit' ? 'Submitted' : 'Ran'}: {sessionData.last_execution_verdict} ({sessionData.last_execution_passed}/{sessionData.last_execution_total} Passed)
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Main Dual-Panel Workspace Grid */}
@@ -609,6 +637,11 @@ export default function InterviewRoom() {
             isCandidate={currentUserRole === 'interviewee'}
             runResults={runResults}
             submissionResult={submissionResult}
+            lastExecutionInfo={
+              sessionData?.last_execution_verdict
+                ? `${sessionData.last_execution_verdict} - ${sessionData.last_execution_passed}/${sessionData.last_execution_total} Passed`
+                : null
+            }
           />
         </div>
       </div>

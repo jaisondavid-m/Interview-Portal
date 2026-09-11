@@ -10,10 +10,18 @@ export default function TestCasesConsole({
   isCandidate = true,
   runResults = null,
   submissionResult = null,
+  lastExecutionInfo = null,
 }) {
-  const [activeTab, setActiveTab] = useState('sample'); // 'sample' | 'custom' | 'result'
+  const [activeTab, setActiveTab] = useState(submissionResult || runResults ? 'result' : 'sample'); // 'sample' | 'custom' | 'result'
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(0);
   const [customInput, setCustomInput] = useState('nums = [2,7,11,15], target = 9');
+
+  // Automatically show verdict tab if a new execution comes in
+  React.useEffect(() => {
+    if (submissionResult || runResults) {
+      setActiveTab('result');
+    }
+  }, [submissionResult, runResults]);
 
   const handleRun = () => {
     if (activeTab === 'custom') {
@@ -27,7 +35,7 @@ export default function TestCasesConsole({
     <div className="flex flex-col rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden shadow-[var(--shadow-sm)]">
       {/* Console Header Tabs */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] select-none flex-wrap gap-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveTab('sample')}
@@ -40,36 +48,43 @@ export default function TestCasesConsole({
             Sample Cases ({openTestCases.length || 2})
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('custom')}
-            className={`px-3 py-1 text-[11px] font-mono font-bold rounded transition-all ${
-              activeTab === 'custom'
-                ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Custom Input
-          </button>
-
-          {(runResults || submissionResult) && (
+          {isCandidate && (
             <button
               type="button"
-              onClick={() => setActiveTab('result')}
-              className={`px-3 py-1 text-[11px] font-mono font-bold rounded transition-all flex items-center gap-1 ${
-                activeTab === 'result'
+              onClick={() => setActiveTab('custom')}
+              className={`px-3 py-1 text-[11px] font-mono font-bold rounded transition-all ${
+                activeTab === 'custom'
                   ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
-              <Terminal className="w-3 h-3" />
-              <span>Verdict & Output</span>
+              Custom Input
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('result')}
+            className={`px-3 py-1 text-[11px] font-mono font-bold rounded transition-all flex items-center gap-1.5 ${
+              activeTab === 'result'
+                ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <Terminal className="w-3 h-3" />
+            <span>Verdict & Execution</span>
+            {(runResults || submissionResult) && (
+              <span className={`w-2 h-2 rounded-full ${
+                (submissionResult?.verdict === 'Accepted' || runResults?.all_passed)
+                  ? 'bg-[var(--green)]'
+                  : 'bg-[var(--red)]'
+              }`} />
+            )}
+          </button>
         </div>
 
-        {/* Action Run & Submit Buttons */}
-        {isCandidate && (
+        {/* Action Run & Submit Buttons (Candidate only) OR Live Status Indicator (Interviewer) */}
+        {isCandidate ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -98,6 +113,13 @@ export default function TestCasesConsole({
               )}
               <span>Submit Solution</span>
             </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-[11px] font-mono">
+            <span className="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse" />
+            <span className="text-[var(--text-muted)]">
+              Candidate Live Console {lastExecutionInfo ? `(${lastExecutionInfo})` : ''}
+            </span>
           </div>
         )}
       </div>
