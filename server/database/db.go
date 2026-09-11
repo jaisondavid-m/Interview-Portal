@@ -71,8 +71,8 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 	// Clean up duplicate "Level X: " prefix in level names if any exist
 	db.Exec("UPDATE interview_levels SET name = TRIM(SUBSTRING(name, INSTR(name, ':') + 1)) WHERE name LIKE 'Level %:%'")
 
-	// Seed default Admin user
-	seedAdminUser(db)
+	// Seed default Admin & Student accounts
+	seedAdminAndStudents(db)
 
 	DB = db
 	return db, nil
@@ -245,39 +245,58 @@ func seedInterviewData(db *gorm.DB) {
 	db.Exec("UPDATE interview_questions SET payload_json = ? WHERE title LIKE '%Rehashing%' AND payload_json NOT LIKE '%interview_tips%'", mcqPayload)
 }
 
-// seedAdminUser checks if default admin exists; if not, seeds admin@bitsathy.ac.in
-func seedAdminUser(db *gorm.DB) {
-	adminEmail := "admin@bitsathy.ac.in"
-	var existingAdmin models.User
-	err := db.Where("email = ?", adminEmail).First(&existingAdmin).Error
-
+// seedAdminAndStudents checks and seeds default admin and demo student accounts
+func seedAdminAndStudents(db *gorm.DB) {
 	hashedPassword, errHash := models.HashPassword("password")
 	if errHash != nil {
-		log.Printf("[ERROR] Failed to hash admin password: %v\n", errHash)
+		log.Printf("[ERROR] Failed to hash password: %v\n", errHash)
 		return
 	}
 
-	if err != nil {
-		// Admin does not exist, create
-		admin := models.User{
+	defaultUsers := []models.User{
+		{
 			Name:       "System Administrator",
-			Email:      adminEmail,
+			Email:      "admin@bitsathy.ac.in",
 			RollNo:     "ADMIN01",
 			Department: "Administration",
-			Password:   hashedPassword,
 			Role:       "admin",
-		}
-		if createErr := db.Create(&admin).Error; createErr != nil {
-			log.Printf("[ERROR] Failed to seed default admin: %v\n", createErr)
+			Password:   hashedPassword,
+		},
+		{
+			Name:       "Jaison David M",
+			Email:      "jaisondavidm.cs25@bitsathy.ac.in",
+			RollNo:     "7376251CS221",
+			Department: "CSE",
+			Role:       "student",
+			Password:   hashedPassword,
+		},
+		{
+			Name:       "Mani M R S",
+			Email:      "manimozhichelvanmrs.ad25@bitsathy.ac.in",
+			RollNo:     "7376252AD230",
+			Department: "AI&DS",
+			Role:       "student",
+			Password:   hashedPassword,
+		},
+	}
+
+	for _, u := range defaultUsers {
+		var existing models.User
+		err := db.Where("email = ?", u.Email).First(&existing).Error
+		if err != nil {
+			if createErr := db.Create(&u).Error; createErr != nil {
+				log.Printf("[ERROR] Failed to seed user %s: %v\n", u.Email, createErr)
+			} else {
+				log.Printf("[INFO] Successfully seeded user: %s (Password: 'password')\n", u.Email)
+			}
 		} else {
-			log.Println("[INFO] Successfully seeded default admin user: admin@bitsathy.ac.in (Password: 'password')")
+			db.Model(&existing).Updates(map[string]interface{}{
+				"password":   hashedPassword,
+				"name":       u.Name,
+				"roll_no":    u.RollNo,
+				"department": u.Department,
+				"role":       u.Role,
+			})
 		}
-	} else {
-		// Update password to ensure it matches requirement if needed
-		db.Model(&existingAdmin).Updates(map[string]interface{}{
-			"role":     "admin",
-			"password": hashedPassword,
-		})
-		log.Println("[INFO] Verified default admin user: admin@bitsathy.ac.in")
 	}
 }
