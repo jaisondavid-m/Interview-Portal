@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Mic, Menu, X, LogOut, GraduationCap, ShieldCheck, Users } from 'lucide-react';
-import { APP_NAME } from '../utils/constants';
-import api from '../api/axios';
+import { Link } from 'react-router-dom';
 
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -18,144 +13,63 @@ export default function Navbar() {
     }
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await api.post('/auth/logout');
-    } catch (e) {}
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
-
   const isAdmin = user?.role === 'admin';
+  const targetPath = isAdmin ? '/admin/users' : '/dashboard';
 
-  const navLinks = isAdmin
-    ? [
-        { name: 'User Management', path: '/admin/users' },
-        { name: 'Student Dashboard', path: '/dashboard' },
-        { name: 'Audio Rooms', path: '/interview' },
-      ]
-    : [
-        { name: 'Dashboard', path: '/dashboard' },
-        { name: 'Peer Audio Room', path: '/interview' },
-        { name: 'Feedback & Logs', path: '/history' },
-      ];
+  const initials = user?.name
+    ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'SA';
+
+  const displayName = user?.name || (isAdmin ? 'System Administrator' : 'College Student');
+  const displayRoll = user?.roll_no || (isAdmin ? 'ADMIN01' : user?.email || 'STUDENT01');
 
   return (
-    <nav className="sticky top-0 z-50 bg-[var(--bg-card)]/90 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)]">
-      <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center justify-between">
-        
-        {/* Brand Logo & Portal Badge */}
-        <Link 
-          to={isAdmin ? "/admin/users" : "/dashboard"} 
-          className="font-mono font-semibold text-[13px] tracking-[0.06em] text-[var(--accent)] flex items-center gap-2 no-underline group"
-        >
-          <span className="w-2 h-2 rounded-full bg-[var(--accent)] group-hover:scale-125 transition-transform" />
-          <span className="font-bold tracking-tight">{APP_NAME}</span>
-          <span className={`font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full ml-1 flex items-center gap-1 ${
-            isAdmin 
-              ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]' 
-              : 'bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/20'
-          }`}>
-            {isAdmin ? <ShieldCheck className="w-3 h-3" /> : <GraduationCap className="w-3 h-3" />}
-            <span>{isAdmin ? 'ADMIN PORTAL' : 'CAMPUS PORTAL'}</span>
-          </span>
-        </Link>
-
-        {/* Desktop Navigation Links */}
-        <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <NavLink
-              key={link.path}
-              to={link.path}
-              className={({ isActive }) =>
-                `px-3.5 py-1.5 rounded-[var(--radius-sm)] text-[13px] font-medium font-ui transition-all duration-150 ${
-                  isActive
-                    ? 'text-[var(--accent)] bg-[var(--accent-dim)] font-semibold'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                }`
-              }
-            >
-              {link.name}
-            </NavLink>
-          ))}
-        </div>
-
-        {/* Action Buttons & Logout */}
-        <div className="hidden md:flex items-center gap-3">
-          {isAdmin ? (
-            <Link
-              to="/admin/users"
-              className="btn btn-primary text-[12px] py-1.5 px-3"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Manage Users</span>
-            </Link>
-          ) : (
-            <Link
-              to="/interview"
-              className="btn btn-primary text-[12px] py-1.5 px-3"
-            >
-              <Mic className="w-3.5 h-3.5" />
-              <span>Match Peer</span>
-            </Link>
-          )}
-
-          <button
-            onClick={handleLogout}
-            className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] rounded-[var(--radius-sm)] transition flex items-center gap-1.5 text-[12px] font-medium"
-            title="Sign Out"
+    <header className="sticky top-0 z-50 bg-[var(--bg-card)]/95 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)] h-16">
+      <div className="flex items-center justify-between h-full w-full">
+        {/* Left Section: MockMate centered directly above the sidebar */}
+        <div className="w-64 h-full md:border-r border-[var(--border)] flex items-center justify-center px-4 shrink-0">
+          <Link 
+            to={targetPath} 
+            className="flex items-center gap-2.5 no-underline group focus:outline-none"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
+            {/* Brand Icon Logo */}
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#6e56cf] to-[#8c74eb] flex items-center justify-center text-white shadow-[0_2px_8px_rgba(110,86,207,0.28)] group-hover:scale-105 transition-transform duration-200">
+              <svg 
+                viewBox="0 0 24 24" 
+                className="w-4 h-4 fill-current"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z" />
+              </svg>
+            </div>
+
+            {/* Site Name */}
+            <div className="flex items-baseline gap-1">
+              <span className="font-ui font-extrabold text-[18px] tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                Mock<span className="text-[var(--accent)]">Mate</span>
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mb-0.5 animate-pulse" />
+            </div>
+          </Link>
         </div>
 
-        {/* Mobile Hamburger Button */}
-        <div className="md:hidden flex items-center">
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="p-2 rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-            aria-label="Toggle navigation"
-          >
-            {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Drawer */}
-      {isOpen && (
-        <div className="md:hidden bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4 space-y-2 animate-slide-up">
-          {navLinks.map((link) => (
-            <NavLink
-              key={link.path}
-              to={link.path}
-              onClick={() => setIsOpen(false)}
-              className={({ isActive }) =>
-                `block px-3 py-2 rounded-[var(--radius-sm)] text-sm font-medium font-ui ${
-                  isActive
-                    ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-semibold'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                }`
-              }
-            >
-              {link.name}
-            </NavLink>
-          ))}
-          <div className="pt-3 border-t border-[var(--border)] flex flex-col gap-2">
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                handleLogout();
-              }}
-              className="btn btn-secondary w-full text-xs py-2 text-[var(--red)]"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
-            </button>
+        {/* Right Section: User Profile Card at the far right end */}
+        <div className="flex-1 flex items-center justify-end px-6">
+          <div className="flex items-center gap-3 px-3 py-1.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)] hover:border-[var(--border-strong)] transition-all">
+            <div className="card-avatar w-7 h-7 text-[11px]">
+              {initials}
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-[13px] font-bold text-[var(--text-primary)] font-ui leading-tight">
+                {displayName}
+              </span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)] tracking-wider">
+                {displayRoll}
+              </span>
+            </div>
           </div>
         </div>
-      )}
-    </nav>
+      </div>
+    </header>
   );
 }
