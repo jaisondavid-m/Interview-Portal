@@ -78,6 +78,10 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/interviews/questions/:id", controllers.AdminGetQuestionByID)
 			admin.PUT("/interviews/questions/:id", controllers.AdminUpdateQuestion)
 			admin.DELETE("/interviews/questions/:id", controllers.AdminDeleteQuestion)
+
+			// Interview History & Meeting Details
+			admin.GET("/interviews/sessions", controllers.AdminGetInterviewSessions)
+			admin.GET("/interviews/sessions/:id", controllers.AdminGetInterviewSessionByID)
 		}
 	}
 

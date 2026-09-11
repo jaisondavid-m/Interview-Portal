@@ -452,3 +452,145 @@ func EndInterviewSession(c *gin.Context) {
 		"message": "Interview session finished successfully",
 	})
 }
+
+// AdminGetInterviewSessions returns all interview history with full participant identities
+func AdminGetInterviewSessions(c *gin.Context) {
+	var sessions []models.InterviewSession
+	err := database.DB.
+		Preload("Track").
+		Preload("Level").
+		Preload("Interviewer").
+		Preload("Interviewee").
+		Order("created_at desc").
+		Find(&sessions).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to fetch interview session history",
+		})
+		return
+	}
+
+	type UserSummary struct {
+		ID         uint   `json:"id"`
+		Name       string `json:"name"`
+		Email      string `json:"email"`
+		RollNo     string `json:"roll_no"`
+		Department string `json:"department"`
+		Role       string `json:"role"`
+	}
+
+	type SessionDTO struct {
+		ID            uint         `json:"id"`
+		TrackID       uint         `json:"track_id"`
+		TrackTitle    string       `json:"track_title"`
+		TrackCategory string       `json:"track_category"`
+		LevelID       uint         `json:"level_id"`
+		LevelNumber   int          `json:"level_number"`
+		LevelName     string       `json:"level_name"`
+		LevelMode     string       `json:"level_mode"`
+		Interviewer   *UserSummary `json:"interviewer"`
+		Interviewee   *UserSummary `json:"interviewee"`
+		Status        string       `json:"status"`
+		RolesSwitched bool         `json:"roles_switched"`
+		SwitchCount   int          `json:"switch_count"`
+		StartedAt     time.Time    `json:"started_at"`
+		EndedAt       *time.Time   `json:"ended_at"`
+		CreatedAt     time.Time    `json:"created_at"`
+	}
+
+	result := make([]SessionDTO, len(sessions))
+	for i, s := range sessions {
+		var interviewer *UserSummary
+		if s.Interviewer != nil {
+			interviewer = &UserSummary{
+				ID:         s.Interviewer.ID,
+				Name:       s.Interviewer.Name,
+				Email:      s.Interviewer.Email,
+				RollNo:     s.Interviewer.RollNo,
+				Department: s.Interviewer.Department,
+				Role:       s.Interviewer.Role,
+			}
+		}
+
+		var interviewee *UserSummary
+		if s.Interviewee != nil {
+			interviewee = &UserSummary{
+				ID:         s.Interviewee.ID,
+				Name:       s.Interviewee.Name,
+				Email:      s.Interviewee.Email,
+				RollNo:     s.Interviewee.RollNo,
+				Department: s.Interviewee.Department,
+				Role:       s.Interviewee.Role,
+			}
+		}
+
+		trackTitle := "Unknown Domain"
+		trackCategory := "Technical"
+		if s.Track != nil {
+			trackTitle = s.Track.Title
+			trackCategory = s.Track.Category
+		}
+
+		lvlNum := 1
+		lvlName := "Level 1"
+		lvlMode := "coding"
+		if s.Level != nil {
+			lvlNum = s.Level.LevelNumber
+			lvlName = s.Level.Name
+			lvlMode = string(s.Level.Mode)
+		}
+
+		result[i] = SessionDTO{
+			ID:            s.ID,
+			TrackID:       s.TrackID,
+			TrackTitle:    trackTitle,
+			TrackCategory: trackCategory,
+			LevelID:       s.LevelID,
+			LevelNumber:   lvlNum,
+			LevelName:     lvlName,
+			LevelMode:     lvlMode,
+			Interviewer:   interviewer,
+			Interviewee:   interviewee,
+			Status:        s.Status,
+			RolesSwitched: s.RolesSwitched,
+			SwitchCount:   s.SwitchCount,
+			StartedAt:     s.StartedAt,
+			EndedAt:       s.EndedAt,
+			CreatedAt:     s.CreatedAt,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   result,
+	})
+}
+
+// AdminGetInterviewSessionByID returns full details of a specific session for admin inspection
+func AdminGetInterviewSessionByID(c *gin.Context) {
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	err := database.DB.
+		Preload("Track").
+		Preload("Level.Questions").
+		Preload("Interviewer").
+		Preload("Interviewee").
+		First(&session, sessionID).Error
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":  "error",
+			"message": "Interview session not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   session,
+	})
+}
+

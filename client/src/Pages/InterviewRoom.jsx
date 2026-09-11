@@ -232,7 +232,7 @@ export default function InterviewRoom() {
         </button>
       </div>
 
-      {/* Participants Dual Cards */}
+      {/* Participants Dual Cards (Anonymized for peer privacy) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Card 1: Interviewer */}
         <div className={`panel-card p-5 border-2 transition-all ${
@@ -243,27 +243,28 @@ export default function InterviewRoom() {
               <Shield className="w-3.5 h-3.5" />
               <span>Interviewer</span>
             </span>
-            {currentUserRole === 'interviewer' && (
+            {currentUserRole === 'interviewer' ? (
               <span className="text-[11px] font-mono text-[var(--accent)] font-bold">
                 (You)
+              </span>
+            ) : (
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                Peer
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center font-bold text-[16px] text-[var(--accent)]">
-              {interviewer?.name ? interviewer.name.charAt(0).toUpperCase() : 'I'}
+              {currentUserRole === 'interviewer' ? 'ME' : 'P1'}
             </div>
             <div className="space-y-0.5">
               <h4 className="text-[15px] font-bold text-[var(--text-primary)]">
-                {interviewer?.name || 'Peer Interviewer'}
+                {currentUserRole === 'interviewer' ? 'You (Interviewer)' : 'Peer Interviewer'}
               </h4>
               <p className="text-[12px] font-mono text-[var(--text-muted)]">
-                {interviewer?.roll_no ? `Roll: ${interviewer.roll_no}` : interviewer?.email}
+                {currentUserRole === 'interviewer' ? 'Conducting Assessment' : 'Assessing Session'}
               </p>
-              {interviewer?.department && (
-                <p className="text-[11px] text-[var(--text-secondary)]">Dept: {interviewer.department}</p>
-              )}
             </div>
           </div>
         </div>
@@ -277,27 +278,28 @@ export default function InterviewRoom() {
               <Award className="w-3.5 h-3.5" />
               <span>Candidate</span>
             </span>
-            {currentUserRole === 'interviewee' && (
+            {currentUserRole === 'interviewee' ? (
               <span className="text-[11px] font-mono text-[var(--green)] font-bold">
                 (You)
+              </span>
+            ) : (
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                Peer
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-full bg-[var(--green-bg)] border border-[var(--green)]/30 flex items-center justify-center font-bold text-[16px] text-[var(--green)]">
-              {interviewee?.name ? interviewee.name.charAt(0).toUpperCase() : 'C'}
+              {currentUserRole === 'interviewee' ? 'ME' : 'P2'}
             </div>
             <div className="space-y-0.5">
               <h4 className="text-[15px] font-bold text-[var(--text-primary)]">
-                {interviewee?.name || 'Peer Candidate'}
+                {currentUserRole === 'interviewee' ? 'You (Candidate)' : 'Peer Candidate'}
               </h4>
               <p className="text-[12px] font-mono text-[var(--text-muted)]">
-                {interviewee?.roll_no ? `Roll: ${interviewee.roll_no}` : interviewee?.email}
+                {currentUserRole === 'interviewee' ? 'Answering Assessment' : 'Interviewee'}
               </p>
-              {interviewee?.department && (
-                <p className="text-[11px] text-[var(--text-secondary)]">Dept: {interviewee.department}</p>
-              )}
             </div>
           </div>
         </div>

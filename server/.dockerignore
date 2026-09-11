@@ -1,0 +1,10 @@
+.git
+.gitignore
+.air.toml
+*.exe
+*.log
+tmp/
+bin/
+.env
+.env.*
+cookies.txt

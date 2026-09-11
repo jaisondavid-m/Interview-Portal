@@ -12,6 +12,7 @@ import History from '../Pages/History';
 import Login from '../Pages/Login';
 import AdminUsers from '../Pages/AdminUsers';
 import AdminInterviewConfig from '../Pages/AdminInterviewConfig';
+import AdminInterviewHistory from '../Pages/AdminInterviewHistory';
 import StudentInterviews from '../Pages/StudentInterviews';
 import InterviewRoom from '../Pages/InterviewRoom';
 import NotFound from '../Pages/NotFound';
@@ -72,6 +73,10 @@ export const router = createBrowserRouter([
           {
             path: 'admin/interviews',
             element: <AdminInterviewConfig />,
+          },
+          {
+            path: 'admin/history',
+            element: <AdminInterviewHistory />,
           },
           {
             path: 'admin/interviews/:trackId/levels',
