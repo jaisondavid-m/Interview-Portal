@@ -9,6 +9,7 @@ import (
 	"server/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // ============================================================
@@ -401,17 +402,39 @@ func AdminDeleteLevel(c *gin.Context) {
 }
 
 // ============================================================
-// QUESTIONS CONTROLLER
+// QUESTIONS CONTROLLER (Relational Database Normalization)
 // ============================================================
 
-// AdminGetQuestions retrieves all questions for a specific level on demand
+// QuestionInput defines the payload for creating or updating questions
+type QuestionInput struct {
+	LevelID    uint                                   `json:"level_id"`
+	Title      string                                 `json:"title" binding:"required"`
+	Prompt     string                                 `json:"prompt" binding:"required"`
+	Difficulty string                                 `json:"difficulty"`
+	Type       models.InterviewMode                   `json:"type" binding:"required"`
+	Detail     *models.InterviewQuestionDetail        `json:"detail"`
+	Templates  []models.InterviewQuestionCodeTemplate `json:"templates"`
+	TestCases  []models.InterviewQuestionTestCase     `json:"test_cases"`
+	Hints      []models.InterviewQuestionHint         `json:"hints"`
+	MCQOptions []models.InterviewQuestionMCQOption    `json:"mcq_options"`
+}
+
+// AdminGetQuestions retrieves all questions for a specific level with all relational children
 func AdminGetQuestions(c *gin.Context) {
 	levelID := c.Param("id")
 	if levelID == "" {
 		levelID = c.Param("levelId")
 	}
 	var questions []models.InterviewQuestion
-	if err := database.DB.Where("level_id = ?", levelID).Order("id asc").Find(&questions).Error; err != nil {
+	if err := database.DB.
+		Preload("Detail").
+		Preload("Templates").
+		Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		Where("level_id = ?", levelID).
+		Order("id asc").
+		Find(&questions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch questions"})
 		return
 	}
@@ -422,11 +445,17 @@ func AdminGetQuestions(c *gin.Context) {
 	})
 }
 
-// AdminGetQuestionByID retrieves a single question
+// AdminGetQuestionByID retrieves a single question with all relational child tables
 func AdminGetQuestionByID(c *gin.Context) {
 	id := c.Param("id")
 	var question models.InterviewQuestion
-	if err := database.DB.First(&question, id).Error; err != nil {
+	if err := database.DB.
+		Preload("Detail").
+		Preload("Templates").
+		Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		First(&question, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Question not found"})
 		return
 	}
@@ -437,19 +466,97 @@ func AdminGetQuestionByID(c *gin.Context) {
 	})
 }
 
-// AdminCreateQuestion adds a question into a level
+// saveQuestionRelations synchronizes all relational child rows directly from strongly typed payload fields
+func saveQuestionRelations(tx *gorm.DB, qID uint, input QuestionInput) error {
+	// 1. Detail (Constraints, Approach, Complexity, Scenario, Ideal Answer, etc.)
+	if input.Detail != nil {
+		input.Detail.QuestionID = qID
+		var existingDetail models.InterviewQuestionDetail
+		if err := tx.Where("question_id = ?", qID).First(&existingDetail).Error; err == nil {
+			input.Detail.ID = existingDetail.ID
+			if err := tx.Save(input.Detail).Error; err != nil {
+				return err
+			}
+		} else {
+			input.Detail.ID = 0
+			if err := tx.Create(input.Detail).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// 2. Language Starter Code Templates
+	if len(input.Templates) > 0 {
+		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionCodeTemplate{}).Error; err != nil {
+			return err
+		}
+		for _, tmpl := range input.Templates {
+			tmpl.QuestionID = qID
+			tmpl.ID = 0
+			if err := tx.Create(&tmpl).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// 3. Test Cases (Sample and Hidden)
+	if len(input.TestCases) > 0 {
+		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionTestCase{}).Error; err != nil {
+			return err
+		}
+		for i, tc := range input.TestCases {
+			tc.QuestionID = qID
+			tc.ID = 0
+			if tc.OrderIndex == 0 {
+				tc.OrderIndex = i + 1
+			}
+			if err := tx.Create(&tc).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// 4. Hints & Rubrics & Talking Points
+	if len(input.Hints) > 0 {
+		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionHint{}).Error; err != nil {
+			return err
+		}
+		for i, h := range input.Hints {
+			h.QuestionID = qID
+			h.ID = 0
+			if h.OrderIndex == 0 {
+				h.OrderIndex = i + 1
+			}
+			if err := tx.Create(&h).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// 5. MCQ Options
+	if len(input.MCQOptions) > 0 {
+		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionMCQOption{}).Error; err != nil {
+			return err
+		}
+		for _, opt := range input.MCQOptions {
+			opt.QuestionID = qID
+			opt.ID = 0
+			if err := tx.Create(&opt).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// AdminCreateQuestion adds a question into a level with relational data
 func AdminCreateQuestion(c *gin.Context) {
 	levelID := c.Param("id")
 	if levelID == "" {
 		levelID = c.Param("levelId")
 	}
-	var input struct {
-		Title       string               `json:"title" binding:"required"`
-		Prompt      string               `json:"prompt" binding:"required"`
-		Difficulty  string               `json:"difficulty"`
-		Type        models.InterviewMode `json:"type" binding:"required"`
-		PayloadJSON string               `json:"payload_json"`
-	}
+	var input QuestionInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -472,15 +579,16 @@ func AdminCreateQuestion(c *gin.Context) {
 	}
 
 	question := models.InterviewQuestion{
-		LevelID:     levelIDUint,
-		Title:       input.Title,
-		Prompt:      input.Prompt,
-		Difficulty:  difficulty,
-		Type:        input.Type,
-		PayloadJSON: input.PayloadJSON,
+		LevelID:    levelIDUint,
+		Title:      input.Title,
+		Prompt:     input.Prompt,
+		Difficulty: difficulty,
+		Type:       input.Type,
 	}
 
-	if err := database.DB.Create(&question).Error; err != nil {
+	tx := database.DB.Begin()
+	if err := tx.Create(&question).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to create question",
@@ -489,14 +597,32 @@ func AdminCreateQuestion(c *gin.Context) {
 		return
 	}
 
+	// Persist child relational records
+	if err := saveQuestionRelations(tx, question.ID, input); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save question relational details"})
+		return
+	}
+	tx.Commit()
+
+	// Preload fresh question
+	var created models.InterviewQuestion
+	database.DB.
+		Preload("Detail").
+		Preload("Templates").
+		Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		First(&created, question.ID)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
 		"message": "Question added successfully",
-		"data":    question,
+		"data":    created,
 	})
 }
 
-// AdminUpdateQuestion updates a question
+// AdminUpdateQuestion updates a question and its relational children
 func AdminUpdateQuestion(c *gin.Context) {
 	id := c.Param("id")
 	var question models.InterviewQuestion
@@ -505,13 +631,7 @@ func AdminUpdateQuestion(c *gin.Context) {
 		return
 	}
 
-	var input struct {
-		Title       string               `json:"title"`
-		Prompt      string               `json:"prompt"`
-		Difficulty  string               `json:"difficulty"`
-		Type        models.InterviewMode `json:"type"`
-		PayloadJSON string               `json:"payload_json"`
-	}
+	var input QuestionInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid payload"})
 		return
@@ -529,16 +649,35 @@ func AdminUpdateQuestion(c *gin.Context) {
 	if input.Type != "" {
 		question.Type = input.Type
 	}
-	if input.PayloadJSON != "" {
-		question.PayloadJSON = input.PayloadJSON
+
+	tx := database.DB.Begin()
+	if err := tx.Save(&question).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update question"})
+		return
 	}
 
-	database.DB.Save(&question)
+	if err := saveQuestionRelations(tx, question.ID, input); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update question relational details"})
+		return
+	}
+	tx.Commit()
+
+	// Preload updated question
+	var updated models.InterviewQuestion
+	database.DB.
+		Preload("Detail").
+		Preload("Templates").
+		Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		First(&updated, question.ID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "Question updated successfully",
-		"data":    question,
+		"data":    updated,
 	})
 }
 

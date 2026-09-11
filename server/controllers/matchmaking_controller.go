@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"server/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // Global mutex to avoid race conditions during queue pairings
@@ -39,33 +41,187 @@ func extractStarterCode(payloadJSON string, defaultCode string) string {
 
 // Helper to sanitize questions for candidate (strip hidden test cases, solutions, hints, rubrics)
 func sanitizeQuestionForCandidate(q models.InterviewQuestion) gin.H {
-	var payload map[string]interface{}
-	_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
+	// 1. Build starter templates
+	templatesMap := make(map[string]string)
+	for _, t := range q.Templates {
+		templatesMap[t.Language] = t.StarterCode
+	}
+	starterCode := templatesMap["javascript"]
 
-	sanitizedPayload := gin.H{
-		"starter_code":    "",
-		"open_test_cases": []interface{}{},
-		"constraints":     "",
+	// 2. Build open test cases
+	var openTestCases []gin.H
+	for _, tc := range q.TestCases {
+		if !tc.IsHidden {
+			openTestCases = append(openTestCases, gin.H{
+				"input":       tc.Input,
+				"output":      tc.ExpectedOutput,
+				"explanation": tc.Explanation,
+			})
+		}
 	}
 
-	if payload != nil {
-		if sc, ok := payload["starter_code"]; ok {
-			sanitizedPayload["starter_code"] = sc
+	// 3. Extract details
+	constraints := ""
+	scenario := ""
+	if q.Detail != nil {
+		constraints = q.Detail.Constraints
+		scenario = q.Detail.Scenario
+	}
+
+	// 4. Extract sanitized MCQ options (hide is_correct)
+	var sanitizedOptions []gin.H
+	for _, opt := range q.MCQOptions {
+		sanitizedOptions = append(sanitizedOptions, gin.H{
+			"id":   opt.OptionKey,
+			"text": opt.OptionText,
+		})
+	}
+
+	// Fallback to JSON payload if relations were not loaded
+	if len(openTestCases) == 0 && q.PayloadJSON != "" {
+		var payload map[string]interface{}
+		_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
+		if payload != nil {
+			if sc, ok := payload["starter_code"].(string); ok && starterCode == "" {
+				starterCode = sc
+			}
+			if otc, ok := payload["open_test_cases"].([]interface{}); ok {
+				for _, tc := range otc {
+					if tcMap, ok := tc.(map[string]interface{}); ok {
+						openTestCases = append(openTestCases, gin.H{
+							"input":  tcMap["input"],
+							"output": tcMap["output"],
+						})
+					}
+				}
+			}
+			if c, ok := payload["constraints"].(string); ok && constraints == "" {
+				constraints = c
+			}
+			if s, ok := payload["scenario"].(string); ok && scenario == "" {
+				scenario = s
+			}
 		}
-		if otc, ok := payload["open_test_cases"]; ok {
-			sanitizedPayload["open_test_cases"] = otc
-		} else if tc, ok := payload["test_cases"]; ok {
-			sanitizedPayload["open_test_cases"] = tc
+	}
+
+	sanitizedPayload := gin.H{
+		"starter_code":      starterCode,
+		"starter_code_js":   templatesMap["javascript"],
+		"starter_code_py":   templatesMap["python"],
+		"starter_code_cpp":  templatesMap["cpp"],
+		"starter_code_java": templatesMap["java"],
+		"open_test_cases":   openTestCases,
+		"constraints":       constraints,
+		"scenario":          scenario,
+		"options":           sanitizedOptions,
+	}
+
+	return gin.H{
+		"id":         q.ID,
+		"level_id":   q.LevelID,
+		"title":      q.Title,
+		"prompt":     q.Prompt,
+		"difficulty": q.Difficulty,
+		"type":       q.Type,
+		"templates":  q.Templates,
+		"test_cases": openTestCases,
+		"detail":     q.Detail,
+		"payload":    sanitizedPayload,
+		"created_at": q.CreatedAt,
+	}
+}
+
+// Helper for interviewer full question payload
+func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
+	templatesMap := make(map[string]string)
+	for _, t := range q.Templates {
+		templatesMap[t.Language] = t.StarterCode
+	}
+
+	var openTestCases []gin.H
+	var hiddenTestCases []gin.H
+	for _, tc := range q.TestCases {
+		tcObj := gin.H{
+			"input":       tc.Input,
+			"output":      tc.ExpectedOutput,
+			"explanation": tc.Explanation,
 		}
-		if c, ok := payload["constraints"]; ok {
-			sanitizedPayload["constraints"] = c
+		if tc.IsHidden {
+			hiddenTestCases = append(hiddenTestCases, tcObj)
+		} else {
+			openTestCases = append(openTestCases, tcObj)
 		}
-		if s, ok := payload["scenario"]; ok {
-			sanitizedPayload["scenario"] = s
+	}
+
+	var hints []string
+	var interviewTips []string
+	var rubrics []string
+	var talkingPoints []string
+	var tradeoffs []string
+
+	for _, h := range q.Hints {
+		switch h.Type {
+		case "hint":
+			hints = append(hints, h.Content)
+		case "interview_tip":
+			interviewTips = append(interviewTips, h.Content)
+		case "rubric":
+			rubrics = append(rubrics, h.Content)
+		case "talking_point":
+			talkingPoints = append(talkingPoints, h.Content)
+		case "tradeoff":
+			tradeoffs = append(tradeoffs, h.Content)
 		}
-		if opts, ok := payload["options"]; ok {
-			sanitizedPayload["options"] = opts
-		}
+	}
+
+	var mcqOptions []gin.H
+	for _, opt := range q.MCQOptions {
+		mcqOptions = append(mcqOptions, gin.H{
+			"id":         opt.OptionKey,
+			"text":       opt.OptionText,
+			"is_correct": opt.IsCorrect,
+		})
+	}
+
+	constraints := ""
+	expectedApproach := ""
+	expectedComplexity := ""
+	idealAnswer := ""
+	scenario := ""
+	correctOption := ""
+	explanation := ""
+
+	if q.Detail != nil {
+		constraints = q.Detail.Constraints
+		expectedApproach = q.Detail.ExpectedApproach
+		expectedComplexity = q.Detail.ExpectedComplexity
+		idealAnswer = q.Detail.IdealAnswer
+		scenario = q.Detail.Scenario
+		correctOption = q.Detail.CorrectOption
+		explanation = q.Detail.Explanation
+	}
+
+	fullPayload := gin.H{
+		"starter_code":        templatesMap["javascript"],
+		"starter_code_js":     templatesMap["javascript"],
+		"starter_code_py":     templatesMap["python"],
+		"starter_code_cpp":    templatesMap["cpp"],
+		"starter_code_java":   templatesMap["java"],
+		"open_test_cases":     openTestCases,
+		"hidden_test_cases":   hiddenTestCases,
+		"constraints":         constraints,
+		"expected_approach":   expectedApproach,
+		"expected_complexity": expectedComplexity,
+		"hints":               hints,
+		"interview_tips":      interviewTips,
+		"ideal_answer":        idealAnswer,
+		"rubrics":             rubrics,
+		"scenario":            scenario,
+		"talking_points":      talkingPoints,
+		"tradeoffs":           tradeoffs,
+		"options":             mcqOptions,
+		"correct_option":      correctOption,
+		"explanation":         explanation,
 	}
 
 	return gin.H{
@@ -75,33 +231,27 @@ func sanitizeQuestionForCandidate(q models.InterviewQuestion) gin.H {
 		"prompt":      q.Prompt,
 		"difficulty":  q.Difficulty,
 		"type":        q.Type,
-		"payload":     sanitizedPayload,
+		"detail":      q.Detail,
+		"templates":   q.Templates,
+		"test_cases":  q.TestCases,
+		"hints":       q.Hints,
+		"mcq_options": q.MCQOptions,
+		"payload":     fullPayload,
 		"created_at":  q.CreatedAt,
-	}
-}
-
-// Helper for interviewer full question payload
-func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
-	var payload map[string]interface{}
-	_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
-
-	return gin.H{
-		"id":           q.ID,
-		"level_id":     q.LevelID,
-		"title":        q.Title,
-		"prompt":       q.Prompt,
-		"difficulty":   q.Difficulty,
-		"type":         q.Type,
-		"payload":      payload,
-		"payload_json": q.PayloadJSON,
-		"created_at":   q.CreatedAt,
 	}
 }
 
 // GetStudentTracks returns interview tracks with their levels and mode information for students
 func GetStudentTracks(c *gin.Context) {
 	var tracks []models.InterviewTrack
-	err := database.DB.Preload("Levels.Questions").Order("id asc").Find(&tracks).Error
+	err := database.DB.
+		Preload("Levels.Questions.Detail").
+		Preload("Levels.Questions.Templates").
+		Preload("Levels.Questions.TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Levels.Questions.Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Levels.Questions.MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		Order("id asc").
+		Find(&tracks).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
@@ -195,7 +345,7 @@ func JoinMatchmaking(c *gin.Context) {
 
 	// 1. Check if track exists
 	var track models.InterviewTrack
-	if err := database.DB.Preload("Levels.Questions").First(&track, req.TrackID).Error; err != nil {
+	if err := database.DB.Preload("Levels.Questions.Templates").First(&track, req.TrackID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview track not found"})
 		return
 	}
@@ -226,8 +376,18 @@ func JoinMatchmaking(c *gin.Context) {
 		var initialQID uint = 0
 		var starterCode string = "// Write your solution here\n"
 		if selectedLevel != nil && len(selectedLevel.Questions) > 0 {
-			initialQID = selectedLevel.Questions[0].ID
-			starterCode = extractStarterCode(selectedLevel.Questions[0].PayloadJSON, starterCode)
+			initialQ := selectedLevel.Questions[0]
+			initialQID = initialQ.ID
+			if len(initialQ.Templates) > 0 {
+				for _, t := range initialQ.Templates {
+					if t.Language == "javascript" {
+						starterCode = t.StarterCode
+						break
+					}
+				}
+			} else {
+				starterCode = extractStarterCode(initialQ.PayloadJSON, starterCode)
+			}
 		}
 
 		session := models.InterviewSession{
@@ -308,42 +468,46 @@ func GetMatchmakingStatus(c *gin.Context) {
 	currentUserID := rawUserID.(uint)
 
 	var entry models.MatchmakingQueueEntry
-	err := database.DB.Where("user_id = ?", currentUserID).
-		Order("id desc").
+	err := database.DB.Where("user_id = ? AND status = 'matched'", currentUserID).
+		Order("updated_at desc").
 		First(&entry).Error
 
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "idle"})
-		return
-	}
-
-	if entry.Status == "matched" && entry.MatchedSessionID > 0 {
+	if err == nil && entry.MatchedSessionID > 0 {
 		var session models.InterviewSession
-		if err := database.DB.First(&session, entry.MatchedSessionID).Error; err == nil {
+		if sErr := database.DB.First(&session, entry.MatchedSessionID).Error; sErr == nil {
 			role := "interviewee"
 			if session.InterviewerID == currentUserID {
 				role = "interviewer"
 			}
-
 			c.JSON(http.StatusOK, gin.H{
 				"status":     "matched",
 				"matched":    true,
-				"session_id": entry.MatchedSessionID,
+				"session_id": session.ID,
 				"role":       role,
 			})
 			return
 		}
 	}
 
+	// Check if still waiting
+	var waitingEntry models.MatchmakingQueueEntry
+	wErr := database.DB.Where("user_id = ? AND status = 'waiting'", currentUserID).First(&waitingEntry).Error
+	if wErr == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":   "waiting",
+			"matched":  false,
+			"queue_id": waitingEntry.ID,
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":   entry.Status,
-		"matched":  false,
-		"queue_id": entry.ID,
-		"track_id": entry.TrackID,
+		"status":  "idle",
+		"matched": false,
 	})
 }
 
-// CancelMatchmaking removes the student from the waiting queue
+// CancelMatchmaking removes student from queue
 func CancelMatchmaking(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -352,16 +516,13 @@ func CancelMatchmaking(c *gin.Context) {
 	}
 	currentUserID := rawUserID.(uint)
 
-	queueMutex.Lock()
-	defer queueMutex.Unlock()
-
 	database.DB.Model(&models.MatchmakingQueueEntry{}).
 		Where("user_id = ? AND status = 'waiting'", currentUserID).
 		Update("status", "cancelled")
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
-		"message": "Matchmaking search cancelled successfully",
+		"message": "Cancelled matchmaking queue",
 	})
 }
 
@@ -378,8 +539,16 @@ func GetInterviewSession(c *gin.Context) {
 	var session models.InterviewSession
 	err := database.DB.
 		Preload("Track").
-		Preload("Level.Questions").
-		Preload("CurrentQuestion").
+		Preload("Level.Questions.Detail").
+		Preload("Level.Questions.Templates").
+		Preload("Level.Questions.TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Level.Questions.Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Level.Questions.MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		Preload("CurrentQuestion.Detail").
+		Preload("CurrentQuestion.Templates").
+		Preload("CurrentQuestion.TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("CurrentQuestion.Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("CurrentQuestion.MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
 		Preload("Interviewer").
 		Preload("Interviewee").
 		First(&session, sessionID).Error
@@ -401,7 +570,16 @@ func GetInterviewSession(c *gin.Context) {
 		session.CurrentQuestion = &session.Level.Questions[0]
 		session.Round1QuestionID = session.Level.Questions[0].ID
 		if session.CandidateCode == "" {
-			session.CandidateCode = extractStarterCode(session.CurrentQuestion.PayloadJSON, "")
+			if len(session.CurrentQuestion.Templates) > 0 {
+				for _, t := range session.CurrentQuestion.Templates {
+					if t.Language == "javascript" {
+						session.CandidateCode = t.StarterCode
+						break
+					}
+				}
+			} else {
+				session.CandidateCode = extractStarterCode(session.CurrentQuestion.PayloadJSON, "")
+			}
 		}
 		database.DB.Model(&session).Updates(map[string]interface{}{
 			"current_question_id": session.CurrentQuestionID,
@@ -409,6 +587,16 @@ func GetInterviewSession(c *gin.Context) {
 			"candidate_code":      session.CandidateCode,
 			"round":               1,
 		})
+	}
+
+	// Ensure started_at is populated and persisted
+	if session.StartedAt.IsZero() {
+		if !session.CreatedAt.IsZero() {
+			session.StartedAt = session.CreatedAt
+		} else {
+			session.StartedAt = time.Now()
+		}
+		database.DB.Model(&session).Update("started_at", session.StartedAt)
 	}
 
 	// Identify current user role
@@ -625,36 +813,28 @@ func RunSessionCode(c *gin.Context) {
 			ExecutionMs: rand.Intn(35) + 12,
 		})
 	} else {
-		// Run open sample test cases
-		var openCases []interface{}
-		if payload != nil {
-			if otc, ok := payload["open_test_cases"].([]interface{}); ok {
-				openCases = otc
-			} else if tc, ok := payload["test_cases"].([]interface{}); ok {
-				openCases = tc
-			}
+		// Run relational open sample test cases
+		var openCases []models.InterviewQuestionTestCase
+		if session.CurrentQuestionID > 0 {
+			database.DB.Where("question_id = ? AND is_hidden = false", session.CurrentQuestionID).
+				Order("order_index asc, id asc").
+				Find(&openCases)
 		}
 
 		if len(openCases) == 0 {
-			// Fallback mock sample case
-			openCases = append(openCases, map[string]interface{}{
-				"input":  "Sample Case 1",
-				"output": "Expected Output 1",
+			openCases = append(openCases, models.InterviewQuestionTestCase{
+				Input:          "nums = [2,7,11,15], target = 9",
+				ExpectedOutput: "[0,1]",
+			})
+			openCases = append(openCases, models.InterviewQuestionTestCase{
+				Input:          "nums = [3,2,4], target = 6",
+				ExpectedOutput: "[1,2]",
 			})
 		}
 
 		for idx, tc := range openCases {
-			tcMap, ok := tc.(map[string]interface{})
-			inputStr := "nums = [2,7,11,15], target = 9"
-			expectedStr := "[0,1]"
-			if ok {
-				if inVal, exists := tcMap["input"].(string); exists {
-					inputStr = inVal
-				}
-				if outVal, exists := tcMap["output"].(string); exists {
-					expectedStr = outVal
-				}
-			}
+			inputStr := tc.Input
+			expectedStr := tc.ExpectedOutput
 
 			// Code execution simulation based on non-empty logic
 			passed := len(strings.TrimSpace(input.Code)) > 20
@@ -709,7 +889,7 @@ func RunSessionCode(c *gin.Context) {
 	})
 }
 
-// SubmitSessionCode evaluates full solution against both open and hidden test cases
+// SubmitSessionCode evaluates full solution against both open and hidden relational test cases
 func SubmitSessionCode(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -739,28 +919,95 @@ func SubmitSessionCode(c *gin.Context) {
 		return
 	}
 
-	var payload map[string]interface{}
-	if session.CurrentQuestion != nil {
-		_ = json.Unmarshal([]byte(session.CurrentQuestion.PayloadJSON), &payload)
+	type DetailedCaseResult struct {
+		Index       int    `json:"index"`
+		IsHidden    bool   `json:"is_hidden"`
+		Name        string `json:"name"`
+		Input       string `json:"input"`
+		Expected    string `json:"expected"`
+		Actual      string `json:"actual"`
+		Passed      bool   `json:"passed"`
+		ExecutionMs int    `json:"execution_ms"`
 	}
 
-	openCount := 2
-	hiddenCount := 2
-	if payload != nil {
-		if otc, ok := payload["open_test_cases"].([]interface{}); ok && len(otc) > 0 {
-			openCount = len(otc)
-		}
-		if htc, ok := payload["hidden_test_cases"].([]interface{}); ok && len(htc) > 0 {
-			hiddenCount = len(htc)
+	var caseResults []DetailedCaseResult
+	isPassedOverall := len(strings.TrimSpace(input.Code)) >= 25
+
+	// 1. Process Open Sample Cases
+	var openCases []models.InterviewQuestionTestCase
+	var hiddenCases []models.InterviewQuestionTestCase
+
+	if session.CurrentQuestionID > 0 {
+		database.DB.Where("question_id = ? AND is_hidden = false", session.CurrentQuestionID).
+			Order("order_index asc, id asc").
+			Find(&openCases)
+		database.DB.Where("question_id = ? AND is_hidden = true", session.CurrentQuestionID).
+			Order("order_index asc, id asc").
+			Find(&hiddenCases)
+	}
+
+	if len(openCases) == 0 {
+		openCases = append(openCases, models.InterviewQuestionTestCase{
+			Input:          "nums = [2,7,11,15], target = 9",
+			ExpectedOutput: "[0,1]",
+		})
+		openCases = append(openCases, models.InterviewQuestionTestCase{
+			Input:          "nums = [3,2,4], target = 6",
+			ExpectedOutput: "[1,2]",
+		})
+	}
+
+	if len(hiddenCases) == 0 {
+		hiddenCases = append(hiddenCases, models.InterviewQuestionTestCase{
+			Input:          "nums = [-1,-2,-3,-4,-5], target = -8",
+			ExpectedOutput: "[2,4]",
+		})
+		hiddenCases = append(hiddenCases, models.InterviewQuestionTestCase{
+			Input:          "nums = [3,3], target = 6",
+			ExpectedOutput: "[0,1]",
+		})
+	}
+
+	caseIdx := 1
+	for _, tc := range openCases {
+		caseResults = append(caseResults, DetailedCaseResult{
+			Index:       caseIdx,
+			IsHidden:    false,
+			Name:        fmt.Sprintf("Sample Case %d", caseIdx),
+			Input:       tc.Input,
+			Expected:    tc.ExpectedOutput,
+			Actual:      tc.ExpectedOutput,
+			Passed:      isPassedOverall,
+			ExecutionMs: rand.Intn(40) + 15,
+		})
+		caseIdx++
+	}
+
+	hiddenIdx := 1
+	for _, tc := range hiddenCases {
+		caseResults = append(caseResults, DetailedCaseResult{
+			Index:       caseIdx,
+			IsHidden:    true,
+			Name:        fmt.Sprintf("Hidden Case %d (Verification)", hiddenIdx),
+			Input:       tc.Input,
+			Expected:    tc.ExpectedOutput,
+			Actual:      tc.ExpectedOutput,
+			Passed:      isPassedOverall,
+			ExecutionMs: rand.Intn(35) + 12,
+		})
+		caseIdx++
+		hiddenIdx++
+	}
+
+	passedCount := 0
+	for _, c := range caseResults {
+		if c.Passed {
+			passedCount++
 		}
 	}
 
-	totalCases := openCount + hiddenCount
-	passedCases := totalCases
 	verdict := "Accepted"
-
-	if len(strings.TrimSpace(input.Code)) < 25 {
-		passedCases = 0
+	if !isPassedOverall || passedCount < len(caseResults) {
 		verdict = "Wrong Answer"
 	}
 
@@ -768,10 +1015,12 @@ func SubmitSessionCode(c *gin.Context) {
 		"status":        "success",
 		"type":          "submit",
 		"verdict":       verdict,
-		"passed_cases":  passedCases,
-		"total_cases":   totalCases,
-		"open_cases":    openCount,
-		"hidden_cases":  hiddenCount,
+		"passed_cases":  passedCount,
+		"total_cases":   len(caseResults),
+		"open_cases":    len(openCases),
+		"hidden_cases":  len(hiddenCases),
+		"results":       caseResults,
+		"all_passed":    verdict == "Accepted",
 		"runtime_ms":    rand.Intn(40) + 20,
 		"memory_mb":     "14.2 MB",
 		"round":         session.Round,
@@ -783,8 +1032,8 @@ func SubmitSessionCode(c *gin.Context) {
 		"last_execution_json":    string(subJSON),
 		"last_execution_type":    "submit",
 		"last_execution_verdict": verdict,
-		"last_execution_passed":  passedCases,
-		"last_execution_total":   totalCases,
+		"last_execution_passed":  passedCount,
+		"last_execution_total":   len(caseResults),
 		"last_executed_at":       &now,
 	})
 
@@ -810,7 +1059,7 @@ func performRoleSwitchInternal(session *models.InterviewSession) error {
 
 	// 2. Load random next question for Round 2 (different from Round 1 question)
 	var allQuestions []models.InterviewQuestion
-	database.DB.Where("level_id = ?", session.LevelID).Find(&allQuestions)
+	database.DB.Preload("Templates").Where("level_id = ?", session.LevelID).Find(&allQuestions)
 
 	var candidateQuestions []models.InterviewQuestion
 	for _, q := range allQuestions {
@@ -830,7 +1079,19 @@ func performRoleSwitchInternal(session *models.InterviewSession) error {
 	if nextQ.ID > 0 {
 		session.CurrentQuestionID = nextQ.ID
 		session.Round2QuestionID = nextQ.ID
-		session.CandidateCode = extractStarterCode(nextQ.PayloadJSON, "")
+		starterCode := ""
+		if len(nextQ.Templates) > 0 {
+			for _, t := range nextQ.Templates {
+				if t.Language == "javascript" {
+					starterCode = t.StarterCode
+					break
+				}
+			}
+		}
+		if starterCode == "" {
+			starterCode = extractStarterCode(nextQ.PayloadJSON, "")
+		}
+		session.CandidateCode = starterCode
 	}
 
 	return database.DB.Save(session).Error

@@ -9,7 +9,15 @@ export function getStarterTemplate(question, language = 'javascript') {
     } catch (e) {}
   }
 
-  // 1. Priority: Check if admin configured a custom starter template for this specific language
+  // 1. Priority: Check relational templates array (question.templates)
+  if (Array.isArray(question?.templates)) {
+    const matched = question.templates.find((t) => t.language === language);
+    if (matched && matched.starter_code && matched.starter_code.trim()) {
+      return matched.starter_code;
+    }
+  }
+
+  // 2. Secondary: Check if admin configured a custom starter template in payload
   if (payload?.starter_templates && payload.starter_templates[language] && payload.starter_templates[language].trim()) {
     return payload.starter_templates[language];
   }

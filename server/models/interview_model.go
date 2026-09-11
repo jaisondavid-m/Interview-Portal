@@ -53,10 +53,78 @@ type InterviewQuestion struct {
 	Prompt      string         `gorm:"type:text;not null" json:"prompt" binding:"required"`
 	Difficulty  string         `gorm:"size:50;default:'Medium'" json:"difficulty"`
 	Type        InterviewMode  `gorm:"size:50;not null" json:"type"`
-	PayloadJSON string         `gorm:"type:longtext" json:"payload_json"` // Stores mode-specific configuration in JSON
+	PayloadJSON string         `gorm:"type:longtext" json:"payload_json,omitempty"` // Retained for compatibility/fallback
+
+	// Relational associations
+	Detail      *InterviewQuestionDetail        `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE" json:"detail,omitempty"`
+	Templates   []InterviewQuestionCodeTemplate `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE" json:"templates,omitempty"`
+	TestCases   []InterviewQuestionTestCase     `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE" json:"test_cases,omitempty"`
+	Hints       []InterviewQuestionHint         `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE" json:"hints,omitempty"`
+	MCQOptions  []InterviewQuestionMCQOption    `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE" json:"mcq_options,omitempty"`
+
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// InterviewQuestionDetail holds structured constraints, approaches, scenarios, and answers (1:1 with InterviewQuestion)
+type InterviewQuestionDetail struct {
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	QuestionID         uint      `gorm:"not null;uniqueIndex" json:"question_id"`
+	Constraints        string    `gorm:"type:text" json:"constraints"`
+	ExpectedApproach   string    `gorm:"type:text" json:"expected_approach"`
+	ExpectedComplexity string    `gorm:"type:text" json:"expected_complexity"`
+	IdealAnswer        string    `gorm:"type:text" json:"ideal_answer"`
+	Scenario           string    `gorm:"type:text" json:"scenario"`
+	CorrectOption      string    `gorm:"size:50" json:"correct_option"`
+	Explanation        string    `gorm:"type:text" json:"explanation"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// InterviewQuestionCodeTemplate holds starter code for specific programming languages (1:N with InterviewQuestion)
+type InterviewQuestionCodeTemplate struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	QuestionID  uint      `gorm:"not null;index" json:"question_id"`
+	Language    string    `gorm:"size:50;not null;index" json:"language"` // "javascript", "python", "cpp", "java"
+	StarterCode string    `gorm:"type:longtext;not null" json:"starter_code"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// InterviewQuestionTestCase holds individual open sample and hidden test cases (1:N with InterviewQuestion)
+type InterviewQuestionTestCase struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	QuestionID     uint      `gorm:"not null;index" json:"question_id"`
+	Input          string    `gorm:"type:text;not null" json:"input"`
+	ExpectedOutput string    `gorm:"type:text;not null" json:"expected_output"`
+	IsHidden       bool      `gorm:"default:false;index" json:"is_hidden"` // false = sample case, true = hidden verification case
+	Explanation    string    `gorm:"type:text" json:"explanation"`
+	OrderIndex     int       `gorm:"default:0" json:"order_index"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// InterviewQuestionHint holds hints, assessor tips, rubrics, talking points, and tradeoffs (1:N with InterviewQuestion)
+type InterviewQuestionHint struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	QuestionID uint      `gorm:"not null;index" json:"question_id"`
+	Type       string    `gorm:"size:50;default:'hint';index" json:"type"` // "hint", "interview_tip", "rubric", "talking_point", "tradeoff"
+	Content    string    `gorm:"type:text;not null" json:"content"`
+	OrderIndex int       `gorm:"default:0" json:"order_index"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// InterviewQuestionMCQOption holds multiple-choice options (1:N with InterviewQuestion)
+type InterviewQuestionMCQOption struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	QuestionID uint      `gorm:"not null;index" json:"question_id"`
+	OptionKey  string    `gorm:"size:10;not null" json:"option_key"` // "A", "B", "C", "D"
+	OptionText string    `gorm:"type:text;not null" json:"option_text"`
+	IsCorrect  bool      `gorm:"default:false" json:"is_correct"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // MatchmakingQueueEntry represents a student waiting in queue to be paired

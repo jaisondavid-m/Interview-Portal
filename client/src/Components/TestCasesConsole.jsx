@@ -125,7 +125,7 @@ export default function TestCasesConsole({
       </div>
 
       {/* Tab Content Panel */}
-      <div className="p-4 space-y-3 min-h-[160px] max-h-[260px] overflow-y-auto">
+      <div className="p-4 space-y-3 min-h-[160px] max-h-[300px] overflow-y-auto">
         {/* TAB 1: Sample Test Cases */}
         {activeTab === 'sample' && (
           <div className="space-y-3">
@@ -225,51 +225,164 @@ export default function TestCasesConsole({
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
                     {submissionResult.verdict === 'Accepted' ? (
-                      <CheckCircle2 className="w-5 h-5 text-[var(--green)]" />
+                      <CheckCircle2 className="w-5 h-5 text-[var(--green)] shrink-0" />
                     ) : (
-                      <XCircle className="w-5 h-5 text-[var(--red)]" />
+                      <XCircle className="w-5 h-5 text-[var(--red)] shrink-0" />
                     )}
                     <h4 className="text-[16px] font-bold">
                       {submissionResult.verdict}
                     </h4>
                   </div>
                   <p className="text-[11px] opacity-90">
-                    Passed {submissionResult.passed_cases} of {submissionResult.total_cases} test cases ({submissionResult.hidden_cases} hidden test cases evaluated)
+                    Passed {submissionResult.passed_cases} of {submissionResult.total_cases} test cases ({submissionResult.hidden_cases || 0} hidden test cases evaluated)
                   </p>
                 </div>
 
-                <div className="text-right text-[11px] opacity-80">
+                <div className="text-right text-[11px] opacity-80 shrink-0">
                   <div>Runtime: {submissionResult.runtime_ms} ms</div>
-                  <div>Memory: {submissionResult.memory_mb}</div>
+                  <div>Memory: {submissionResult.memory_mb || '14.2 MB'}</div>
                 </div>
               </div>
             )}
 
-            {runResults && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)]">
-                  <span>Execution Output Summary:</span>
-                  <span className={runResults.all_passed ? 'text-[var(--green)]' : 'text-[var(--red)]'}>
-                    {runResults.all_passed ? '✓ All Sample Cases Passed' : '✗ Some Cases Failed'}
+            {/* If Run Code was executed without submission */}
+            {!submissionResult && runResults && (
+              <div className={`p-3 rounded-[var(--radius-sm)] border flex items-center justify-between ${
+                runResults.all_passed
+                  ? 'bg-[var(--green-bg)] border-[var(--green)]/30 text-[var(--green)]'
+                  : 'bg-[var(--red-bg)] border-[var(--red)]/30 text-[var(--red)]'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {runResults.all_passed ? (
+                    <CheckCircle2 className="w-4 h-4 text-[var(--green)] shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-[var(--red)] shrink-0" />
+                  )}
+                  <span className="font-bold text-[13px]">
+                    {runResults.all_passed ? 'Sample Cases Passed' : 'Sample Cases Failed'}
                   </span>
                 </div>
-
-                {runResults.results?.map((res, i) => (
-                  <div key={i} className="p-2.5 bg-[var(--bg-raised)] rounded border border-[var(--border)] flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {res.passed ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--green)]" />
-                      ) : (
-                        <XCircle className="w-3.5 h-3.5 text-[var(--red)]" />
-                      )}
-                      <span>Case {res.index}:</span>
-                      <span className="text-[var(--text-muted)]">{res.input}</span>
-                    </div>
-                    <span className="text-[10px] text-[var(--text-muted)]">{res.execution_ms}ms</span>
-                  </div>
-                ))}
+                <div className="text-[11px] opacity-80">
+                  {runResults.results?.filter(r => r.passed).length || 0} of {runResults.results?.length || 0} sample cases passed
+                </div>
               </div>
             )}
+
+            {/* Execution Output Summary (Lists all Sample Cases AND Hidden Cases individually) */}
+            {(() => {
+              const activeResults = submissionResult?.results || runResults?.results || [];
+              const isSubmission = !!submissionResult;
+              const allPassed = isSubmission
+                ? (submissionResult.verdict === 'Accepted' || submissionResult.all_passed)
+                : !!runResults?.all_passed;
+              const totalCount = isSubmission
+                ? (submissionResult.total_cases || activeResults.length)
+                : activeResults.length;
+              const passedCount = isSubmission
+                ? (submissionResult.passed_cases ?? activeResults.filter(r => r.passed).length)
+                : activeResults.filter(r => r.passed).length;
+              const failedCount = totalCount - passedCount;
+
+              if (activeResults.length === 0) {
+                return (
+                  <div className="p-6 text-center text-[var(--text-muted)] border border-dashed border-[var(--border)] rounded">
+                    No execution results yet. Click <strong>Run Code</strong> or <strong>Submit Solution</strong> to evaluate.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)]">
+                    <span className="flex items-center gap-1.5">
+                      <span>Execution Output Summary:</span>
+                      {isSubmission && (
+                        <span className="text-[10px] font-mono font-normal text-[var(--text-muted)]">
+                          ({submissionResult.open_cases || 0} Sample + {submissionResult.hidden_cases || 0} Hidden)
+                        </span>
+                      )}
+                    </span>
+                    <span className={allPassed ? 'text-[var(--green)]' : 'text-[var(--red)]'}>
+                      {allPassed
+                        ? (isSubmission ? '✓ All Test Cases Passed' : '✓ All Sample Cases Passed')
+                        : (isSubmission ? `✗ ${failedCount} Test Case(s) Failed` : '✗ Some Cases Failed')}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {activeResults.map((res, i) => {
+                      const isHidden = !!res.is_hidden;
+                      const passed = !!res.passed;
+
+                      return (
+                        <div
+                          key={i}
+                          className={`p-2.5 rounded-[var(--radius-sm)] border flex flex-col gap-1.5 transition-all ${
+                            passed
+                              ? 'bg-[var(--bg-raised)] hover:bg-[var(--bg-card)] border-[var(--border)]'
+                              : 'bg-[var(--red-bg)]/40 hover:bg-[var(--red-bg)]/60 border-[var(--red)]/30'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0 pr-2 flex-wrap">
+                              {passed ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-[var(--green)] shrink-0" />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5 text-[var(--red)] shrink-0" />
+                              )}
+
+                              {isHidden ? (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                                    Hidden Case
+                                  </span>
+                                  <span className="font-bold text-[var(--text-primary)] text-[11px]">
+                                    Case {res.index}:
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="font-bold text-[var(--text-primary)] shrink-0 text-[11px]">
+                                  Case {res.index}:
+                                </span>
+                              )}
+
+                              <span className="text-[var(--text-muted)] text-[11px] truncate max-w-[260px] sm:max-w-md font-mono">
+                                {res.input || (isHidden ? 'Verification Dataset Test' : 'Sample Input')}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
+                              <span className={`font-bold text-[10px] ${passed ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                                {passed ? 'Passed' : 'Failed'}
+                              </span>
+                              {res.execution_ms !== undefined && (
+                                <span className="text-[10px] text-[var(--text-muted)]">
+                                  {res.execution_ms}ms
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* If case failed, show output diff breakdown */}
+                          {!passed && (
+                            <div className="mt-1 pt-1.5 border-t border-[var(--border)] text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[var(--bg-card)]/60 p-2 rounded">
+                              <div>
+                                <span className="text-[var(--text-muted)] block text-[10px] uppercase font-bold">Expected:</span>
+                                <span className="text-[var(--green)] font-mono">{res.expected || 'Correct Result'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[var(--text-muted)] block text-[10px] uppercase font-bold">Actual:</span>
+                                <span className="text-[var(--red)] font-mono">{res.actual || 'Incorrect Output'}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

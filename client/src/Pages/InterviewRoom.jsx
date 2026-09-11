@@ -41,7 +41,20 @@ export default function InterviewRoom() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [switching, setSwitching] = useState(false);
-  const [elapsedSecs, setElapsedSecs] = useState(0);
+  const [elapsedSecs, setElapsedSecs] = useState(() => {
+    try {
+      const cachedStart = sessionStorage.getItem(`interview_started_${sessionId}`);
+      if (cachedStart) {
+        const startTime = new Date(cachedStart).getTime();
+        if (!isNaN(startTime) && startTime > 0) {
+          return Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 0;
+  });
 
   // Active interviewer tab
   const [interviewerTab, setInterviewerTab] = useState('problem'); // 'problem' | 'hints' | 'solution' | 'testcases'
@@ -99,6 +112,13 @@ export default function InterviewRoom() {
       const data = res?.data || res;
       if (data?.session) {
         setSessionData(data.session);
+        if (data.session.started_at) {
+          try {
+            sessionStorage.setItem(`interview_started_${sessionId}`, data.session.started_at);
+          } catch (e) {
+            // ignore
+          }
+        }
         setCurrentUserRole(data.current_user_role || 'interviewee');
         setPeerUser(data.peer || null);
         setError('');
@@ -140,8 +160,10 @@ export default function InterviewRoom() {
                 const execData = JSON.parse(data.session.last_execution_json);
                 if (data.session.last_execution_type === 'run') {
                   setRunResults(execData);
+                  setSubmissionResult(null);
                 } else if (data.session.last_execution_type === 'submit') {
                   setSubmissionResult(execData);
+                  setRunResults(null);
                 }
               } catch (e) {
                 // ignore parse error
@@ -175,17 +197,38 @@ export default function InterviewRoom() {
     };
   }, [fetchSession]);
 
-  // Session elapsed timer
+  // Session elapsed timer (Synchronized with session.started_at from server for both students)
   useEffect(() => {
-    const start = Date.now();
+    const startedAt = sessionData?.started_at;
+    if (!startedAt) return;
+
+    const computeElapsed = () => {
+      const startTime = new Date(startedAt).getTime();
+      if (isNaN(startTime) || startTime <= 0) return 0;
+
+      if (sessionData.status === 'completed' && sessionData.ended_at) {
+        const endTime = new Date(sessionData.ended_at).getTime();
+        return Math.max(0, Math.floor((endTime - startTime) / 1000));
+      }
+
+      return Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+    };
+
+    // Set immediately on session load / reload
+    setElapsedSecs(computeElapsed());
+
+    if (sessionData.status === 'completed') {
+      return;
+    }
+
     timerRef.current = setInterval(() => {
-      setElapsedSecs(Math.floor((Date.now() - start) / 1000));
+      setElapsedSecs(computeElapsed());
     }, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [sessionData?.started_at, sessionData?.status, sessionData?.ended_at]);
 
   // Sync candidate code to server (debounced)
   const handleCodeChange = (newCode) => {
@@ -236,6 +279,7 @@ export default function InterviewRoom() {
       });
       const data = res?.data || res;
       setRunResults(data);
+      setSubmissionResult(null);
     } catch (err) {
       openModal({
         title: 'Execution Error',
@@ -261,6 +305,7 @@ export default function InterviewRoom() {
       });
       const data = res?.data || res;
       setSubmissionResult(data);
+      setRunResults(null);
     } catch (err) {
       openModal({
         title: 'Submission Error',
@@ -383,10 +428,15 @@ export default function InterviewRoom() {
     });
   };
 
-  // Format seconds -> MM:SS
+  // Format seconds -> MM:SS or HH:MM:SS
   const formatTime = (secs) => {
-    const mins = Math.floor(secs / 60);
+    if (!secs || isNaN(secs) || secs < 0) return '00:00';
+    const hours = Math.floor(secs / 3600);
+    const mins = Math.floor((secs % 3600) / 60);
     const rem = secs % 60;
+    if (hours > 0) {
+      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+    }
     return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
   };
 

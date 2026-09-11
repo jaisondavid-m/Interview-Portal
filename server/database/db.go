@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -86,13 +87,268 @@ func runMigrations(db *gorm.DB) error {
 		&models.InterviewTrack{},
 		&models.InterviewLevel{},
 		&models.InterviewQuestion{},
+		&models.InterviewQuestionDetail{},
+		&models.InterviewQuestionCodeTemplate{},
+		&models.InterviewQuestionTestCase{},
+		&models.InterviewQuestionHint{},
+		&models.InterviewQuestionMCQOption{},
 		&models.MatchmakingQueueEntry{},
 		&models.InterviewSession{},
 	)
 	if err == nil {
 		seedInterviewData(db)
+		syncAllQuestionRelationalData(db)
 	}
 	return err
+}
+
+// syncAllQuestionRelationalData ensures all questions have populated normalized relational rows
+func syncAllQuestionRelationalData(db *gorm.DB) {
+	var questions []models.InterviewQuestion
+	db.Find(&questions)
+
+	for _, q := range questions {
+		// 1. Sync Detail
+		var detailCount int64
+		db.Model(&models.InterviewQuestionDetail{}).Where("question_id = ?", q.ID).Count(&detailCount)
+		if detailCount == 0 {
+			var payload map[string]interface{}
+			if q.PayloadJSON != "" {
+				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
+			}
+			constraints := ""
+			approach := ""
+			complexity := ""
+			idealAnswer := ""
+			scenario := ""
+			correctOpt := "A"
+			explanation := ""
+			if payload != nil {
+				if v, ok := payload["constraints"].(string); ok {
+					constraints = v
+				}
+				if v, ok := payload["expected_approach"].(string); ok {
+					approach = v
+				}
+				if v, ok := payload["expected_complexity"].(string); ok {
+					complexity = v
+				}
+				if v, ok := payload["ideal_answer"].(string); ok {
+					idealAnswer = v
+				}
+				if v, ok := payload["scenario"].(string); ok {
+					scenario = v
+				}
+				if v, ok := payload["correct_option"].(string); ok {
+					correctOpt = v
+				}
+				if v, ok := payload["explanation"].(string); ok {
+					explanation = v
+				}
+			}
+			db.Create(&models.InterviewQuestionDetail{
+				QuestionID:         q.ID,
+				Constraints:        constraints,
+				ExpectedApproach:   approach,
+				ExpectedComplexity: complexity,
+				IdealAnswer:        idealAnswer,
+				Scenario:           scenario,
+				CorrectOption:      correctOpt,
+				Explanation:        explanation,
+			})
+		}
+
+		// 2. Sync Code Templates (for coding questions)
+		var tmplCount int64
+		db.Model(&models.InterviewQuestionCodeTemplate{}).Where("question_id = ?", q.ID).Count(&tmplCount)
+		if tmplCount == 0 && q.Type == models.ModeCoding {
+			var payload map[string]interface{}
+			if q.PayloadJSON != "" {
+				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
+			}
+			jsStarter := "/**\n * @param {any} input\n * @return {any}\n */\nfunction solution(input) {\n    // Write your solution here\n    \n}\n"
+			pyStarter := "def solution(input):\n    # Write your solution here\n    pass\n"
+			cppStarter := "#include <iostream>\n#include <vector>\nusing namespace std;\n\n// Write your solution here\n"
+			javaStarter := "class Solution {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n"
+
+			if payload != nil {
+				if sc, ok := payload["starter_code"].(string); ok && sc != "" {
+					jsStarter = sc
+				}
+				if sc, ok := payload["starter_code_js"].(string); ok && sc != "" {
+					jsStarter = sc
+				}
+				if sc, ok := payload["starter_code_py"].(string); ok && sc != "" {
+					pyStarter = sc
+				}
+				if sc, ok := payload["starter_code_cpp"].(string); ok && sc != "" {
+					cppStarter = sc
+				}
+				if sc, ok := payload["starter_code_java"].(string); ok && sc != "" {
+					javaStarter = sc
+				}
+			}
+
+			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "javascript", StarterCode: jsStarter})
+			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "python", StarterCode: pyStarter})
+			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "cpp", StarterCode: cppStarter})
+			db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: q.ID, Language: "java", StarterCode: javaStarter})
+		}
+
+		// 3. Sync Test Cases
+		var tcCount int64
+		db.Model(&models.InterviewQuestionTestCase{}).Where("question_id = ?", q.ID).Count(&tcCount)
+		if tcCount == 0 && q.Type == models.ModeCoding {
+			var payload map[string]interface{}
+			if q.PayloadJSON != "" {
+				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
+			}
+			order := 1
+			if payload != nil {
+				// Open sample cases
+				if otc, ok := payload["open_test_cases"].([]interface{}); ok && len(otc) > 0 {
+					for _, tc := range otc {
+						if tcMap, ok := tc.(map[string]interface{}); ok {
+							inStr, _ := tcMap["input"].(string)
+							outStr, _ := tcMap["output"].(string)
+							db.Create(&models.InterviewQuestionTestCase{
+								QuestionID:     q.ID,
+								Input:          inStr,
+								ExpectedOutput: outStr,
+								IsHidden:       false,
+								OrderIndex:     order,
+							})
+							order++
+						}
+					}
+				} else if tcList, ok := payload["test_cases"].([]interface{}); ok && len(tcList) > 0 {
+					for _, tc := range tcList {
+						if tcMap, ok := tc.(map[string]interface{}); ok {
+							inStr, _ := tcMap["input"].(string)
+							outStr, _ := tcMap["output"].(string)
+							db.Create(&models.InterviewQuestionTestCase{
+								QuestionID:     q.ID,
+								Input:          inStr,
+								ExpectedOutput: outStr,
+								IsHidden:       false,
+								OrderIndex:     order,
+							})
+							order++
+						}
+					}
+				}
+
+				// Hidden verification cases
+				if htc, ok := payload["hidden_test_cases"].([]interface{}); ok && len(htc) > 0 {
+					for _, tc := range htc {
+						if tcMap, ok := tc.(map[string]interface{}); ok {
+							inStr, _ := tcMap["input"].(string)
+							outStr, _ := tcMap["output"].(string)
+							db.Create(&models.InterviewQuestionTestCase{
+								QuestionID:     q.ID,
+								Input:          inStr,
+								ExpectedOutput: outStr,
+								IsHidden:       true,
+								OrderIndex:     order,
+							})
+							order++
+						}
+					}
+				}
+			}
+
+			// If still 0, create default sample & hidden
+			if order == 1 {
+				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [2,7,11,15], target = 9", ExpectedOutput: "[0,1]", IsHidden: false, OrderIndex: 1})
+				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [3,2,4], target = 6", ExpectedOutput: "[1,2]", IsHidden: false, OrderIndex: 2})
+				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [3,3], target = 6", ExpectedOutput: "[0,1]", IsHidden: true, OrderIndex: 3})
+				db.Create(&models.InterviewQuestionTestCase{QuestionID: q.ID, Input: "nums = [-1,-2,-3,-4,-5], target = -8", ExpectedOutput: "[2,4]", IsHidden: true, OrderIndex: 4})
+			}
+		}
+
+		// 4. Sync Hints, Rubrics, Tips
+		var hintCount int64
+		db.Model(&models.InterviewQuestionHint{}).Where("question_id = ?", q.ID).Count(&hintCount)
+		if hintCount == 0 {
+			var payload map[string]interface{}
+			if q.PayloadJSON != "" {
+				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
+			}
+			if payload != nil {
+				hOrder := 1
+				if hints, ok := payload["hints"].([]interface{}); ok {
+					for _, h := range hints {
+						if hs, ok := h.(string); ok && hs != "" {
+							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "hint", Content: hs, OrderIndex: hOrder})
+							hOrder++
+						}
+					}
+				}
+				if tips, ok := payload["interview_tips"].([]interface{}); ok {
+					for _, t := range tips {
+						if ts, ok := t.(string); ok && ts != "" {
+							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "interview_tip", Content: ts, OrderIndex: hOrder})
+							hOrder++
+						}
+					}
+				}
+				if rubrics, ok := payload["rubrics"].([]interface{}); ok {
+					for _, r := range rubrics {
+						if rs, ok := r.(string); ok && rs != "" {
+							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "rubric", Content: rs, OrderIndex: hOrder})
+							hOrder++
+						}
+					}
+				}
+				if tps, ok := payload["talking_points"].([]interface{}); ok {
+					for _, tp := range tps {
+						if tpsStr, ok := tp.(string); ok && tpsStr != "" {
+							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "talking_point", Content: tpsStr, OrderIndex: hOrder})
+							hOrder++
+						}
+					}
+				}
+				if tradeoffs, ok := payload["tradeoffs"].([]interface{}); ok {
+					for _, tr := range tradeoffs {
+						if trStr, ok := tr.(string); ok && trStr != "" {
+							db.Create(&models.InterviewQuestionHint{QuestionID: q.ID, Type: "tradeoff", Content: trStr, OrderIndex: hOrder})
+							hOrder++
+						}
+					}
+				}
+			}
+		}
+
+		// 5. Sync MCQ Options (for MCQ mode)
+		var mcqCount int64
+		db.Model(&models.InterviewQuestionMCQOption{}).Where("question_id = ?", q.ID).Count(&mcqCount)
+		if mcqCount == 0 && q.Type == models.ModeMCQ {
+			var payload map[string]interface{}
+			if q.PayloadJSON != "" {
+				_ = json.Unmarshal([]byte(q.PayloadJSON), &payload)
+			}
+			correctOpt := "A"
+			if payload != nil {
+				if co, ok := payload["correct_option"].(string); ok {
+					correctOpt = co
+				}
+				if opts, ok := payload["options"].([]interface{}); ok {
+					for _, opt := range opts {
+						if optMap, ok := opt.(map[string]interface{}); ok {
+							optID, _ := optMap["id"].(string)
+							optText, _ := optMap["text"].(string)
+							db.Create(&models.InterviewQuestionMCQOption{
+								QuestionID: q.ID,
+								OptionKey:  optID,
+								OptionText: optText,
+								IsCorrect:  optID == correctOpt,
+							})
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 // seedInterviewData creates standard initial interview tracks, levels, and questions if none exist

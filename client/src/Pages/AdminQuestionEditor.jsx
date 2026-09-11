@@ -129,25 +129,40 @@ export default function AdminQuestionEditor() {
             setDifficulty(qData.difficulty || 'Medium');
             setType(qData.type || lvl?.mode || 'coding');
 
-            // Parse payload
-            let payload = {};
+            // Parse relational detail and payload fallback
+            const detail = qData.detail || {};
+            let payload = qData.payload || {};
             if (typeof qData.payload_json === 'string' && qData.payload_json) {
               try {
-                payload = JSON.parse(qData.payload_json);
+                payload = { ...payload, ...JSON.parse(qData.payload_json) };
               } catch (e) {}
-            } else if (qData.payload) {
-              payload = qData.payload;
             }
 
-            // Load multi-language templates
+            // Load multi-language templates (from relational templates table first, then payload)
+            const relationalTemplates = {};
+            if (Array.isArray(qData.templates) && qData.templates.length > 0) {
+              qData.templates.forEach((t) => {
+                if (t.language && t.starter_code) {
+                  relationalTemplates[t.language] = t.starter_code;
+                }
+              });
+            }
+
             const defaultTemplates = {
-              javascript: getStarterTemplate({ title: qData.title, payload }, 'javascript'),
-              python: getStarterTemplate({ title: qData.title, payload }, 'python'),
-              cpp: getStarterTemplate({ title: qData.title, payload }, 'cpp'),
-              java: getStarterTemplate({ title: qData.title, payload }, 'java'),
+              javascript: relationalTemplates.javascript || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'javascript'),
+              python: relationalTemplates.python || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'python'),
+              cpp: relationalTemplates.cpp || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'cpp'),
+              java: relationalTemplates.java || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'java'),
             };
 
-            if (payload.starter_templates) {
+            if (Object.keys(relationalTemplates).length > 0) {
+              setStarterTemplates({
+                javascript: relationalTemplates.javascript || defaultTemplates.javascript,
+                python: relationalTemplates.python || defaultTemplates.python,
+                cpp: relationalTemplates.cpp || defaultTemplates.cpp,
+                java: relationalTemplates.java || defaultTemplates.java,
+              });
+            } else if (payload.starter_templates) {
               setStarterTemplates({
                 javascript: payload.starter_templates.javascript || defaultTemplates.javascript,
                 python: payload.starter_templates.python || defaultTemplates.python,
@@ -163,40 +178,65 @@ export default function AdminQuestionEditor() {
               setStarterTemplates(defaultTemplates);
             }
 
-            setConstraints(payload.constraints || '');
-            if (payload.open_test_cases && payload.open_test_cases.length > 0) {
-              setOpenTestCases(payload.open_test_cases);
-            } else if (payload.test_cases && payload.test_cases.length > 0) {
-              setOpenTestCases(payload.test_cases);
+            // Constraints & Approach
+            setConstraints(detail.constraints || payload.constraints || '');
+            setExpectedApproach(detail.expected_approach || payload.expected_approach || '');
+            setExpectedComplexity(detail.expected_complexity || payload.expected_complexity || '');
+
+            // Test Cases (from relational table first, then payload)
+            if (Array.isArray(qData.test_cases) && qData.test_cases.length > 0) {
+              const relOpen = qData.test_cases
+                .filter((tc) => !tc.is_hidden)
+                .map((tc) => ({ input: tc.input || '', output: tc.expected_output || tc.output || '' }));
+              const relHidden = qData.test_cases
+                .filter((tc) => tc.is_hidden)
+                .map((tc) => ({ input: tc.input || '', output: tc.expected_output || tc.output || '' }));
+
+              if (relOpen.length > 0) setOpenTestCases(relOpen);
+              if (relHidden.length > 0) setHiddenTestCases(relHidden);
+            } else {
+              if (payload.open_test_cases && payload.open_test_cases.length > 0) {
+                setOpenTestCases(payload.open_test_cases);
+              } else if (payload.test_cases && payload.test_cases.length > 0) {
+                setOpenTestCases(payload.test_cases);
+              }
+              if (payload.hidden_test_cases && payload.hidden_test_cases.length > 0) {
+                setHiddenTestCases(payload.hidden_test_cases);
+              }
             }
-            if (payload.hidden_test_cases && payload.hidden_test_cases.length > 0) {
-              setHiddenTestCases(payload.hidden_test_cases);
-            }
-            if (payload.hints && payload.hints.length > 0) {
-              setHints(payload.hints);
-            }
-            setExpectedApproach(payload.expected_approach || '');
-            setExpectedComplexity(payload.expected_complexity || '');
-            if (payload.interview_tips && payload.interview_tips.length > 0) {
-              setInterviewTips(payload.interview_tips);
+
+            // Hints & Interview Tips (from relational hints table first, then payload)
+            if (Array.isArray(qData.hints) && qData.hints.length > 0) {
+              const relHints = qData.hints.filter((h) => h.type === 'hint').map((h) => h.content);
+              const relTips = qData.hints.filter((h) => h.type === 'interview_tip').map((h) => h.content);
+              const relRubrics = qData.hints.filter((h) => h.type === 'rubric').map((h) => h.content);
+              const relTalking = qData.hints.filter((h) => h.type === 'talking_point').map((h) => h.content);
+              const relTradeoffs = qData.hints.filter((h) => h.type === 'tradeoff').map((h) => h.content);
+
+              if (relHints.length > 0) setHints(relHints);
+              if (relTips.length > 0) setInterviewTips(relTips);
+              if (relRubrics.length > 0) setRubrics(relRubrics);
+              if (relTalking.length > 0) setTalkingPoints(relTalking);
+              if (relTradeoffs.length > 0) setTradeoffs(relTradeoffs);
+            } else {
+              if (payload.hints && payload.hints.length > 0) setHints(payload.hints);
+              if (payload.interview_tips && payload.interview_tips.length > 0) setInterviewTips(payload.interview_tips);
+              if (payload.rubrics && payload.rubrics.length > 0) setRubrics(payload.rubrics);
+              if (payload.talking_points && payload.talking_points.length > 0) setTalkingPoints(payload.talking_points);
+              if (payload.tradeoffs && payload.tradeoffs.length > 0) setTradeoffs(payload.tradeoffs);
             }
 
             // Non-coding fields
-            setIdealAnswer(payload.ideal_answer || '');
-            if (payload.rubrics && payload.rubrics.length > 0) {
-              setRubrics(payload.rubrics);
-            }
-            if (payload.options && payload.options.length > 0) {
+            setIdealAnswer(detail.ideal_answer || payload.ideal_answer || '');
+            setScenario(detail.scenario || payload.scenario || '');
+            setExplanation(detail.explanation || payload.explanation || '');
+            setCorrectOption(detail.correct_option || payload.correct_option || 'A');
+
+            // MCQ Options (from relational table first, then payload)
+            if (Array.isArray(qData.mcq_options) && qData.mcq_options.length > 0) {
+              setMcqOptions(qData.mcq_options.map((opt) => ({ id: opt.option_key, text: opt.option_text })));
+            } else if (payload.options && payload.options.length > 0) {
               setMcqOptions(payload.options);
-            }
-            setCorrectOption(payload.correct_option || 'A');
-            setExplanation(payload.explanation || '');
-            setScenario(payload.scenario || '');
-            if (payload.talking_points && payload.talking_points.length > 0) {
-              setTalkingPoints(payload.talking_points);
-            }
-            if (payload.tradeoffs && payload.tradeoffs.length > 0) {
-              setTradeoffs(payload.tradeoffs);
             }
           }
         } else {
@@ -345,6 +385,56 @@ export default function AdminQuestionEditor() {
         };
       }
 
+      // Build relational child entities
+      const detail = {
+        constraints: constraints.trim(),
+        expected_approach: expectedApproach.trim(),
+        expected_complexity: expectedComplexity.trim(),
+        ideal_answer: idealAnswer.trim(),
+        scenario: scenario.trim(),
+        correct_option: correctOption,
+        explanation: explanation.trim(),
+      };
+
+      const templates = Object.entries(starterTemplates).map(([lang, code]) => ({
+        language: lang,
+        starter_code: code || '',
+      }));
+
+      const cleanedOpenCases = openTestCases
+        .filter((tc) => tc.input.trim() || tc.output.trim())
+        .map((tc, idx) => ({
+          input: tc.input.trim(),
+          expected_output: tc.output.trim(),
+          is_hidden: false,
+          order_index: idx + 1,
+        }));
+
+      const cleanedHiddenCases = hiddenTestCases
+        .filter((tc) => tc.input.trim() || tc.output.trim())
+        .map((tc, idx) => ({
+          input: tc.input.trim(),
+          expected_output: tc.output.trim(),
+          is_hidden: true,
+          order_index: cleanedOpenCases.length + idx + 1,
+        }));
+
+      const testCases = [...cleanedOpenCases, ...cleanedHiddenCases];
+
+      const hintsList = [
+        ...hints.filter((h) => h.trim()).map((h, i) => ({ type: 'hint', content: h.trim(), order_index: i + 1 })),
+        ...interviewTips.filter((t) => t.trim()).map((t, i) => ({ type: 'interview_tip', content: t.trim(), order_index: i + 1 })),
+        ...rubrics.filter((r) => r.trim()).map((r, i) => ({ type: 'rubric', content: r.trim(), order_index: i + 1 })),
+        ...talkingPoints.filter((tp) => tp.trim()).map((tp, i) => ({ type: 'talking_point', content: tp.trim(), order_index: i + 1 })),
+        ...tradeoffs.filter((tr) => tr.trim()).map((tr, i) => ({ type: 'tradeoff', content: tr.trim(), order_index: i + 1 })),
+      ];
+
+      const mcqOptionsList = mcqOptions.map((opt) => ({
+        option_key: opt.id,
+        option_text: opt.text.trim(),
+        is_correct: opt.id === correctOption,
+      }));
+
       const payloadJSON = JSON.stringify(payloadObj);
 
       const requestBody = {
@@ -354,6 +444,11 @@ export default function AdminQuestionEditor() {
         difficulty,
         type,
         payload_json: payloadJSON,
+        detail,
+        templates,
+        test_cases: testCases,
+        hints: hintsList,
+        mcq_options: mcqOptionsList,
       };
 
       if (isEditing) {

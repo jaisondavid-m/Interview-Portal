@@ -5,7 +5,7 @@ import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { Code2, RotateCcw, Copy, Check, Eye, Lock, Terminal } from 'lucide-react';
+import { RotateCcw, Copy, Check } from 'lucide-react';
 import { getStarterTemplate } from '../utils/starterTemplates';
 
 const LANGUAGE_CONFIGS = [
@@ -56,40 +56,14 @@ export default function CodeEditor({
   return (
     <div className="flex flex-col h-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[#282c34] overflow-hidden shadow-[var(--shadow-sm)]">
       {/* Editor Header Toolbar */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-[#21252b] border-b border-[#181a1f] text-xs select-none">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold text-gray-300">
-            <Code2 className="w-4 h-4 text-[var(--accent)]" />
-            <span>Workspace Editor</span>
-          </div>
-
-          {/* Role Status Tag */}
-          {isEditable ? (
-            <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)] animate-pulse" />
-              <span>You Are Coding</span>
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-              <Eye className="w-3 h-3" />
-              <span>Viewing Candidate Live Stream</span>
-            </span>
-          )}
-
-          <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">
-            <Lock className="w-2.5 h-2.5 text-amber-400" />
-            <span>Template Protected</span>
-          </span>
-        </div>
-
-        {/* Actions Toolbar */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#21252b] border-b border-[#181a1f] text-xs select-none">
+        {/* Language Selector */}
         <div className="flex items-center gap-2">
-          {/* Language Selector */}
           <select
             value={language}
             onChange={(e) => onLanguageChange && onLanguageChange(e.target.value)}
             disabled={!isEditable}
-            className="bg-[#282c34] text-gray-300 text-[11px] font-mono rounded px-2 py-1 border border-[#3e4451] focus:outline-none focus:border-[var(--accent)] disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+            className="bg-[#282c34] text-gray-300 text-[11px] font-mono rounded px-2.5 py-1 border border-[#3e4451] focus:outline-none focus:border-[var(--accent)] disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
           >
             {LANGUAGE_CONFIGS.map((lang) => (
               <option key={lang.id} value={lang.id}>
@@ -97,7 +71,10 @@ export default function CodeEditor({
               </option>
             ))}
           </select>
+        </div>
 
+        {/* Actions Toolbar */}
+        <div className="flex items-center gap-2">
           {/* Reset Starter Code */}
           {isEditable && onResetCode && (
             <button
