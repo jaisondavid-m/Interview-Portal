@@ -27,6 +27,9 @@ import {
 import api from '../api/axios';
 import CodeEditor from '../Components/CodeEditor';
 import TestCasesConsole from '../Components/TestCasesConsole';
+import ConfirmModal from '../Components/ConfirmModal';
+
+import { getStarterTemplate } from '../utils/starterTemplates';
 
 export default function InterviewRoom() {
   const { sessionId } = useParams();
@@ -51,10 +54,43 @@ export default function InterviewRoom() {
   const [runResults, setRunResults] = useState(null);
   const [submissionResult, setSubmissionResult] = useState(null);
 
+  // Reusable confirmation modal state
+  const [modalConfig, setModalConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    variant: 'primary',
+    icon: null,
+    onConfirm: null,
+    showCancel: true,
+  });
+
+  const closeModal = () => {
+    setModalConfig((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const openModal = (config) => {
+    setModalConfig({
+      isOpen: true,
+      title: config.title || 'Confirmation',
+      message: config.message || 'Are you sure you want to proceed?',
+      confirmText: config.confirmText || 'Confirm',
+      cancelText: config.cancelText || 'Cancel',
+      variant: config.variant || 'primary',
+      icon: config.icon || null,
+      onConfirm: config.onConfirm || closeModal,
+      showCancel: config.showCancel !== false,
+    });
+  };
+
   const pollRef = useRef(null);
   const timerRef = useRef(null);
   const syncTimeoutRef = useRef(null);
   const lastSyncCodeRef = useRef('');
+  const activeQIdRef = useRef(0);
+  const activeRoundRef = useRef(1);
 
   // Fetch session data
   const fetchSession = useCallback(async () => {
@@ -67,27 +103,56 @@ export default function InterviewRoom() {
         setPeerUser(data.peer || null);
         setError('');
 
-        // If candidate code is received from server and user is Interviewer (or code was initialized), update editor
-        if (data.current_user_role === 'interviewer') {
-          setCode(data.session.candidate_code || '');
-          setLanguage(data.session.candidate_lang || 'javascript');
+        const targetLang = data.session.candidate_lang || 'javascript';
+        const isRoundOrQuestionChanged =
+          (data.session.current_question_id && data.session.current_question_id !== activeQIdRef.current) ||
+          (data.session.round && data.session.round !== activeRoundRef.current);
 
-          // Synchronize candidate execution state for interviewer
-          if (data.session.last_execution_json) {
-            try {
-              const execData = JSON.parse(data.session.last_execution_json);
-              if (data.session.last_execution_type === 'run') {
-                setRunResults(execData);
-              } else if (data.session.last_execution_type === 'submit') {
-                setSubmissionResult(execData);
-              }
-            } catch (e) {
-              // ignore parse error
-            }
+        if (isRoundOrQuestionChanged) {
+          activeQIdRef.current = data.session.current_question_id;
+          activeRoundRef.current = data.session.round;
+          setRunResults(null);
+          setSubmissionResult(null);
+
+          const template = getStarterTemplate(data.session.current_question, targetLang);
+          const initialCode = (data.session.candidate_code && data.session.candidate_code.trim())
+            ? data.session.candidate_code
+            : template;
+
+          setCode(initialCode);
+          setLanguage(targetLang);
+
+          if (data.current_user_role === 'interviewee') {
+            api.post(`/interviews/sessions/${sessionId}/code`, {
+              code: initialCode,
+              lang: targetLang,
+            }).catch(() => {});
           }
-        } else if (!code && data.session.candidate_code) {
-          setCode(data.session.candidate_code);
-          setLanguage(data.session.candidate_lang || 'javascript');
+        } else {
+          // If candidate code is received from server and user is Interviewer, update editor stream
+          if (data.current_user_role === 'interviewer') {
+            setCode(data.session.candidate_code || '');
+            setLanguage(targetLang);
+
+            // Synchronize candidate execution state for interviewer
+            if (data.session.last_execution_json) {
+              try {
+                const execData = JSON.parse(data.session.last_execution_json);
+                if (data.session.last_execution_type === 'run') {
+                  setRunResults(execData);
+                } else if (data.session.last_execution_type === 'submit') {
+                  setSubmissionResult(execData);
+                }
+              } catch (e) {
+                // ignore parse error
+              }
+            }
+          } else if (!code || !code.trim()) {
+            const template = getStarterTemplate(data.session.current_question, targetLang);
+            const initialCode = data.session.candidate_code || template;
+            setCode(initialCode);
+            setLanguage(targetLang);
+          }
         }
       }
     } catch (err) {
@@ -144,11 +209,13 @@ export default function InterviewRoom() {
   };
 
   const handleLanguageChange = async (newLang) => {
+    const newTemplate = getStarterTemplate(sessionData?.current_question, newLang);
     setLanguage(newLang);
+    setCode(newTemplate);
     if (currentUserRole === 'interviewee') {
       try {
         await api.post(`/interviews/sessions/${sessionId}/code`, {
-          code: code,
+          code: newTemplate,
           lang: newLang,
         });
       } catch (e) {
@@ -170,7 +237,15 @@ export default function InterviewRoom() {
       const data = res?.data || res;
       setRunResults(data);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Execution error');
+      openModal({
+        title: 'Execution Error',
+        message: err.response?.data?.message || err.message || 'Failed to run test cases.',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        confirmText: 'Dismiss',
+        onConfirm: closeModal,
+      });
     } finally {
       setIsRunning(false);
     }
@@ -187,30 +262,56 @@ export default function InterviewRoom() {
       const data = res?.data || res;
       setSubmissionResult(data);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Submission error');
+      openModal({
+        title: 'Submission Error',
+        message: err.response?.data?.message || err.message || 'Failed to evaluate submission.',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        confirmText: 'Dismiss',
+        onConfirm: closeModal,
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // Request Role Switch (Requires peer acceptance)
-  const handleRequestSwitch = async () => {
-    if (!window.confirm('Request to finish Round 1 and swap roles to Round 2? Your peer will receive a prompt to accept or decline.')) return;
-    try {
-      setSwitching(true);
-      const res = await api.post(`/interviews/sessions/${sessionId}/request-switch`);
-      const data = res?.data || res;
-      if (data?.switched && data?.current_user_role) {
-        setCurrentUserRole(data.current_user_role);
-        setRunResults(null);
-        setSubmissionResult(null);
-      }
-      await fetchSession();
-    } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Failed to request role switch.');
-    } finally {
-      setSwitching(false);
-    }
+  const handleRequestSwitch = () => {
+    openModal({
+      title: 'Request Round Switch (Round 2)',
+      message: 'Finish Round 1 and switch roles to Round 2? Your peer will receive a live confirmation prompt to accept or decline. A new random question will be assigned for Round 2.',
+      confirmText: 'Send Switch Request',
+      cancelText: 'Keep Practicing',
+      variant: 'primary',
+      icon: Repeat,
+      onConfirm: async () => {
+        closeModal();
+        try {
+          setSwitching(true);
+          const res = await api.post(`/interviews/sessions/${sessionId}/request-switch`);
+          const data = res?.data || res;
+          if (data?.switched && data?.current_user_role) {
+            setCurrentUserRole(data.current_user_role);
+            setRunResults(null);
+            setSubmissionResult(null);
+          }
+          await fetchSession();
+        } catch (err) {
+          openModal({
+            title: 'Role Switch Notice',
+            message: err.response?.data?.message || err.message || 'Failed to request role switch.',
+            variant: 'warning',
+            icon: AlertCircle,
+            showCancel: false,
+            confirmText: 'OK',
+            onConfirm: closeModal,
+          });
+        } finally {
+          setSwitching(false);
+        }
+      },
+    });
   };
 
   // Accept Role Switch from Peer
@@ -226,7 +327,15 @@ export default function InterviewRoom() {
       setSubmissionResult(null);
       await fetchSession();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Failed to accept role switch.');
+      openModal({
+        title: 'Role Switch Notice',
+        message: err.response?.data?.message || err.message || 'Failed to accept role switch.',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        confirmText: 'OK',
+        onConfirm: closeModal,
+      });
     } finally {
       setSwitching(false);
     }
@@ -239,21 +348,39 @@ export default function InterviewRoom() {
       await api.post(`/interviews/sessions/${sessionId}/decline-switch`);
       await fetchSession();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Failed to decline switch request.');
+      openModal({
+        title: 'Role Switch Notice',
+        message: err.response?.data?.message || err.message || 'Failed to decline switch request.',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        confirmText: 'OK',
+        onConfirm: closeModal,
+      });
     } finally {
       setSwitching(false);
     }
   };
 
   // End Interview Session
-  const handleEndSession = async () => {
-    if (!window.confirm('Are you sure you want to finish and end this interview session?')) return;
-    try {
-      await api.post(`/interviews/sessions/${sessionId}/end`);
-      navigate('/interviews');
-    } catch (e) {
-      navigate('/interviews');
-    }
+  const handleEndSession = () => {
+    openModal({
+      title: 'End Interview Assessment',
+      message: 'Are you sure you want to conclude and end this live interview session? You will be navigated back to the assessment directory.',
+      confirmText: 'End Assessment',
+      cancelText: 'Stay in Room',
+      variant: 'danger',
+      icon: LogOut,
+      onConfirm: async () => {
+        closeModal();
+        try {
+          await api.post(`/interviews/sessions/${sessionId}/end`);
+          navigate('/interviews');
+        } catch (e) {
+          navigate('/interviews');
+        }
+      },
+    });
   };
 
   // Format seconds -> MM:SS
@@ -731,11 +858,11 @@ export default function InterviewRoom() {
               onLanguageChange={handleLanguageChange}
               isEditable={currentUserRole === 'interviewee'}
               onResetCode={() => {
-                if (payload?.starter_code) {
-                  handleCodeChange(payload.starter_code);
-                }
+                const cleanTemplate = getStarterTemplate(question, language);
+                handleCodeChange(cleanTemplate);
               }}
-              starterCode={payload?.starter_code}
+              starterCode={getStarterTemplate(question, language)}
+              question={question}
             />
           </div>
 
@@ -757,6 +884,9 @@ export default function InterviewRoom() {
           />
         </div>
       </div>
+
+      {/* Confirmation & Alert Modal */}
+      <ConfirmModal {...modalConfig} onClose={closeModal} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { Code2, RotateCcw, Copy, Check, Eye, Lock, Terminal } from 'lucide-react';
+import { getStarterTemplate } from '../utils/starterTemplates';
 
 const LANGUAGE_CONFIGS = [
   { id: 'javascript', label: 'JavaScript (Node.js)', extension: () => javascript({ jsx: true }) },
@@ -22,8 +23,14 @@ export default function CodeEditor({
   isEditable = true,
   onResetCode,
   starterCode,
+  question = null,
 }) {
   const [copied, setCopied] = React.useState(false);
+
+  const activeStarter = starterCode || (question ? getStarterTemplate(question, language) : '// Write your solution here\n');
+
+  // Enforce template code: if code is null/empty, supply the starter template
+  const displayCode = code && code.trim() ? code : activeStarter;
 
   const selectedExtension = useMemo(() => {
     const langObj = LANGUAGE_CONFIGS.find((l) => l.id === language);
@@ -31,9 +38,19 @@ export default function CodeEditor({
   }, [language]);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(code || '');
+    navigator.clipboard.writeText(displayCode || '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCodeChange = (val) => {
+    if (!isEditable || !onChange) return;
+    // If the candidate erases the entire editor, restore the template skeleton automatically
+    if (!val || !val.trim()) {
+      onChange(activeStarter);
+    } else {
+      onChange(val);
+    }
   };
 
   return (
@@ -58,6 +75,11 @@ export default function CodeEditor({
               <span>Viewing Candidate Live Stream</span>
             </span>
           )}
+
+          <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">
+            <Lock className="w-2.5 h-2.5 text-amber-400" />
+            <span>Template Protected</span>
+          </span>
         </div>
 
         {/* Actions Toolbar */}
@@ -67,7 +89,7 @@ export default function CodeEditor({
             value={language}
             onChange={(e) => onLanguageChange && onLanguageChange(e.target.value)}
             disabled={!isEditable}
-            className="bg-[#282c34] text-gray-300 text-[11px] font-mono rounded px-2 py-1 border border-[#3e4451] focus:outline-none focus:border-[var(--accent)] disabled:opacity-75 disabled:cursor-not-allowed"
+            className="bg-[#282c34] text-gray-300 text-[11px] font-mono rounded px-2 py-1 border border-[#3e4451] focus:outline-none focus:border-[var(--accent)] disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
           >
             {LANGUAGE_CONFIGS.map((lang) => (
               <option key={lang.id} value={lang.id}>
@@ -80,10 +102,11 @@ export default function CodeEditor({
           {isEditable && onResetCode && (
             <button
               onClick={onResetCode}
-              title="Reset code to default template"
-              className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#3e4451] transition"
+              title="Reset code to default question template"
+              className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-[#3e4451] transition cursor-pointer flex items-center gap-1 text-[11px] font-mono"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline text-[10px]">Reset Template</span>
             </button>
           )}
 
@@ -91,7 +114,7 @@ export default function CodeEditor({
           <button
             onClick={handleCopy}
             title="Copy code to clipboard"
-            className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#3e4451] transition flex items-center gap-1 text-[10px] font-mono"
+            className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-[#3e4451] transition flex items-center gap-1 text-[10px] font-mono cursor-pointer"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
@@ -101,18 +124,14 @@ export default function CodeEditor({
       {/* CodeMirror Workspace */}
       <div className="flex-1 overflow-auto relative">
         <CodeMirror
-          value={code || ''}
+          value={displayCode}
           height="100%"
           minHeight="320px"
           theme={oneDark}
           extensions={selectedExtension}
           readOnly={!isEditable}
           editable={isEditable}
-          onChange={(val) => {
-            if (isEditable && onChange) {
-              onChange(val);
-            }
-          }}
+          onChange={handleCodeChange}
           className="text-[13px] font-mono h-full"
           basicSetup={{
             lineNumbers: true,
