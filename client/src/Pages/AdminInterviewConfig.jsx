@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
   Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
-  HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp, Copy
+  HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp, Copy,
+  Lightbulb, Target, Sparkles, BookOpen
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -98,6 +99,11 @@ export default function AdminInterviewConfig() {
     open_test_cases: [{ input: '', output: '' }],
     hidden_test_cases: [{ input: '', output: '' }],
     constraints: '',
+    hints: [''],
+    expected_approach: '',
+    expected_complexity: '',
+    // Interview tips (all modes)
+    interview_tips: [''],
     // Verbal Q&A payload
     ideal_answer: '',
     rubrics: [''],
@@ -264,32 +270,43 @@ export default function AdminInterviewConfig() {
 
     try {
       let payloadObj = {};
+      const tips = (questionForm.interview_tips || []).filter((t) => t.trim());
+
       if (currentLevel.mode === 'coding') {
         const openTCs = questionForm.open_test_cases.filter((tc) => tc.input || tc.output);
         const hiddenTCs = questionForm.hidden_test_cases.filter((tc) => tc.input || tc.output);
+        const hints = (questionForm.hints || []).filter((h) => h.trim());
+
         payloadObj = {
           starter_code: questionForm.starter_code,
           open_test_cases: openTCs,
           hidden_test_cases: hiddenTCs,
           test_cases: openTCs, // Backward compatibility
           constraints: questionForm.constraints,
+          hints: hints,
+          expected_approach: questionForm.expected_approach,
+          expected_complexity: questionForm.expected_complexity,
+          interview_tips: tips,
         };
       } else if (currentLevel.mode === 'verbal_qa') {
         payloadObj = {
           ideal_answer: questionForm.ideal_answer,
           rubrics: questionForm.rubrics.filter((r) => r.trim()),
+          interview_tips: tips,
         };
       } else if (currentLevel.mode === 'mcq') {
         payloadObj = {
           options: questionForm.options,
           correct_option: questionForm.correct_option,
           explanation: questionForm.explanation,
+          interview_tips: tips,
         };
       } else if (currentLevel.mode === 'discussion') {
         payloadObj = {
           scenario: questionForm.scenario,
           talking_points: questionForm.talking_points.filter((tp) => tp.trim()),
           tradeoffs: questionForm.tradeoffs.filter((to) => to.trim()),
+          interview_tips: tips,
         };
       }
 
@@ -374,6 +391,9 @@ export default function AdminInterviewConfig() {
       ? parsed.hidden_test_cases
       : [{ input: '', output: '' }];
 
+    const hints = parsed.hints?.length ? parsed.hints : [''];
+    const tips = parsed.interview_tips?.length ? parsed.interview_tips : [''];
+
     setQuestionForm({
       id: q.id,
       title: q.title || '',
@@ -384,6 +404,10 @@ export default function AdminInterviewConfig() {
       open_test_cases: openCases,
       hidden_test_cases: hiddenCases,
       constraints: parsed.constraints || '',
+      hints: hints,
+      expected_approach: parsed.expected_approach || '',
+      expected_complexity: parsed.expected_complexity || '',
+      interview_tips: tips,
       ideal_answer: parsed.ideal_answer || '',
       rubrics: parsed.rubrics?.length ? parsed.rubrics : [''],
       options: parsed.options?.length ? parsed.options : [{ id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }],
@@ -408,6 +432,10 @@ export default function AdminInterviewConfig() {
       open_test_cases: [{ input: '', output: '' }],
       hidden_test_cases: [{ input: '', output: '' }],
       constraints: '',
+      hints: [''],
+      expected_approach: '',
+      expected_complexity: '',
+      interview_tips: [''],
       ideal_answer: '',
       rubrics: [''],
       options: [{ id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }],
@@ -424,7 +452,7 @@ export default function AdminInterviewConfig() {
   return (
     <div className="space-y-6">
       {/* Dynamic Header with Interactive Breadcrumbs and Deep Links */}
-      <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className={`${questionId ? 'pb-2' : 'pb-5 border-b border-[var(--border)]'} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
         <div>
           {/* Breadcrumb path */}
           <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex-wrap">
@@ -459,125 +487,96 @@ export default function AdminInterviewConfig() {
             {questionId && currentQuestion && (
               <>
                 <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
-                <span className="font-bold text-[var(--accent)] truncate max-w-[200px]">
+                <span className="font-bold text-[var(--accent)] truncate max-w-[250px]">
                   {currentQuestion.title}
                 </span>
               </>
             )}
           </div>
 
-          <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
-            {questionId
-              ? (currentQuestion?.title || 'Question Details')
-              : !trackId
-              ? 'Interview Domains & Tracks'
-              : !levelId
-              ? `${currentTrack?.title || 'Loading...'} — Levels`
-              : formatFullLevelTitle(currentLevel)}
-          </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            {questionId
-              ? `${currentQuestion?.difficulty || 'Medium'} Difficulty • ${currentLevel?.mode?.toUpperCase() || 'CODING'} Assessment • Level ${currentLevel?.level_number || 1}`
-              : !trackId
-              ? 'Configure campus interview domains, progression tiers, and mode-specific assessments.'
-              : !levelId
-              ? 'Define progression levels, time limits, and select interview assessment mode.'
-              : `Manage questions and evaluation rubrics for ${currentLevel?.mode?.toUpperCase()} mode.`}
-          </p>
+          {!questionId && (
+            <>
+              <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
+                {!trackId
+                  ? 'Interview Domains & Tracks'
+                  : !levelId
+                  ? `${currentTrack?.title || 'Loading...'} — Levels`
+                  : formatFullLevelTitle(currentLevel)}
+              </h1>
+              <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+                {!trackId
+                  ? 'Configure campus interview domains, progression tiers, and mode-specific assessments.'
+                  : !levelId
+                  ? 'Define progression levels, time limits, and select interview assessment mode.'
+                  : `Manage questions and evaluation rubrics for ${currentLevel?.mode?.toUpperCase()} mode.`}
+              </p>
+            </>
+          )}
         </div>
 
-        {/* Primary Action Button */}
-        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
-          {questionId ? (
-            <>
-              <button
-                onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
-                className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back to Questions</span>
-              </button>
-              {currentQuestion && (
-                <>
-                  <button
-                    onClick={() => openEditQuestionModal(currentQuestion)}
-                    className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Edit Question</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDeleteTarget({ type: 'question', data: currentQuestion });
-                      setShowDeleteModal(true);
-                    }}
-                    className="btn btn-danger text-xs py-2 px-3.5 flex items-center gap-1.5"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete</span>
-                  </button>
-                </>
-              )}
-            </>
-          ) : levelId ? (
-            <>
-              <button
-                onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
-                className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back to Levels</span>
-              </button>
-              <button
-                onClick={openNewQuestionModal}
-                className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)]"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Question</span>
-              </button>
-            </>
-          ) : trackId ? (
-            <>
-              <button
-                onClick={() => navigate('/admin/interviews')}
-                className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>All Tracks</span>
-              </button>
+        {/* Primary Action Button (Only for Views 1, 2, 3) */}
+        {!questionId && (
+          <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+            {levelId ? (
+              <>
+                <button
+                  onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
+                  className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Levels</span>
+                </button>
+                <button
+                  onClick={openNewQuestionModal}
+                  className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Question</span>
+                </button>
+              </>
+            ) : trackId ? (
+              <>
+                <button
+                  onClick={() => navigate('/admin/interviews')}
+                  className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>All Tracks</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setLevelForm({
+                      id: null,
+                      level_number: (levels?.length || 0) + 1,
+                      name: '',
+                      description: '',
+                      mode: 'coding',
+                      duration_minutes: 45,
+                    });
+                    setFormError('');
+                    setShowLevelModal(true);
+                  }}
+                  className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Level</span>
+                </button>
+              </>
+            ) : (
               <button
                 onClick={() => {
-                  setLevelForm({
-                    id: null,
-                    level_number: (levels?.length || 0) + 1,
-                    name: '',
-                    description: '',
-                    mode: 'coding',
-                    duration_minutes: 45,
-                  });
+                  setTrackForm({ id: null, title: '', icon: 'Code', description: '' });
                   setFormError('');
-                  setShowLevelModal(true);
+                  setShowTrackModal(true);
                 }}
                 className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)]"
               >
                 <Plus className="w-4 h-4" />
-                <span>Create Level</span>
+                <span>Add Interview Domain</span>
               </button>
-            </>
-          ) : (
-            <button
-              onClick={() => {
-                setTrackForm({ id: null, title: '', icon: 'Code', description: '' });
-                setFormError('');
-                setShowTrackModal(true);
-              }}
-              className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)]"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Interview Domain</span>
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ============================================================ */}
@@ -1010,6 +1009,13 @@ export default function AdminInterviewConfig() {
 
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
+                        className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back to Questions</span>
+                      </button>
+                      <button
                         onClick={() => openEditQuestionModal(currentQuestion)}
                         className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
                       >
@@ -1058,6 +1064,86 @@ export default function AdminInterviewConfig() {
                         <div className="font-mono text-[12px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
                           {parsed.constraints}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Expected Solution Approach */}
+                    {parsed.expected_approach && (
+                      <div className="panel-card p-5 space-y-2 border-l-4 border-l-[var(--accent)] bg-[var(--bg-raised)]">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-[var(--accent)]" />
+                          <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
+                            Solution Expected Approach
+                          </span>
+                        </div>
+                        <div className="text-[13px] text-[var(--text-primary)] whitespace-pre-line leading-relaxed font-ui">
+                          {parsed.expected_approach}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Expected Complexity */}
+                    {parsed.expected_complexity && (
+                      <div className="panel-card p-4 space-y-1.5 bg-[var(--bg-card)] border border-[var(--border)]">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-[var(--text-muted)]" />
+                          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                            Expected Complexity Target
+                          </span>
+                        </div>
+                        <div className="font-mono text-[12px] text-[var(--text-primary)] whitespace-pre-line font-semibold">
+                          {parsed.expected_complexity}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Progressive Hints */}
+                    {parsed.hints?.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-[13px] font-bold text-[var(--text-primary)]">
+                          <Lightbulb className="w-4 h-4 text-[var(--amber)]" />
+                          <span>Progressive Hints</span>
+                          <span className="text-[10px] font-mono bg-[var(--amber-bg)] text-[var(--amber)] px-2 py-0.5 rounded font-semibold">
+                            {parsed.hints.length} {parsed.hints.length === 1 ? 'Hint' : 'Hints'} Available
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {parsed.hints.map((h, hIdx) => (
+                            <div key={hIdx} className="p-3.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] flex items-start gap-3 shadow-[var(--shadow-sm)]">
+                              <span className="w-6 h-6 rounded-full bg-[var(--amber-bg)] text-[var(--amber)] font-mono font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                                {hIdx + 1}
+                              </span>
+                              <div className="space-y-0.5 flex-1">
+                                <span className="text-[10px] font-mono font-bold uppercase text-[var(--text-muted)]">
+                                  Hint {hIdx + 1}
+                                </span>
+                                <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                                  {h}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Interview Tips for Coding Mode */}
+                    {parsed.interview_tips?.length > 0 && (
+                      <div className="panel-card p-5 space-y-3 bg-[var(--bg-card)] border border-[var(--border)]">
+                        <div className="flex items-center gap-2">
+                          <Target className="w-4 h-4 text-emerald-500" />
+                          <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                            Interview Tips & Evaluator Probing Questions
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {parsed.interview_tips.map((tip, tipIdx) => (
+                            <li key={tipIdx} className="flex items-start gap-2.5 text-[13px] text-[var(--text-secondary)]">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-2" />
+                              <span>{tip}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
 
@@ -1205,6 +1291,25 @@ export default function AdminInterviewConfig() {
                         </ul>
                       </div>
                     )}
+
+                    {parsed.interview_tips?.length > 0 && (
+                      <div className="panel-card p-5 space-y-3 bg-[var(--bg-card)] border border-[var(--border)]">
+                        <div className="flex items-center gap-2">
+                          <Target className="w-4 h-4 text-emerald-500" />
+                          <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                            Interview Tips & Probing Questions
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {parsed.interview_tips.map((tip, tipIdx) => (
+                            <li key={tipIdx} className="flex items-start gap-2.5 text-[13px] text-[var(--text-secondary)]">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-2" />
+                              <span>{tip}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1258,6 +1363,25 @@ export default function AdminInterviewConfig() {
                         </p>
                       </div>
                     )}
+
+                    {parsed.interview_tips?.length > 0 && (
+                      <div className="panel-card p-5 space-y-3 bg-[var(--bg-card)] border border-[var(--border)]">
+                        <div className="flex items-center gap-2">
+                          <Target className="w-4 h-4 text-emerald-500" />
+                          <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                            Key Concepts & Diagnostic Tips
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {parsed.interview_tips.map((tip, tipIdx) => (
+                            <li key={tipIdx} className="flex items-start gap-2.5 text-[13px] text-[var(--text-secondary)]">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-2" />
+                              <span>{tip}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1302,6 +1426,25 @@ export default function AdminInterviewConfig() {
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {parsed.interview_tips?.length > 0 && (
+                      <div className="panel-card p-5 space-y-3 bg-[var(--bg-card)] border border-[var(--border)]">
+                        <div className="flex items-center gap-2">
+                          <Target className="w-4 h-4 text-emerald-500" />
+                          <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                            Interviewer Facilitation & Probing Guide
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {parsed.interview_tips.map((tip, tipIdx) => (
+                            <li key={tipIdx} className="flex items-start gap-2.5 text-[13px] text-[var(--text-secondary)]">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-2" />
+                              <span>{tip}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                   </div>
@@ -1589,10 +1732,123 @@ export default function AdminInterviewConfig() {
                       type="text"
                       value={questionForm.constraints}
                       onChange={(e) => setQuestionForm({ ...questionForm, constraints: e.target.value })}
-                      placeholder="e.g. 1 <= nums.length <= 10^5"
+                      placeholder="e.g. 1 <= nums.length <= 10^5, -10^9 <= nums[i] <= 10^9"
                       className="custom-input font-mono text-[12px]"
                     />
                   </label>
+
+                  <label>
+                    <span>Solution Expected Approach</span>
+                    <textarea
+                      rows="3"
+                      value={questionForm.expected_approach}
+                      onChange={(e) => setQuestionForm({ ...questionForm, expected_approach: e.target.value })}
+                      placeholder="Optimal algorithmic steps (e.g. Single-Pass Hash Map, complement lookup O(N))..."
+                      className="custom-input font-ui text-[12px]"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Expected Complexity Target</span>
+                    <input
+                      type="text"
+                      value={questionForm.expected_complexity}
+                      onChange={(e) => setQuestionForm({ ...questionForm, expected_complexity: e.target.value })}
+                      placeholder="e.g. Time: O(N), Space: O(N)"
+                      className="custom-input font-mono text-[12px]"
+                    />
+                  </label>
+
+                  {/* Progressive Hints */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">
+                        Progressive Hints (Hint 1, Hint 2, ...):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm({ ...questionForm, hints: [...questionForm.hints, ''] })}
+                        className="text-[11px] text-[var(--accent)] hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" /> Add Hint
+                      </button>
+                    </div>
+
+                    {questionForm.hints.map((hint, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-[var(--text-muted)] font-bold w-14 shrink-0">
+                          Hint #{idx + 1}:
+                        </span>
+                        <input
+                          type="text"
+                          placeholder={`Hint ${idx + 1} (e.g. Consider using a Hash Map for O(1) complement lookups)`}
+                          value={hint}
+                          onChange={(e) => {
+                            const updated = [...questionForm.hints];
+                            updated[idx] = e.target.value;
+                            setQuestionForm({ ...questionForm, hints: updated });
+                          }}
+                          className="custom-input text-[12px] py-1.5 flex-1"
+                        />
+                        {questionForm.hints.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = questionForm.hints.filter((_, i) => i !== idx);
+                              setQuestionForm({ ...questionForm, hints: updated });
+                            }}
+                            className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Interview Tips for Coding Mode */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">
+                        Interview Tips & Evaluator Notes:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm({ ...questionForm, interview_tips: [...questionForm.interview_tips, ''] })}
+                        className="text-[11px] text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" /> Add Tip
+                      </button>
+                    </div>
+
+                    {questionForm.interview_tips.map((tip, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Tip ${idx + 1} (e.g. Ask candidate to clarify input constraints before coding)`}
+                          value={tip}
+                          onChange={(e) => {
+                            const updated = [...questionForm.interview_tips];
+                            updated[idx] = e.target.value;
+                            setQuestionForm({ ...questionForm, interview_tips: updated });
+                          }}
+                          className="custom-input text-[12px] py-1.5 flex-1"
+                        />
+                        {questionForm.interview_tips.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = questionForm.interview_tips.filter((_, i) => i !== idx);
+                              setQuestionForm({ ...questionForm, interview_tips: updated });
+                            }}
+                            className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
 
                   {/* Open / Sample Test Cases */}
                   <div className="p-3.5 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] space-y-3">
@@ -1730,7 +1986,7 @@ export default function AdminInterviewConfig() {
 
               {/* 2. VERBAL Q&A MODE */}
               {currentLevel.mode === 'verbal_qa' && (
-                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+                <div className="space-y-4 pt-2 border-t border-[var(--border)]">
                   <h4 className="text-[13px] font-bold text-[var(--amber)] font-mono uppercase tracking-wider">
                     Verbal Q&A Specifications
                   </h4>
@@ -1786,12 +2042,54 @@ export default function AdminInterviewConfig() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Interview Tips */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Interview Tips & Probing Questions:</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm({ ...questionForm, interview_tips: [...questionForm.interview_tips, ''] })}
+                        className="text-[11px] text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" /> Add Tip
+                      </button>
+                    </div>
+
+                    {questionForm.interview_tips.map((tip, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Tip ${idx + 1} (e.g. Follow up on M:N scheduler work stealing)`}
+                          value={tip}
+                          onChange={(e) => {
+                            const updated = [...questionForm.interview_tips];
+                            updated[idx] = e.target.value;
+                            setQuestionForm({ ...questionForm, interview_tips: updated });
+                          }}
+                          className="custom-input text-[12px] py-1.5 flex-1"
+                        />
+                        {questionForm.interview_tips.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = questionForm.interview_tips.filter((_, i) => i !== idx);
+                              setQuestionForm({ ...questionForm, interview_tips: updated });
+                            }}
+                            className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {/* 3. MCQ MODE */}
               {currentLevel.mode === 'mcq' && (
-                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+                <div className="space-y-4 pt-2 border-t border-[var(--border)]">
                   <h4 className="text-[13px] font-bold text-[var(--green)] font-mono uppercase tracking-wider">
                     MCQ Multiple-Choice Specifications
                   </h4>
@@ -1836,12 +2134,54 @@ export default function AdminInterviewConfig() {
                       className="custom-input text-[12px]"
                     />
                   </label>
+
+                  {/* Interview Tips */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Diagnostic Tips & Key Takeaways:</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm({ ...questionForm, interview_tips: [...questionForm.interview_tips, ''] })}
+                        className="text-[11px] text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" /> Add Tip
+                      </button>
+                    </div>
+
+                    {questionForm.interview_tips.map((tip, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Tip ${idx + 1} (e.g. Highlight amortized vs worst-case distinction)`}
+                          value={tip}
+                          onChange={(e) => {
+                            const updated = [...questionForm.interview_tips];
+                            updated[idx] = e.target.value;
+                            setQuestionForm({ ...questionForm, interview_tips: updated });
+                          }}
+                          className="custom-input text-[12px] py-1.5 flex-1"
+                        />
+                        {questionForm.interview_tips.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = questionForm.interview_tips.filter((_, i) => i !== idx);
+                              setQuestionForm({ ...questionForm, interview_tips: updated });
+                            }}
+                            className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {/* 4. DISCUSSION MODE */}
               {currentLevel.mode === 'discussion' && (
-                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+                <div className="space-y-4 pt-2 border-t border-[var(--border)]">
                   <h4 className="text-[13px] font-bold text-sky-600 font-mono uppercase tracking-wider">
                     Discussion & System Design Specifications
                   </h4>
@@ -1929,6 +2269,48 @@ export default function AdminInterviewConfig() {
                             onClick={() => {
                               const updated = questionForm.tradeoffs.filter((_, i) => i !== idx);
                               setQuestionForm({ ...questionForm, tradeoffs: updated });
+                            }}
+                            className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Interview Tips */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Interviewer Facilitation & Probing Guide:</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm({ ...questionForm, interview_tips: [...questionForm.interview_tips, ''] })}
+                        className="text-[11px] text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" /> Add Tip
+                      </button>
+                    </div>
+
+                    {questionForm.interview_tips.map((tip, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Tip ${idx + 1} (e.g. Probe on clock skew drift with distributed Redis instances)`}
+                          value={tip}
+                          onChange={(e) => {
+                            const updated = [...questionForm.interview_tips];
+                            updated[idx] = e.target.value;
+                            setQuestionForm({ ...questionForm, interview_tips: updated });
+                          }}
+                          className="custom-input text-[12px] py-1.5 flex-1"
+                        />
+                        {questionForm.interview_tips.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = questionForm.interview_tips.filter((_, i) => i !== idx);
+                              setQuestionForm({ ...questionForm, interview_tips: updated });
                             }}
                             className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
                           >
