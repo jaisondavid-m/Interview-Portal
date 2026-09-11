@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
   Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
-  HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp
+  HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp, Copy
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -62,10 +62,18 @@ const formatFullLevelTitle = (level) => {
 };
 
 export default function AdminInterviewConfig() {
-  const { trackId, levelId } = useParams();
+  const { trackId, levelId, questionId } = useParams();
   const navigate = useNavigate();
 
+  // On-demand isolated state per view layer
   const [tracks, setTracks] = useState([]);
+  const [currentTrack, setCurrentTrack] = useState(null);
+  const [levels, setLevels] = useState([]);
+  const [currentLevel, setCurrentLevel] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -75,14 +83,6 @@ export default function AdminInterviewConfig() {
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'track'|'level'|'question', data: obj }
-  const [expandedQuestions, setExpandedQuestions] = useState({}); // { [questionId]: boolean }
-
-  const toggleQuestionExpand = (qId) => {
-    setExpandedQuestions((prev) => ({
-      ...prev,
-      [qId]: !prev[qId],
-    }));
-  };
 
   // Form States
   const [trackForm, setTrackForm] = useState({ id: null, title: '', icon: 'Code', description: '' });
@@ -114,33 +114,94 @@ export default function AdminInterviewConfig() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Fetch all Tracks directly from Database
-  const fetchTracks = async () => {
+  // ============================================================
+  // ON-DEMAND DATA FETCHING FUNCTIONS (SPLIT ENDPOINTS)
+  // ============================================================
+
+  // 1. Fetch only tracks overview
+  const loadTracks = async () => {
     setLoading(true);
     try {
       const res = await api.get('/admin/interviews/tracks');
-      if (Array.isArray(res)) {
-        setTracks(res);
-      } else if (res && res.data && Array.isArray(res.data)) {
-        setTracks(res.data);
-      } else {
-        setTracks([]);
-      }
+      setTracks(Array.isArray(res) ? res : (res?.data || []));
     } catch (err) {
-      console.error('Failed to fetch interview tracks from backend:', err);
+      console.error('Failed to load tracks:', err);
       setTracks([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchTracks();
-  }, []);
+  // 2. Fetch track info and its levels on demand
+  const loadTrackLevels = async (tId) => {
+    setLoading(true);
+    try {
+      const [trackRes, levelsRes] = await Promise.all([
+        api.get(`/admin/interviews/tracks/${tId}`),
+        api.get(`/admin/interviews/tracks/${tId}/levels`),
+      ]);
+      setCurrentTrack(trackRes?.data || trackRes);
+      setLevels(Array.isArray(levelsRes) ? levelsRes : (levelsRes?.data || []));
+    } catch (err) {
+      console.error('Failed to load track levels:', err);
+      setLevels([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Compute selected track and level from route params
-  const selectedTrack = trackId ? tracks.find((t) => String(t.id) === String(trackId)) : null;
-  const selectedLevel = levelId && selectedTrack ? selectedTrack.levels?.find((l) => String(l.id) === String(levelId)) : null;
+  // 3. Fetch track, level, and questions on demand
+  const loadLevelQuestions = async (tId, lId) => {
+    setLoading(true);
+    try {
+      const [trackRes, levelRes, questionsRes] = await Promise.all([
+        api.get(`/admin/interviews/tracks/${tId}`),
+        api.get(`/admin/interviews/levels/${lId}`),
+        api.get(`/admin/interviews/levels/${lId}/questions`),
+      ]);
+      setCurrentTrack(trackRes?.data || trackRes);
+      setCurrentLevel(levelRes?.data || levelRes);
+      setQuestions(Array.isArray(questionsRes) ? questionsRes : (questionsRes?.data || []));
+    } catch (err) {
+      console.error('Failed to load level questions:', err);
+      setQuestions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Fetch track, level, and single question on demand
+  const loadQuestionDetails = async (tId, lId, qId) => {
+    setLoading(true);
+    try {
+      const [trackRes, levelRes, questionRes] = await Promise.all([
+        api.get(`/admin/interviews/tracks/${tId}`),
+        api.get(`/admin/interviews/levels/${lId}`),
+        api.get(`/admin/interviews/questions/${qId}`),
+      ]);
+      setCurrentTrack(trackRes?.data || trackRes);
+      setCurrentLevel(levelRes?.data || levelRes);
+      setCurrentQuestion(questionRes?.data || questionRes);
+    } catch (err) {
+      console.error('Failed to load question details:', err);
+      setCurrentQuestion(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Trigger granular fetch when route params change
+  useEffect(() => {
+    if (trackId && levelId && questionId) {
+      loadQuestionDetails(trackId, levelId, questionId);
+    } else if (trackId && levelId) {
+      loadLevelQuestions(trackId, levelId);
+    } else if (trackId) {
+      loadTrackLevels(trackId);
+    } else {
+      loadTracks();
+    }
+  }, [trackId, levelId, questionId]);
 
   // Filter Tracks solely by title/description
   const filteredTracks = tracks.filter((t) => {
@@ -162,7 +223,7 @@ export default function AdminInterviewConfig() {
         await api.post('/admin/interviews/tracks', trackForm);
       }
       setShowTrackModal(false);
-      fetchTracks();
+      loadTracks();
     } catch (err) {
       setFormError(err.message || 'Failed to save track');
     } finally {
@@ -173,17 +234,20 @@ export default function AdminInterviewConfig() {
   // Level Form Handlers
   const handleSaveLevel = async (e) => {
     e.preventDefault();
-    if (!selectedTrack) return;
+    if (!trackId) return;
     setFormError('');
     setFormLoading(true);
     try {
+      const cleanName = levelForm.name.replace(new RegExp(`^Level\\s*${levelForm.level_number}\\s*:\\s*`, 'i'), '').trim();
+      const payload = { ...levelForm, name: cleanName };
+
       if (levelForm.id) {
-        await api.put(`/admin/interviews/levels/${levelForm.id}`, levelForm);
+        await api.put(`/admin/interviews/levels/${levelForm.id}`, payload);
       } else {
-        await api.post(`/admin/interviews/tracks/${selectedTrack.id}/levels`, levelForm);
+        await api.post(`/admin/interviews/tracks/${trackId}/levels`, payload);
       }
       setShowLevelModal(false);
-      fetchTracks();
+      loadTrackLevels(trackId);
     } catch (err) {
       setFormError(err.message || 'Failed to save level');
     } finally {
@@ -194,13 +258,13 @@ export default function AdminInterviewConfig() {
   // Question Form Handlers
   const handleSaveQuestion = async (e) => {
     e.preventDefault();
-    if (!selectedLevel) return;
+    if (!levelId || !currentLevel) return;
     setFormError('');
     setFormLoading(true);
 
     try {
       let payloadObj = {};
-      if (selectedLevel.mode === 'coding') {
+      if (currentLevel.mode === 'coding') {
         const openTCs = questionForm.open_test_cases.filter((tc) => tc.input || tc.output);
         const hiddenTCs = questionForm.hidden_test_cases.filter((tc) => tc.input || tc.output);
         payloadObj = {
@@ -210,18 +274,18 @@ export default function AdminInterviewConfig() {
           test_cases: openTCs, // Backward compatibility
           constraints: questionForm.constraints,
         };
-      } else if (selectedLevel.mode === 'verbal_qa') {
+      } else if (currentLevel.mode === 'verbal_qa') {
         payloadObj = {
           ideal_answer: questionForm.ideal_answer,
           rubrics: questionForm.rubrics.filter((r) => r.trim()),
         };
-      } else if (selectedLevel.mode === 'mcq') {
+      } else if (currentLevel.mode === 'mcq') {
         payloadObj = {
           options: questionForm.options,
           correct_option: questionForm.correct_option,
           explanation: questionForm.explanation,
         };
-      } else if (selectedLevel.mode === 'discussion') {
+      } else if (currentLevel.mode === 'discussion') {
         payloadObj = {
           scenario: questionForm.scenario,
           talking_points: questionForm.talking_points.filter((tp) => tp.trim()),
@@ -233,18 +297,22 @@ export default function AdminInterviewConfig() {
         title: questionForm.title,
         prompt: questionForm.prompt,
         difficulty: questionForm.difficulty,
-        type: selectedLevel.mode,
+        type: currentLevel.mode,
         payload_json: JSON.stringify(payloadObj),
       };
 
       if (questionForm.id) {
         await api.put(`/admin/interviews/questions/${questionForm.id}`, postBody);
       } else {
-        await api.post(`/admin/interviews/levels/${selectedLevel.id}/questions`, postBody);
+        await api.post(`/admin/interviews/levels/${levelId}/questions`, postBody);
       }
 
       setShowQuestionModal(false);
-      fetchTracks();
+      if (questionId) {
+        loadQuestionDetails(trackId, levelId, questionId);
+      } else {
+        loadLevelQuestions(trackId, levelId);
+      }
     } catch (err) {
       setFormError(err.message || 'Failed to save question');
     } finally {
@@ -259,20 +327,32 @@ export default function AdminInterviewConfig() {
     try {
       if (deleteTarget.type === 'track') {
         await api.delete(`/admin/interviews/tracks/${deleteTarget.data.id}`);
-        if (selectedTrack?.id === deleteTarget.data.id) {
+        setShowDeleteModal(false);
+        setDeleteTarget(null);
+        if (trackId) {
           navigate('/admin/interviews');
+        } else {
+          loadTracks();
         }
       } else if (deleteTarget.type === 'level') {
         await api.delete(`/admin/interviews/levels/${deleteTarget.data.id}`);
-        if (selectedLevel?.id === deleteTarget.data.id) {
-          navigate(`/admin/interviews/${selectedTrack.id}/levels`);
+        setShowDeleteModal(false);
+        setDeleteTarget(null);
+        if (levelId) {
+          navigate(`/admin/interviews/${trackId}/levels`);
+        } else {
+          loadTrackLevels(trackId);
         }
       } else if (deleteTarget.type === 'question') {
         await api.delete(`/admin/interviews/questions/${deleteTarget.data.id}`);
+        setShowDeleteModal(false);
+        setDeleteTarget(null);
+        if (questionId) {
+          navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`);
+        } else {
+          loadLevelQuestions(trackId, levelId);
+        }
       }
-      setShowDeleteModal(false);
-      setDeleteTarget(null);
-      fetchTracks();
     } catch (err) {
       alert(err.message || 'Failed to delete item');
     } finally {
@@ -299,7 +379,7 @@ export default function AdminInterviewConfig() {
       title: q.title || '',
       prompt: q.prompt || '',
       difficulty: q.difficulty || 'Medium',
-      type: q.type || selectedLevel.mode,
+      type: q.type || currentLevel?.mode || 'coding',
       starter_code: parsed.starter_code || '',
       open_test_cases: openCases,
       hidden_test_cases: hiddenCases,
@@ -323,7 +403,7 @@ export default function AdminInterviewConfig() {
       title: '',
       prompt: '',
       difficulty: 'Medium',
-      type: selectedLevel.mode,
+      type: currentLevel?.mode || 'coding',
       starter_code: '',
       open_test_cases: [{ input: '', output: '' }],
       hidden_test_cases: [{ input: '', output: '' }],
@@ -347,56 +427,102 @@ export default function AdminInterviewConfig() {
       <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           {/* Breadcrumb path */}
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex-wrap">
             <button
               onClick={() => navigate('/admin/interviews')}
-              className={`hover:text-[var(--accent)] transition ${!selectedTrack ? 'font-bold text-[var(--accent)]' : ''}`}
+              className={`hover:text-[var(--accent)] transition ${!trackId ? 'font-bold text-[var(--accent)]' : ''}`}
             >
               Interview Configuration
             </button>
-            {selectedTrack && (
+            {trackId && currentTrack && (
               <>
-                <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />
+                <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
                 <button
-                  onClick={() => navigate(`/admin/interviews/${selectedTrack.id}/levels`)}
-                  className={`hover:text-[var(--accent)] transition ${!selectedLevel ? 'font-bold text-[var(--accent)]' : ''}`}
+                  onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
+                  className={`hover:text-[var(--accent)] transition ${!levelId ? 'font-bold text-[var(--accent)]' : ''}`}
                 >
-                  {selectedTrack.title}
+                  {currentTrack.title}
                 </button>
               </>
             )}
-            {selectedLevel && (
+            {levelId && currentLevel && (
               <>
-                <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />
-                <span className="font-bold text-[var(--accent)]">
-                  Level {selectedLevel.level_number} ({selectedLevel.mode})
+                <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                <button
+                  onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
+                  className={`hover:text-[var(--accent)] transition ${!questionId ? 'font-bold text-[var(--accent)]' : ''}`}
+                >
+                  Level {currentLevel.level_number} ({currentLevel.mode?.toUpperCase()})
+                </button>
+              </>
+            )}
+            {questionId && currentQuestion && (
+              <>
+                <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                <span className="font-bold text-[var(--accent)] truncate max-w-[200px]">
+                  {currentQuestion.title}
                 </span>
               </>
             )}
           </div>
 
           <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
-            {!selectedTrack
+            {questionId
+              ? (currentQuestion?.title || 'Question Details')
+              : !trackId
               ? 'Interview Domains & Tracks'
-              : !selectedLevel
-              ? `${selectedTrack.title} — Levels`
-              : formatFullLevelTitle(selectedLevel)}
+              : !levelId
+              ? `${currentTrack?.title || 'Loading...'} — Levels`
+              : formatFullLevelTitle(currentLevel)}
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            {!selectedTrack
+            {questionId
+              ? `${currentQuestion?.difficulty || 'Medium'} Difficulty • ${currentLevel?.mode?.toUpperCase() || 'CODING'} Assessment • Level ${currentLevel?.level_number || 1}`
+              : !trackId
               ? 'Configure campus interview domains, progression tiers, and mode-specific assessments.'
-              : !selectedLevel
+              : !levelId
               ? 'Define progression levels, time limits, and select interview assessment mode.'
-              : `Manage questions and evaluation rubrics for ${selectedLevel.mode.toUpperCase()} mode.`}
+              : `Manage questions and evaluation rubrics for ${currentLevel?.mode?.toUpperCase()} mode.`}
           </p>
         </div>
 
         {/* Primary Action Button */}
-        <div className="flex items-center gap-2 self-start md:self-auto">
-          {selectedLevel ? (
+        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+          {questionId ? (
             <>
               <button
-                onClick={() => navigate(`/admin/interviews/${selectedTrack.id}/levels`)}
+                onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
+                className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Questions</span>
+              </button>
+              {currentQuestion && (
+                <>
+                  <button
+                    onClick={() => openEditQuestionModal(currentQuestion)}
+                    className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Edit Question</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDeleteTarget({ type: 'question', data: currentQuestion });
+                      setShowDeleteModal(true);
+                    }}
+                    className="btn btn-danger text-xs py-2 px-3.5 flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </>
+              )}
+            </>
+          ) : levelId ? (
+            <>
+              <button
+                onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
                 className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -410,7 +536,7 @@ export default function AdminInterviewConfig() {
                 <span>Add Question</span>
               </button>
             </>
-          ) : selectedTrack ? (
+          ) : trackId ? (
             <>
               <button
                 onClick={() => navigate('/admin/interviews')}
@@ -423,7 +549,7 @@ export default function AdminInterviewConfig() {
                 onClick={() => {
                   setLevelForm({
                     id: null,
-                    level_number: (selectedTrack.levels?.length || 0) + 1,
+                    level_number: (levels?.length || 0) + 1,
                     name: '',
                     description: '',
                     mode: 'coding',
@@ -457,7 +583,7 @@ export default function AdminInterviewConfig() {
       {/* ============================================================ */}
       {/* VIEW 1: TRACKS OVERVIEW (/admin/interviews) */}
       {/* ============================================================ */}
-      {!selectedTrack && (
+      {!trackId && (
         <div className="space-y-5">
           {/* Clean Search Bar */}
           <div className="panel-card p-4">
@@ -477,8 +603,8 @@ export default function AdminInterviewConfig() {
           {/* Tracks Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredTracks.map((track) => {
-              const totalQuestions = track.levels?.reduce((sum, l) => sum + (l.questions?.length || 0), 0) || 0;
-              const levelsCount = track.levels?.length || 0;
+              const totalQuestions = track.questions_count || 0;
+              const levelsCount = track.levels_count || 0;
 
               return (
                 <div
@@ -554,23 +680,23 @@ export default function AdminInterviewConfig() {
       {/* ============================================================ */}
       {/* VIEW 2: LEVELS OVERVIEW FOR SELECTED TRACK (/admin/interviews/:trackId/levels) */}
       {/* ============================================================ */}
-      {selectedTrack && !selectedLevel && (
+      {trackId && !levelId && (
         <div className="space-y-6">
           {/* Track Summary Banner */}
           <div className="panel-card p-5 bg-[var(--bg-raised)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <h2 className="text-[18px] font-bold text-[var(--text-primary)]">
-                {selectedTrack.title}
+                {currentTrack?.title || 'Loading Domain...'}
               </h2>
               <p className="text-[13px] text-[var(--text-secondary)]">
-                {selectedTrack.description || 'Define progression levels and assessment modes for this domain.'}
+                {currentTrack?.description || 'Define progression levels and assessment modes for this domain.'}
               </p>
             </div>
 
             <div className="flex items-center gap-4 border-t sm:border-t-0 sm:border-l border-[var(--border)] pt-3 sm:pt-0 sm:pl-6 text-center shrink-0">
               <div>
                 <p className="text-[20px] font-bold font-mono text-[var(--text-primary)]">
-                  {selectedTrack.levels?.length || 0}
+                  {levels?.length || 0}
                 </p>
                 <p className="text-[11px] font-mono text-[var(--text-muted)]">Progression Levels</p>
               </div>
@@ -586,7 +712,7 @@ export default function AdminInterviewConfig() {
               </span>
             </h3>
 
-            {(!selectedTrack.levels || selectedTrack.levels.length === 0) ? (
+            {(!levels || levels.length === 0) ? (
               <div className="panel-card p-8 text-center space-y-3">
                 <p className="text-[13px] text-[var(--text-muted)]">
                   No levels created for this interview domain yet.
@@ -611,15 +737,15 @@ export default function AdminInterviewConfig() {
                 </button>
               </div>
             ) : (
-              selectedTrack.levels.map((level) => {
+              levels.map((level) => {
                 const modeMeta = INTERVIEW_MODES.find((m) => m.id === level.mode) || INTERVIEW_MODES[0];
                 const ModeIcon = modeMeta.icon;
-                const questionsCount = level.questions?.length || 0;
+                const questionsCount = level.questions_count || 0;
 
                 return (
                   <div
                     key={level.id}
-                    onClick={() => navigate(`/admin/interviews/${selectedTrack.id}/levels/${level.id}/questions`)}
+                    onClick={() => navigate(`/admin/interviews/${trackId}/levels/${level.id}/questions`)}
                     className="panel-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all group"
                   >
                     <div className="flex items-start gap-4">
@@ -668,7 +794,7 @@ export default function AdminInterviewConfig() {
                             setLevelForm({
                               id: level.id,
                               level_number: level.level_number,
-                              name: level.name,
+                              name: formatLevelName(level),
                               description: level.description,
                               mode: level.mode,
                               duration_minutes: level.duration_minutes,
@@ -706,11 +832,11 @@ export default function AdminInterviewConfig() {
       {/* ============================================================ */}
       {/* VIEW 3: QUESTIONS MANAGEMENT (/admin/interviews/:trackId/levels/:levelId/questions) */}
       {/* ============================================================ */}
-      {selectedTrack && selectedLevel && (
+      {trackId && levelId && !questionId && (
         <div className="space-y-6">
           {/* Level Mode Callout Banner */}
           {(() => {
-            const modeMeta = INTERVIEW_MODES.find((m) => m.id === selectedLevel.mode) || INTERVIEW_MODES[0];
+            const modeMeta = INTERVIEW_MODES.find((m) => m.id === currentLevel?.mode) || INTERVIEW_MODES[0];
             const ModeIcon = modeMeta.icon;
             return (
               <div className={`p-4 rounded-[var(--radius-md)] border ${modeMeta.bg} ${modeMeta.border} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
@@ -733,7 +859,7 @@ export default function AdminInterviewConfig() {
 
                 <div className="flex items-center gap-2 text-[12px] font-mono text-[var(--text-secondary)]">
                   <span className="bg-[var(--bg-card)] px-2.5 py-1 rounded border border-[var(--border)]">
-                    ⏱ {selectedLevel.duration_minutes || 45} mins allotted
+                    ⏱ {currentLevel?.duration_minutes || 45} mins allotted
                   </span>
                 </div>
               </div>
@@ -744,11 +870,14 @@ export default function AdminInterviewConfig() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
-                Questions Bank ({selectedLevel.questions?.length || 0})
+                Questions Bank ({questions?.length || 0})
               </h3>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                Click any question to view full specifications
+              </span>
             </div>
 
-            {(!selectedLevel.questions || selectedLevel.questions.length === 0) ? (
+            {(!questions || questions.length === 0) ? (
               <div className="panel-card p-10 text-center space-y-3">
                 <HelpCircle className="w-8 h-8 text-[var(--text-muted)] mx-auto" />
                 <p className="text-[13px] text-[var(--text-muted)]">
@@ -763,269 +892,423 @@ export default function AdminInterviewConfig() {
                 </button>
               </div>
             ) : (
-              selectedLevel.questions.map((q, qIndex) => {
-                let parsed = {};
-                try {
-                  parsed = JSON.parse(q.payload_json || '{}');
-                } catch (e) {}
-
-                const isExpanded = !!expandedQuestions[q.id];
-
+              questions.map((q, qIndex) => {
                 return (
                   <div
                     key={q.id}
-                    className={`panel-card transition-all duration-200 bg-[var(--bg-card)] border ${
-                      isExpanded
-                        ? 'border-[var(--accent)] shadow-[var(--shadow-md)] ring-1 ring-[var(--accent)]/20'
-                        : 'border-[var(--border)] hover:border-[var(--border-strong)]'
-                    }`}
+                    onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${q.id}`)}
+                    className="panel-card p-5 cursor-pointer hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all group bg-[var(--bg-card)] border border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
-                    {/* Compact Card Header (Clickable to Toggle Full Details) */}
-                    <div
-                      onClick={() => toggleQuestionExpand(q.id)}
-                      className="p-5 cursor-pointer select-none space-y-2.5"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1">
-                          <span className="w-6 h-6 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-mono font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
-                            {qIndex + 1}
+                    <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                      <span className="w-6 h-6 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-mono font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                        {qIndex + 1}
+                      </span>
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-[15px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                            {q.title}
+                          </h4>
+                          <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${
+                            q.difficulty === 'Easy' ? 'bg-[var(--green-bg)] text-[var(--green)]' :
+                            q.difficulty === 'Hard' ? 'bg-[var(--red-bg)] text-[var(--red)]' :
+                            'bg-[var(--amber-bg)] text-[var(--amber)]'
+                          }`}>
+                            {q.difficulty}
                           </span>
-                          <div className="space-y-1 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-[15px] font-bold text-[var(--text-primary)]">
-                                {q.title}
-                              </h4>
-                              <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${
-                                q.difficulty === 'Easy' ? 'bg-[var(--green-bg)] text-[var(--green)]' :
-                                q.difficulty === 'Hard' ? 'bg-[var(--red-bg)] text-[var(--red)]' :
-                                'bg-[var(--amber-bg)] text-[var(--amber)]'
-                              }`}>
-                                {q.difficulty}
-                              </span>
-                            </div>
-                            <p className="text-[13px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed font-ui">
-                              {q.prompt}
-                            </p>
-                          </div>
                         </div>
-
-                        {/* Action Buttons & Expand Toggle */}
-                        <div className="flex items-center gap-1.5 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={() => toggleQuestionExpand(q.id)}
-                            className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono font-semibold rounded border transition ${
-                              isExpanded
-                                ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--accent)]/30'
-                                : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
-                            }`}
-                            title={isExpanded ? 'Collapse Details' : 'View Full Details'}
-                          >
-                            <span>{isExpanded ? 'Hide Details' : 'View Details'}</span>
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => openEditQuestionModal(q)}
-                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded border border-transparent hover:border-[var(--border)] transition"
-                            title="Edit Question"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeleteTarget({ type: 'question', data: q });
-                              setShowDeleteModal(true);
-                            }}
-                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] rounded border border-transparent hover:border-[var(--red)]/20 transition"
-                            title="Delete Question"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        <p className="text-[13px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed font-ui">
+                          {q.prompt}
+                        </p>
                       </div>
                     </div>
 
-                    {/* Expanded Full Details Section */}
-                    {isExpanded && (
-                      <div className="px-5 pb-5 pt-3 border-t border-[var(--border)] bg-[var(--bg-app)]/40 space-y-4 animate-fade-in">
-                        {/* 1. CODING MODE DETAILS */}
-                        {selectedLevel.mode === 'coding' && (
-                          <div className="space-y-3.5 text-[12px]">
-                            {parsed.constraints && (
-                              <div className="p-2.5 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
-                                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
-                                  Constraints:
-                                </span>
-                                <p className="font-mono text-[11px] text-[var(--text-secondary)] whitespace-pre-line">
-                                  {parsed.constraints}
-                                </p>
-                              </div>
-                            )}
-
-                            {parsed.starter_code && (
-                              <div className="p-3 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-primary)] overflow-x-auto">
-                                <span className="text-[10px] uppercase font-bold text-[var(--accent)] block mb-1">
-                                  Starter Template:
-                                </span>
-                                <pre className="text-[11px] leading-relaxed">{parsed.starter_code}</pre>
-                              </div>
-                            )}
-
-                            {/* Open Test Cases */}
-                            {((parsed.open_test_cases && parsed.open_test_cases.length > 0) || (parsed.test_cases && parsed.test_cases.length > 0)) && (
-                              <div className="space-y-1.5">
-                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--accent)] font-bold uppercase">
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>Sample / Open Test Cases (Visible to Candidate):</span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {(parsed.open_test_cases || parsed.test_cases).map((tc, tcIdx) => (
-                                    <div key={tcIdx} className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px] space-y-1 shadow-[var(--shadow-sm)]">
-                                      <div className="text-[var(--text-muted)] text-[10px] uppercase font-bold">Case #{tcIdx + 1}</div>
-                                      <div><span className="text-[var(--text-muted)] font-semibold">Input:</span> <span className="text-[var(--text-primary)]">{tc.input}</span></div>
-                                      <div><span className="text-[var(--accent)] font-semibold">Output:</span> <span className="text-[var(--text-primary)] font-bold">{tc.output}</span></div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Hidden Test Cases */}
-                            {parsed.hidden_test_cases && parsed.hidden_test_cases.length > 0 && (
-                              <div className="space-y-1.5">
-                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--amber)] font-bold uppercase">
-                                  <Lock className="w-3.5 h-3.5" />
-                                  <span>Hidden Test Cases (Grading / Automated Evaluation):</span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {parsed.hidden_test_cases.map((tc, tcIdx) => (
-                                    <div key={tcIdx} className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--amber-bg)]/30 border border-[var(--amber)]/30 font-mono text-[11px] space-y-1 shadow-[var(--shadow-sm)]">
-                                      <div className="text-[var(--amber)] text-[10px] uppercase font-bold">Hidden Case #{tcIdx + 1}</div>
-                                      <div><span className="text-[var(--text-muted)] font-semibold">Input:</span> <span className="text-[var(--text-secondary)]">{tc.input}</span></div>
-                                      <div><span className="text-[var(--amber)] font-semibold">Output:</span> <span className="text-[var(--text-primary)] font-bold">{tc.output}</span></div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 2. VERBAL Q&A MODE DETAILS */}
-                        {selectedLevel.mode === 'verbal_qa' && (
-                          <div className="space-y-3 text-[12px]">
-                            {parsed.ideal_answer && (
-                              <div className="p-3.5 bg-[var(--amber-bg)]/40 border border-[var(--amber)]/20 rounded-[var(--radius-sm)] text-[12px] text-[var(--text-secondary)]">
-                                <strong className="text-[var(--amber)] block mb-1 font-mono uppercase text-[11px]">
-                                  Key Evaluator Note / Ideal Answer:
-                                </strong>
-                                <p className="leading-relaxed">{parsed.ideal_answer}</p>
-                              </div>
-                            )}
-                            {parsed.rubrics?.length > 0 && (
-                              <div className="space-y-1.5 p-3 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
-                                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-bold">
-                                  Evaluation Rubrics:
-                                </span>
-                                <ul className="list-disc pl-5 text-[12px] text-[var(--text-secondary)] space-y-1">
-                                  {parsed.rubrics.map((r, rIdx) => (
-                                    <li key={rIdx}>{r}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 3. MCQ MODE DETAILS */}
-                        {selectedLevel.mode === 'mcq' && (
-                          <div className="space-y-3 text-[12px]">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {parsed.options?.map((opt) => (
-                                <div
-                                  key={opt.id}
-                                  className={`p-2.5 rounded-[var(--radius-sm)] border text-[12px] flex items-center gap-2 ${
-                                    opt.id === parsed.correct_option
-                                      ? 'bg-[var(--green-bg)] border-[var(--green)]/40 text-[var(--green)] font-semibold shadow-[var(--shadow-sm)]'
-                                      : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)]'
-                                  }`}
-                                >
-                                  <span className="font-mono font-bold w-5">{opt.id}.</span>
-                                  <span>{opt.text}</span>
-                                  {opt.id === parsed.correct_option && (
-                                    <span className="ml-auto text-[10px] font-mono uppercase font-bold bg-[var(--green)] text-white px-1.5 py-0.5 rounded">
-                                      Correct
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                            {parsed.explanation && (
-                              <div className="p-2.5 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
-                                <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-bold block mb-0.5">
-                                  Explanation:
-                                </span>
-                                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-                                  {parsed.explanation}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 4. DISCUSSION MODE DETAILS */}
-                        {selectedLevel.mode === 'discussion' && (
-                          <div className="space-y-3 text-[12px]">
-                            {parsed.scenario && (
-                              <div className="p-3 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
-                                <strong className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">
-                                  Scenario Context:
-                                </strong>
-                                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-                                  {parsed.scenario}
-                                </p>
-                              </div>
-                            )}
-                            {parsed.talking_points?.length > 0 && (
-                              <div>
-                                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-bold">
-                                  Discussion Talking Points:
-                                </span>
-                                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                  {parsed.talking_points.map((tp, tpIdx) => (
-                                    <span key={tpIdx} className="px-2.5 py-1 rounded bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border)] text-[11px]">
-                                      • {tp}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {parsed.tradeoffs?.length > 0 && (
-                              <div>
-                                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-bold">
-                                  Tradeoffs to Evaluate:
-                                </span>
-                                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                  {parsed.tradeoffs.map((to, toIdx) => (
-                                    <span key={toIdx} className="px-2.5 py-1 rounded bg-[var(--amber-bg)]/30 text-[var(--text-secondary)] border border-[var(--amber)]/30 text-[11px]">
-                                      ⚠️ {to}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between md:justify-end gap-3 shrink-0 border-t md:border-t-0 pt-2 md:pt-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditQuestionModal(q);
+                        }}
+                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded border border-transparent hover:border-[var(--border)] transition"
+                        title="Edit Question"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget({ type: 'question', data: q });
+                          setShowDeleteModal(true);
+                        }}
+                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] rounded border border-transparent hover:border-[var(--red)]/20 transition"
+                        title="Delete Question"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--accent)] group-hover:translate-x-0.5 transition" />
+                    </div>
                   </div>
                 );
               })
             )}
           </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* VIEW 4: QUESTION DETAILS PAGE (/admin/interviews/:trackId/levels/:levelId/questions/:questionId) */}
+      {/* ============================================================ */}
+      {trackId && levelId && questionId && (
+        <div className="space-y-6">
+          {!currentQuestion ? (
+            <div className="panel-card p-10 text-center space-y-3">
+              <AlertCircle className="w-8 h-8 text-[var(--text-muted)] mx-auto" />
+              <p className="text-[14px] text-[var(--text-secondary)]">Question not found or still loading...</p>
+              <button
+                onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
+                className="btn btn-secondary text-xs py-2 px-4 inline-flex items-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Questions</span>
+              </button>
+            </div>
+          ) : (() => {
+            let parsed = {};
+            try {
+              parsed = JSON.parse(currentQuestion.payload_json || '{}');
+            } catch (e) {}
+
+            const modeMeta = INTERVIEW_MODES.find((m) => m.id === currentLevel?.mode) || INTERVIEW_MODES[0];
+            const ModeIcon = modeMeta.icon;
+            const openCases = parsed.open_test_cases?.length
+              ? parsed.open_test_cases
+              : (parsed.test_cases?.length ? parsed.test_cases : []);
+            const hiddenCases = parsed.hidden_test_cases || [];
+
+            return (
+              <div className="space-y-6">
+                {/* Question Overview Header Card */}
+                <div className="panel-card p-6 bg-[var(--bg-raised)] space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-1.5 text-[12px] font-bold px-3 py-1 rounded-full border ${modeMeta.bg} ${modeMeta.color} ${modeMeta.border}`}>
+                        <ModeIcon className="w-3.5 h-3.5" />
+                        <span>{modeMeta.label} Assessment</span>
+                      </span>
+                      <span className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded ${
+                        currentQuestion.difficulty === 'Easy' ? 'bg-[var(--green-bg)] text-[var(--green)]' :
+                        currentQuestion.difficulty === 'Hard' ? 'bg-[var(--red-bg)] text-[var(--red)]' :
+                        'bg-[var(--amber-bg)] text-[var(--amber)]'
+                      }`}>
+                        {currentQuestion.difficulty} Difficulty
+                      </span>
+                      <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-2.5 py-1 rounded border border-[var(--border)]">
+                        Level {currentLevel?.level_number}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditQuestionModal(currentQuestion)}
+                        className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeleteTarget({ type: 'question', data: currentQuestion });
+                          setShowDeleteModal(true);
+                        }}
+                        className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-[20px] font-bold text-[var(--text-primary)]">
+                      {currentQuestion.title}
+                    </h2>
+                  </div>
+                </div>
+
+                {/* Problem Statement Card */}
+                <div className="panel-card p-6 space-y-3">
+                  <h3 className="text-[13px] font-bold font-mono uppercase tracking-wider text-[var(--text-muted)]">
+                    Problem Statement
+                  </h3>
+                  <div className="text-[14px] text-[var(--text-primary)] leading-relaxed whitespace-pre-line font-ui">
+                    {currentQuestion.prompt}
+                  </div>
+                </div>
+
+                {/* 1. CODING MODE SPECIFICATIONS */}
+                {currentLevel?.mode === 'coding' && (
+                  <div className="space-y-6">
+                    {/* Constraints */}
+                    {parsed.constraints && (
+                      <div className="panel-card p-5 space-y-2 border-l-4 border-l-[var(--accent)]">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                          Constraints & Limits
+                        </span>
+                        <div className="font-mono text-[12px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
+                          {parsed.constraints}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Starter Code */}
+                    {parsed.starter_code && (
+                      <div className="panel-card overflow-hidden border border-[var(--border)]">
+                        <div className="p-3 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
+                          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
+                            Starter Template (Candidate Editor Default)
+                          </span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(parsed.starter_code);
+                              setCopiedCode(true);
+                              setTimeout(() => setCopiedCode(false), 2000);
+                            }}
+                            className="flex items-center gap-1 text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+                          >
+                            {copiedCode ? <Check className="w-3.5 h-3.5 text-[var(--green)]" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
+                          </button>
+                        </div>
+                        <div className="p-4 bg-[var(--bg-input)] font-mono text-[12px] text-[var(--text-primary)] overflow-x-auto">
+                          <pre className="leading-relaxed">{parsed.starter_code}</pre>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Open / Sample Test Cases */}
+                    {openCases.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-[13px] font-bold text-[var(--text-primary)]">
+                            <Eye className="w-4 h-4 text-[var(--accent)]" />
+                            <span>Sample / Open Test Cases</span>
+                            <span className="text-[10px] font-mono bg-[var(--accent-dim)] text-[var(--accent)] px-2 py-0.5 rounded font-semibold">
+                              Visible to Candidate
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                            {openCases.length} {openCases.length === 1 ? 'Case' : 'Cases'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {openCases.map((tc, tcIdx) => (
+                            <div key={tcIdx} className="panel-card p-4 bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
+                                <span className="text-[11px] font-mono font-bold text-[var(--text-muted)]">
+                                  Test Case #{tcIdx + 1}
+                                </span>
+                              </div>
+                              <div className="space-y-1.5 font-mono text-[12px]">
+                                <div>
+                                  <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Input:</span>
+                                  <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] overflow-x-auto">
+                                    {tc.input || '(empty)'}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] uppercase font-bold text-[var(--accent)] block">Expected Output:</span>
+                                  <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold overflow-x-auto">
+                                    {tc.output || '(empty)'}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Hidden Test Cases */}
+                    {hiddenCases.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-[13px] font-bold text-[var(--text-primary)]">
+                            <Lock className="w-4 h-4 text-[var(--amber)]" />
+                            <span>Hidden Test Cases</span>
+                            <span className="text-[10px] font-mono bg-[var(--amber-bg)] text-[var(--amber)] px-2 py-0.5 rounded font-semibold">
+                              Grading & Auto-Evaluation Only
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                            {hiddenCases.length} {hiddenCases.length === 1 ? 'Hidden Case' : 'Hidden Cases'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {hiddenCases.map((tc, tcIdx) => (
+                            <div key={tcIdx} className="panel-card p-4 bg-[var(--amber-bg)]/20 border border-[var(--amber)]/30 space-y-2">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-[var(--amber)]/20">
+                                <span className="text-[11px] font-mono font-bold text-[var(--amber)]">
+                                  Hidden Case #{tcIdx + 1}
+                                </span>
+                              </div>
+                              <div className="space-y-1.5 font-mono text-[12px]">
+                                <div>
+                                  <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Input:</span>
+                                  <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-secondary)] overflow-x-auto">
+                                    {tc.input || '(empty)'}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] uppercase font-bold text-[var(--amber)] block">Expected Output:</span>
+                                  <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold overflow-x-auto">
+                                    {tc.output || '(empty)'}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. VERBAL Q&A SPECIFICATIONS */}
+                {currentLevel?.mode === 'verbal_qa' && (
+                  <div className="space-y-6">
+                    {parsed.ideal_answer && (
+                      <div className="panel-card p-5 bg-[var(--amber-bg)]/30 border border-[var(--amber)]/30 space-y-2">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--amber)] block">
+                          Key Evaluator Note / Model Answer:
+                        </span>
+                        <p className="text-[13px] text-[var(--text-primary)] leading-relaxed whitespace-pre-line">
+                          {parsed.ideal_answer}
+                        </p>
+                      </div>
+                    )}
+
+                    {parsed.rubrics?.length > 0 && (
+                      <div className="panel-card p-5 space-y-3">
+                        <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                          Scoring Rubrics & Evaluation Criteria:
+                        </span>
+                        <ul className="space-y-2">
+                          {parsed.rubrics.map((r, rIdx) => (
+                            <li key={rIdx} className="flex items-start gap-2.5 text-[13px] text-[var(--text-secondary)]">
+                              <Check className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" />
+                              <span>{r}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. MCQ SPECIFICATIONS */}
+                {currentLevel?.mode === 'mcq' && (
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                        Answer Choices:
+                      </span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {parsed.options?.map((opt) => {
+                          const isCorrect = opt.id === parsed.correct_option;
+                          return (
+                            <div
+                              key={opt.id}
+                              className={`p-4 rounded-[var(--radius-md)] border flex items-center justify-between gap-3 ${
+                                isCorrect
+                                  ? 'bg-[var(--green-bg)] border-[var(--green)]/50 text-[var(--green)] font-semibold shadow-[var(--shadow-sm)]'
+                                  : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className={`w-7 h-7 rounded-full flex items-center justify-center font-mono font-bold text-[12px] ${
+                                  isCorrect
+                                    ? 'bg-[var(--green)] text-white'
+                                    : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)]'
+                                }`}>
+                                  {opt.id}
+                                </span>
+                                <span className="text-[13px]">{opt.text}</span>
+                              </div>
+                              {isCorrect && (
+                                <span className="text-[10px] font-mono uppercase font-bold bg-[var(--green)] text-white px-2 py-0.5 rounded shrink-0">
+                                  Correct Option
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {parsed.explanation && (
+                      <div className="panel-card p-5 space-y-2 bg-[var(--bg-raised)]">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                          Answer Explanation & Reference:
+                        </span>
+                        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-line">
+                          {parsed.explanation}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 4. DISCUSSION SPECIFICATIONS */}
+                {currentLevel?.mode === 'discussion' && (
+                  <div className="space-y-6">
+                    {parsed.scenario && (
+                      <div className="panel-card p-5 space-y-2">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                          Architecture / Scenario Context:
+                        </span>
+                        <p className="text-[13px] text-[var(--text-primary)] leading-relaxed whitespace-pre-line">
+                          {parsed.scenario}
+                        </p>
+                      </div>
+                    )}
+
+                    {parsed.talking_points?.length > 0 && (
+                      <div className="panel-card p-5 space-y-3">
+                        <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                          Key Discussion Talking Points:
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {parsed.talking_points.map((tp, tpIdx) => (
+                            <span key={tpIdx} className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border)] text-[12px]">
+                              • {tp}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {parsed.tradeoffs?.length > 0 && (
+                      <div className="panel-card p-5 space-y-3 bg-[var(--amber-bg)]/20 border border-[var(--amber)]/30">
+                        <span className="text-[12px] font-mono font-bold uppercase tracking-wider text-[var(--amber)] block">
+                          Tradeoffs & Edge Cases to Challenge:
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {parsed.tradeoffs.map((to, toIdx) => (
+                            <span key={toIdx} className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--amber)]/40 text-[12px]">
+                              ⚠️ {to}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1216,12 +1499,12 @@ export default function AdminInterviewConfig() {
       {/* ============================================================ */}
       {/* CREATE / EDIT QUESTION MODAL (DYNAMIC BASED ON MODE) */}
       {/* ============================================================ */}
-      {showQuestionModal && (
+      {showQuestionModal && currentLevel && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-2xl shadow-[var(--shadow-lg)] space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
               <div>
-                <span className="badge-kicker">Question Configuration • {selectedLevel.mode.toUpperCase()}</span>
+                <span className="badge-kicker">Question Configuration • {currentLevel.mode?.toUpperCase()}</span>
                 <h3 className="text-[17px] font-bold text-[var(--text-primary)] mt-0.5">
                   {questionForm.id ? 'Edit Question' : 'Upload Question'}
                 </h3>
@@ -1281,7 +1564,7 @@ export default function AdminInterviewConfig() {
               {/* DYNAMIC FORM FIELDS BY LEVEL MODE */}
 
               {/* 1. CODING MODE */}
-              {selectedLevel.mode === 'coding' && (
+              {currentLevel.mode === 'coding' && (
                 <div className="space-y-4 pt-2 border-t border-[var(--border)]">
                   <div className="flex items-center justify-between">
                     <h4 className="text-[13px] font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
@@ -1446,26 +1729,26 @@ export default function AdminInterviewConfig() {
               )}
 
               {/* 2. VERBAL Q&A MODE */}
-              {selectedLevel.mode === 'verbal_qa' && (
+              {currentLevel.mode === 'verbal_qa' && (
                 <div className="space-y-3 pt-2 border-t border-[var(--border)]">
                   <h4 className="text-[13px] font-bold text-[var(--amber)] font-mono uppercase tracking-wider">
-                    Verbal Q&A Evaluation Rubrics
+                    Verbal Q&A Specifications
                   </h4>
 
                   <label>
-                    <span>Ideal Answer / Key Concepts</span>
+                    <span>Ideal / Reference Answer (Evaluator Notes)</span>
                     <textarea
                       rows="3"
                       value={questionForm.ideal_answer}
                       onChange={(e) => setQuestionForm({ ...questionForm, ideal_answer: e.target.value })}
-                      placeholder="Summary of what strong candidate should explain..."
-                      className="custom-input text-[12px]"
+                      placeholder="Expected key concepts, technical accuracy points, and architectural tradeoffs..."
+                      className="custom-input"
                     />
                   </label>
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Evaluation Checkpoints:</span>
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Evaluation Rubrics / Checklist:</span>
                       <button
                         type="button"
                         onClick={() => setQuestionForm({ ...questionForm, rubrics: [...questionForm.rubrics, ''] })}
@@ -1479,7 +1762,7 @@ export default function AdminInterviewConfig() {
                       <div key={idx} className="flex items-center gap-2">
                         <input
                           type="text"
-                          placeholder={`Evaluation criterion #${idx + 1}`}
+                          placeholder={`Rubric item ${idx + 1} (e.g. Explains user vs kernel space)`}
                           value={rubric}
                           onChange={(e) => {
                             const updated = [...questionForm.rubrics];
@@ -1507,84 +1790,82 @@ export default function AdminInterviewConfig() {
               )}
 
               {/* 3. MCQ MODE */}
-              {selectedLevel.mode === 'mcq' && (
+              {currentLevel.mode === 'mcq' && (
                 <div className="space-y-3 pt-2 border-t border-[var(--border)]">
                   <h4 className="text-[13px] font-bold text-[var(--green)] font-mono uppercase tracking-wider">
-                    MCQ Options & Correct Answer
+                    MCQ Multiple-Choice Specifications
                   </h4>
 
                   <div className="space-y-2">
-                    {questionForm.options.map((opt, idx) => (
-                      <div key={opt.id} className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded bg-[var(--bg-input)] font-mono font-bold text-[11px] flex items-center justify-center shrink-0 border border-[var(--border)]">
-                          {opt.id}
-                        </span>
-                        <input
-                          type="text"
-                          required
-                          placeholder={`Option ${opt.id} text`}
-                          value={opt.text}
-                          onChange={(e) => {
-                            const updated = [...questionForm.options];
-                            updated[idx].text = e.target.value;
-                            setQuestionForm({ ...questionForm, options: updated });
-                          }}
-                          className="custom-input text-[12px] py-1.5 flex-1"
-                        />
-                        <label className="flex items-center gap-1 cursor-pointer shrink-0 text-[11px] font-mono font-semibold text-[var(--text-secondary)]">
+                    <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase block">Answer Choices & Correct Key:</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {questionForm.options.map((opt, idx) => (
+                        <div key={opt.id} className="flex items-center gap-2 p-2 rounded bg-[var(--bg-input)] border border-[var(--border)]">
                           <input
                             type="radio"
                             name="correct_option"
                             checked={questionForm.correct_option === opt.id}
                             onChange={() => setQuestionForm({ ...questionForm, correct_option: opt.id })}
-                            className="accent-[var(--accent)]"
+                            className="accent-[var(--green)]"
                           />
-                          <span>Correct</span>
-                        </label>
-                      </div>
-                    ))}
+                          <span className="font-mono font-bold text-[12px] text-[var(--text-primary)]">{opt.id}.</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder={`Option ${opt.id} text`}
+                            value={opt.text}
+                            onChange={(e) => {
+                              const updated = [...questionForm.options];
+                              updated[idx].text = e.target.value;
+                              setQuestionForm({ ...questionForm, options: updated });
+                            }}
+                            className="custom-input text-[12px] py-1 flex-1 bg-[var(--bg-card)]"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <label>
-                    <span>Explanation (Shown after answering)</span>
+                    <span>Explanation / Solution Rationale</span>
                     <textarea
                       rows="2"
                       value={questionForm.explanation}
                       onChange={(e) => setQuestionForm({ ...questionForm, explanation: e.target.value })}
-                      placeholder="Why this option is correct..."
-                      className="custom-input text-[12px] resize-none"
+                      placeholder="Why the correct option is right and others are incorrect..."
+                      className="custom-input text-[12px]"
                     />
                   </label>
                 </div>
               )}
 
               {/* 4. DISCUSSION MODE */}
-              {selectedLevel.mode === 'discussion' && (
+              {currentLevel.mode === 'discussion' && (
                 <div className="space-y-3 pt-2 border-t border-[var(--border)]">
                   <h4 className="text-[13px] font-bold text-sky-600 font-mono uppercase tracking-wider">
-                    System Design Discussion Points
+                    Discussion & System Design Specifications
                   </h4>
 
                   <label>
-                    <span>Scenario Overview</span>
-                    <input
-                      type="text"
+                    <span>Scenario Context / Scale Target</span>
+                    <textarea
+                      rows="2"
                       value={questionForm.scenario}
                       onChange={(e) => setQuestionForm({ ...questionForm, scenario: e.target.value })}
-                      placeholder="e.g. Multi-region high throughput API gateway"
+                      placeholder="e.g. 100k requests/sec, 99.99% availability SLA, multi-region..."
                       className="custom-input text-[12px]"
                     />
                   </label>
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Key Talking Points:</span>
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Key Discussion Talking Points:</span>
                       <button
                         type="button"
                         onClick={() => setQuestionForm({ ...questionForm, talking_points: [...questionForm.talking_points, ''] })}
-                        className="text-[11px] text-[var(--accent)] hover:underline flex items-center gap-1 font-semibold"
+                        className="text-[11px] text-sky-600 hover:underline flex items-center gap-1 font-semibold"
                       >
-                        <Plus className="w-3 h-3" /> Add Point
+                        <Plus className="w-3 h-3" /> Add Talking Point
                       </button>
                     </div>
 
@@ -1592,7 +1873,7 @@ export default function AdminInterviewConfig() {
                       <div key={idx} className="flex items-center gap-2">
                         <input
                           type="text"
-                          placeholder={`Talking point #${idx + 1}`}
+                          placeholder={`Talking Point ${idx + 1} (e.g. Consistent Hashing ring & virtual nodes)`}
                           value={tp}
                           onChange={(e) => {
                             const updated = [...questionForm.talking_points];
@@ -1607,6 +1888,47 @@ export default function AdminInterviewConfig() {
                             onClick={() => {
                               const updated = questionForm.talking_points.filter((_, i) => i !== idx);
                               setQuestionForm({ ...questionForm, talking_points: updated });
+                            }}
+                            className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Architectural Tradeoffs to Evaluate:</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm({ ...questionForm, tradeoffs: [...questionForm.tradeoffs, ''] })}
+                        className="text-[11px] text-sky-600 hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" /> Add Tradeoff
+                      </button>
+                    </div>
+
+                    {questionForm.tradeoffs.map((to, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Tradeoff ${idx + 1} (e.g. Strong Consistency vs High Availability under network partition)`}
+                          value={to}
+                          onChange={(e) => {
+                            const updated = [...questionForm.tradeoffs];
+                            updated[idx] = e.target.value;
+                            setQuestionForm({ ...questionForm, tradeoffs: updated });
+                          }}
+                          className="custom-input text-[12px] py-1.5 flex-1"
+                        />
+                        {questionForm.tradeoffs.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = questionForm.tradeoffs.filter((_, i) => i !== idx);
+                              setQuestionForm({ ...questionForm, tradeoffs: updated });
                             }}
                             className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
                           >
@@ -1635,23 +1957,42 @@ export default function AdminInterviewConfig() {
       {/* ============================================================ */}
       {/* DELETE CONFIRMATION MODAL */}
       {/* ============================================================ */}
-      {showDeleteModal && (
+      {showDeleteModal && deleteTarget && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] space-y-4">
-            <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
-              Confirm Deletion
-            </h3>
-            <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-              Are you sure you want to delete this {deleteTarget?.type} <strong className="text-[var(--text-primary)]">{deleteTarget?.data?.title || deleteTarget?.data?.name}</strong>?
-              {deleteTarget?.type === 'track' && ' All nested levels and questions will also be deleted.'}
-              {deleteTarget?.type === 'level' && ' All questions in this level will also be deleted.'}
-            </p>
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
-              <button onClick={() => setShowDeleteModal(false)} className="btn btn-secondary text-xs py-2 px-3.5">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-sm shadow-[var(--shadow-lg)] space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-[var(--red-bg)] text-[var(--red)] flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
+                Delete {deleteTarget.type === 'track' ? 'Domain' : deleteTarget.type === 'level' ? 'Level' : 'Question'}?
+              </h3>
+              <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+                Are you sure you want to delete <span className="font-semibold text-[var(--text-primary)]">"{deleteTarget.data.title || deleteTarget.data.name}"</span>?
+                {deleteTarget.type === 'track' && ' All levels and questions under this domain will also be deleted.'}
+                {deleteTarget.type === 'level' && ' All questions in this level will also be deleted.'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteTarget(null);
+                }}
+                className="btn btn-secondary text-xs py-2 px-4"
+              >
                 Cancel
               </button>
-              <button onClick={handleConfirmDelete} disabled={formLoading} className="btn btn-danger text-xs py-2 px-4">
-                {formLoading ? 'Deleting...' : 'Confirm Delete'}
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={formLoading}
+                className="btn text-xs py-2 px-4 bg-[var(--red)] hover:opacity-90 text-white font-semibold rounded-[var(--radius-sm)]"
+              >
+                {formLoading ? 'Deleting...' : 'Yes, Delete'}
               </button>
             </div>
           </div>

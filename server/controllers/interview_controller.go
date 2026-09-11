@@ -15,10 +15,10 @@ import (
 // TRACKS CONTROLLER
 // ============================================================
 
-// AdminGetTracks retrieves all interview tracks along with nested level & question counts
+// AdminGetTracks retrieves all interview tracks with lightweight counts (no heavy nested payloads)
 func AdminGetTracks(c *gin.Context) {
 	var tracks []models.InterviewTrack
-	if err := database.DB.Preload("Levels.Questions").Order("id asc").Find(&tracks).Error; err != nil {
+	if err := database.DB.Order("id asc").Find(&tracks).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to fetch interview tracks",
@@ -27,9 +27,69 @@ func AdminGetTracks(c *gin.Context) {
 		return
 	}
 
+	type TrackDTO struct {
+		models.InterviewTrack
+		LevelsCount    int64 `json:"levels_count"`
+		QuestionsCount int64 `json:"questions_count"`
+	}
+
+	var trackDTOs []TrackDTO
+	for _, t := range tracks {
+		var lCount int64
+		var qCount int64
+		database.DB.Model(&models.InterviewLevel{}).Where("track_id = ?", t.ID).Count(&lCount)
+		database.DB.Model(&models.InterviewQuestion{}).
+			Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
+			Where("interview_levels.track_id = ?", t.ID).
+			Count(&qCount)
+
+		trackDTOs = append(trackDTOs, TrackDTO{
+			InterviewTrack: t,
+			LevelsCount:    lCount,
+			QuestionsCount: qCount,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"data":   tracks,
+		"data":   trackDTOs,
+	})
+}
+
+// AdminGetTrackByID retrieves a single track
+func AdminGetTrackByID(c *gin.Context) {
+	id := c.Param("id")
+	var track models.InterviewTrack
+	if err := database.DB.First(&track, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":  "error",
+			"message": "Interview track not found",
+		})
+		return
+	}
+
+	var lCount int64
+	var qCount int64
+	database.DB.Model(&models.InterviewLevel{}).Where("track_id = ?", track.ID).Count(&lCount)
+	database.DB.Model(&models.InterviewQuestion{}).
+		Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
+		Where("interview_levels.track_id = ?", track.ID).
+		Count(&qCount)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"id":              track.ID,
+			"title":           track.Title,
+			"slug":            track.Slug,
+			"category":        track.Category,
+			"icon":            track.Icon,
+			"description":     track.Description,
+			"levels_count":    lCount,
+			"questions_count": qCount,
+			"created_at":      track.CreatedAt,
+			"updated_at":      track.UpdatedAt,
+		},
 	})
 }
 
@@ -155,11 +215,14 @@ func AdminDeleteTrack(c *gin.Context) {
 // LEVELS CONTROLLER
 // ============================================================
 
-// AdminGetLevels retrieves all levels for a track
+// AdminGetLevels retrieves all levels for a specific track on demand
 func AdminGetLevels(c *gin.Context) {
-	trackID := c.Param("trackId")
+	trackID := c.Param("id")
+	if trackID == "" {
+		trackID = c.Param("trackId")
+	}
 	var levels []models.InterviewLevel
-	if err := database.DB.Preload("Questions").Where("track_id = ?", trackID).Order("level_number asc").Find(&levels).Error; err != nil {
+	if err := database.DB.Where("track_id = ?", trackID).Order("level_number asc").Find(&levels).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to fetch levels",
@@ -167,15 +230,62 @@ func AdminGetLevels(c *gin.Context) {
 		return
 	}
 
+	type LevelDTO struct {
+		models.InterviewLevel
+		QuestionsCount int64 `json:"questions_count"`
+	}
+
+	var levelDTOs []LevelDTO
+	for _, l := range levels {
+		var qCount int64
+		database.DB.Model(&models.InterviewQuestion{}).Where("level_id = ?", l.ID).Count(&qCount)
+		levelDTOs = append(levelDTOs, LevelDTO{
+			InterviewLevel: l,
+			QuestionsCount: qCount,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"data":   levels,
+		"data":   levelDTOs,
+	})
+}
+
+// AdminGetLevelByID retrieves a single level on demand
+func AdminGetLevelByID(c *gin.Context) {
+	id := c.Param("id")
+	var level models.InterviewLevel
+	if err := database.DB.First(&level, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Level not found"})
+		return
+	}
+
+	var qCount int64
+	database.DB.Model(&models.InterviewQuestion{}).Where("level_id = ?", level.ID).Count(&qCount)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"id":               level.ID,
+			"track_id":         level.TrackID,
+			"level_number":     level.LevelNumber,
+			"name":             level.Name,
+			"description":      level.Description,
+			"mode":             level.Mode,
+			"duration_minutes": level.DurationMin,
+			"questions_count":  qCount,
+			"created_at":       level.CreatedAt,
+			"updated_at":       level.UpdatedAt,
+		},
 	})
 }
 
 // AdminCreateLevel adds a new level to an interview track
 func AdminCreateLevel(c *gin.Context) {
-	trackID := c.Param("trackId")
+	trackID := c.Param("id")
+	if trackID == "" {
+		trackID = c.Param("trackId")
+	}
 	var input struct {
 		LevelNumber int                  `json:"level_number" binding:"required"`
 		Name        string               `json:"name" binding:"required"`
@@ -294,9 +404,12 @@ func AdminDeleteLevel(c *gin.Context) {
 // QUESTIONS CONTROLLER
 // ============================================================
 
-// AdminGetQuestions retrieves all questions for a specific level
+// AdminGetQuestions retrieves all questions for a specific level on demand
 func AdminGetQuestions(c *gin.Context) {
-	levelID := c.Param("levelId")
+	levelID := c.Param("id")
+	if levelID == "" {
+		levelID = c.Param("levelId")
+	}
 	var questions []models.InterviewQuestion
 	if err := database.DB.Where("level_id = ?", levelID).Order("id asc").Find(&questions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch questions"})
@@ -309,9 +422,27 @@ func AdminGetQuestions(c *gin.Context) {
 	})
 }
 
+// AdminGetQuestionByID retrieves a single question
+func AdminGetQuestionByID(c *gin.Context) {
+	id := c.Param("id")
+	var question models.InterviewQuestion
+	if err := database.DB.First(&question, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Question not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   question,
+	})
+}
+
 // AdminCreateQuestion adds a question into a level
 func AdminCreateQuestion(c *gin.Context) {
-	levelID := c.Param("levelId")
+	levelID := c.Param("id")
+	if levelID == "" {
+		levelID = c.Param("levelId")
+	}
 	var input struct {
 		Title       string               `json:"title" binding:"required"`
 		Prompt      string               `json:"prompt" binding:"required"`

@@ -42,19 +42,22 @@ func SetupRouter() *gin.Engine {
 
 			// Interview Configuration: Tracks
 			admin.GET("/interviews/tracks", controllers.AdminGetTracks)
+			admin.GET("/interviews/tracks/:id", controllers.AdminGetTrackByID)
 			admin.POST("/interviews/tracks", controllers.AdminCreateTrack)
 			admin.PUT("/interviews/tracks/:id", controllers.AdminUpdateTrack)
 			admin.DELETE("/interviews/tracks/:id", controllers.AdminDeleteTrack)
 
 			// Interview Configuration: Levels
-			admin.GET("/interviews/tracks/:trackId/levels", controllers.AdminGetLevels)
-			admin.POST("/interviews/tracks/:trackId/levels", controllers.AdminCreateLevel)
+			admin.GET("/interviews/tracks/:id/levels", controllers.AdminGetLevels)
+			admin.POST("/interviews/tracks/:id/levels", controllers.AdminCreateLevel)
+			admin.GET("/interviews/levels/:id", controllers.AdminGetLevelByID)
 			admin.PUT("/interviews/levels/:id", controllers.AdminUpdateLevel)
 			admin.DELETE("/interviews/levels/:id", controllers.AdminDeleteLevel)
 
 			// Interview Configuration: Questions
-			admin.GET("/interviews/levels/:levelId/questions", controllers.AdminGetQuestions)
-			admin.POST("/interviews/levels/:levelId/questions", controllers.AdminCreateQuestion)
+			admin.GET("/interviews/levels/:id/questions", controllers.AdminGetQuestions)
+			admin.POST("/interviews/levels/:id/questions", controllers.AdminCreateQuestion)
+			admin.GET("/interviews/questions/:id", controllers.AdminGetQuestionByID)
 			admin.PUT("/interviews/questions/:id", controllers.AdminUpdateQuestion)
 			admin.DELETE("/interviews/questions/:id", controllers.AdminDeleteQuestion)
 		}
