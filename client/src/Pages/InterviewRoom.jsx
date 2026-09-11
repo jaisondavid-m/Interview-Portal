@@ -193,12 +193,31 @@ export default function InterviewRoom() {
     }
   };
 
-  // Switch Roles action (Allowed strictly ONCE)
-  const handleSwitchRoles = async () => {
-    if (!window.confirm('Finish Round 1 and switch roles to Round 2? A new question will be assigned to the new candidate.')) return;
+  // Request Role Switch (Requires peer acceptance)
+  const handleRequestSwitch = async () => {
+    if (!window.confirm('Request to finish Round 1 and swap roles to Round 2? Your peer will receive a prompt to accept or decline.')) return;
     try {
       setSwitching(true);
-      const res = await api.post(`/interviews/sessions/${sessionId}/switch-roles`);
+      const res = await api.post(`/interviews/sessions/${sessionId}/request-switch`);
+      const data = res?.data || res;
+      if (data?.switched && data?.current_user_role) {
+        setCurrentUserRole(data.current_user_role);
+        setRunResults(null);
+        setSubmissionResult(null);
+      }
+      await fetchSession();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to request role switch.');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  // Accept Role Switch from Peer
+  const handleAcceptSwitch = async () => {
+    try {
+      setSwitching(true);
+      const res = await api.post(`/interviews/sessions/${sessionId}/accept-switch`);
       const data = res?.data || res;
       if (data?.current_user_role) {
         setCurrentUserRole(data.current_user_role);
@@ -207,7 +226,20 @@ export default function InterviewRoom() {
       setSubmissionResult(null);
       await fetchSession();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Failed to switch roles.');
+      alert(err.response?.data?.message || err.message || 'Failed to accept role switch.');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  // Decline or Cancel Role Switch
+  const handleDeclineSwitch = async () => {
+    try {
+      setSwitching(true);
+      await api.post(`/interviews/sessions/${sessionId}/decline-switch`);
+      await fetchSession();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to decline switch request.');
     } finally {
       setSwitching(false);
     }
@@ -264,6 +296,12 @@ export default function InterviewRoom() {
   const switchCount = sessionData?.switch_count || 0;
   const isCompleted = sessionData?.status === 'completed';
 
+  // Mutual role switch state calculations
+  const myUserId = currentUserRole === 'interviewer' ? sessionData?.interviewer_id : sessionData?.interviewee_id;
+  const switchRequestedBy = sessionData?.switch_requested_by || 0;
+  const isSwitchRequestedByMe = switchRequestedBy > 0 && switchRequestedBy === myUserId;
+  const isSwitchRequestedByPeer = switchRequestedBy > 0 && switchRequestedBy !== myUserId;
+
   // Extract open test cases
   const openCases = payload?.open_test_cases || payload?.test_cases || [
     { input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' },
@@ -304,21 +342,56 @@ export default function InterviewRoom() {
             <span>Session: <strong>{formatTime(elapsedSecs)}</strong></span>
           </div>
 
-          {/* ONE-TIME ROLE SWAP BUTTON */}
+          {/* MUTUAL CONSENT ROLE SWAP BUTTON */}
           {switchCount === 0 && !isCompleted ? (
-            <button
-              onClick={handleSwitchRoles}
-              disabled={switching}
-              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-[var(--shadow-sm)] border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)]"
-              title="Finish Round 1 and switch roles to Round 2 (Once only)"
-            >
-              {switching ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
-              ) : (
-                <Repeat className="w-3.5 h-3.5 text-[var(--accent)]" />
-              )}
-              <span>Finish Round 1 & Swap Roles</span>
-            </button>
+            isSwitchRequestedByMe ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-mono text-[var(--accent)] px-2.5 py-1.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center gap-1.5 font-bold">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
+                  <span>Waiting for Peer Acceptance...</span>
+                </span>
+                <button
+                  onClick={handleDeclineSwitch}
+                  disabled={switching}
+                  className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--red)] underline px-1 cursor-pointer"
+                  title="Cancel role switch request"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : isSwitchRequestedByPeer ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleAcceptSwitch}
+                  disabled={switching}
+                  className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-sm animate-pulse"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Accept Role Switch</span>
+                </button>
+                <button
+                  onClick={handleDeclineSwitch}
+                  disabled={switching}
+                  className="btn btn-secondary text-xs py-1.5 px-2.5"
+                >
+                  <span>Decline</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleRequestSwitch}
+                disabled={switching}
+                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-[var(--shadow-sm)] border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer"
+                title="Request to finish Round 1 and swap roles to Round 2 (Requires peer confirmation)"
+              >
+                {switching ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
+                ) : (
+                  <Repeat className="w-3.5 h-3.5 text-[var(--accent)]" />
+                )}
+                <span>Request Role Swap (Round 2)</span>
+              </button>
+            )
           ) : (
             <span className="text-[11px] font-mono text-[var(--text-muted)] px-2.5 py-1 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
               {isCompleted ? 'Session Ended' : 'Final Round (Swap Locked)'}
@@ -334,6 +407,45 @@ export default function InterviewRoom() {
           </button>
         </div>
       </div>
+
+      {/* MUTUAL CONSENT MODAL / PROMPT BANNER FOR PEER */}
+      {isSwitchRequestedByPeer && switchCount === 0 && !isCompleted && (
+        <div className="p-4 rounded-[var(--radius-md)] border-2 border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-md)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-full bg-[var(--accent)] text-white shrink-0 mt-0.5 sm:mt-0">
+              <Repeat className="w-5 h-5 animate-spin" />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Peer Requested Round Switch (Round 2)</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--accent)] text-white uppercase font-bold">
+                  Action Required
+                </span>
+              </h4>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+                Your peer has completed their part of Round 1 and requested to switch roles. When you confirm, roles will swap and a new random question will be assigned for Round 2.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              onClick={handleAcceptSwitch}
+              disabled={switching}
+              className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
+            >
+              {switching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              <span>Accept & Switch to Round 2</span>
+            </button>
+            <button
+              onClick={handleDeclineSwitch}
+              disabled={switching}
+              className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1 font-medium cursor-pointer"
+            >
+              <span>Not Ready</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Role Banner */}
       <div className={`p-3 rounded-[var(--radius-sm)] border flex flex-col sm:flex-row sm:items-center justify-between text-xs transition-all gap-2 ${

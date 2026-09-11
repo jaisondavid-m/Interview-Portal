@@ -507,6 +507,7 @@ func GetInterviewSession(c *gin.Context) {
 				"last_execution_json":    session.LastExecutionJSON,
 				"roles_switched":         session.RolesSwitched,
 				"switch_count":           session.SwitchCount,
+				"switch_requested_by":    session.SwitchRequestedBy,
 				"started_at":             session.StartedAt,
 				"ended_at":               session.EndedAt,
 			},
@@ -790,36 +791,8 @@ func SubmitSessionCode(c *gin.Context) {
 	c.JSON(http.StatusOK, subData)
 }
 
-// SwitchSessionRoles performs the one-time role swap and loads a random new question for Round 2
-func SwitchSessionRoles(c *gin.Context) {
-	rawUserID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
-		return
-	}
-	currentUserID := rawUserID.(uint)
-	sessionID := c.Param("id")
-
-	var session models.InterviewSession
-	if err := database.DB.Preload("Level.Questions").First(&session, sessionID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
-		return
-	}
-
-	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
-		return
-	}
-
-	// Strictly limit role switch to ONE TIME ONLY
-	if session.SwitchCount >= 1 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Role switch is allowed only once per session. Round 2 is the final round.",
-		})
-		return
-	}
-
+// performRoleSwitchInternal executes the actual role swap and selects the next question
+func performRoleSwitchInternal(session *models.InterviewSession) error {
 	// 1. Swap participants
 	oldInterviewer := session.InterviewerID
 	session.InterviewerID = session.IntervieweeID
@@ -827,6 +800,7 @@ func SwitchSessionRoles(c *gin.Context) {
 	session.RolesSwitched = true
 	session.SwitchCount = 1
 	session.Round = 2
+	session.SwitchRequestedBy = 0
 	session.LastExecutionJSON = ""
 	session.LastExecutionType = ""
 	session.LastExecutionVerdict = ""
@@ -859,8 +833,124 @@ func SwitchSessionRoles(c *gin.Context) {
 		session.CandidateCode = extractStarterCode(nextQ.PayloadJSON, "")
 	}
 
-	if err := database.DB.Save(&session).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to switch interview roles"})
+	return database.DB.Save(session).Error
+}
+
+// RequestSessionRoleSwitch initiates a role switch request requiring peer confirmation
+func RequestSessionRoleSwitch(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	if err := database.DB.Preload("Level.Questions").First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	// Strictly limit role switch to ONE TIME ONLY
+	if session.SwitchCount >= 1 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Role switch is allowed only once per session. Round 2 is the final round.",
+		})
+		return
+	}
+
+	// If the other student has already requested a role switch, this request acts as mutual acceptance!
+	if session.SwitchRequestedBy != 0 && session.SwitchRequestedBy != currentUserID {
+		if err := performRoleSwitchInternal(&session); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to switch interview roles"})
+			return
+		}
+
+		currentUserRole := "interviewee"
+		if session.InterviewerID == currentUserID {
+			currentUserRole = "interviewer"
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":              "success",
+			"switched":            true,
+			"message":             "Mutual agreement reached! Roles switched to Round 2.",
+			"current_user_role":   currentUserRole,
+			"round":               session.Round,
+			"switch_count":        session.SwitchCount,
+			"current_question_id": session.CurrentQuestionID,
+			"candidate_code":      session.CandidateCode,
+		})
+		return
+	}
+
+	// Otherwise, record switch request and wait for peer acceptance
+	session.SwitchRequestedBy = currentUserID
+	database.DB.Model(&session).Update("switch_requested_by", currentUserID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":              "pending",
+		"switched":            false,
+		"switch_requested_by": currentUserID,
+		"message":             "Role switch requested! Waiting for peer student to accept...",
+	})
+}
+
+// AcceptSessionRoleSwitch confirms and completes the role swap
+func AcceptSessionRoleSwitch(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	if err := database.DB.Preload("Level.Questions").First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	if session.SwitchCount >= 1 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Role switch has already been completed.",
+		})
+		return
+	}
+
+	if session.SwitchRequestedBy == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "No pending role switch request found.",
+		})
+		return
+	}
+
+	if session.SwitchRequestedBy == currentUserID {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "You cannot accept your own request. Waiting for peer.",
+		})
+		return
+	}
+
+	// Perform role swap
+	if err := performRoleSwitchInternal(&session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to execute role switch"})
 		return
 	}
 
@@ -871,13 +961,49 @@ func SwitchSessionRoles(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":              "success",
-		"message":             "Round 1 completed! Roles switched to Round 2 with a new question.",
+		"switched":            true,
+		"message":             "Round 1 finished! Roles switched to Round 2 with a new question.",
 		"current_user_role":   currentUserRole,
 		"round":               session.Round,
 		"switch_count":        session.SwitchCount,
 		"current_question_id": session.CurrentQuestionID,
 		"candidate_code":      session.CandidateCode,
 	})
+}
+
+// DeclineSessionRoleSwitch cancels the pending switch request
+func DeclineSessionRoleSwitch(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	session.SwitchRequestedBy = 0
+	database.DB.Model(&session).Update("switch_requested_by", 0)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Role switch request was declined.",
+	})
+}
+
+// SwitchSessionRoles performs or delegates the role switch request
+func SwitchSessionRoles(c *gin.Context) {
+	RequestSessionRoleSwitch(c)
 }
 
 // EndInterviewSession marks the session as completed
