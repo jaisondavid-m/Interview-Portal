@@ -29,6 +29,24 @@ func SetupRouter() *gin.Engine {
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.GetMe)
 		}
 
+		// Student Protected Routes (Require JWT)
+		interviews := g.Group("/interviews")
+		interviews.Use(middlewares.AuthMiddleware())
+		{
+			// Tracks & Domains listing for students
+			interviews.GET("/tracks", controllers.GetStudentTracks)
+
+			// Matchmaking
+			interviews.POST("/matchmake", controllers.JoinMatchmaking)
+			interviews.GET("/matchmake/status", controllers.GetMatchmakingStatus)
+			interviews.POST("/matchmake/cancel", controllers.CancelMatchmaking)
+
+			// Live Session
+			interviews.GET("/sessions/:id", controllers.GetInterviewSession)
+			interviews.POST("/sessions/:id/switch-roles", controllers.SwitchSessionRoles)
+			interviews.POST("/sessions/:id/end", controllers.EndInterviewSession)
+		}
+
 		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)
 		admin := g.Group("/admin")
 		admin.Use(middlewares.AuthMiddleware(), middlewares.RequireAdmin())

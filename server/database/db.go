@@ -73,6 +73,8 @@ func runMigrations(db *gorm.DB) error {
 		&models.InterviewTrack{},
 		&models.InterviewLevel{},
 		&models.InterviewQuestion{},
+		&models.MatchmakingQueueEntry{},
+		&models.InterviewSession{},
 	)
 	if err == nil {
 		seedInterviewData(db)

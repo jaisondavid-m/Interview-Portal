@@ -12,6 +12,8 @@ import History from '../Pages/History';
 import Login from '../Pages/Login';
 import AdminUsers from '../Pages/AdminUsers';
 import AdminInterviewConfig from '../Pages/AdminInterviewConfig';
+import StudentInterviews from '../Pages/StudentInterviews';
+import InterviewRoom from '../Pages/InterviewRoom';
 import NotFound from '../Pages/NotFound';
 
 // Route Guards
@@ -98,6 +100,14 @@ export const router = createBrowserRouter([
           {
             path: 'dashboard',
             element: <Dashboard />,
+          },
+          {
+            path: 'interviews',
+            element: <StudentInterviews />,
+          },
+          {
+            path: 'interviews/room/:sessionId',
+            element: <InterviewRoom />,
           },
           {
             path: 'interview',

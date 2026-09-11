@@ -58,3 +58,42 @@ type InterviewQuestion struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+// MatchmakingQueueEntry represents a student waiting in queue to be paired
+type MatchmakingQueueEntry struct {
+	ID               uint           `gorm:"primaryKey" json:"id"`
+	UserID           uint           `gorm:"not null;index" json:"user_id"`
+	User             *User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	TrackID          uint           `gorm:"not null;index" json:"track_id"`
+	Track            *InterviewTrack `gorm:"foreignKey:TrackID" json:"track,omitempty"`
+	LevelID          uint           `gorm:"default:0" json:"level_id"`
+	Status           string         `gorm:"size:50;default:'waiting';index" json:"status"` // waiting, matched, cancelled
+	MatchedSessionID uint           `gorm:"default:0" json:"matched_session_id"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// InterviewSession represents a live peer-to-peer interview room between two students
+type InterviewSession struct {
+	ID            uint            `gorm:"primaryKey" json:"id"`
+	TrackID       uint            `gorm:"not null;index" json:"track_id"`
+	Track         *InterviewTrack `gorm:"foreignKey:TrackID" json:"track,omitempty"`
+	LevelID       uint            `gorm:"default:0" json:"level_id"`
+	Level         *InterviewLevel `gorm:"foreignKey:LevelID" json:"level,omitempty"`
+	InterviewerID uint            `gorm:"not null;index" json:"interviewer_id"`
+	Interviewer   *User           `gorm:"foreignKey:InterviewerID" json:"interviewer,omitempty"`
+	IntervieweeID uint            `gorm:"not null;index" json:"interviewee_id"`
+	Interviewee   *User           `gorm:"foreignKey:IntervieweeID" json:"interviewee,omitempty"`
+	Status        string          `gorm:"size:50;default:'in_progress';index" json:"status"` // in_progress, completed, cancelled
+	RolesSwitched bool            `gorm:"default:false" json:"roles_switched"`
+	SwitchCount   int             `gorm:"default:0" json:"switch_count"`
+	CurrentQIndex int             `gorm:"default:0" json:"current_question_index"`
+	Notes         string          `gorm:"type:text" json:"notes"`
+	StartedAt     time.Time       `json:"started_at"`
+	EndedAt       *time.Time      `json:"ended_at"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt  `gorm:"index" json:"-"`
+}
+

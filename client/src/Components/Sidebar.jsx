@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, SlidersHorizontal } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, SlidersHorizontal, Video } from 'lucide-react';
 import api from '../api/axios';
 
 export default function Sidebar() {
@@ -31,6 +31,7 @@ export default function Sidebar() {
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Interviews', path: '/interviews', icon: Video },
       ];
 
   return (
