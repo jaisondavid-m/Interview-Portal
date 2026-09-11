@@ -55,6 +55,9 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 		log.Printf("[WARN] Migration warning: %v\n", err)
 	}
 
+	// Clean up duplicate "Level X: " prefix in level names if any exist
+	db.Exec("UPDATE interview_levels SET name = TRIM(SUBSTRING(name, INSTR(name, ':') + 1)) WHERE name LIKE 'Level %:%'")
+
 	// Seed default Admin user
 	seedAdminUser(db)
 
@@ -100,7 +103,7 @@ func seedInterviewData(db *gorm.DB) {
 	level1DSA := models.InterviewLevel{
 		TrackID:     dsaTrack.ID,
 		LevelNumber: 1,
-		Name:        "Level 1: Arrays, Strings & Basic Hashing",
+		Name:        "Arrays, Strings & Basic Hashing",
 		Description: "Fundamental array manipulation, two-pointer approach, and hash table lookup optimization.",
 		Mode:        models.ModeCoding,
 		DurationMin: 45,
@@ -113,13 +116,13 @@ func seedInterviewData(db *gorm.DB) {
 		Prompt:     "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.",
 		Difficulty: "Easy",
 		Type:       models.ModeCoding,
-		PayloadJSON: `{"starter_code":"func twoSum(nums []int, target int) []int {\n    // Write your solution here\n    return nil\n}","test_cases":[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"},{"input":"nums = [3,2,4], target = 6","output":"[1,2]"}],"constraints":"2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9"}`,
+		PayloadJSON: `{"starter_code":"func twoSum(nums []int, target int) []int {\n    // Write your solution here\n    return nil\n}","open_test_cases":[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"},{"input":"nums = [3,2,4], target = 6","output":"[1,2]"}],"hidden_test_cases":[{"input":"nums = [3,3], target = 6","output":"[0,1]"},{"input":"nums = [-1,-2,-3,-4,-5], target = -8","output":"[2,4]"}],"test_cases":[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"},{"input":"nums = [3,2,4], target = 6","output":"[1,2]"}],"constraints":"2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9"}`,
 	})
 
 	level2DSA := models.InterviewLevel{
 		TrackID:     dsaTrack.ID,
 		LevelNumber: 2,
-		Name:        "Level 2: Graph Traversals & Dynamic Programming",
+		Name:        "Graph Traversals & Dynamic Programming",
 		Description: "Advanced problem solving involving BFS/DFS, topological sort, memoization, and tabulations.",
 		Mode:        models.ModeCoding,
 		DurationMin: 60,
@@ -139,7 +142,7 @@ func seedInterviewData(db *gorm.DB) {
 	level1Sys := models.InterviewLevel{
 		TrackID:     sysTrack.ID,
 		LevelNumber: 1,
-		Name:        "Level 1: Architectural Concepts & Tradeoffs",
+		Name:        "Architectural Concepts & Tradeoffs",
 		Description: "Evaluate understanding of CAP theorem, database indexing, caching strategies, and load balancers.",
 		Mode:        models.ModeDiscussion,
 		DurationMin: 45,
@@ -168,7 +171,7 @@ func seedInterviewData(db *gorm.DB) {
 	level1Core := models.InterviewLevel{
 		TrackID:     coreTrack.ID,
 		LevelNumber: 1,
-		Name:        "Level 1: OS, Concurrency & Networking",
+		Name:        "OS, Concurrency & Networking",
 		Description: "Live verbal technical interview assessing candidate's conceptual clarity and communication.",
 		Mode:        models.ModeVerbalQA,
 		DurationMin: 30,
@@ -197,7 +200,7 @@ func seedInterviewData(db *gorm.DB) {
 	level1MCQ := models.InterviewLevel{
 		TrackID:     mcqTrack.ID,
 		LevelNumber: 1,
-		Name:        "Level 1: Output Prediction & Complexity MCQ",
+		Name:        "Output Prediction & Complexity MCQ",
 		Description: "Multiple-choice diagnostic round with time-boxed questions.",
 		Mode:        models.ModeMCQ,
 		DurationMin: 30,

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
   Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
-  HelpCircle
+  HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -47,6 +47,20 @@ const INTERVIEW_MODES = [
   },
 ];
 
+// Helper to format level title cleanly without duplicate "Level X: Level X: ..."
+const formatLevelName = (level) => {
+  if (!level) return '';
+  const rawName = level.name || '';
+  const cleanName = rawName.replace(new RegExp(`^Level\\s*${level.level_number || '\\d+'}\\s*[:\\-]\\s*`, 'i'), '').trim();
+  return cleanName || rawName;
+};
+
+const formatFullLevelTitle = (level) => {
+  if (!level) return '';
+  const clean = formatLevelName(level);
+  return clean ? `Level ${level.level_number}: ${clean}` : `Level ${level.level_number}`;
+};
+
 export default function AdminInterviewConfig() {
   const { trackId, levelId } = useParams();
   const navigate = useNavigate();
@@ -61,6 +75,14 @@ export default function AdminInterviewConfig() {
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'track'|'level'|'question', data: obj }
+  const [expandedQuestions, setExpandedQuestions] = useState({}); // { [questionId]: boolean }
+
+  const toggleQuestionExpand = (qId) => {
+    setExpandedQuestions((prev) => ({
+      ...prev,
+      [qId]: !prev[qId],
+    }));
+  };
 
   // Form States
   const [trackForm, setTrackForm] = useState({ id: null, title: '', icon: 'Code', description: '' });
@@ -73,7 +95,8 @@ export default function AdminInterviewConfig() {
     type: 'coding',
     // Coding payload
     starter_code: '',
-    test_cases: [{ input: '', output: '' }],
+    open_test_cases: [{ input: '', output: '' }],
+    hidden_test_cases: [{ input: '', output: '' }],
     constraints: '',
     // Verbal Q&A payload
     ideal_answer: '',
@@ -91,160 +114,21 @@ export default function AdminInterviewConfig() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Fetch all Tracks
+  // Fetch all Tracks directly from Database
   const fetchTracks = async () => {
     setLoading(true);
     try {
       const res = await api.get('/admin/interviews/tracks');
-      if (res && res.data) {
+      if (Array.isArray(res)) {
+        setTracks(res);
+      } else if (res && res.data && Array.isArray(res.data)) {
         setTracks(res.data);
+      } else {
+        setTracks([]);
       }
     } catch (err) {
-      console.warn('Backend offline or error, using local fallback:', err);
-      // Fallback sample data
-      setTracks([
-        {
-          id: 1,
-          title: 'Data Structures & Algorithms',
-          slug: 'dsa',
-          icon: 'Code',
-          description: 'Core computer science fundamentals, algorithmic problem solving, time complexity, and data structure manipulation.',
-          levels: [
-            {
-              id: 101,
-              track_id: 1,
-              level_number: 1,
-              name: 'Level 1: Arrays, Strings & Basic Hashing',
-              description: 'Fundamental array manipulation, two-pointer approach, and hash table lookup optimization.',
-              mode: 'coding',
-              duration_minutes: 45,
-              questions: [
-                {
-                  id: 1001,
-                  level_id: 101,
-                  title: 'Two Sum with Target Index Lookup',
-                  prompt: 'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.',
-                  difficulty: 'Easy',
-                  type: 'coding',
-                  payload_json: JSON.stringify({
-                    starter_code: 'func twoSum(nums []int, target int) []int {\n    // Write your solution here\n    return nil\n}',
-                    test_cases: [{ input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' }, { input: 'nums = [3,2,4], target = 6', output: '[1,2]' }],
-                    constraints: '2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9',
-                  }),
-                },
-              ],
-            },
-            {
-              id: 102,
-              track_id: 1,
-              level_number: 2,
-              name: 'Level 2: Graph Traversals & Dynamic Programming',
-              description: 'Advanced problem solving involving BFS/DFS, topological sort, memoization, and tabulations.',
-              mode: 'coding',
-              duration_minutes: 60,
-              questions: [],
-            },
-          ],
-        },
-        {
-          id: 2,
-          title: 'System Design & Scalable Architecture',
-          slug: 'system-design',
-          icon: 'Layers',
-          description: 'Distributed systems, database sharding, microservices, load balancing, caching tiers, and high-availability architecture.',
-          levels: [
-            {
-              id: 201,
-              track_id: 2,
-              level_number: 1,
-              name: 'Level 1: Architectural Concepts & Tradeoffs',
-              description: 'Evaluate understanding of CAP theorem, database indexing, caching strategies, and load balancers.',
-              mode: 'discussion',
-              duration_minutes: 45,
-              questions: [
-                {
-                  id: 2001,
-                  level_id: 201,
-                  title: 'Design a Distributed Rate Limiter',
-                  prompt: 'Walk me through designing an API rate limiter capable of handling 100,000 requests per second across multiple regional data centers.',
-                  difficulty: 'Medium',
-                  type: 'discussion',
-                  payload_json: JSON.stringify({
-                    scenario: 'High-throughput global API gateway requiring strict IP and token-based rate limits.',
-                    talking_points: ['Token Bucket vs Leaky Bucket vs Sliding Window Log', 'Redis distributed cache with atomic Lua scripts', 'Handling Redis failover and clock skew drift'],
-                    tradeoffs: ['Consistency vs Latency in multi-region deployments', 'Local in-memory token buffering vs centralized Redis calls'],
-                  }),
-                },
-              ],
-            },
-          ],
-        },
-        {
-          id: 3,
-          title: 'Computer Science Core Fundamentals',
-          slug: 'cs-core',
-          icon: 'Cpu',
-          description: 'Operating systems, concurrency, networking protocols, database ACID properties, and memory management.',
-          levels: [
-            {
-              id: 301,
-              track_id: 3,
-              level_number: 1,
-              name: 'Level 1: OS, Concurrency & Networking',
-              description: 'Live verbal technical interview assessing candidate conceptual clarity and communication.',
-              mode: 'verbal_qa',
-              duration_minutes: 30,
-              questions: [
-                {
-                  id: 3001,
-                  level_id: 301,
-                  title: 'Goroutines vs Operating System Threads',
-                  prompt: 'Explain how lightweight green threads (such as Go goroutines) differ from standard OS kernel threads in terms of memory footprint, stack growth, and context-switching overhead.',
-                  difficulty: 'Medium',
-                  type: 'verbal_qa',
-                  payload_json: JSON.stringify({
-                    ideal_answer: 'Goroutines start with tiny 2KB stack that grows/shrinks dynamically vs 1-2MB fixed OS threads. Context switching is managed in user-space by the Go M:N scheduler without entering kernel mode.',
-                    rubrics: ['Mentions memory footprint (2KB vs 1MB+)', 'Explains user-space runtime scheduler vs kernel context switch', 'Mentions channel/mutex synchronization mechanisms'],
-                  }),
-                },
-              ],
-            },
-          ],
-        },
-        {
-          id: 4,
-          title: 'Campus Aptitude & Technical Screening',
-          slug: 'screening-mcq',
-          icon: 'CheckSquare',
-          description: 'Rapid objective technical multiple choice screening covering language syntax, output prediction, and complexity.',
-          levels: [
-            {
-              id: 401,
-              track_id: 4,
-              level_number: 1,
-              name: 'Level 1: Output Prediction & Complexity MCQ',
-              description: 'Multiple-choice diagnostic round with time-boxed questions.',
-              mode: 'mcq',
-              duration_minutes: 30,
-              questions: [
-                {
-                  id: 4001,
-                  level_id: 401,
-                  title: 'Time Complexity of Hash Table Rehashing',
-                  prompt: 'When an open-addressing or chained hash table reaches its load factor limit and doubles in capacity, what is the amortized time complexity per insertion?',
-                  difficulty: 'Easy',
-                  type: 'mcq',
-                  payload_json: JSON.stringify({
-                    options: [{ id: 'A', text: 'O(1) Amortized' }, { id: 'B', text: 'O(N) Strict Worst Case' }, { id: 'C', text: 'O(log N)' }, { id: 'D', text: 'O(N^2)' }],
-                    correct_option: 'A',
-                    explanation: 'While resizing itself takes O(N) work, because it occurs exponentially less frequently (doubling capacity), the amortized cost per single insert operation remains O(1).',
-                  }),
-                },
-              ],
-            },
-          ],
-        },
-      ]);
+      console.error('Failed to fetch interview tracks from backend:', err);
+      setTracks([]);
     } finally {
       setLoading(false);
     }
@@ -317,9 +201,13 @@ export default function AdminInterviewConfig() {
     try {
       let payloadObj = {};
       if (selectedLevel.mode === 'coding') {
+        const openTCs = questionForm.open_test_cases.filter((tc) => tc.input || tc.output);
+        const hiddenTCs = questionForm.hidden_test_cases.filter((tc) => tc.input || tc.output);
         payloadObj = {
           starter_code: questionForm.starter_code,
-          test_cases: questionForm.test_cases.filter((tc) => tc.input || tc.output),
+          open_test_cases: openTCs,
+          hidden_test_cases: hiddenTCs,
+          test_cases: openTCs, // Backward compatibility
           constraints: questionForm.constraints,
         };
       } else if (selectedLevel.mode === 'verbal_qa') {
@@ -399,6 +287,13 @@ export default function AdminInterviewConfig() {
       parsed = JSON.parse(q.payload_json || '{}');
     } catch (e) {}
 
+    const openCases = parsed.open_test_cases?.length
+      ? parsed.open_test_cases
+      : (parsed.test_cases?.length ? parsed.test_cases : [{ input: '', output: '' }]);
+    const hiddenCases = parsed.hidden_test_cases?.length
+      ? parsed.hidden_test_cases
+      : [{ input: '', output: '' }];
+
     setQuestionForm({
       id: q.id,
       title: q.title || '',
@@ -406,7 +301,8 @@ export default function AdminInterviewConfig() {
       difficulty: q.difficulty || 'Medium',
       type: q.type || selectedLevel.mode,
       starter_code: parsed.starter_code || '',
-      test_cases: parsed.test_cases?.length ? parsed.test_cases : [{ input: '', output: '' }],
+      open_test_cases: openCases,
+      hidden_test_cases: hiddenCases,
       constraints: parsed.constraints || '',
       ideal_answer: parsed.ideal_answer || '',
       rubrics: parsed.rubrics?.length ? parsed.rubrics : [''],
@@ -429,7 +325,8 @@ export default function AdminInterviewConfig() {
       difficulty: 'Medium',
       type: selectedLevel.mode,
       starter_code: '',
-      test_cases: [{ input: '', output: '' }],
+      open_test_cases: [{ input: '', output: '' }],
+      hidden_test_cases: [{ input: '', output: '' }],
       constraints: '',
       ideal_answer: '',
       rubrics: [''],
@@ -483,7 +380,7 @@ export default function AdminInterviewConfig() {
               ? 'Interview Domains & Tracks'
               : !selectedLevel
               ? `${selectedTrack.title} — Levels`
-              : `Level ${selectedLevel.level_number}: ${selectedLevel.name}`}
+              : formatFullLevelTitle(selectedLevel)}
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
             {!selectedTrack
@@ -736,7 +633,7 @@ export default function AdminInterviewConfig() {
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h4 className="text-[15px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
-                            {level.name}
+                            {formatFullLevelTitle(level)}
                           </h4>
 
                           {/* Mode Badge */}
@@ -872,141 +769,254 @@ export default function AdminInterviewConfig() {
                   parsed = JSON.parse(q.payload_json || '{}');
                 } catch (e) {}
 
+                const isExpanded = !!expandedQuestions[q.id];
+
                 return (
                   <div
                     key={q.id}
-                    className="panel-card p-5 space-y-3.5 bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-strong)] transition"
+                    className={`panel-card transition-all duration-200 bg-[var(--bg-card)] border ${
+                      isExpanded
+                        ? 'border-[var(--accent)] shadow-[var(--shadow-md)] ring-1 ring-[var(--accent)]/20'
+                        : 'border-[var(--border)] hover:border-[var(--border-strong)]'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-mono font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
-                          {qIndex + 1}
-                        </span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-[15px] font-bold text-[var(--text-primary)]">
-                              {q.title}
-                            </h4>
-                            <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${
-                              q.difficulty === 'Easy' ? 'bg-[var(--green-bg)] text-[var(--green)]' :
-                              q.difficulty === 'Hard' ? 'bg-[var(--red-bg)] text-[var(--red)]' :
-                              'bg-[var(--amber-bg)] text-[var(--amber)]'
-                            }`}>
-                              {q.difficulty}
-                            </span>
+                    {/* Compact Card Header (Clickable to Toggle Full Details) */}
+                    <div
+                      onClick={() => toggleQuestionExpand(q.id)}
+                      className="p-5 cursor-pointer select-none space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1">
+                          <span className="w-6 h-6 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-mono font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                            {qIndex + 1}
+                          </span>
+                          <div className="space-y-1 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-[15px] font-bold text-[var(--text-primary)]">
+                                {q.title}
+                              </h4>
+                              <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${
+                                q.difficulty === 'Easy' ? 'bg-[var(--green-bg)] text-[var(--green)]' :
+                                q.difficulty === 'Hard' ? 'bg-[var(--red-bg)] text-[var(--red)]' :
+                                'bg-[var(--amber-bg)] text-[var(--amber)]'
+                              }`}>
+                                {q.difficulty}
+                              </span>
+                            </div>
+                            <p className="text-[13px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed font-ui">
+                              {q.prompt}
+                            </p>
                           </div>
-                          <p className="text-[13px] text-[var(--text-secondary)] mt-1 whitespace-pre-line leading-relaxed font-ui">
-                            {q.prompt}
-                          </p>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => openEditQuestionModal(q)}
-                          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded"
-                          title="Edit Question"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDeleteTarget({ type: 'question', data: q });
-                            setShowDeleteModal(true);
-                          }}
-                          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] rounded"
-                          title="Delete Question"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Action Buttons & Expand Toggle */}
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => toggleQuestionExpand(q.id)}
+                            className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono font-semibold rounded border transition ${
+                              isExpanded
+                                ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--accent)]/30'
+                                : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+                            }`}
+                            title={isExpanded ? 'Collapse Details' : 'View Full Details'}
+                          >
+                            <span>{isExpanded ? 'Hide Details' : 'View Details'}</span>
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openEditQuestionModal(q)}
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded border border-transparent hover:border-[var(--border)] transition"
+                            title="Edit Question"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteTarget({ type: 'question', data: q });
+                              setShowDeleteModal(true);
+                            }}
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] rounded border border-transparent hover:border-[var(--red)]/20 transition"
+                            title="Delete Question"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Mode Specific Previews */}
-                    {selectedLevel.mode === 'coding' && (
-                      <div className="space-y-2 pt-2 border-t border-[var(--border)] text-[12px]">
-                        {parsed.starter_code && (
-                          <div className="p-3 bg-[var(--bg-input)] rounded-[var(--radius-sm)] font-mono text-[11px] text-[var(--text-primary)] overflow-x-auto">
-                            <span className="text-[10px] uppercase font-bold text-[var(--accent)] block mb-1">Starter Template:</span>
-                            <pre className="text-[11px]">{parsed.starter_code}</pre>
-                          </div>
-                        )}
-                        {parsed.test_cases?.length > 0 && (
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            {parsed.test_cases.map((tc, tcIdx) => (
-                              <div key={tcIdx} className="px-2.5 py-1 rounded bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[11px]">
-                                <span className="text-[var(--text-muted)]">In:</span> {tc.input} &rarr; <span className="text-[var(--accent)]">Out:</span> {tc.output}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {selectedLevel.mode === 'verbal_qa' && (
-                      <div className="space-y-2 pt-2 border-t border-[var(--border)] text-[12px]">
-                        {parsed.ideal_answer && (
-                          <div className="p-3 bg-[var(--amber-bg)]/50 border border-[var(--amber)]/20 rounded-[var(--radius-sm)] text-[12px] text-[var(--text-secondary)]">
-                            <strong className="text-[var(--amber)] block mb-0.5">Key Evaluator Note / Ideal Answer:</strong>
-                            {parsed.ideal_answer}
-                          </div>
-                        )}
-                        {parsed.rubrics?.length > 0 && (
-                          <div className="space-y-1">
-                            <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-semibold">Evaluation Rubrics:</span>
-                            <ul className="list-disc pl-5 text-[12px] text-[var(--text-secondary)] space-y-0.5">
-                              {parsed.rubrics.map((r, rIdx) => (
-                                <li key={rIdx}>{r}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {selectedLevel.mode === 'mcq' && (
-                      <div className="space-y-2 pt-2 border-t border-[var(--border)] text-[12px]">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {parsed.options?.map((opt) => (
-                            <div
-                              key={opt.id}
-                              className={`p-2 rounded-[var(--radius-sm)] border text-[12px] flex items-center gap-2 ${
-                                opt.id === parsed.correct_option
-                                  ? 'bg-[var(--green-bg)] border-[var(--green)]/30 text-[var(--green)] font-semibold'
-                                  : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)]'
-                              }`}
-                            >
-                              <span className="font-mono font-bold">{opt.id}.</span>
-                              <span>{opt.text}</span>
-                              {opt.id === parsed.correct_option && <Check className="w-3.5 h-3.5 ml-auto" />}
-                            </div>
-                          ))}
-                        </div>
-                        {parsed.explanation && (
-                          <p className="text-[11px] text-[var(--text-muted)] font-mono italic">
-                            Explanation: {parsed.explanation}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {selectedLevel.mode === 'discussion' && (
-                      <div className="space-y-2 pt-2 border-t border-[var(--border)] text-[12px]">
-                        {parsed.scenario && (
-                          <p className="text-[12px] text-[var(--text-secondary)]">
-                            <strong className="text-[var(--text-primary)]">Scenario Context:</strong> {parsed.scenario}
-                          </p>
-                        )}
-                        {parsed.talking_points?.length > 0 && (
-                          <div>
-                            <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-semibold">Discussion Talking Points:</span>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {parsed.talking_points.map((tp, tpIdx) => (
-                                <span key={tpIdx} className="px-2 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)] text-[11px]">
-                                  • {tp}
+                    {/* Expanded Full Details Section */}
+                    {isExpanded && (
+                      <div className="px-5 pb-5 pt-3 border-t border-[var(--border)] bg-[var(--bg-app)]/40 space-y-4 animate-fade-in">
+                        {/* 1. CODING MODE DETAILS */}
+                        {selectedLevel.mode === 'coding' && (
+                          <div className="space-y-3.5 text-[12px]">
+                            {parsed.constraints && (
+                              <div className="p-2.5 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
+                                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
+                                  Constraints:
                                 </span>
+                                <p className="font-mono text-[11px] text-[var(--text-secondary)] whitespace-pre-line">
+                                  {parsed.constraints}
+                                </p>
+                              </div>
+                            )}
+
+                            {parsed.starter_code && (
+                              <div className="p-3 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-primary)] overflow-x-auto">
+                                <span className="text-[10px] uppercase font-bold text-[var(--accent)] block mb-1">
+                                  Starter Template:
+                                </span>
+                                <pre className="text-[11px] leading-relaxed">{parsed.starter_code}</pre>
+                              </div>
+                            )}
+
+                            {/* Open Test Cases */}
+                            {((parsed.open_test_cases && parsed.open_test_cases.length > 0) || (parsed.test_cases && parsed.test_cases.length > 0)) && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--accent)] font-bold uppercase">
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Sample / Open Test Cases (Visible to Candidate):</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {(parsed.open_test_cases || parsed.test_cases).map((tc, tcIdx) => (
+                                    <div key={tcIdx} className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px] space-y-1 shadow-[var(--shadow-sm)]">
+                                      <div className="text-[var(--text-muted)] text-[10px] uppercase font-bold">Case #{tcIdx + 1}</div>
+                                      <div><span className="text-[var(--text-muted)] font-semibold">Input:</span> <span className="text-[var(--text-primary)]">{tc.input}</span></div>
+                                      <div><span className="text-[var(--accent)] font-semibold">Output:</span> <span className="text-[var(--text-primary)] font-bold">{tc.output}</span></div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Hidden Test Cases */}
+                            {parsed.hidden_test_cases && parsed.hidden_test_cases.length > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--amber)] font-bold uppercase">
+                                  <Lock className="w-3.5 h-3.5" />
+                                  <span>Hidden Test Cases (Grading / Automated Evaluation):</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {parsed.hidden_test_cases.map((tc, tcIdx) => (
+                                    <div key={tcIdx} className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--amber-bg)]/30 border border-[var(--amber)]/30 font-mono text-[11px] space-y-1 shadow-[var(--shadow-sm)]">
+                                      <div className="text-[var(--amber)] text-[10px] uppercase font-bold">Hidden Case #{tcIdx + 1}</div>
+                                      <div><span className="text-[var(--text-muted)] font-semibold">Input:</span> <span className="text-[var(--text-secondary)]">{tc.input}</span></div>
+                                      <div><span className="text-[var(--amber)] font-semibold">Output:</span> <span className="text-[var(--text-primary)] font-bold">{tc.output}</span></div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 2. VERBAL Q&A MODE DETAILS */}
+                        {selectedLevel.mode === 'verbal_qa' && (
+                          <div className="space-y-3 text-[12px]">
+                            {parsed.ideal_answer && (
+                              <div className="p-3.5 bg-[var(--amber-bg)]/40 border border-[var(--amber)]/20 rounded-[var(--radius-sm)] text-[12px] text-[var(--text-secondary)]">
+                                <strong className="text-[var(--amber)] block mb-1 font-mono uppercase text-[11px]">
+                                  Key Evaluator Note / Ideal Answer:
+                                </strong>
+                                <p className="leading-relaxed">{parsed.ideal_answer}</p>
+                              </div>
+                            )}
+                            {parsed.rubrics?.length > 0 && (
+                              <div className="space-y-1.5 p-3 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
+                                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-bold">
+                                  Evaluation Rubrics:
+                                </span>
+                                <ul className="list-disc pl-5 text-[12px] text-[var(--text-secondary)] space-y-1">
+                                  {parsed.rubrics.map((r, rIdx) => (
+                                    <li key={rIdx}>{r}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 3. MCQ MODE DETAILS */}
+                        {selectedLevel.mode === 'mcq' && (
+                          <div className="space-y-3 text-[12px]">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {parsed.options?.map((opt) => (
+                                <div
+                                  key={opt.id}
+                                  className={`p-2.5 rounded-[var(--radius-sm)] border text-[12px] flex items-center gap-2 ${
+                                    opt.id === parsed.correct_option
+                                      ? 'bg-[var(--green-bg)] border-[var(--green)]/40 text-[var(--green)] font-semibold shadow-[var(--shadow-sm)]'
+                                      : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)]'
+                                  }`}
+                                >
+                                  <span className="font-mono font-bold w-5">{opt.id}.</span>
+                                  <span>{opt.text}</span>
+                                  {opt.id === parsed.correct_option && (
+                                    <span className="ml-auto text-[10px] font-mono uppercase font-bold bg-[var(--green)] text-white px-1.5 py-0.5 rounded">
+                                      Correct
+                                    </span>
+                                  )}
+                                </div>
                               ))}
                             </div>
+                            {parsed.explanation && (
+                              <div className="p-2.5 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
+                                <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-bold block mb-0.5">
+                                  Explanation:
+                                </span>
+                                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                                  {parsed.explanation}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 4. DISCUSSION MODE DETAILS */}
+                        {selectedLevel.mode === 'discussion' && (
+                          <div className="space-y-3 text-[12px]">
+                            {parsed.scenario && (
+                              <div className="p-3 bg-[var(--bg-card)] rounded-[var(--radius-sm)] border border-[var(--border)]">
+                                <strong className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">
+                                  Scenario Context:
+                                </strong>
+                                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                                  {parsed.scenario}
+                                </p>
+                              </div>
+                            )}
+                            {parsed.talking_points?.length > 0 && (
+                              <div>
+                                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-bold">
+                                  Discussion Talking Points:
+                                </span>
+                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                  {parsed.talking_points.map((tp, tpIdx) => (
+                                    <span key={tpIdx} className="px-2.5 py-1 rounded bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border)] text-[11px]">
+                                      • {tp}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {parsed.tradeoffs?.length > 0 && (
+                              <div>
+                                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase font-bold">
+                                  Tradeoffs to Evaluate:
+                                </span>
+                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                  {parsed.tradeoffs.map((to, toIdx) => (
+                                    <span key={toIdx} className="px-2.5 py-1 rounded bg-[var(--amber-bg)]/30 text-[var(--text-secondary)] border border-[var(--amber)]/30 text-[11px]">
+                                      ⚠️ {to}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1137,7 +1147,7 @@ export default function AdminInterviewConfig() {
                   required
                   value={levelForm.name}
                   onChange={(e) => setLevelForm({ ...levelForm, name: e.target.value })}
-                  placeholder="e.g. Level 1: Fundamentals & Basic Hashing"
+                  placeholder="e.g. Fundamentals & Basic Hashing"
                   className="custom-input"
                 />
               </label>
@@ -1272,10 +1282,12 @@ export default function AdminInterviewConfig() {
 
               {/* 1. CODING MODE */}
               {selectedLevel.mode === 'coding' && (
-                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
-                  <h4 className="text-[13px] font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
-                    Coding Mode Specifications
-                  </h4>
+                <div className="space-y-4 pt-2 border-t border-[var(--border)]">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[13px] font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
+                      Coding Mode Specifications
+                    </h4>
+                  </div>
 
                   <label>
                     <span>Starter Code Boilerplate</span>
@@ -1299,56 +1311,136 @@ export default function AdminInterviewConfig() {
                     />
                   </label>
 
-                  <div className="space-y-2">
+                  {/* Open / Sample Test Cases */}
+                  <div className="p-3.5 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Test Cases:</span>
+                      <div className="flex items-center gap-1.5">
+                        <Eye className="w-4 h-4 text-[var(--accent)]" />
+                        <span className="text-[12px] font-bold text-[var(--text-primary)] font-ui">
+                          Open Test Cases
+                        </span>
+                        <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                          Visible to candidate
+                        </span>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setQuestionForm({ ...questionForm, test_cases: [...questionForm.test_cases, { input: '', output: '' }] })}
+                        onClick={() => setQuestionForm({ ...questionForm, open_test_cases: [...questionForm.open_test_cases, { input: '', output: '' }] })}
                         className="text-[11px] text-[var(--accent)] hover:underline flex items-center gap-1 font-semibold"
                       >
-                        <Plus className="w-3 h-3" /> Add Case
+                        <Plus className="w-3 h-3" /> Add Open Case
                       </button>
                     </div>
 
-                    {questionForm.test_cases.map((tc, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder={`Input ${idx + 1} (e.g. [2,7,11], target=9)`}
-                          value={tc.input}
-                          onChange={(e) => {
-                            const updated = [...questionForm.test_cases];
-                            updated[idx].input = e.target.value;
-                            setQuestionForm({ ...questionForm, test_cases: updated });
-                          }}
-                          className="custom-input font-mono text-[11px] py-1.5 flex-1"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Expected Output"
-                          value={tc.output}
-                          onChange={(e) => {
-                            const updated = [...questionForm.test_cases];
-                            updated[idx].output = e.target.value;
-                            setQuestionForm({ ...questionForm, test_cases: updated });
-                          }}
-                          className="custom-input font-mono text-[11px] py-1.5 flex-1"
-                        />
-                        {questionForm.test_cases.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = questionForm.test_cases.filter((_, i) => i !== idx);
-                              setQuestionForm({ ...questionForm, test_cases: updated });
+                    <div className="space-y-2">
+                      {questionForm.open_test_cases.map((tc, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder={`Open Input ${idx + 1} (e.g. nums = [2,7,11], target = 9)`}
+                            value={tc.input}
+                            onChange={(e) => {
+                              const updated = [...questionForm.open_test_cases];
+                              updated[idx].input = e.target.value;
+                              setQuestionForm({ ...questionForm, open_test_cases: updated });
                             }}
-                            className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Expected Output (e.g. [0,1])"
+                            value={tc.output}
+                            onChange={(e) => {
+                              const updated = [...questionForm.open_test_cases];
+                              updated[idx].output = e.target.value;
+                              setQuestionForm({ ...questionForm, open_test_cases: updated });
+                            }}
+                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                          />
+                          {questionForm.open_test_cases.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = questionForm.open_test_cases.filter((_, i) => i !== idx);
+                                setQuestionForm({ ...questionForm, open_test_cases: updated });
+                              }}
+                              className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                              title="Remove Test Case"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hidden Test Cases */}
+                  <div className="p-3.5 bg-[var(--amber-bg)]/20 rounded-[var(--radius-sm)] border border-[var(--amber)]/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Lock className="w-4 h-4 text-[var(--amber)]" />
+                        <span className="text-[12px] font-bold text-[var(--text-primary)] font-ui">
+                          Hidden Test Cases
+                        </span>
+                        <span className="text-[10px] font-mono text-[var(--amber)] bg-[var(--bg-card)] px-1.5 py-0.5 rounded border border-[var(--amber)]/30 font-semibold">
+                          Private / Evaluation only
+                        </span>
                       </div>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm({ ...questionForm, hidden_test_cases: [...questionForm.hidden_test_cases, { input: '', output: '' }] })}
+                        className="text-[11px] text-[var(--amber)] hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" /> Add Hidden Case
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      Hidden test cases are not revealed to students during the interview. They evaluate edge cases, boundary conditions, and large inputs during final test runs.
+                    </p>
+
+                    <div className="space-y-2">
+                      {questionForm.hidden_test_cases.map((tc, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder={`Hidden Input ${idx + 1} (e.g. nums = [-1,-2], target = -3)`}
+                            value={tc.input}
+                            onChange={(e) => {
+                              const updated = [...questionForm.hidden_test_cases];
+                              updated[idx].input = e.target.value;
+                              setQuestionForm({ ...questionForm, hidden_test_cases: updated });
+                            }}
+                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Expected Output (e.g. [0,1])"
+                            value={tc.output}
+                            onChange={(e) => {
+                              const updated = [...questionForm.hidden_test_cases];
+                              updated[idx].output = e.target.value;
+                              setQuestionForm({ ...questionForm, hidden_test_cases: updated });
+                            }}
+                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                          />
+                          {questionForm.hidden_test_cases.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = questionForm.hidden_test_cases.filter((_, i) => i !== idx);
+                                setQuestionForm({ ...questionForm, hidden_test_cases: updated });
+                              }}
+                              className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                              title="Remove Test Case"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
