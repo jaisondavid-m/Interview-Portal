@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
-  Search, Filter, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
-  FileCode, ListChecks, HelpCircle, Sparkles, FolderKanban, Sliders, ChevronDown
+  Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
+  HelpCircle
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -50,7 +50,6 @@ export default function AdminInterviewConfig() {
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
 
   // Hierarchy Navigation State
   const [selectedTrack, setSelectedTrack] = useState(null);
@@ -64,7 +63,7 @@ export default function AdminInterviewConfig() {
   const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'track'|'level'|'question', data: obj }
 
   // Form States
-  const [trackForm, setTrackForm] = useState({ id: null, title: '', category: 'Technical', icon: 'Code', description: '' });
+  const [trackForm, setTrackForm] = useState({ id: null, title: '', icon: 'Code', description: '' });
   const [levelForm, setLevelForm] = useState({ id: null, level_number: 1, name: '', description: '', mode: 'coding', duration_minutes: 45 });
   const [questionForm, setQuestionForm] = useState({
     id: null,
@@ -99,7 +98,6 @@ export default function AdminInterviewConfig() {
       const res = await api.get('/admin/interviews/tracks');
       if (res && res.data) {
         setTracks(res.data);
-        // If track or level is selected, sync active states
         if (selectedTrack) {
           const updatedTrack = res.data.find((t) => t.id === selectedTrack.id);
           if (updatedTrack) {
@@ -119,7 +117,6 @@ export default function AdminInterviewConfig() {
           id: 1,
           title: 'Data Structures & Algorithms',
           slug: 'dsa',
-          category: 'Technical',
           icon: 'Code',
           description: 'Core computer science fundamentals, algorithmic problem solving, time complexity, and data structure manipulation.',
           levels: [
@@ -163,7 +160,6 @@ export default function AdminInterviewConfig() {
           id: 2,
           title: 'System Design & Scalable Architecture',
           slug: 'system-design',
-          category: 'Architecture',
           icon: 'Layers',
           description: 'Distributed systems, database sharding, microservices, load balancing, caching tiers, and high-availability architecture.',
           levels: [
@@ -197,7 +193,6 @@ export default function AdminInterviewConfig() {
           id: 3,
           title: 'Computer Science Core Fundamentals',
           slug: 'cs-core',
-          category: 'Core',
           icon: 'Cpu',
           description: 'Operating systems, concurrency, networking protocols, database ACID properties, and memory management.',
           levels: [
@@ -230,7 +225,6 @@ export default function AdminInterviewConfig() {
           id: 4,
           title: 'Campus Aptitude & Technical Screening',
           slug: 'screening-mcq',
-          category: 'Screening',
           icon: 'CheckSquare',
           description: 'Rapid objective technical multiple choice screening covering language syntax, output prediction, and complexity.',
           levels: [
@@ -270,13 +264,12 @@ export default function AdminInterviewConfig() {
     fetchTracks();
   }, []);
 
-  // Filter Tracks
+  // Filter Tracks solely by title/description
   const filteredTracks = tracks.filter((t) => {
-    const matchesSearch =
+    return (
       t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCat = categoryFilter === 'ALL' || t.category === categoryFilter;
-    return matchesSearch && matchesCat;
+      t.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   });
 
   // Track Form Handlers
@@ -328,7 +321,6 @@ export default function AdminInterviewConfig() {
     setFormLoading(true);
 
     try {
-      // Build mode-specific payload
       let payloadObj = {};
       if (selectedLevel.mode === 'coding') {
         payloadObj = {
@@ -562,7 +554,7 @@ export default function AdminInterviewConfig() {
           ) : (
             <button
               onClick={() => {
-                setTrackForm({ id: null, title: '', category: 'Technical', icon: 'Code', description: '' });
+                setTrackForm({ id: null, title: '', icon: 'Code', description: '' });
                 setFormError('');
                 setShowTrackModal(true);
               }}
@@ -580,34 +572,18 @@ export default function AdminInterviewConfig() {
       {/* ============================================================ */}
       {!selectedTrack && (
         <div className="space-y-5">
-          {/* Search & Filter Bar */}
-          <div className="panel-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-80">
+          {/* Clean Search Bar */}
+          <div className="panel-card p-4">
+            <div className="relative w-full max-w-md">
               <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search interview domains..."
+                placeholder="Search interview domains (e.g. DSA, System Design)..."
                 className="custom-input search-input text-[12px] py-2"
                 style={{ paddingLeft: '2.4rem' }}
               />
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-[12px] text-[var(--text-secondary)] font-medium">Category:</span>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="custom-input text-[12px] py-1.5 px-3 bg-[var(--bg-card)] w-auto"
-              >
-                <option value="ALL">All Categories</option>
-                <option value="Technical">Technical</option>
-                <option value="Architecture">Architecture</option>
-                <option value="Core">Core CS</option>
-                <option value="Screening">Screening</option>
-                <option value="Behavioral">Behavioral</option>
-              </select>
             </div>
           </div>
 
@@ -630,17 +606,13 @@ export default function AdminInterviewConfig() {
                       </div>
 
                       <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-mono uppercase font-semibold px-2 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)]">
-                          {track.category || 'Domain'}
-                        </span>
                         <div
-                          className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)]"
+                          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition"
                           onClick={(e) => {
                             e.stopPropagation();
                             setTrackForm({
                               id: track.id,
                               title: track.title,
-                              category: track.category,
                               icon: track.icon,
                               description: track.description,
                             });
@@ -652,7 +624,7 @@ export default function AdminInterviewConfig() {
                           <Edit2 className="w-3.5 h-3.5" />
                         </div>
                         <div
-                          className="p-1 text-[var(--text-muted)] hover:text-[var(--red)] rounded hover:bg-[var(--red-bg)]"
+                          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] rounded hover:bg-[var(--red-bg)] transition"
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeleteTarget({ type: 'track', data: track });
@@ -700,19 +672,11 @@ export default function AdminInterviewConfig() {
           {/* Track Summary Banner */}
           <div className="panel-card p-5 bg-[var(--bg-raised)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono uppercase font-semibold text-[var(--accent)] bg-[var(--accent-dim)] px-2 py-0.5 rounded border border-[var(--border-accent)]">
-                  {selectedTrack.category}
-                </span>
-                <span className="text-[12px] text-[var(--text-muted)] font-mono">
-                  Slug: #{selectedTrack.slug}
-                </span>
-              </div>
               <h2 className="text-[18px] font-bold text-[var(--text-primary)]">
                 {selectedTrack.title}
               </h2>
               <p className="text-[13px] text-[var(--text-secondary)]">
-                {selectedTrack.description}
+                {selectedTrack.description || 'Define progression levels and assessment modes for this domain.'}
               </p>
             </div>
 
@@ -1101,27 +1065,12 @@ export default function AdminInterviewConfig() {
               </label>
 
               <label>
-                <span>Category</span>
-                <select
-                  value={trackForm.category}
-                  onChange={(e) => setTrackForm({ ...trackForm, category: e.target.value })}
-                  className="custom-input"
-                >
-                  <option value="Technical">Technical</option>
-                  <option value="Architecture">Architecture</option>
-                  <option value="Core">Core CS</option>
-                  <option value="Screening">Screening</option>
-                  <option value="Behavioral">Behavioral</option>
-                </select>
-              </label>
-
-              <label>
                 <span>Description</span>
                 <textarea
                   rows="3"
                   value={trackForm.description}
                   onChange={(e) => setTrackForm({ ...trackForm, description: e.target.value })}
-                  placeholder="Brief overview of topics covered in this track..."
+                  placeholder="Brief overview of topics covered in this domain..."
                   className="custom-input resize-none"
                 />
               </label>

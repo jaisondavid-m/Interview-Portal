@@ -34,7 +34,7 @@ export default function Sidebar() {
       ];
 
   return (
-    <aside className="w-64 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col justify-between p-4 min-h-[calc(100vh-4rem)] shadow-[var(--shadow-sm)]">
+    <aside className="w-64 h-full shrink-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col justify-between p-4 shadow-[var(--shadow-sm)] overflow-y-auto custom-scrollbar">
       {/* Navigation Menu */}
       <nav className="space-y-1.5 pt-1">
         {menuItems.map((item) => {

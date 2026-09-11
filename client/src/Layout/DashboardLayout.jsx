@@ -27,19 +27,19 @@ export default function DashboardLayout() {
       ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg)] text-[var(--text-primary)]">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--text-primary)]">
       {/* Clean Top Bar (Site Name and Logo Only) */}
       <Navbar />
 
-      <div className="flex-1 flex flex-col md:flex-row pb-16 md:pb-0">
-        {/* Desktop Sidebar */}
-        <div className="hidden md:block">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* Desktop Sidebar (Fixed & Non-scrolling with page) */}
+        <div className="hidden md:block h-full shrink-0">
           <Sidebar />
         </div>
 
-        {/* Main Content Area */}
-        <main className="flex-1 p-5 md:p-8 bg-[var(--bg)] overflow-y-auto">
-          <div className="max-w-[1280px] mx-auto">
+        {/* Main Content Area (Independently Scrollable) */}
+        <main className="flex-1 h-full overflow-y-auto custom-scrollbar p-5 md:p-8 bg-[var(--bg)]">
+          <div className="max-w-[1280px] mx-auto pb-16 md:pb-8">
             <Outlet />
           </div>
         </main>
