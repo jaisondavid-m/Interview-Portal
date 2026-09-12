@@ -68,7 +68,7 @@ export default function InterviewRoom() {
   } = useWebRTCAudio({
     sessionId,
     currentUserId: myUserId,
-    enabled: !micModalOpen && !isCompleted,
+    enabled: !micModalOpen,
   });
 
   const [elapsedSecs, setElapsedSecs] = useState(() => {
@@ -477,6 +477,7 @@ export default function InterviewRoom() {
         closeModal();
         try {
           setEnding(true);
+          await stopAndUploadRecording();
           await api.post(`/interviews/sessions/${sessionId}/end`);
           navigate('/interviews');
         } catch (err) {
@@ -504,6 +505,7 @@ export default function InterviewRoom() {
           const res = await api.post(`/interviews/sessions/${sessionId}/request-end`);
           const data = res?.data || res;
           if (data?.ended) {
+            await stopAndUploadRecording();
             navigate('/interviews');
             return;
           }
@@ -529,6 +531,7 @@ export default function InterviewRoom() {
   const handleAcceptEnd = async () => {
     try {
       setEnding(true);
+      await stopAndUploadRecording();
       const res = await api.post(`/interviews/sessions/${sessionId}/accept-end`);
       const data = res?.data || res;
       await fetchSession();

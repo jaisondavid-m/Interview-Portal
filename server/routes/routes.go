@@ -67,7 +67,6 @@ func SetupRouter() *gin.Engine {
 
 		// Public Audio Streaming Route (Supports HTTP byte-range for players)
 		g.GET("/recordings/:filename", controllers.StreamInterviewRecording)
-		g.GET("/interviews/sessions/:id/ws", controllers.HandleWebRTCSignaling) // Fallback for query-token WS upgrades
 
 		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)
 		admin := g.Group("/admin")

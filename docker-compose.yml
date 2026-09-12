@@ -44,6 +44,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-mock_mate_secure_jwt_secret_2026}
     ports:
       - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      - audio_recordings:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -89,6 +91,8 @@ services:
 
 volumes:
   mysql_data:
+    driver: local
+  audio_recordings:
     driver: local
 
 networks:

@@ -62,6 +62,11 @@ func AuthMiddleware() gin.HandlerFunc {
 					tokenString = parts[1]
 				}
 			}
+
+			// 3. Fallback to URL Query parameter "token" (for WebSocket handshakes)
+			if tokenString == "" {
+				tokenString = c.Query("token")
+			}
 		}
 
 		if tokenString == "" {

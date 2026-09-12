@@ -15,11 +15,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const UploadsDir = "uploads/recordings"
+func getUploadsDir() string {
+	if envDir := os.Getenv("UPLOADS_DIR"); envDir != "" {
+		_ = os.MkdirAll(envDir, 0755)
+		return envDir
+	}
 
-// EnsureUploadDir creates the recording directory if not existing
-func init() {
-	_ = os.MkdirAll(UploadsDir, 0755)
+	// Check existing directories
+	candidates := []string{
+		"uploads/recordings",
+		"server/uploads/recordings",
+		"../uploads/recordings",
+	}
+	for _, dir := range candidates {
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			return dir
+		}
+	}
+
+	// Default fallback: create "uploads/recordings"
+	target := "uploads/recordings"
+	_ = os.MkdirAll(target, 0755)
+	return target
 }
 
 // UploadInterviewRecording handles the client-uploaded mixed session audio recording
@@ -58,8 +75,8 @@ func UploadInterviewRecording(c *gin.Context) {
 		}
 	}
 
-	// Create directory if missing
-	if err := os.MkdirAll(UploadsDir, 0755); err != nil {
+	uploadsDir := getUploadsDir()
+	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to prepare storage directory"})
 		return
 	}
@@ -70,7 +87,7 @@ func UploadInterviewRecording(c *gin.Context) {
 		fileExt = ".webm"
 	}
 	savedFileName := fmt.Sprintf("session_%s_%d%s", sessionID, time.Now().Unix(), fileExt)
-	destPath := filepath.Join(UploadsDir, savedFileName)
+	destPath := filepath.Join(uploadsDir, savedFileName)
 
 	if err := c.SaveUploadedFile(file, destPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save audio recording file", "error": err.Error()})
@@ -124,9 +141,27 @@ func StreamInterviewRecording(c *gin.Context) {
 	filename := c.Param("filename")
 	// Prevent path traversal
 	cleanedFilename := filepath.Base(filename)
-	filePath := filepath.Join(UploadsDir, cleanedFilename)
 
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	possibleDirs := []string{
+		getUploadsDir(),
+		"uploads/recordings",
+		"server/uploads/recordings",
+		"../uploads/recordings",
+		"server/controllers/uploads/recordings",
+	}
+
+	var filePath string
+	found := false
+	for _, dir := range possibleDirs {
+		candidate := filepath.Join(dir, cleanedFilename)
+		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
+			filePath = candidate
+			found = true
+			break
+		}
+	}
+
+	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Audio recording file not found"})
 		return
 	}
