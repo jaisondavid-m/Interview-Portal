@@ -59,6 +59,10 @@ func SetupRouter() *gin.Engine {
 			interviews.GET("/sessions/:id/feedback", controllers.GetSessionFeedbackStatus)
 			interviews.POST("/sessions/:id/feedback", controllers.SubmitSessionFeedback)
 
+			// Credential Solicitation Security Audit
+			interviews.GET("/sessions/:id/security-report", controllers.GetSessionSecurityReportStatus)
+			interviews.POST("/sessions/:id/security-report", controllers.SubmitSecurityReport)
+
 			// WebRTC Live Audio Signaling & Recordings
 			interviews.GET("/sessions/:id/ws", controllers.HandleWebRTCSignaling)
 			interviews.POST("/sessions/:id/recording", controllers.UploadInterviewRecording)
@@ -106,6 +110,10 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/feedback/questions/:id", controllers.AdminUpdateFeedbackQuestion)
 			admin.DELETE("/feedback/questions/:id", controllers.AdminDeleteFeedbackQuestion)
 			admin.GET("/feedback/submissions", controllers.AdminGetFeedbackSubmissions)
+
+			// Security Incident & Credential Solicitation Audits
+			admin.GET("/security-reports", controllers.AdminGetSecurityReports)
+			admin.PUT("/security-reports/:id", controllers.AdminUpdateSecurityReportStatus)
 
 			// Interview History & Meeting Details
 			admin.GET("/interviews/sessions", controllers.AdminGetInterviewSessions)

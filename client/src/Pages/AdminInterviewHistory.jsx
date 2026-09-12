@@ -4,6 +4,7 @@ import {
   Search,
   Users,
   Shield,
+  ShieldAlert,
   Award,
   Clock,
   Repeat,
@@ -299,16 +300,25 @@ export default function AdminInterviewHistory() {
 
                       {/* Status */}
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded ${
-                          s.status === 'in_progress'
-                            ? 'bg-[var(--green-bg)] text-[var(--green)]'
-                            : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]'
-                        }`}>
-                          {s.status === 'in_progress' && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)] animate-pulse" />
+                        <div className="space-y-1">
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded ${
+                            s.status === 'in_progress'
+                              ? 'bg-[var(--green-bg)] text-[var(--green)]'
+                              : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]'
+                          }`}>
+                            {s.status === 'in_progress' && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)] animate-pulse" />
+                            )}
+                            <span>{s.status === 'in_progress' ? 'IN PROGRESS' : 'COMPLETED'}</span>
+                          </span>
+
+                          {s.has_security_report && (
+                            <div className="flex items-center gap-1 text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded">
+                              <ShieldAlert className="w-3 h-3" />
+                              <span>CREDENTIALS REPORTED</span>
+                            </div>
                           )}
-                          <span>{s.status === 'in_progress' ? 'IN PROGRESS' : 'COMPLETED'}</span>
-                        </span>
+                        </div>
                       </td>
 
                       {/* Started / Duration */}
@@ -316,7 +326,7 @@ export default function AdminInterviewHistory() {
                         <div className="space-y-0.5 text-[11px] font-mono">
                           <p className="text-[var(--text-primary)]">{formatDateTime(s.started_at)}</p>
                           <p className="text-[var(--text-muted)]">
-                            ⏱ {calculateDuration(s.started_at, s.ended_at)}
+                            Duration: {calculateDuration(s.started_at, s.ended_at)}
                           </p>
                         </div>
                       </td>
@@ -381,6 +391,44 @@ export default function AdminInterviewHistory() {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Security / Credential Solicitation Alert Banner */}
+                {detailedSession?.security_reports?.some((r) => r.asked_credentials) && (
+                  <div className="p-4 rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/30 space-y-2.5 text-rose-950 dark:text-rose-200 shadow-sm animate-in fade-in">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-bold font-mono text-[13px] text-rose-600 dark:text-rose-400">
+                        <ShieldAlert className="w-4 h-4" />
+                        <span>SECURITY ALERT: Credential Solicitation Reported</span>
+                      </div>
+                      <span className="text-[10px] font-mono uppercase bg-rose-600 text-white font-bold px-2.5 py-0.5 rounded shadow-xs">
+                        Admin Review Required
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {detailedSession.security_reports.filter((r) => r.asked_credentials).map((r) => (
+                        <div key={r.id} className="text-xs space-y-1 bg-white/60 dark:bg-black/30 p-3 rounded-[var(--radius-xs)] border border-rose-500/20">
+                          <p className="font-semibold text-[var(--text-primary)]">
+                            Student <span className="text-rose-600 dark:text-rose-400 font-bold">{r.reporter?.name || 'Participant'}</span> reported that peer <span className="font-bold underline">{r.reported_user?.name || 'Peer'}</span> asked for their login credentials or personal passwords.
+                          </p>
+                          {r.details && (
+                            <p className="font-mono text-[11px] text-[var(--text-secondary)] mt-1">
+                              <strong>Student Notes:</strong> "{r.details}"
+                            </p>
+                          )}
+                          <p className="text-[10px] font-mono text-[var(--text-muted)] pt-1">
+                            Reported on: {formatDateTime(r.created_at)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className="text-[11px] font-mono text-rose-700 dark:text-rose-300 font-medium flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 animate-pulse text-rose-500" />
+                      <span>Use the Session Audio Player below to listen to and verify the conversation dialogue.</span>
+                    </p>
+                  </div>
+                )}
+
                 {/* Meeting Metadata Summary */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)]">

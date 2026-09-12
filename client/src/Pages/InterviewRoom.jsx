@@ -29,6 +29,7 @@ import CodeEditor from '../Components/CodeEditor';
 import TestCasesConsole from '../Components/TestCasesConsole';
 import ConfirmModal from '../Components/ConfirmModal';
 import PeerFeedbackModal from '../Components/PeerFeedbackModal';
+import CredentialAuditModal from '../Components/CredentialAuditModal';
 import MicPermissionModal from '../Components/MicPermissionModal';
 import AudioCallBanner from '../Components/AudioCallBanner';
 
@@ -48,8 +49,11 @@ export default function InterviewRoom() {
   const [ending, setEnding] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [hasFeedbackSubmitted, setHasFeedbackSubmitted] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [hasSecuritySubmitted, setHasSecuritySubmitted] = useState(false);
   const [micModalOpen, setMicModalOpen] = useState(true);
   const feedbackCheckedRef = useRef(false);
+  const securityCheckedRef = useRef(false);
   const recordingUploadedRef = useRef(false);
 
   const myUserId = currentUserRole === 'interviewer' ? sessionData?.interviewer_id : sessionData?.interviewee_id;
@@ -275,6 +279,18 @@ export default function InterviewRoom() {
             const data = res?.data || res;
             if (data?.has_submitted) {
               setHasFeedbackSubmitted(true);
+              // Check security audit status if feedback is already done
+              if (!securityCheckedRef.current) {
+                securityCheckedRef.current = true;
+                api.get(`/interviews/sessions/${sessionId}/security-report`)
+                  .then((sRes) => {
+                    const sData = sRes?.data || sRes;
+                    if (!sData?.has_submitted) {
+                      setShowSecurityModal(true);
+                    }
+                  })
+                  .catch(() => {});
+              }
             } else {
               setHasFeedbackSubmitted(false);
               setShowFeedbackModal(true);
@@ -1255,11 +1271,33 @@ export default function InterviewRoom() {
       {/* Dynamic Peer Feedback Modal */}
       <PeerFeedbackModal
         isOpen={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
+        onClose={() => {
+          setShowFeedbackModal(false);
+          if (!hasSecuritySubmitted) {
+            setShowSecurityModal(true);
+          }
+        }}
         sessionId={sessionId}
         peerUser={peerUser}
         onSubmitted={() => {
           setHasFeedbackSubmitted(true);
+          fetchSession();
+          setShowFeedbackModal(false);
+          setShowSecurityModal(true);
+        }}
+      />
+
+      {/* Post-Feedback Credential Security Audit Modal */}
+      <CredentialAuditModal
+        isOpen={showSecurityModal}
+        onClose={() => {
+          setShowSecurityModal(false);
+          navigate('/interviews');
+        }}
+        sessionId={sessionId}
+        peerUser={peerUser}
+        onCompleted={() => {
+          setHasSecuritySubmitted(true);
           fetchSession();
         }}
       />
