@@ -31,6 +31,7 @@ export default function useWebRTCAudio({
   enabled = true,
   onRecordingUploaded,
 }) {
+  // State
   const [connectionState, setConnectionState] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed'
   const [isMuted, setIsMuted] = useState(false);
   const [peerMuted, setPeerMuted] = useState(false);
@@ -40,6 +41,8 @@ export default function useWebRTCAudio({
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   // References
+  const isMutedRef = useRef(false);
+  const peerMutedRef = useRef(false);
   const wsRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -80,13 +83,13 @@ export default function useWebRTCAudio({
     };
   }, []);
 
-  // Voice Activity Detection (VAD) Loop
+  // Voice Activity Detection (VAD) Loop - Completely decoupled from effect re-triggers using refs
   const startVAD = useCallback(() => {
     if (vadIntervalRef.current) clearInterval(vadIntervalRef.current);
 
     vadIntervalRef.current = setInterval(() => {
       // Local voice check
-      if (localAnalyserRef.current && !isMuted) {
+      if (localAnalyserRef.current && !isMutedRef.current) {
         const dataArray = new Uint8Array(localAnalyserRef.current.frequencyBinCount);
         localAnalyserRef.current.getByteFrequencyData(dataArray);
         let sum = 0;
@@ -100,7 +103,7 @@ export default function useWebRTCAudio({
       }
 
       // Remote voice check
-      if (remoteAnalyserRef.current && !peerMuted) {
+      if (remoteAnalyserRef.current && !peerMutedRef.current) {
         const dataArray = new Uint8Array(remoteAnalyserRef.current.frequencyBinCount);
         remoteAnalyserRef.current.getByteFrequencyData(dataArray);
         let sum = 0;
@@ -113,7 +116,7 @@ export default function useWebRTCAudio({
         setIsPeerSpeaking(false);
       }
     }, 150);
-  }, [isMuted, peerMuted]);
+  }, []);
 
   // Setup Web Audio Mixer for Dual-Speaker Recording
   const initAudioMixer = useCallback(async (localStream) => {
@@ -154,7 +157,6 @@ export default function useWebRTCAudio({
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
-          console.log(`[WebRTC Audio] Chunk captured: ${event.data.size} bytes (Total chunks: ${recordedChunksRef.current.length})`);
         }
       };
 
@@ -246,8 +248,6 @@ export default function useWebRTCAudio({
       }
 
       const totalChunks = recordedChunksRef.current.length;
-      console.log(`[WebRTC Audio] Total captured chunks for upload: ${totalChunks}`);
-
       if (totalChunks === 0) {
         console.warn('[WebRTC Audio] No recorded chunks available to upload.');
         return null;
@@ -255,7 +255,6 @@ export default function useWebRTCAudio({
 
       const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
       const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-      console.log(`[WebRTC Audio] Prepared upload blob: ${blob.size} bytes (${mimeType})`);
 
       if (blob.size === 0) {
         console.warn('[WebRTC Audio] Recording blob is empty (0 bytes).');
@@ -290,7 +289,7 @@ export default function useWebRTCAudio({
     }
   }, [sessionId, onRecordingUploaded]);
 
-  // Main WebRTC & WebSocket initialization
+  // Main WebRTC & WebSocket initialization - Stable lifecycle on [enabled, sessionId]
   useEffect(() => {
     if (!enabled || !sessionId) return;
 
@@ -316,6 +315,12 @@ export default function useWebRTCAudio({
         }
 
         localStreamRef.current = stream;
+        // Ensure track enabled matches initial mute state
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          audioTracks[0].enabled = !isMutedRef.current;
+        }
+
         await initAudioMixer(stream);
 
         // 2. Setup RTCPeerConnection
@@ -451,12 +456,18 @@ export default function useWebRTCAudio({
               }
 
               case 'mute-status': {
-                setPeerMuted(Boolean(msg.is_muted));
+                const nextPeerMuted = Boolean(msg.is_muted);
+                peerMutedRef.current = nextPeerMuted;
+                setPeerMuted(nextPeerMuted);
+                if (nextPeerMuted) {
+                  setIsPeerSpeaking(false);
+                }
                 break;
               }
 
               case 'peer_left': {
                 setConnectionState('connecting');
+                peerMutedRef.current = false;
                 setPeerMuted(false);
                 setIsPeerSpeaking(false);
                 break;
@@ -518,18 +529,22 @@ export default function useWebRTCAudio({
     };
   }, []);
 
-  // Toggle local mute
+  // Toggle local mute - purely adjusts track.enabled with ZERO reconnection or effect interruption
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
       const audioTracks = localStreamRef.current.getAudioTracks();
       if (audioTracks.length > 0) {
-        const nextMuted = !isMuted;
+        const nextMuted = !isMutedRef.current;
+        isMutedRef.current = nextMuted;
         audioTracks[0].enabled = !nextMuted;
         setIsMuted(nextMuted);
+        if (nextMuted) {
+          setIsSpeaking(false);
+        }
         sendSignaling('mute-status', null, { is_muted: nextMuted });
       }
     }
-  }, [isMuted, sendSignaling]);
+  }, [sendSignaling]);
 
   return {
     connectionState,
