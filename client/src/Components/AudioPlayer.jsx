@@ -394,13 +394,6 @@ export default function AudioPlayer({
     ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
     : 0;
 
-  // Waveform spikes pattern matching modern audio visualizer
-  const waveformBars = [
-    32, 48, 68, 28, 72, 85, 58, 38, 52, 78, 98, 64, 82, 42, 28, 58,
-    72, 48, 92, 78, 58, 36, 68, 82, 88, 52, 32, 62, 78, 92, 68, 46,
-    36, 58, 74, 88, 76, 62, 42, 28, 52, 72, 88, 56, 38, 68, 82, 46
-  ];
-
   return (
     <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border-2 border-[var(--border-strong)] space-y-4 shadow-md transition-all">
       {/* Hidden HTML5 Audio Element with local blob URL */}
@@ -478,9 +471,9 @@ export default function AudioPlayer({
         </div>
       </div>
 
-      {/* Interactive Waveform Spikes Timeline Track (Seeker) */}
-      <div className="space-y-2 py-2 px-1">
-        {/* Waveform Visualization Spikes (Direct Scrubber & Tracker) */}
+      {/* YouTube-Style Single Line Progress Scrubber */}
+      <div className="space-y-2 py-1 px-1">
+        {/* Scrubber Track Container */}
         <div
           ref={progressBarRef}
           onClick={handleProgressBarClick}
@@ -488,31 +481,36 @@ export default function AudioPlayer({
           onMouseLeave={handleProgressBarMouseLeave}
           onMouseDown={() => setIsDragging(true)}
           onMouseUp={() => setIsDragging(false)}
-          className="relative h-14 w-full flex items-center justify-between gap-[3px] px-0.5 cursor-pointer select-none group"
-          title="Click or drag across spikes to seek"
+          className="relative h-6 w-full flex items-center cursor-pointer select-none group"
+          title="Click or drag to seek"
         >
-          {waveformBars.map((heightPercent, idx) => {
-            const barPercent = (idx / (waveformBars.length - 1)) * 100;
-            const isPlayed = barPercent <= progressPercent;
-
-            return (
+          {/* Base Background Track Line */}
+          <div className="relative w-full h-1.5 group-hover:h-2 rounded-full bg-[var(--border-strong)]/60 dark:bg-gray-700/80 transition-all duration-150 overflow-hidden">
+            {/* Hover Preview Bar (YouTube style) */}
+            {hoverTime !== null && (
               <div
-                key={idx}
-                className="flex-1 rounded-full transition-all duration-75 min-w-[3px]"
-                style={{
-                  height: `${Math.max(20, heightPercent)}%`,
-                  backgroundColor: isPlayed
-                    ? 'var(--accent)'
-                    : 'rgba(99, 102, 241, 0.18)',
-                }}
+                className="absolute top-0 left-0 h-full bg-[var(--accent)]/30 transition-none rounded-full pointer-events-none"
+                style={{ width: `${hoverPosition}%` }}
               />
-            );
-          })}
+            )}
+
+            {/* Current Audio Played Progress Fill */}
+            <div
+              className="absolute top-0 left-0 h-full bg-[var(--accent)] rounded-full transition-all duration-75"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* YouTube-Style Scrubber Thumb / Playhead Dot */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-[var(--accent)] shadow-md border-2 border-white dark:border-gray-900 transition-transform duration-100 group-hover:scale-125 pointer-events-none z-10"
+            style={{ left: `${progressPercent}%` }}
+          />
 
           {/* Hover Time Tooltip */}
           {hoverTime !== null && (
             <div
-              className="absolute -top-7 transform -translate-x-1/2 bg-[var(--text-primary)] text-[var(--bg-base)] text-[10px] font-mono font-bold py-0.5 px-1.5 rounded shadow-lg pointer-events-none z-10 whitespace-nowrap"
+              className="absolute -top-7 transform -translate-x-1/2 bg-[var(--text-primary)] text-[var(--bg-base)] text-[10px] font-mono font-bold py-0.5 px-1.5 rounded shadow-lg pointer-events-none z-20 whitespace-nowrap"
               style={{ left: `${hoverPosition}%` }}
             >
               {formatTime(hoverTime)}
@@ -520,8 +518,8 @@ export default function AudioPlayer({
           )}
         </div>
 
-        {/* Time Labels: Start to End (No dividing line) */}
-        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] pt-1 px-1">
+        {/* Time Labels: Start to End */}
+        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] pt-0.5 px-0.5">
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-[var(--text-primary)]">{formatTime(currentTime)}</span>
             <span className="text-[10px] text-[var(--text-muted)]">/</span>
