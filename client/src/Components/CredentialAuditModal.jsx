@@ -106,7 +106,7 @@ export default function CredentialAuditModal({
                 Security & Integrity Verification
               </span>
               <h3 className="text-[15px] font-bold text-[var(--text-primary)] font-ui">
-                Interview Credential Audit
+                Peer Identity Audit
               </h3>
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function CredentialAuditModal({
                 </h4>
                 <p className="text-[12px] text-[var(--text-secondary)] max-w-sm mx-auto">
                   {askedCredentials
-                    ? 'Your incident report has been registered. Administrators will review the session audio recording.'
+                    ? 'Your incident report has been registered. Administrators will review the session audio recording to verify identity solicitation.'
                     : 'Thank you. Your interview verification has been safely recorded.'}
                 </p>
               </div>
@@ -165,7 +165,7 @@ export default function CredentialAuditModal({
               {/* Main Question */}
               <div className="space-y-2">
                 <label className="text-[13px] font-bold text-[var(--text-primary)] block leading-snug">
-                  Did the peer student ask for your personal credentials, login passwords, or confidential account details during this interview?
+                  Did the peer student ask for your personal identity details (such as your Register / Roll Number, Phone Number, Real Name, or Personal Contact details) during this interview?
                 </label>
                 <p className="text-[11px] text-[var(--text-muted)] font-mono">
                   Target Peer: <span className="text-[var(--text-primary)] font-bold">{peerDisplayName}</span>
@@ -189,7 +189,7 @@ export default function CredentialAuditModal({
                     <ShieldCheck className={`w-4 h-4 ${askedCredentials === false ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`} />
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] leading-tight">
-                    No credential request was made. Interview followed guidelines.
+                    No identity request was made. Interview remained anonymous and followed guidelines.
                   </p>
                 </button>
 
@@ -208,7 +208,7 @@ export default function CredentialAuditModal({
                     <ShieldAlert className={`w-4 h-4 ${askedCredentials === true ? 'text-rose-500' : 'text-[var(--text-muted)]'}`} />
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] leading-tight">
-                    Yes, the student asked for my credentials or unauthorized access.
+                    Yes, the student asked for my register number, phone number, name, or contact details.
                   </p>
                 </button>
               </div>
@@ -222,7 +222,7 @@ export default function CredentialAuditModal({
                   </div>
 
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    Selecting <strong>Yes</strong> automatically flags this session with high priority in the Administrator portal. Admins will inspect the dual-speaker dialogue audio recording to verify the incident.
+                    Selecting <strong>Yes</strong> automatically flags this session with high priority in the Administrator portal. Admins will inspect the dual-speaker dialogue audio recording to verify the identity solicitation.
                   </p>
 
                   <div className="space-y-1">
@@ -232,7 +232,7 @@ export default function CredentialAuditModal({
                     <textarea
                       value={details}
                       onChange={(e) => setDetails(e.target.value)}
-                      placeholder="e.g. The student asked for my college portal password / Wi-Fi credentials during Round 1..."
+                      placeholder="e.g. The student asked for my register number and WhatsApp / phone number during Round 1..."
                       rows={2}
                       className="input-field text-xs py-2 w-full custom-scrollbar"
                       maxLength={500}

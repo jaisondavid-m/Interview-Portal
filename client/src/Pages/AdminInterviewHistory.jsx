@@ -359,7 +359,7 @@ export default function AdminInterviewHistory() {
                           {s.has_security_report && (
                             <div className="flex items-center gap-1 text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded">
                               <ShieldAlert className="w-3 h-3" />
-                              <span>CREDENTIALS REPORTED</span>
+                              <span>IDENTITY SOLICITED</span>
                             </div>
                           )}
                         </div>
@@ -435,13 +435,13 @@ export default function AdminInterviewHistory() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Security / Credential Solicitation Alert Banner */}
+                {/* Security / Identity Solicitation Alert Banner */}
                 {detailedSession?.security_reports?.some((r) => r.asked_credentials) && (
                   <div className="p-4 rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/30 space-y-2.5 text-rose-950 dark:text-rose-200 shadow-sm animate-in fade-in">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-bold font-mono text-[13px] text-rose-600 dark:text-rose-400">
                         <ShieldAlert className="w-4 h-4" />
-                        <span>SECURITY ALERT: Credential Solicitation Reported</span>
+                        <span>SECURITY ALERT: Student Identity Solicitation Reported</span>
                       </div>
                       <span className="text-[10px] font-mono uppercase bg-rose-600 text-white font-bold px-2.5 py-0.5 rounded shadow-xs">
                         Admin Review Required
@@ -452,7 +452,7 @@ export default function AdminInterviewHistory() {
                       {detailedSession.security_reports.filter((r) => r.asked_credentials).map((r) => (
                         <div key={r.id} className="text-xs space-y-1 bg-white/60 dark:bg-black/30 p-3 rounded-[var(--radius-xs)] border border-rose-500/20">
                           <p className="font-semibold text-[var(--text-primary)]">
-                            Student <span className="text-rose-600 dark:text-rose-400 font-bold">{r.reporter?.name || 'Participant'}</span> reported that peer <span className="font-bold underline">{r.reported_user?.name || 'Peer'}</span> asked for their login credentials or personal passwords.
+                            Student <span className="text-rose-600 dark:text-rose-400 font-bold">{r.reporter?.name || 'Participant'}</span> reported that peer <span className="font-bold underline">{r.reported_user?.name || 'Peer'}</span> asked for their personal identity details (e.g. Register / Roll No, Phone Number, Full Name, or Contact info).
                           </p>
                           {r.details && (
                             <p className="font-mono text-[11px] text-[var(--text-secondary)] mt-1">
