@@ -511,7 +511,7 @@ export default function AdminFeedbackConfig() {
                     <span>MUTUAL PEER EVALUATION</span>
                   </div>
                   <h4 className="text-[14px] font-bold text-[var(--text-primary)] mt-0.5">
-                    Evaluate Peer: Jane Doe (7376252CS102)
+                    Evaluate Peer: Jaison David (7376251CS221)
                   </h4>
                   <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                     Your feedback helps your peer improve their interview readiness.

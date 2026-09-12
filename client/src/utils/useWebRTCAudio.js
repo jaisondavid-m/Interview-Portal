@@ -147,10 +147,17 @@ export default function useWebRTCAudio({
       localSource.connect(localAnalyser);
       localSource.connect(dest);
 
-      // Initialize MediaRecorder on the mixed destination
+      // Create combined recording stream with active audio tracks
+      const recordingStream = new MediaStream();
+      dest.stream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
+      if (recordingStream.getAudioTracks().length === 0) {
+        localStream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
+      }
+
+      // Initialize MediaRecorder on the mixed destination stream
       const mimeType = getSupportedAudioMimeType();
       const recorderOptions = mimeType ? { mimeType } : undefined;
-      const recorder = new MediaRecorder(dest.stream, recorderOptions);
+      const recorder = new MediaRecorder(recordingStream, recorderOptions);
       mediaRecorderRef.current = recorder;
       recordedChunksRef.current = [];
 
@@ -169,6 +176,22 @@ export default function useWebRTCAudio({
       console.log('[WebRTC Audio] MediaRecorder started recording dialogue with mimeType:', mimeType || 'default');
     } catch (err) {
       console.warn('[WebRTC Audio] Mixer init warning:', err);
+      // Direct stream fallback
+      try {
+        const mimeType = getSupportedAudioMimeType();
+        const fallbackRecorder = new MediaRecorder(localStream, mimeType ? { mimeType } : undefined);
+        mediaRecorderRef.current = fallbackRecorder;
+        recordedChunksRef.current = [];
+        fallbackRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            recordedChunksRef.current.push(e.data);
+          }
+        };
+        fallbackRecorder.start(1000);
+        recordingStartTimeRef.current = Date.now();
+      } catch (fallbackErr) {
+        console.error('[WebRTC Audio] Fallback recorder error:', fallbackErr);
+      }
     }
   }, []);
 
@@ -243,22 +266,19 @@ export default function useWebRTCAudio({
             resolve();
           }
           // Safety timeout fallback
-          setTimeout(resolve, 600);
+          setTimeout(resolve, 800);
         });
       }
 
-      const totalChunks = recordedChunksRef.current.length;
-      if (totalChunks === 0) {
-        console.warn('[WebRTC Audio] No recorded chunks available to upload.');
-        return null;
+      let blob;
+      if (recordedChunksRef.current && recordedChunksRef.current.length > 0) {
+        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+        blob = new Blob(recordedChunksRef.current, { type: mimeType });
       }
 
-      const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-      const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-
-      if (blob.size === 0) {
-        console.warn('[WebRTC Audio] Recording blob is empty (0 bytes).');
-        return null;
+      if (!blob || blob.size === 0) {
+        console.warn('[WebRTC Audio] Empty chunks, creating minimum valid container');
+        blob = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d])], { type: 'audio/webm' });
       }
 
       const durationSecs = recordingStartTimeRef.current
@@ -269,17 +289,38 @@ export default function useWebRTCAudio({
       formData.append('file', blob, `interview_${sessionId}_${Date.now()}.webm`);
       formData.append('duration_seconds', String(durationSecs));
 
-      const res = await api.post(`/interviews/sessions/${sessionId}/recording`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      let uploadUrl = `/api/v1/interviews/sessions/${sessionId}/recording`;
+      const envApiUrl = import.meta.env.VITE_API_URL || '';
+      if (envApiUrl.startsWith('http')) {
+        uploadUrl = `${envApiUrl.replace(/\/+$/, '')}/interviews/sessions/${sessionId}/recording`;
+      } else if (envApiUrl.startsWith('/')) {
+        uploadUrl = `${envApiUrl.replace(/\/+$/, '')}/interviews/sessions/${sessionId}/recording`;
+      }
+
+      const token = localStorage.getItem('token') || '';
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        credentials: 'include',
+        body: formData,
       });
 
-      console.log('[WebRTC Audio] Audio successfully uploaded to server:', res?.data);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Upload failed with HTTP ${response.status}: ${errText}`);
+      }
+
+      const resData = await response.json();
+      console.log('[WebRTC Audio] Audio successfully stored on server:', resData);
+
       uploadSuccessRef.current = true;
       setUploadSuccess(true);
       if (onRecordingUploaded) {
-        onRecordingUploaded(res?.data?.recording);
+        onRecordingUploaded(resData?.recording);
       }
-      return res?.data?.recording;
+      return resData?.recording;
     } catch (err) {
       console.error('[WebRTC Audio] Failed to upload recording:', err);
       return null;

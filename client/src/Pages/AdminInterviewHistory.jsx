@@ -17,7 +17,8 @@ import {
   Eye,
   GraduationCap,
   Radio,
-  FileAudio
+  FileAudio,
+  Mail
 } from 'lucide-react';
 import api from '../api/axios';
 import AudioPlayer from '../Components/AudioPlayer';
@@ -412,74 +413,122 @@ export default function AdminInterviewHistory() {
                 </div>
 
                 {/* Participant Details Comparison */}
+                {/* Meeting Student Participants */}
                 <div className="space-y-3">
-                  <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Users className="w-4 h-4 text-[var(--accent)]" />
-                    <span>Meeting Student Participants</span>
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[13px] font-bold text-[var(--text-primary)] flex items-center gap-2 font-mono uppercase tracking-wider">
+                      <Users className="w-4 h-4 text-[var(--accent)]" />
+                      <span>Session Participants</span>
+                    </h3>
+                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                      2 Students Paired
+                    </span>
+                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {/* Student A */}
-                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-dim)] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
-                          <GraduationCap className="w-3.5 h-3.5" />
-                          <span>Student A</span>
-                        </span>
-                        <span className="text-[10px] font-mono bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border)] font-bold">
-                          Peer 1
+                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-accent)] transition-all space-y-3 shadow-xs">
+                      <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border)]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                          <span className="text-[11px] font-mono font-bold tracking-wider text-[var(--text-primary)] uppercase">
+                            Student A
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-[var(--radius-xs)] bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)] font-medium">
+                          Round 1 Interviewer
                         </span>
                       </div>
 
                       {selectedSession.interviewer ? (
-                        <div className="space-y-1">
-                          <h4 className="text-[16px] font-bold text-[var(--text-primary)]">
-                            {selectedSession.interviewer.name}
-                          </h4>
-                          <p className="text-[12px] font-mono text-[var(--text-secondary)]">
-                            📧 {selectedSession.interviewer.email}
-                          </p>
-                          <p className="text-[12px] font-mono text-[var(--text-secondary)]">
-                            🆔 Roll: {selectedSession.interviewer.roll_no || 'N/A'}
-                          </p>
-                          <p className="text-[12px] text-[var(--text-secondary)]">
-                            🏛 Dept: {selectedSession.interviewer.department || 'Not specified'}
-                          </p>
+                        <div className="space-y-2.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold font-mono text-[13px] border border-[var(--border-accent)] shrink-0">
+                              {selectedSession.interviewer.name ? selectedSession.interviewer.name.charAt(0).toUpperCase() : 'A'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-[14px] font-bold text-[var(--text-primary)] truncate font-ui">
+                                {selectedSession.interviewer.name}
+                              </h4>
+                              <p className="text-[11px] font-mono text-[var(--text-muted)] truncate flex items-center gap-1.5 mt-0.5">
+                                <Mail className="w-3 h-3 shrink-0 opacity-70" />
+                                <span className="truncate" title={selectedSession.interviewer.email}>
+                                  {selectedSession.interviewer.email}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--border)] text-[11px] font-mono">
+                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Roll No</span>
+                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5">
+                                {selectedSession.interviewer.roll_no || '—'}
+                              </span>
+                            </div>
+                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Department</span>
+                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5" title={selectedSession.interviewer.department}>
+                                {selectedSession.interviewer.department || '—'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       ) : (
-                        <p className="text-[13px] text-[var(--text-muted)] italic">No student profile.</p>
+                        <p className="text-[12px] text-[var(--text-muted)] italic">No student profile found.</p>
                       )}
                     </div>
 
                     {/* Student B */}
-                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--green)]/30 bg-[var(--green-bg)] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--green)]">
-                          <GraduationCap className="w-3.5 h-3.5" />
-                          <span>Student B</span>
-                        </span>
-                        <span className="text-[10px] font-mono bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border)] font-bold">
-                          Peer 2
+                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-accent)] transition-all space-y-3 shadow-xs">
+                      <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border)]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span className="text-[11px] font-mono font-bold tracking-wider text-[var(--text-primary)] uppercase">
+                            Student B
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-[var(--radius-xs)] bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)] font-medium">
+                          Round 1 Candidate
                         </span>
                       </div>
 
                       {selectedSession.interviewee ? (
-                        <div className="space-y-1">
-                          <h4 className="text-[16px] font-bold text-[var(--text-primary)]">
-                            {selectedSession.interviewee.name}
-                          </h4>
-                          <p className="text-[12px] font-mono text-[var(--text-secondary)]">
-                            📧 {selectedSession.interviewee.email}
-                          </p>
-                          <p className="text-[12px] font-mono text-[var(--text-secondary)]">
-                            🆔 Roll: {selectedSession.interviewee.roll_no || 'N/A'}
-                          </p>
-                          <p className="text-[12px] text-[var(--text-secondary)]">
-                            🏛 Dept: {selectedSession.interviewee.department || 'Not specified'}
-                          </p>
+                        <div className="space-y-2.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold font-mono text-[13px] border border-emerald-500/20 shrink-0">
+                              {selectedSession.interviewee.name ? selectedSession.interviewee.name.charAt(0).toUpperCase() : 'B'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-[14px] font-bold text-[var(--text-primary)] truncate font-ui">
+                                {selectedSession.interviewee.name}
+                              </h4>
+                              <p className="text-[11px] font-mono text-[var(--text-muted)] truncate flex items-center gap-1.5 mt-0.5">
+                                <Mail className="w-3 h-3 shrink-0 opacity-70" />
+                                <span className="truncate" title={selectedSession.interviewee.email}>
+                                  {selectedSession.interviewee.email}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--border)] text-[11px] font-mono">
+                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Roll No</span>
+                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5">
+                                {selectedSession.interviewee.roll_no || '—'}
+                              </span>
+                            </div>
+                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Department</span>
+                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5" title={selectedSession.interviewee.department}>
+                                {selectedSession.interviewee.department || '—'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       ) : (
-                        <p className="text-[13px] text-[var(--text-muted)] italic">No student profile.</p>
+                        <p className="text-[12px] text-[var(--text-muted)] italic">No student profile found.</p>
                       )}
                     </div>
                   </div>
