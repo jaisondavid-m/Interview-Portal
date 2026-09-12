@@ -24,11 +24,28 @@ export default function AudioPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
-  // Construct recording URL
+  const [audioError, setAudioError] = useState(false);
+
+  // Construct recording URL with backend base resolution
   const audioFileName = recording?.file_name || '';
+  let audioBase = '/api/v1';
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  if (envApiUrl && envApiUrl.startsWith('http')) {
+    audioBase = envApiUrl.replace(/\/+$/, '');
+  } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '5173') {
+    audioBase = 'http://localhost:8080/api/v1';
+  }
+
   const audioSrc = audioFileName
-    ? `/api/v1/recordings/${encodeURIComponent(audioFileName)}`
+    ? `${audioBase}/recordings/${encodeURIComponent(audioFileName)}`
     : '';
+
+  useEffect(() => {
+    if (recording?.duration_seconds && recording.duration_seconds > 0) {
+      setDuration(recording.duration_seconds);
+    }
+    setAudioError(false);
+  }, [recording?.duration_seconds, recording?.file_name]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -39,6 +56,7 @@ export default function AudioPlayer({
     };
 
     const handleLoadedMetadata = () => {
+      setAudioError(false);
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
         setDuration(audio.duration);
       }
@@ -49,14 +67,22 @@ export default function AudioPlayer({
       setCurrentTime(0);
     };
 
+    const handleError = (e) => {
+      console.warn('[AudioPlayer] Audio stream error:', e);
+      setAudioError(true);
+      setIsPlaying(false);
+    };
+
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
     };
   }, [audioSrc]);
 
@@ -66,10 +92,12 @@ export default function AudioPlayer({
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
+      setAudioError(false);
       audioRef.current.play().then(() => {
         setIsPlaying(true);
       }).catch((e) => {
         console.warn('Audio play error:', e);
+        setAudioError(true);
       });
     }
   };
@@ -227,6 +255,19 @@ export default function AudioPlayer({
           />
         </div>
       </div>
+
+      {audioError && (
+        <div className="p-2.5 rounded-[var(--radius-xs)] bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-mono flex items-center justify-between gap-2">
+          <span>Audio stream codec unavailable in current browser. Use Download to listen.</span>
+          <a
+            href={audioSrc}
+            download={audioFileName}
+            className="underline font-bold hover:text-amber-600"
+          >
+            Direct File
+          </a>
+        </div>
+      )}
     </div>
   );
 }

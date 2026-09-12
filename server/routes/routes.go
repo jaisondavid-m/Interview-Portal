@@ -118,6 +118,7 @@ func SetupRouter() *gin.Engine {
 			// Interview History & Meeting Details
 			admin.GET("/interviews/sessions", controllers.AdminGetInterviewSessions)
 			admin.GET("/interviews/sessions/:id", controllers.AdminGetInterviewSessionByID)
+			admin.GET("/interviews/sessions/:id/recording", controllers.GetSessionRecording)
 		}
 	}
 

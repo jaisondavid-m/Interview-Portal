@@ -290,19 +290,24 @@ export default function useWebRTCAudio({
       formData.append('duration_seconds', String(durationSecs));
 
       let uploadUrl = `/api/v1/interviews/sessions/${sessionId}/recording`;
-      const envApiUrl = import.meta.env.VITE_API_URL || '';
-      if (envApiUrl.startsWith('http')) {
+      const envApiUrl = import.meta.env.VITE_API_URL;
+      if (envApiUrl && envApiUrl.startsWith('http')) {
         uploadUrl = `${envApiUrl.replace(/\/+$/, '')}/interviews/sessions/${sessionId}/recording`;
-      } else if (envApiUrl.startsWith('/')) {
-        uploadUrl = `${envApiUrl.replace(/\/+$/, '')}/interviews/sessions/${sessionId}/recording`;
+      } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '5173') {
+        uploadUrl = `http://localhost:8080/api/v1/interviews/sessions/${sessionId}/recording`;
       }
 
+      console.log('[WebRTC Audio] Dispatching audio upload to:', uploadUrl, 'Blob size:', blob.size, 'bytes');
+
       const token = localStorage.getItem('token') || '';
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(uploadUrl, {
         method: 'POST',
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-        },
+        headers,
         credentials: 'include',
         body: formData,
       });

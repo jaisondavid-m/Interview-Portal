@@ -22,20 +22,15 @@ func getUploadsDir() string {
 		return envDir
 	}
 
-	// Check existing directories
-	candidates := []string{
-		"uploads/recordings",
-		"server/uploads/recordings",
-		"../uploads/recordings",
-	}
-	for _, dir := range candidates {
-		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
-			return dir
-		}
+	// 1. If running from repository root where "server" directory exists:
+	if fi, err := os.Stat("server"); err == nil && fi.IsDir() {
+		target := filepath.Join("server", "uploads", "recordings")
+		_ = os.MkdirAll(target, 0755)
+		return target
 	}
 
-	// Default fallback: create "uploads/recordings"
-	target := "uploads/recordings"
+	// 2. If running from within "server" directory or container:
+	target := filepath.Join("uploads", "recordings")
 	_ = os.MkdirAll(target, 0755)
 	return target
 }
@@ -76,18 +71,10 @@ func UploadInterviewRecording(c *gin.Context) {
 		}
 	}
 
-	// Prepare directories: create both standard locations
-	targetDirs := []string{
-		getUploadsDir(),
-		"uploads/recordings",
-		"server/uploads/recordings",
-	}
-	for _, dir := range targetDirs {
-		_ = os.MkdirAll(dir, 0755)
-	}
+	primaryDir := getUploadsDir()
+	_ = os.MkdirAll(primaryDir, 0755)
 
 	savedFileName := fmt.Sprintf("session_%s_%d.webm", sessionID, time.Now().Unix())
-	primaryDir := getUploadsDir()
 	destPath := filepath.Join(primaryDir, savedFileName)
 
 	var fileSize int64 = 0
@@ -142,12 +129,13 @@ func UploadInterviewRecording(c *gin.Context) {
 		}
 	}
 
-	// Copy to secondary directories so it's always accessible in both `uploads/recordings` and `server/uploads/recordings`
-	data, readErr := os.ReadFile(destPath)
-	if readErr == nil && len(data) > 0 {
-		for _, dir := range targetDirs {
-			altPath := filepath.Join(dir, savedFileName)
-			if altPath != destPath {
+	// If running from repo root, mirror to server/uploads/recordings if different
+	if fi, sErr := os.Stat("server"); sErr == nil && fi.IsDir() {
+		serverDir := filepath.Join("server", "uploads", "recordings")
+		_ = os.MkdirAll(serverDir, 0755)
+		altPath := filepath.Join(serverDir, savedFileName)
+		if altPath != destPath {
+			if data, rErr := os.ReadFile(destPath); rErr == nil && len(data) > 0 {
 				_ = os.WriteFile(altPath, data, 0644)
 			}
 		}
@@ -196,10 +184,10 @@ func StreamInterviewRecording(c *gin.Context) {
 
 	possibleDirs := []string{
 		getUploadsDir(),
-		"uploads/recordings",
 		"server/uploads/recordings",
+		"uploads/recordings",
 		"../uploads/recordings",
-		"server/controllers/uploads/recordings",
+		"/app/uploads/recordings",
 	}
 
 	var filePath string

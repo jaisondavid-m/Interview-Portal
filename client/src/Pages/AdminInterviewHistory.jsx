@@ -54,13 +54,41 @@ export default function AdminInterviewHistory() {
 
   const openSessionDetail = async (session) => {
     setSelectedSession(session);
+    setDetailedSession(null);
     setModalLoading(true);
     try {
       const res = await api.get(`/admin/interviews/sessions/${session.id}`);
-      const data = res?.data || res;
-      setDetailedSession(data);
+      // Axios interceptor returns response.data:
+      // { status: "success", data: sessionObj, session: sessionObj, feedbacks: [...], recording: {...}, security_reports: [...] }
+      const sessionObj = res?.data || res?.session || session;
+      const combined = {
+        ...session,
+        ...sessionObj,
+        feedbacks: res?.feedbacks || sessionObj?.feedbacks || [],
+        recording: res?.recording || sessionObj?.recording || session?.recording || null,
+        security_reports: res?.security_reports || sessionObj?.security_reports || [],
+      };
+      setDetailedSession(combined);
     } catch (err) {
       console.error('Failed to load session details:', err);
+      // Fallback: query recording endpoint directly if possible
+      try {
+        const recRes = await api.get(`/interviews/sessions/${session.id}/recording`);
+        const recData = recRes?.recording || recRes?.data || null;
+        setDetailedSession({
+          ...session,
+          recording: recData,
+          feedbacks: session.feedbacks || [],
+          security_reports: session.security_reports || [],
+        });
+      } catch (e) {
+        setDetailedSession({
+          ...session,
+          feedbacks: session.feedbacks || [],
+          recording: session.recording || null,
+          security_reports: session.security_reports || [],
+        });
+      }
     } finally {
       setModalLoading(false);
     }
@@ -209,6 +237,7 @@ export default function AdminInterviewHistory() {
                   <th className="py-3 px-4">Student A</th>
                   <th className="py-3 px-4">Student B</th>
                   <th className="py-3 px-4">Switches</th>
+                  <th className="py-3 px-4">Audio</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Started / Duration</th>
                   <th className="py-3 px-4 text-right">Action</th>
@@ -295,6 +324,21 @@ export default function AdminInterviewHistory() {
                           </span>
                         ) : (
                           <span className="text-[var(--text-muted)]">0</span>
+                        )}
+                      </td>
+
+                      {/* Audio Recording Status */}
+                      <td className="py-3.5 px-4">
+                        {s.has_recording || s.recording ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <Radio className="w-3 h-3 text-emerald-500" />
+                            <span>Recorded</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-[var(--text-muted)]">
+                            <FileAudio className="w-3 h-3 opacity-40" />
+                            <span>—</span>
+                          </span>
                         )}
                       </td>
 
@@ -652,10 +696,18 @@ export default function AdminInterviewHistory() {
 
                 {/* Interview Audio Recording Section */}
                 <div className="space-y-3 pt-2 border-t border-[var(--border)]">
-                  <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-[var(--accent)]" />
-                    <span>Interview Dialogue Audio Recording</span>
-                  </h3>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <Radio className="w-4 h-4 text-[var(--accent)]" />
+                      <span>Interview Dialogue Audio Recording</span>
+                    </h3>
+                    {detailedSession?.recording && (
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold flex items-center gap-1">
+                        <Radio className="w-3 h-3 text-emerald-500" />
+                        <span>Recording Attached</span>
+                      </span>
+                    )}
+                  </div>
 
                   <AudioPlayer
                     recording={detailedSession?.recording}

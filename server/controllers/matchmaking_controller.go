@@ -1576,24 +1576,26 @@ func AdminGetInterviewSessions(c *gin.Context) {
 	}
 
 	type SessionDTO struct {
-		ID                uint         `json:"id"`
-		TrackID           uint         `json:"track_id"`
-		TrackTitle        string       `json:"track_title"`
-		TrackCategory     string       `json:"track_category"`
-		LevelID           uint         `json:"level_id"`
-		LevelNumber       int          `json:"level_number"`
-		LevelName         string       `json:"level_name"`
-		LevelMode         string       `json:"level_mode"`
-		Interviewer       *UserSummary `json:"interviewer"`
-		Interviewee       *UserSummary `json:"interviewee"`
-		Status            string       `json:"status"`
-		Round             int          `json:"round"`
-		RolesSwitched     bool         `json:"roles_switched"`
-		SwitchCount       int          `json:"switch_count"`
-		HasSecurityReport bool         `json:"has_security_report"`
-		StartedAt         time.Time    `json:"started_at"`
-		EndedAt           *time.Time   `json:"ended_at"`
-		CreatedAt         time.Time    `json:"created_at"`
+		ID                uint                       `json:"id"`
+		TrackID           uint                       `json:"track_id"`
+		TrackTitle        string                     `json:"track_title"`
+		TrackCategory     string                     `json:"track_category"`
+		LevelID           uint                       `json:"level_id"`
+		LevelNumber       int                        `json:"level_number"`
+		LevelName         string                     `json:"level_name"`
+		LevelMode         string                     `json:"level_mode"`
+		Interviewer       *UserSummary               `json:"interviewer"`
+		Interviewee       *UserSummary               `json:"interviewee"`
+		Status            string                     `json:"status"`
+		Round             int                        `json:"round"`
+		RolesSwitched     bool                       `json:"roles_switched"`
+		SwitchCount       int                        `json:"switch_count"`
+		HasSecurityReport bool                       `json:"has_security_report"`
+		HasRecording      bool                       `json:"has_recording"`
+		Recording         *models.InterviewRecording `json:"recording,omitempty"`
+		StartedAt         time.Time                  `json:"started_at"`
+		EndedAt           *time.Time                 `json:"ended_at"`
+		CreatedAt         time.Time                  `json:"created_at"`
 	}
 
 	result := make([]SessionDTO, len(sessions))
@@ -1648,6 +1650,14 @@ func AdminGetInterviewSessions(c *gin.Context) {
 			Where("session_id = ? AND asked_credentials = true", s.ID).
 			Count(&secReportCount)
 
+		var rec models.InterviewRecording
+		var recPtr *models.InterviewRecording
+		hasRec := false
+		if err := database.DB.Where("session_id = ?", s.ID).First(&rec).Error; err == nil {
+			hasRec = true
+			recPtr = &rec
+		}
+
 		result[i] = SessionDTO{
 			ID:                s.ID,
 			TrackID:           s.TrackID,
@@ -1664,6 +1674,8 @@ func AdminGetInterviewSessions(c *gin.Context) {
 			RolesSwitched:     s.RolesSwitched,
 			SwitchCount:       s.SwitchCount,
 			HasSecurityReport: secReportCount > 0,
+			HasRecording:      hasRec,
+			Recording:         recPtr,
 			StartedAt:         s.StartedAt,
 			EndedAt:           s.EndedAt,
 			CreatedAt:         s.CreatedAt,
@@ -1725,6 +1737,7 @@ func AdminGetInterviewSessionByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":           "success",
 		"data":             session,
+		"session":          session,
 		"feedbacks":        feedbacks,
 		"recording":        recording,
 		"security_reports": securityReports,
