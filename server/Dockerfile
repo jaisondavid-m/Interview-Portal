@@ -18,6 +18,9 @@ FROM alpine:3.20
 
 WORKDIR /app
 
+# Install Node.js and Python3 runtimes for real-time code evaluation engine
+RUN apk add --no-cache nodejs python3
+
 # Copy binary from build stage
 COPY --from=builder /app/server /app/server
 

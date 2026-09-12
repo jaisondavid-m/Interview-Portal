@@ -64,8 +64,65 @@ func ExecuteTestCases(code string, lang string, testCases []EvalTestCase) ([]Eva
 	}
 }
 
+func findNodeExecutable() (string, error) {
+	candidates := []string{
+		"node",
+		"nodejs",
+		"/usr/bin/node",
+		"/usr/local/bin/node",
+		"/usr/bin/nodejs",
+		"/usr/local/bin/nodejs",
+		`C:\Program Files\nodejs\node.exe`,
+		`C:\Program Files (x86)\nodejs\node.exe`,
+	}
+	for _, c := range candidates {
+		if path, err := exec.LookPath(c); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("Node.js runtime ('node' or 'nodejs') not found in $PATH. Please ensure Node.js is installed or rebuild docker container")
+}
+
+func findPythonExecutable() (string, error) {
+	candidates := []string{
+		"python3",
+		"python",
+		"py",
+		"/usr/bin/python3",
+		"/usr/local/bin/python3",
+		"/usr/bin/python",
+		`C:\Python312\python.exe`,
+		`C:\Python311\python.exe`,
+		`C:\Python310\python.exe`,
+	}
+	for _, c := range candidates {
+		if path, err := exec.LookPath(c); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("Python runtime ('python3' or 'python') not found in $PATH. Please ensure Python is installed or rebuild docker container")
+}
+
 // executeJavaScript executes the JS code in Node.js
 func executeJavaScript(code string, testCases []EvalTestCase) ([]EvalResult, error) {
+	nodePath, nodeErr := findNodeExecutable()
+	if nodeErr != nil {
+		results := make([]EvalResult, len(testCases))
+		for i, tc := range testCases {
+			results[i] = EvalResult{
+				Index:       tc.Index,
+				IsHidden:    tc.IsHidden,
+				Name:        tc.Name,
+				Input:       tc.Input,
+				Expected:    tc.ExpectedOutput,
+				Actual:      "Execution Error: " + nodeErr.Error(),
+				Passed:      false,
+				ExecutionMs: 0,
+			}
+		}
+		return results, nil
+	}
+
 	casesJSON, err := json.Marshal(testCases)
 	if err != nil {
 		return nil, err
@@ -224,7 +281,7 @@ console.log(JSON.stringify(output));
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "node", "-e", harness)
+	cmd := exec.CommandContext(ctx, nodePath, "-e", harness)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -274,6 +331,24 @@ console.log(JSON.stringify(output));
 
 // executePython executes Python candidate code
 func executePython(code string, testCases []EvalTestCase) ([]EvalResult, error) {
+	pyPath, pyErr := findPythonExecutable()
+	if pyErr != nil {
+		results := make([]EvalResult, len(testCases))
+		for i, tc := range testCases {
+			results[i] = EvalResult{
+				Index:       tc.Index,
+				IsHidden:    tc.IsHidden,
+				Name:        tc.Name,
+				Input:       tc.Input,
+				Expected:    tc.ExpectedOutput,
+				Actual:      "Execution Error: " + pyErr.Error(),
+				Passed:      false,
+				ExecutionMs: 0,
+			}
+		}
+		return results, nil
+	}
+
 	casesJSON, err := json.Marshal(testCases)
 	if err != nil {
 		return nil, err
@@ -376,7 +451,7 @@ print(json.dumps(output))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "python", "-c", harness)
+	cmd := exec.CommandContext(ctx, pyPath, "-c", harness)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
