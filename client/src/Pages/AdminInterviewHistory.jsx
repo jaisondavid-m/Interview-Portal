@@ -7,14 +7,10 @@ import {
   Shield,
   ShieldAlert,
   Clock,
-  Repeat,
   AlertCircle,
   Loader2,
   Calendar,
-  Filter,
-  Eye,
-  Radio,
-  FileAudio
+  Filter
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -185,11 +181,8 @@ export default function AdminInterviewHistory() {
                   <th className="py-3 px-4">Domain & Mode</th>
                   <th className="py-3 px-4">Student A</th>
                   <th className="py-3 px-4">Student B</th>
-                  <th className="py-3 px-4">Switches</th>
-                  <th className="py-3 px-4">Audio</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Started / Duration</th>
-                  <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)] text-[13px]">
@@ -264,33 +257,6 @@ export default function AdminInterviewHistory() {
                         )}
                       </td>
 
-                      {/* Role Switches */}
-                      <td className="py-3.5 px-4 font-mono text-[12px]">
-                        {s.switch_count > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border)] font-bold">
-                            <Repeat className="w-3 h-3" />
-                            <span>{s.switch_count}x</span>
-                          </span>
-                        ) : (
-                          <span className="text-[var(--text-muted)]">0</span>
-                        )}
-                      </td>
-
-                      {/* Audio Recording Status */}
-                      <td className="py-3.5 px-4">
-                        {s.has_recording || s.recording ? (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            <Radio className="w-3 h-3 text-emerald-500" />
-                            <span>Recorded</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-[var(--text-muted)]">
-                            <FileAudio className="w-3 h-3 opacity-40" />
-                            <span>—</span>
-                          </span>
-                        )}
-                      </td>
-
                       {/* Status */}
                       <td className="py-3.5 px-4">
                         <div className="space-y-1">
@@ -322,21 +288,6 @@ export default function AdminInterviewHistory() {
                             Duration: {calculateDuration(s.started_at, s.ended_at)}
                           </p>
                         </div>
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRowClick(s.id);
-                          }}
-                          className="btn btn-secondary text-xs py-1.5 px-2.5 inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Inspect</span>
-                        </button>
                       </td>
                     </tr>
                   );
