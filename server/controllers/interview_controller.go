@@ -470,80 +470,87 @@ func AdminGetQuestionByID(c *gin.Context) {
 func saveQuestionRelations(tx *gorm.DB, qID uint, input QuestionInput) error {
 	// 1. Detail (Constraints, Approach, Complexity, Scenario, Ideal Answer, etc.)
 	if input.Detail != nil {
-		input.Detail.QuestionID = qID
 		var existingDetail models.InterviewQuestionDetail
 		if err := tx.Where("question_id = ?", qID).First(&existingDetail).Error; err == nil {
-			input.Detail.ID = existingDetail.ID
-			if err := tx.Save(input.Detail).Error; err != nil {
-				return err
+			existingDetail.Constraints = input.Detail.Constraints
+			existingDetail.ExpectedApproach = input.Detail.ExpectedApproach
+			existingDetail.ExpectedComplexity = input.Detail.ExpectedComplexity
+			existingDetail.IdealAnswer = input.Detail.IdealAnswer
+			existingDetail.Scenario = input.Detail.Scenario
+			existingDetail.CorrectOption = input.Detail.CorrectOption
+			existingDetail.Explanation = input.Detail.Explanation
+			if err := tx.Save(&existingDetail).Error; err != nil {
+				return fmt.Errorf("detail update failed: %w", err)
 			}
 		} else {
+			input.Detail.QuestionID = qID
 			input.Detail.ID = 0
 			if err := tx.Create(input.Detail).Error; err != nil {
-				return err
+				return fmt.Errorf("detail create failed: %w", err)
 			}
 		}
 	}
 
 	// 2. Language Starter Code Templates
-	if len(input.Templates) > 0 {
-		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionCodeTemplate{}).Error; err != nil {
-			return err
+	if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionCodeTemplate{}).Error; err != nil {
+		return fmt.Errorf("templates delete failed: %w", err)
+	}
+	for _, tmpl := range input.Templates {
+		if strings.TrimSpace(tmpl.StarterCode) == "" {
+			continue
 		}
-		for _, tmpl := range input.Templates {
-			tmpl.QuestionID = qID
-			tmpl.ID = 0
-			if err := tx.Create(&tmpl).Error; err != nil {
-				return err
-			}
+		tmpl.QuestionID = qID
+		tmpl.ID = 0
+		if err := tx.Create(&tmpl).Error; err != nil {
+			return fmt.Errorf("template create failed: %w", err)
 		}
 	}
 
 	// 3. Test Cases (Sample and Hidden)
-	if len(input.TestCases) > 0 {
-		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionTestCase{}).Error; err != nil {
-			return err
+	if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionTestCase{}).Error; err != nil {
+		return fmt.Errorf("test cases delete failed: %w", err)
+	}
+	for i, tc := range input.TestCases {
+		tc.QuestionID = qID
+		tc.ID = 0
+		if tc.OrderIndex == 0 {
+			tc.OrderIndex = i + 1
 		}
-		for i, tc := range input.TestCases {
-			tc.QuestionID = qID
-			tc.ID = 0
-			if tc.OrderIndex == 0 {
-				tc.OrderIndex = i + 1
-			}
-			if err := tx.Create(&tc).Error; err != nil {
-				return err
-			}
+		if err := tx.Create(&tc).Error; err != nil {
+			return fmt.Errorf("test case create failed: %w", err)
 		}
 	}
 
 	// 4. Hints & Rubrics & Talking Points
-	if len(input.Hints) > 0 {
-		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionHint{}).Error; err != nil {
-			return err
+	if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionHint{}).Error; err != nil {
+		return fmt.Errorf("hints delete failed: %w", err)
+	}
+	for i, h := range input.Hints {
+		if strings.TrimSpace(h.Content) == "" {
+			continue
 		}
-		for i, h := range input.Hints {
-			h.QuestionID = qID
-			h.ID = 0
-			if h.OrderIndex == 0 {
-				h.OrderIndex = i + 1
-			}
-			if err := tx.Create(&h).Error; err != nil {
-				return err
-			}
+		h.QuestionID = qID
+		h.ID = 0
+		if h.OrderIndex == 0 {
+			h.OrderIndex = i + 1
+		}
+		if err := tx.Create(&h).Error; err != nil {
+			return fmt.Errorf("hint create failed: %w", err)
 		}
 	}
 
 	// 5. MCQ Options
-	if len(input.MCQOptions) > 0 {
-		if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionMCQOption{}).Error; err != nil {
-			return err
+	if err := tx.Where("question_id = ?", qID).Delete(&models.InterviewQuestionMCQOption{}).Error; err != nil {
+		return fmt.Errorf("mcq options delete failed: %w", err)
+	}
+	for _, opt := range input.MCQOptions {
+		if strings.TrimSpace(opt.OptionText) == "" {
+			continue
 		}
-		for _, opt := range input.MCQOptions {
-			opt.QuestionID = qID
-			opt.ID = 0
-			if err := tx.Create(&opt).Error; err != nil {
-				return err
-			}
+		opt.QuestionID = qID
+		opt.ID = 0
+		if err := tx.Create(&opt).Error; err != nil {
+			return fmt.Errorf("mcq option create failed: %w", err)
 		}
 	}
 
@@ -600,7 +607,12 @@ func AdminCreateQuestion(c *gin.Context) {
 	// Persist child relational records
 	if err := saveQuestionRelations(tx, question.ID, input); err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save question relational details"})
+		fmt.Printf("[AdminCreateQuestion] Relational save error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to save question relational details: " + err.Error(),
+			"error":   err.Error(),
+		})
 		return
 	}
 	tx.Commit()
@@ -633,7 +645,7 @@ func AdminUpdateQuestion(c *gin.Context) {
 
 	var input QuestionInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid payload"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid payload", "error": err.Error()})
 		return
 	}
 
@@ -653,13 +665,18 @@ func AdminUpdateQuestion(c *gin.Context) {
 	tx := database.DB.Begin()
 	if err := tx.Save(&question).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update question"})
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update question", "error": err.Error()})
 		return
 	}
 
 	if err := saveQuestionRelations(tx, question.ID, input); err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update question relational details"})
+		fmt.Printf("[AdminUpdateQuestion] Relational update error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to update question relational details: " + err.Error(),
+			"error":   err.Error(),
+		})
 		return
 	}
 	tx.Commit()
