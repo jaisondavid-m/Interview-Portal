@@ -292,22 +292,23 @@ export default function AdminQuestionEditor() {
       };
 
       const cleanedOpenCases = openTestCases
-        .filter((tc) => tc.input.trim() || tc.output.trim())
+        .filter((tc) => (tc.input !== '' && tc.input !== undefined) || (tc.output !== '' && tc.output !== undefined))
         .map((tc, idx) => ({
-          input: tc.input.trim(),
-          expected_output: tc.output.trim(),
+          input: tc.input ?? '',
+          expected_output: tc.output ?? '',
           is_hidden: false,
           order_index: idx + 1,
         }));
 
       const cleanedHiddenCases = hiddenTestCases
-        .filter((tc) => tc.input.trim() || tc.output.trim())
+        .filter((tc) => (tc.input !== '' && tc.input !== undefined) || (tc.output !== '' && tc.output !== undefined))
         .map((tc, idx) => ({
-          input: tc.input.trim(),
-          expected_output: tc.output.trim(),
+          input: tc.input ?? '',
+          expected_output: tc.output ?? '',
           is_hidden: true,
           order_index: cleanedOpenCases.length + idx + 1,
         }));
+
 
       const testCases = [...cleanedOpenCases, ...cleanedHiddenCases];
 
