@@ -1,38 +1,30 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   History,
   Search,
   Users,
   Shield,
   ShieldAlert,
-  Award,
   Clock,
   Repeat,
-  CheckCircle2,
   AlertCircle,
-  ExternalLink,
-  X,
   Loader2,
   Calendar,
   Filter,
   Eye,
-  GraduationCap,
   Radio,
-  FileAudio,
-  Mail
+  FileAudio
 } from 'lucide-react';
 import api from '../api/axios';
-import AudioPlayer from '../Components/AudioPlayer';
 
 export default function AdminInterviewHistory() {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'in_progress' | 'completed'
-  const [selectedSession, setSelectedSession] = useState(null);
-  const [modalLoading, setModalLoading] = useState(false);
-  const [detailedSession, setDetailedSession] = useState(null);
 
   const fetchSessions = async () => {
     try {
@@ -52,51 +44,8 @@ export default function AdminInterviewHistory() {
     fetchSessions();
   }, []);
 
-  const openSessionDetail = async (session) => {
-    setSelectedSession(session);
-    setDetailedSession(null);
-    setModalLoading(true);
-    try {
-      const res = await api.get(`/admin/interviews/sessions/${session.id}`);
-      // Axios interceptor returns response.data:
-      // { status: "success", data: sessionObj, session: sessionObj, feedbacks: [...], recording: {...}, security_reports: [...] }
-      const sessionObj = res?.data || res?.session || session;
-      const combined = {
-        ...session,
-        ...sessionObj,
-        feedbacks: res?.feedbacks || sessionObj?.feedbacks || [],
-        recording: res?.recording || sessionObj?.recording || session?.recording || null,
-        security_reports: res?.security_reports || sessionObj?.security_reports || [],
-      };
-      setDetailedSession(combined);
-    } catch (err) {
-      console.error('Failed to load session details:', err);
-      // Fallback: query recording endpoint directly if possible
-      try {
-        const recRes = await api.get(`/interviews/sessions/${session.id}/recording`);
-        const recData = recRes?.recording || recRes?.data || null;
-        setDetailedSession({
-          ...session,
-          recording: recData,
-          feedbacks: session.feedbacks || [],
-          security_reports: session.security_reports || [],
-        });
-      } catch (e) {
-        setDetailedSession({
-          ...session,
-          feedbacks: session.feedbacks || [],
-          recording: session.recording || null,
-          security_reports: session.security_reports || [],
-        });
-      }
-    } finally {
-      setModalLoading(false);
-    }
-  };
-
-  const closeSessionDetail = () => {
-    setSelectedSession(null);
-    setDetailedSession(null);
+  const handleRowClick = (sessionId) => {
+    navigate(`/admin/history/${sessionId}`);
   };
 
   const formatDateTime = (dateStr) => {
@@ -153,13 +102,13 @@ export default function AdminInterviewHistory() {
             Interview History & Pairing Records
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            View all peer-to-peer interview sessions, student participant identities, durations, and role switch history.
+            View all peer-to-peer interview sessions, student participant identities, durations, and role switch history. Click any row to view full details.
           </p>
         </div>
 
         <button
           onClick={fetchSessions}
-          className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 self-start md:self-auto"
+          className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 self-start md:self-auto cursor-pointer"
         >
           <Clock className="w-3.5 h-3.5" />
           <span>Refresh History</span>
@@ -190,7 +139,7 @@ export default function AdminInterviewHistory() {
             <button
               key={tab.id}
               onClick={() => setStatusFilter(tab.id)}
-              className={`text-[12px] font-medium px-3 py-1.5 rounded-[var(--radius-sm)] transition-all ${
+              className={`text-[12px] font-medium px-3 py-1.5 rounded-[var(--radius-sm)] transition-all cursor-pointer ${
                 statusFilter === tab.id
                   ? 'bg-[var(--bg-card)] text-[var(--text-primary)] font-bold shadow-[var(--shadow-sm)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -248,7 +197,7 @@ export default function AdminInterviewHistory() {
                   return (
                     <tr
                       key={s.id}
-                      onClick={() => openSessionDetail(s)}
+                      onClick={() => handleRowClick(s.id)}
                       className="hover:bg-[var(--bg-hover)]/70 transition-colors cursor-pointer group"
                     >
                       {/* Session ID */}
@@ -381,9 +330,9 @@ export default function AdminInterviewHistory() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openSessionDetail(s);
+                            handleRowClick(s.id);
                           }}
-                          className="btn btn-secondary text-xs py-1.5 px-2.5 inline-flex items-center gap-1"
+                          className="btn btn-secondary text-xs py-1.5 px-2.5 inline-flex items-center gap-1 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>Inspect</span>
@@ -394,388 +343,6 @@ export default function AdminInterviewHistory() {
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* SESSION INSPECTION DETAIL MODAL */}
-      {/* ============================================================ */}
-      {selectedSession && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={closeSessionDetail}
-        >
-          <div
-            className="panel-card w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] rounded-[var(--radius-lg)] p-6 space-y-6 animate-fadeIn custom-scrollbar"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-[var(--border)]">
-              <div>
-                <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
-                  <span>Room Inspection</span>
-                  <span>•</span>
-                  <span className="font-bold text-[var(--accent)]">Session #{selectedSession.id}</span>
-                </div>
-                <h2 className="text-[20px] font-bold text-[var(--text-primary)]">
-                  {selectedSession.track_title}
-                </h2>
-                <p className="text-[13px] text-[var(--text-secondary)]">
-                  Level {selectedSession.level_number}: {selectedSession.level_name} ({selectedSession.level_mode?.toUpperCase()} Mode)
-                </p>
-              </div>
-
-              <button
-                onClick={closeSessionDetail}
-                className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {modalLoading ? (
-              <div className="py-12 text-center space-y-3">
-                <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-                <p className="text-[13px] text-[var(--text-muted)]">Loading meeting breakdown...</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Anonymity Breach & Identity Solicitation Alert Card */}
-                {detailedSession?.security_reports?.some((r) => r.asked_credentials) && (
-                  <div className="rounded-[var(--radius-md)] bg-[var(--bg-card)] border-2 border-rose-500/40 shadow-sm overflow-hidden animate-in fade-in space-y-0">
-                    {/* Header Banner */}
-                    <div className="bg-rose-500/10 px-4 py-3 border-b border-rose-500/20 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center font-bold shadow-xs">
-                          <ShieldAlert className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold block">
-                            Anonymity Rule Violation
-                          </span>
-                          <h4 className="text-[14px] font-bold text-[var(--text-primary)] font-ui">
-                            Peer Identity Solicitation Reported
-                          </h4>
-                        </div>
-                      </div>
-
-                      <span className="text-[11px] font-mono font-bold uppercase bg-rose-600 text-white px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                        <span>Admin Review Required</span>
-                      </span>
-                    </div>
-
-                    {/* Incident Details */}
-                    <div className="p-4 space-y-3.5 bg-[var(--bg-raised)]/40">
-                      {detailedSession.security_reports.filter((r) => r.asked_credentials).map((r) => (
-                        <div
-                          key={r.id}
-                          className="p-4 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-xs space-y-3"
-                        >
-                          {/* Participant identities involved */}
-                          <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-[var(--border)]">
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="font-bold text-[var(--text-primary)]">
-                                {r.reporter?.name || 'Participant'}
-                              </span>
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
-                                {r.reporter?.roll_no || 'Reporter'}
-                              </span>
-                              <span className="text-rose-600 dark:text-rose-400 font-medium">reported</span>
-                              <span className="font-bold text-rose-700 dark:text-rose-300">
-                                {r.reported_user?.name || 'Peer'}
-                              </span>
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 border border-rose-500/20 font-bold">
-                                {r.reported_user?.roll_no || 'Reported Peer'}
-                              </span>
-                            </div>
-
-                            <span className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              <span>{formatDateTime(r.created_at)}</span>
-                            </span>
-                          </div>
-
-                          {/* Explanation */}
-                          <p className="text-[13px] text-[var(--text-primary)] leading-relaxed">
-                            The student reported that their peer attempted to <strong>deanonymize the session</strong> by asking for personal identity details (such as their Register / Roll Number, Full Name, Phone Number, or Social Media / Contact info).
-                          </p>
-
-                          {/* Student Note */}
-                          {r.details && (
-                            <div className="p-3 rounded-[var(--radius-xs)] bg-rose-500/5 border border-rose-500/15 space-y-1">
-                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
-                                Student Statement:
-                              </span>
-                              <p className="text-[12px] text-[var(--text-primary)] font-mono italic">
-                                "{r.details}"
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-
-                      {/* Admin Audio Verification Cue */}
-                      <div className="p-3 rounded-[var(--radius-sm)] bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-2.5 text-indigo-900 dark:text-indigo-200 text-xs">
-                        <Radio className="w-4 h-4 text-indigo-500 shrink-0 animate-pulse" />
-                        <span className="font-medium">
-                          <strong>Admin Verification Action:</strong> Listen to the dialogue audio recording below to verify if the student asked for identity details during the interview.
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Meeting Metadata Summary */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)]">
-                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] block">Status</span>
-                    <span className={`text-[12px] font-bold font-mono ${selectedSession.status === 'in_progress' ? 'text-[var(--green)]' : 'text-[var(--text-primary)]'}`}>
-                      {selectedSession.status?.toUpperCase()}
-                    </span>
-                  </div>
-
-                  <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)]">
-                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] block">Total Duration</span>
-                    <span className="text-[12px] font-bold font-mono text-[var(--text-primary)]">
-                      {calculateDuration(selectedSession.started_at, selectedSession.ended_at)}
-                    </span>
-                  </div>
-
-                  <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)]">
-                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] block">Role Switches</span>
-                    <span className="text-[12px] font-bold font-mono text-[var(--accent)]">
-                      {selectedSession.switch_count || 0} times
-                    </span>
-                  </div>
-
-                  <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)]">
-                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] block">Category</span>
-                    <span className="text-[12px] font-bold text-[var(--text-primary)]">
-                      {selectedSession.track_category || 'Technical'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Participant Details Comparison */}
-                {/* Meeting Student Participants */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[13px] font-bold text-[var(--text-primary)] flex items-center gap-2 font-mono uppercase tracking-wider">
-                      <Users className="w-4 h-4 text-[var(--accent)]" />
-                      <span>Session Participants</span>
-                    </h3>
-                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                      2 Students Paired
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {/* Student A */}
-                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-accent)] transition-all space-y-3 shadow-xs">
-                      <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border)]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />
-                          <span className="text-[11px] font-mono font-bold tracking-wider text-[var(--text-primary)] uppercase">
-                            Student A
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-[var(--radius-xs)] bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)] font-medium">
-                          Round 1 Interviewer
-                        </span>
-                      </div>
-
-                      {selectedSession.interviewer ? (
-                        <div className="space-y-2.5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold font-mono text-[13px] border border-[var(--border-accent)] shrink-0">
-                              {selectedSession.interviewer.name ? selectedSession.interviewer.name.charAt(0).toUpperCase() : 'A'}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-[14px] font-bold text-[var(--text-primary)] truncate font-ui">
-                                {selectedSession.interviewer.name}
-                              </h4>
-                              <p className="text-[11px] font-mono text-[var(--text-muted)] truncate flex items-center gap-1.5 mt-0.5">
-                                <Mail className="w-3 h-3 shrink-0 opacity-70" />
-                                <span className="truncate" title={selectedSession.interviewer.email}>
-                                  {selectedSession.interviewer.email}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--border)] text-[11px] font-mono">
-                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
-                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Roll No</span>
-                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5">
-                                {selectedSession.interviewer.roll_no || '—'}
-                              </span>
-                            </div>
-                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
-                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Department</span>
-                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5" title={selectedSession.interviewer.department}>
-                                {selectedSession.interviewer.department || '—'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[12px] text-[var(--text-muted)] italic">No student profile found.</p>
-                      )}
-                    </div>
-
-                    {/* Student B */}
-                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-accent)] transition-all space-y-3 shadow-xs">
-                      <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border)]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-[11px] font-mono font-bold tracking-wider text-[var(--text-primary)] uppercase">
-                            Student B
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-[var(--radius-xs)] bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)] font-medium">
-                          Round 1 Candidate
-                        </span>
-                      </div>
-
-                      {selectedSession.interviewee ? (
-                        <div className="space-y-2.5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold font-mono text-[13px] border border-emerald-500/20 shrink-0">
-                              {selectedSession.interviewee.name ? selectedSession.interviewee.name.charAt(0).toUpperCase() : 'B'}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-[14px] font-bold text-[var(--text-primary)] truncate font-ui">
-                                {selectedSession.interviewee.name}
-                              </h4>
-                              <p className="text-[11px] font-mono text-[var(--text-muted)] truncate flex items-center gap-1.5 mt-0.5">
-                                <Mail className="w-3 h-3 shrink-0 opacity-70" />
-                                <span className="truncate" title={selectedSession.interviewee.email}>
-                                  {selectedSession.interviewee.email}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--border)] text-[11px] font-mono">
-                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
-                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Roll No</span>
-                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5">
-                                {selectedSession.interviewee.roll_no || '—'}
-                              </span>
-                            </div>
-                            <div className="bg-[var(--bg-raised)] p-2 rounded-[var(--radius-xs)] border border-[var(--border)]">
-                              <span className="text-[10px] text-[var(--text-muted)] block uppercase">Department</span>
-                              <span className="font-bold text-[var(--text-primary)] truncate block mt-0.5" title={selectedSession.interviewee.department}>
-                                {selectedSession.interviewee.department || '—'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[12px] text-[var(--text-muted)] italic">No student profile found.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mutual Peer Feedback Section */}
-                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                      <Award className="w-4 h-4 text-[var(--accent)]" />
-                      <span>Mutual Peer Reviews & Feedback</span>
-                    </h3>
-                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                      {(detailedSession?.feedbacks || []).length} / 2 Submitted
-                    </span>
-                  </div>
-
-                  {(!detailedSession?.feedbacks || detailedSession.feedbacks.length === 0) ? (
-                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] text-center text-xs text-[var(--text-muted)]">
-                      No peer feedback submitted for this session yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {detailedSession.feedbacks.map((fb) => {
-                        const rev = fb.reviewer || {};
-                        const target = fb.reviewee || {};
-                        const responses = fb.responses || [];
-
-                        return (
-                          <div
-                            key={fb.id}
-                            className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3"
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <span className="font-bold text-[var(--text-primary)]">
-                                  {rev.name}
-                                </span>
-                                <span className="text-[var(--text-muted)] font-mono">evaluated</span>
-                                <span className="font-bold text-purple-600 dark:text-purple-400">
-                                  {target.name}
-                                </span>
-                              </div>
-                              <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                                {formatDateTime(fb.created_at)}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                              {responses.map((resp) => {
-                                const q = resp.question || {};
-                                return (
-                                  <div
-                                    key={resp.id}
-                                    className="p-2.5 rounded bg-[var(--bg-card)] border border-[var(--border)] space-y-1"
-                                  >
-                                    <p className="text-[var(--text-muted)] font-medium text-[11px]">
-                                      {q.question_text || `Question #${resp.question_id}`}
-                                    </p>
-                                    <p className="font-bold font-mono text-[var(--text-primary)] text-[12px]">
-                                      {resp.answer_value || '—'}
-                                    </p>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Interview Audio Recording Section */}
-                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-[var(--accent)]" />
-                      <span>Interview Dialogue Audio Recording</span>
-                    </h3>
-                    {detailedSession?.recording && (
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold flex items-center gap-1">
-                        <Radio className="w-3 h-3 text-emerald-500" />
-                        <span>Recording Attached</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <AudioPlayer
-                    recording={detailedSession?.recording}
-                    title={`Session #${selectedSession.id} Audio Recording`}
-                  />
-                </div>
-
-                {/* Timestamps */}
-                <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] flex-wrap gap-2">
-                  <span>Started: {formatDateTime(selectedSession.started_at)}</span>
-                  <span>Ended: {formatDateTime(selectedSession.ended_at)}</span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
