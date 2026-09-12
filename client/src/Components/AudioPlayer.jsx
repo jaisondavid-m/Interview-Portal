@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Play,
   Pause,
@@ -6,28 +6,34 @@ import {
   VolumeX,
   Download,
   RotateCcw,
-  Sparkles,
   Radio,
   Clock,
-  FileAudio
+  FileAudio,
+  Loader2,
+  RefreshCw,
+  FastForward,
+  Rewind
 } from 'lucide-react';
+import api from '../api/axios';
 
 export default function AudioPlayer({
   recording,
   title = 'Interview Audio Recording',
 }) {
   const audioRef = useRef(null);
+  const [blobUrl, setBlobUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(recording?.duration_seconds || 0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
-  const [audioError, setAudioError] = useState(false);
-
-  // Construct recording URL with backend base resolution
   const audioFileName = recording?.file_name || '';
+
+  // Resolve base API URL
   let audioBase = '/api/v1';
   const envApiUrl = import.meta.env.VITE_API_URL;
   if (envApiUrl && envApiUrl.startsWith('http')) {
@@ -36,17 +42,92 @@ export default function AudioPlayer({
     audioBase = 'http://localhost:8080/api/v1';
   }
 
-  const audioSrc = audioFileName
+  const directStreamUrl = audioFileName
     ? `${audioBase}/recordings/${encodeURIComponent(audioFileName)}`
     : '';
+
+  // Load audio file as local Blob URL for 100% reliable in-browser playback
+  const loadAudioBlob = useCallback(async () => {
+    if (!audioFileName) return;
+
+    setIsLoading(true);
+    setLoadError('');
+
+    // List candidate URLs to fetch audio from
+    const candidateUrls = [
+      `${audioBase}/recordings/${encodeURIComponent(audioFileName)}`,
+      `/recordings/${encodeURIComponent(audioFileName)}`,
+      `/api/recordings/${encodeURIComponent(audioFileName)}`,
+    ];
+
+    let loadedBlob = null;
+
+    // 1. Try Axios first (uses configured auth cookies & interceptors)
+    for (const url of candidateUrls) {
+      try {
+        const res = await api.get(url, { responseType: 'blob' });
+        if (res && res instanceof Blob && res.size > 0) {
+          loadedBlob = res;
+          break;
+        } else if (res?.data && res.data instanceof Blob && res.data.size > 0) {
+          loadedBlob = res.data;
+          break;
+        }
+      } catch (e) {
+        // continue to next candidate
+      }
+    }
+
+    // 2. Fallback: Try native fetch with credentials
+    if (!loadedBlob) {
+      for (const url of candidateUrls) {
+        try {
+          const resp = await fetch(url, { credentials: 'include' });
+          if (resp.ok) {
+            const b = await resp.blob();
+            if (b && b.size > 0) {
+              loadedBlob = b;
+              break;
+            }
+          }
+        } catch (e) {
+          // continue
+        }
+      }
+    }
+
+    if (loadedBlob) {
+      const mimeType = loadedBlob.type || 'audio/webm';
+      const cleanBlob = new Blob([loadedBlob], { type: mimeType });
+      const objectUrl = URL.createObjectURL(cleanBlob);
+      setBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return objectUrl;
+      });
+      setLoadError('');
+    } else {
+      // Fallback directly to direct stream URL
+      setBlobUrl(directStreamUrl);
+    }
+
+    setIsLoading(false);
+  }, [audioFileName, audioBase, directStreamUrl]);
 
   useEffect(() => {
     if (recording?.duration_seconds && recording.duration_seconds > 0) {
       setDuration(recording.duration_seconds);
     }
-    setAudioError(false);
-  }, [recording?.duration_seconds, recording?.file_name]);
+    loadAudioBlob();
 
+    return () => {
+      setBlobUrl((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        return '';
+      });
+    };
+  }, [recording?.id, recording?.file_name, loadAudioBlob]);
+
+  // Handle audio element events
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -56,8 +137,8 @@ export default function AudioPlayer({
     };
 
     const handleLoadedMetadata = () => {
-      setAudioError(false);
-      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+      setLoadError('');
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
         setDuration(audio.duration);
       }
     };
@@ -68,8 +149,13 @@ export default function AudioPlayer({
     };
 
     const handleError = (e) => {
-      console.warn('[AudioPlayer] Audio stream error:', e);
-      setAudioError(true);
+      console.warn('[AudioPlayer] In-browser playback error:', e);
+      // If error occurs with direct stream, try reloading blob
+      if (!blobUrl.startsWith('blob:')) {
+        loadAudioBlob();
+      } else {
+        setLoadError('Browser was unable to decode the audio format. Click Retry or use Direct Download.');
+      }
       setIsPlaying(false);
     };
 
@@ -84,7 +170,7 @@ export default function AudioPlayer({
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [audioSrc]);
+  }, [blobUrl, loadAudioBlob]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -92,13 +178,17 @@ export default function AudioPlayer({
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      setAudioError(false);
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch((e) => {
-        console.warn('Audio play error:', e);
-        setAudioError(true);
-      });
+      setLoadError('');
+      audioRef.current
+        .play()
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch((e) => {
+          console.warn('[AudioPlayer] Play request failed:', e);
+          setLoadError('Failed to play audio in browser.');
+          setIsPlaying(false);
+        });
     }
   };
 
@@ -110,8 +200,15 @@ export default function AudioPlayer({
     }
   };
 
+  const skipTime = (seconds) => {
+    if (!audioRef.current) return;
+    const target = Math.max(0, Math.min(duration, audioRef.current.currentTime + seconds));
+    audioRef.current.currentTime = target;
+    setCurrentTime(target);
+  };
+
   const handleSpeedChange = () => {
-    const rates = [1, 1.25, 1.5, 2];
+    const rates = [0.75, 1, 1.25, 1.5, 2];
     const nextIdx = (rates.indexOf(playbackRate) + 1) % rates.length;
     const nextRate = rates[nextIdx];
     setPlaybackRate(nextRate);
@@ -160,16 +257,34 @@ export default function AudioPlayer({
     );
   }
 
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
     <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border-accent)] space-y-3.5 shadow-sm">
-      {/* Hidden HTML5 Audio Element */}
-      <audio ref={audioRef} src={audioSrc} preload="metadata" />
+      {/* HTML5 Audio Element with local blob URL */}
+      {blobUrl && (
+        <audio
+          ref={audioRef}
+          src={blobUrl}
+          preload="auto"
+        />
+      )}
 
       {/* Header Info */}
       <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-[var(--border)]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold">
-            <Radio className="w-4 h-4" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold relative">
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : isPlaying ? (
+              <div className="flex items-end gap-0.5 h-3.5">
+                <span className="w-1 bg-[var(--accent)] rounded-xs animate-pulse h-full" />
+                <span className="w-1 bg-[var(--accent)] rounded-xs animate-pulse h-2/3 delay-75" />
+                <span className="w-1 bg-[var(--accent)] rounded-xs animate-pulse h-4/5 delay-150" />
+              </div>
+            ) : (
+              <Radio className="w-4 h-4" />
+            )}
           </div>
           <div>
             <h4 className="text-[13px] font-bold text-[var(--text-primary)] font-ui">
@@ -181,16 +296,29 @@ export default function AudioPlayer({
           </div>
         </div>
 
-        {/* Download Action */}
-        <a
-          href={audioSrc}
-          download={audioFileName}
-          className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1.5 font-mono"
-          title="Download original audio recording"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>Download</span>
-        </a>
+        {/* Header Actions: Reload + Download */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={loadAudioBlob}
+            disabled={isLoading}
+            className="btn btn-secondary text-[11px] py-1 px-2 flex items-center gap-1 font-mono"
+            title="Reload audio stream"
+          >
+            <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Reload</span>
+          </button>
+
+          <a
+            href={blobUrl || directStreamUrl}
+            download={audioFileName}
+            className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1.5 font-mono"
+            title="Download original audio file"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download</span>
+          </a>
+        </div>
       </div>
 
       {/* Player Scrubber & Time */}
@@ -200,35 +328,69 @@ export default function AudioPlayer({
           <span>{formatTime(duration)}</span>
         </div>
 
-        {/* Range Slider */}
-        <input
-          type="range"
-          min="0"
-          max={duration || 100}
-          step="0.1"
-          value={currentTime}
-          onChange={handleSeek}
-          className="w-full h-2 rounded-lg bg-[var(--border)] accent-[var(--accent)] cursor-pointer"
-        />
+        {/* Range Slider with visual fill */}
+        <div className="relative flex items-center">
+          <input
+            type="range"
+            min="0"
+            max={duration || 100}
+            step="0.1"
+            value={currentTime}
+            onChange={handleSeek}
+            disabled={isLoading}
+            className="w-full h-2 rounded-lg bg-[var(--border)] accent-[var(--accent)] cursor-pointer"
+          />
+        </div>
       </div>
 
       {/* Controls Bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-        {/* Play/Pause & Speed */}
+        {/* Play/Pause & Quick Skip & Speed */}
         <div className="flex items-center gap-2">
+          {/* -10s Skip */}
+          <button
+            type="button"
+            onClick={() => skipTime(-10)}
+            disabled={isLoading}
+            className="p-1.5 rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
+            title="Rewind 10 seconds"
+          >
+            <Rewind className="w-4 h-4" />
+          </button>
+
+          {/* Play/Pause Primary Button */}
           <button
             type="button"
             onClick={togglePlay}
-            className="w-9 h-9 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-md hover:scale-105 transition-all cursor-pointer"
+            disabled={isLoading}
+            className="w-10 h-10 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
             title={isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : isPlaying ? (
+              <Pause className="w-4 h-4 fill-current" />
+            ) : (
+              <Play className="w-4 h-4 fill-current ml-0.5" />
+            )}
           </button>
 
+          {/* +10s Skip */}
+          <button
+            type="button"
+            onClick={() => skipTime(10)}
+            disabled={isLoading}
+            className="p-1.5 rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
+            title="Forward 10 seconds"
+          >
+            <FastForward className="w-4 h-4" />
+          </button>
+
+          {/* Speed Multiplier */}
           <button
             type="button"
             onClick={handleSpeedChange}
-            className="px-2.5 py-1 rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors cursor-pointer"
+            className="ml-1 px-2.5 py-1 rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors cursor-pointer"
             title="Change playback speed"
           >
             {playbackRate}x
@@ -240,7 +402,8 @@ export default function AudioPlayer({
           <button
             type="button"
             onClick={toggleMute}
-            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted || volume === 0 ? <VolumeX className="w-4 h-4 text-[var(--red)]" /> : <Volume2 className="w-4 h-4" />}
           </button>
@@ -256,16 +419,18 @@ export default function AudioPlayer({
         </div>
       </div>
 
-      {audioError && (
+      {/* Error Callout */}
+      {loadError && (
         <div className="p-2.5 rounded-[var(--radius-xs)] bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-mono flex items-center justify-between gap-2">
-          <span>Audio stream codec unavailable in current browser. Use Download to listen.</span>
-          <a
-            href={audioSrc}
-            download={audioFileName}
-            className="underline font-bold hover:text-amber-600"
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={loadAudioBlob}
+            className="underline font-bold hover:text-amber-600 flex items-center gap-1 cursor-pointer"
           >
-            Direct File
-          </a>
+            <RefreshCw className="w-3 h-3" />
+            <span>Retry</span>
+          </button>
         </div>
       )}
     </div>

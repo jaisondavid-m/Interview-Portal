@@ -192,12 +192,25 @@ func StreamInterviewRecording(c *gin.Context) {
 
 	var filePath string
 	found := false
-	for _, dir := range possibleDirs {
-		candidate := filepath.Join(dir, cleanedFilename)
-		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
-			filePath = candidate
+
+	// 1. Check direct file_path from database record if available
+	var rec models.InterviewRecording
+	if err := database.DB.Where("file_name = ?", cleanedFilename).First(&rec).Error; err == nil && rec.FilePath != "" {
+		if fi, err := os.Stat(rec.FilePath); err == nil && !fi.IsDir() {
+			filePath = rec.FilePath
 			found = true
-			break
+		}
+	}
+
+	// 2. Check candidate directories
+	if !found {
+		for _, dir := range possibleDirs {
+			candidate := filepath.Join(dir, cleanedFilename)
+			if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
+				filePath = candidate
+				found = true
+				break
+			}
 		}
 	}
 
