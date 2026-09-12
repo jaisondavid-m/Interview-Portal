@@ -19,31 +19,13 @@ import (
 // Global mutex to avoid race conditions during queue pairings
 var queueMutex sync.Mutex
 
-// Helper to extract starter code from question templates
+// Helper to extract starter code from question templates (empty by default)
 func extractStarterCode(q models.InterviewQuestion, defaultCode string) string {
-	for _, t := range q.Templates {
-		if t.Language == "javascript" && t.StarterCode != "" {
-			return t.StarterCode
-		}
-	}
-	if len(q.Templates) > 0 && q.Templates[0].StarterCode != "" {
-		return q.Templates[0].StarterCode
-	}
-	if defaultCode != "" {
-		return defaultCode
-	}
-	return "// Write your solution here\n"
+	return ""
 }
 
 func getDefaultStarterTemplate(lang string) string {
-	switch strings.ToLower(lang) {
-	case "python", "py", "python3":
-		return "# Read from STDIN and print to STDOUT\nimport sys\n\ninput_data = sys.stdin.read().strip()\n# Write your solution here\n"
-	case "javascript", "js", "node", "nodejs":
-		return "// Read from STDIN and print to STDOUT\nconst fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim();\n\n// Write your solution here\n"
-	default:
-		return "// Read from STDIN and print to STDOUT\n"
-	}
+	return ""
 }
 
 // Helper to sanitize questions for candidate (strip hidden test cases, solutions, hints, rubrics)

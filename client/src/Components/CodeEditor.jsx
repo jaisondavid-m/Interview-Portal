@@ -5,8 +5,7 @@ import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { RotateCcw, Copy, Check, Lock } from 'lucide-react';
-import { getStarterTemplate } from '../utils/starterTemplates';
+import { Copy, Check, Lock } from 'lucide-react';
 
 const LANGUAGE_CONFIGS = [
   { id: 'javascript', label: 'JavaScript (Node.js)', extension: () => javascript({ jsx: true }) },
@@ -16,21 +15,16 @@ const LANGUAGE_CONFIGS = [
 ];
 
 export default function CodeEditor({
-  code,
+  code = '',
   onChange,
   language = 'javascript',
   onLanguageChange,
   isEditable = true,
-  onResetCode,
-  starterCode,
-  question = null,
 }) {
   const [copied, setCopied] = React.useState(false);
 
-  const activeStarter = starterCode || (question ? getStarterTemplate(question, language) : '// Write your solution here\n');
-
-  // Enforce template code: if code is null/empty, supply the starter template
-  const displayCode = code && code.trim() ? code : activeStarter;
+  // Student interview editor starts empty with no starter template
+  const displayCode = typeof code === 'string' ? code : '';
 
   const selectedExtension = useMemo(() => {
     const langObj = LANGUAGE_CONFIGS.find((l) => l.id === language);
@@ -45,12 +39,7 @@ export default function CodeEditor({
 
   const handleCodeChange = (val) => {
     if (!isEditable || !onChange) return;
-    // If the candidate erases the entire editor, restore the template skeleton automatically
-    if (!val || !val.trim()) {
-      onChange(activeStarter);
-    } else {
-      onChange(val);
-    }
+    onChange(val);
   };
 
   return (
@@ -75,18 +64,6 @@ export default function CodeEditor({
 
         {/* Actions Toolbar */}
         <div className="flex items-center gap-2">
-          {/* Reset Starter Code */}
-          {isEditable && onResetCode && (
-            <button
-              onClick={onResetCode}
-              title="Reset code to default question template"
-              className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-[#3e4451] transition cursor-pointer flex items-center gap-1 text-[11px] font-mono"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline text-[10px]">Reset Template</span>
-            </button>
-          )}
-
           {/* Copy Code */}
           <button
             onClick={handleCopy}
@@ -109,6 +86,7 @@ export default function CodeEditor({
           readOnly={!isEditable}
           editable={isEditable}
           onChange={handleCodeChange}
+          placeholder="// Type your code here..."
           className="text-[13px] font-mono h-full"
           basicSetup={{
             lineNumbers: true,

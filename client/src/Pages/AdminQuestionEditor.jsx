@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Code,
@@ -14,30 +14,14 @@ import {
   Clock,
   Sparkles,
   BookOpen,
-  FileCode,
   Check,
-  RotateCcw,
   Copy,
   Terminal,
   ChevronRight
 } from 'lucide-react';
-import CodeMirror from '@uiw/react-codemirror';
-import { javascript } from '@codemirror/lang-javascript';
-import { python } from '@codemirror/lang-python';
-import { cpp } from '@codemirror/lang-cpp';
-import { java } from '@codemirror/lang-java';
-import { oneDark } from '@codemirror/theme-one-dark';
 
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
-import { getStarterTemplate } from '../utils/starterTemplates';
-
-const CODE_LANGUAGES = [
-  { id: 'javascript', label: 'JavaScript (Node.js)', extension: () => javascript({ jsx: true }) },
-  { id: 'python', label: 'Python 3', extension: () => python() },
-  { id: 'cpp', label: 'C++ (g++ 17)', extension: () => cpp() },
-  { id: 'java', label: 'Java (OpenJDK 17)', extension: () => java() },
-];
 
 export default function AdminQuestionEditor() {
   const { trackId, levelId, questionId } = useParams();
@@ -50,22 +34,11 @@ export default function AdminQuestionEditor() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Active Code Language Tab in Editor
-  const [activeLang, setActiveLang] = useState('javascript');
-
   // Form State
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [difficulty, setDifficulty] = useState('Medium');
   const [type, setType] = useState('coding');
-
-  // Multi-Language Starter Templates
-  const [starterTemplates, setStarterTemplates] = useState({
-    javascript: '',
-    python: '',
-    cpp: '',
-    java: '',
-  });
 
   // Coding Payload Fields
   const [constraints, setConstraints] = useState('');
@@ -133,46 +106,6 @@ export default function AdminQuestionEditor() {
             const detail = qData.detail || {};
             const payload = qData.payload || {};
 
-            // Load multi-language templates (from relational templates table first, then payload)
-            const relationalTemplates = {};
-            if (Array.isArray(qData.templates) && qData.templates.length > 0) {
-              qData.templates.forEach((t) => {
-                if (t.language && t.starter_code) {
-                  relationalTemplates[t.language] = t.starter_code;
-                }
-              });
-            }
-
-            const defaultTemplates = {
-              javascript: relationalTemplates.javascript || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'javascript'),
-              python: relationalTemplates.python || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'python'),
-              cpp: relationalTemplates.cpp || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'cpp'),
-              java: relationalTemplates.java || getStarterTemplate({ title: qData.title, payload, templates: qData.templates }, 'java'),
-            };
-
-            if (Object.keys(relationalTemplates).length > 0) {
-              setStarterTemplates({
-                javascript: relationalTemplates.javascript || defaultTemplates.javascript,
-                python: relationalTemplates.python || defaultTemplates.python,
-                cpp: relationalTemplates.cpp || defaultTemplates.cpp,
-                java: relationalTemplates.java || defaultTemplates.java,
-              });
-            } else if (payload.starter_templates) {
-              setStarterTemplates({
-                javascript: payload.starter_templates.javascript || defaultTemplates.javascript,
-                python: payload.starter_templates.python || defaultTemplates.python,
-                cpp: payload.starter_templates.cpp || defaultTemplates.cpp,
-                java: payload.starter_templates.java || defaultTemplates.java,
-              });
-            } else if (payload.starter_code) {
-              setStarterTemplates({
-                ...defaultTemplates,
-                javascript: payload.starter_code,
-              });
-            } else {
-              setStarterTemplates(defaultTemplates);
-            }
-
             // Constraints & Approach
             setConstraints(detail.constraints || payload.constraints || '');
             setExpectedApproach(detail.expected_approach || payload.expected_approach || '');
@@ -234,14 +167,6 @@ export default function AdminQuestionEditor() {
               setMcqOptions(payload.options);
             }
           }
-        } else {
-          // Initialize new question boilerplate
-          setStarterTemplates({
-            javascript: getStarterTemplate({ title: 'New Question' }, 'javascript'),
-            python: getStarterTemplate({ title: 'New Question' }, 'python'),
-            cpp: getStarterTemplate({ title: 'New Question' }, 'cpp'),
-            java: getStarterTemplate({ title: 'New Question' }, 'java'),
-          });
         }
       } catch (err) {
         setError(err.response?.data?.message || err.message || 'Failed to load configuration data.');
@@ -251,29 +176,6 @@ export default function AdminQuestionEditor() {
     }
     loadData();
   }, [trackId, levelId, questionId, isEditing]);
-
-  // CodeMirror Extension for current selected language
-  const selectedExtension = useMemo(() => {
-    const langObj = CODE_LANGUAGES.find((l) => l.id === activeLang);
-    return langObj ? [langObj.extension()] : [javascript()];
-  }, [activeLang]);
-
-  // Update specific language template
-  const handleTemplateChange = (val) => {
-    setStarterTemplates((prev) => ({
-      ...prev,
-      [activeLang]: val,
-    }));
-  };
-
-  // Reset template for active language
-  const handleResetActiveTemplate = () => {
-    const defaultTemplate = getStarterTemplate({ title }, activeLang);
-    setStarterTemplates((prev) => ({
-      ...prev,
-      [activeLang]: defaultTemplate,
-    }));
-  };
 
   // Dynamic Array Helper handlers
   const handleArrayChange = (setter, list, index, value) => {
@@ -347,8 +249,6 @@ export default function AdminQuestionEditor() {
         const cleanedTips = interviewTips.filter((t) => t.trim());
 
         payloadObj = {
-          starter_code: starterTemplates.javascript || starterTemplates[activeLang] || '',
-          starter_templates: starterTemplates,
           constraints: constraints.trim(),
           open_test_cases: cleanedOpenCases,
           hidden_test_cases: cleanedHiddenCases,
@@ -391,11 +291,6 @@ export default function AdminQuestionEditor() {
         explanation: explanation.trim(),
       };
 
-      const templates = Object.entries(starterTemplates).map(([lang, code]) => ({
-        language: lang,
-        starter_code: code || '',
-      }));
-
       const cleanedOpenCases = openTestCases
         .filter((tc) => tc.input.trim() || tc.output.trim())
         .map((tc, idx) => ({
@@ -437,7 +332,7 @@ export default function AdminQuestionEditor() {
         difficulty,
         type,
         detail,
-        templates,
+        templates: [],
         test_cases: testCases,
         hints: hintsList,
         mcq_options: mcqOptionsList,
@@ -451,24 +346,21 @@ export default function AdminQuestionEditor() {
 
       setModalConfig({
         isOpen: true,
-        title: isEditing ? 'Question Updated' : 'Question Created',
-        message: `Assessment question "${title}" was successfully saved into Level ${level?.level_number || 1}.`,
+        title: 'Success',
+        message: `Question "${title}" saved successfully.`,
         variant: 'primary',
         showCancel: false,
-        confirmText: 'Return to Questions Bank',
-        onConfirm: () => {
-          closeModal();
-          navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`);
-        },
+        confirmText: 'Back to Configuration',
+        onConfirm: () => navigate('/admin/interviews/config'),
       });
     } catch (err) {
       setModalConfig({
         isOpen: true,
         title: 'Save Failed',
-        message: err.response?.data?.message || err.message || 'Failed to save question configuration.',
+        message: err.response?.data?.message || err.message || 'Failed to save question.',
         variant: 'danger',
         showCancel: false,
-        confirmText: 'OK',
+        confirmText: 'Close',
         onConfirm: closeModal,
       });
     } finally {
@@ -478,216 +370,296 @@ export default function AdminQuestionEditor() {
 
   if (loading) {
     return (
-      <div className="panel-card p-16 text-center space-y-3">
-        <Sparkles className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-        <p className="text-[14px] text-[var(--text-muted)] font-medium">Loading question workspace...</p>
+      <div className="flex items-center justify-center p-16 text-[var(--text-muted)]">
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-8 border-3 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-mono">Loading Question Editor...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-16">
-      {/* Top Breadcrumb & Header Toolbar */}
-      <div className="pb-4 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex-wrap">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {/* Top Breadcrumb & Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-muted)]">
             <button
-              onClick={() => navigate('/admin/interviews')}
-              className="hover:text-[var(--text-primary)] transition"
+              type="button"
+              onClick={() => navigate('/admin/interviews/config')}
+              className="hover:text-[var(--text-primary)] flex items-center gap-1"
             >
-              Interview Config
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Track Hub</span>
             </button>
-            <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />
-            <button
-              onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
-              className="hover:text-[var(--text-primary)] transition"
-            >
-              {track?.title || 'Domain'}
-            </button>
-            <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />
-            <button
-              onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
-              className="hover:text-[var(--text-primary)] transition font-bold text-[var(--accent)]"
-            >
-              Level {level?.level_number || 1}
-            </button>
-            <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />
-            <span>{isEditing ? 'Edit Question' : 'New Question'}</span>
+            <ChevronRight className="w-3 h-3 opacity-40" />
+            <span className="text-[var(--accent)] font-bold">{track?.title || 'Track'}</span>
+            <ChevronRight className="w-3 h-3 opacity-40" />
+            <span>Level {level?.level_number}: {level?.name}</span>
           </div>
 
-          <h1 className="text-[22px] font-bold text-[var(--text-primary)] tracking-tight">
-            {isEditing ? `Configure: ${title || 'Question'}` : 'New Assessment Question'}
+          <h1 className="text-[22px] font-bold text-[var(--text-primary)]">
+            {isEditing ? `Edit Question: ${title || 'Untitled'}` : `Create Level ${level?.level_number} Question`}
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Define question prompt, multi-language starter templates, sample/hidden test cases, hints, and assessor rubrics.
+          <p className="text-[13px] text-[var(--text-secondary)]">
+            Configure problem statement, constraints, stdin/stdout test cases, and assessor hints.
           </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
+        {/* Top Actions */}
+        <div className="flex items-center gap-3 self-start sm:self-auto">
           <button
             type="button"
-            onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
-            disabled={saving}
-            className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+            onClick={() => navigate('/admin/interviews/config')}
+            className="btn btn-secondary text-xs py-2 px-3.5"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Cancel</span>
+            Cancel
           </button>
-
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-[var(--shadow-sm)]"
+            className="btn btn-primary text-xs py-2 px-4 flex items-center gap-2 font-bold shadow-md cursor-pointer"
           >
             <Save className="w-4 h-4" />
-            <span>{saving ? 'Saving...' : 'Save Question Configuration'}</span>
+            <span>{saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Question'}</span>
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 rounded-[var(--radius-md)] bg-[var(--red-bg)] border border-[var(--red)]/30 text-[var(--red)] text-xs flex items-center gap-2">
+        <div className="p-4 rounded-[var(--radius-md)] bg-[var(--red-bg)] border border-[var(--red)]/30 text-[var(--red)] flex items-center gap-2 text-xs font-mono">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Main Grid: Left Spec Panel + Right Code & Rubrics Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* Main 2-Column Responsive Workspace Grid */}
+      <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ============================================================ */}
-        {/* LEFT COLUMN: Metadata, Statement, Constraints, Hints */}
+        {/* LEFT COLUMN: Problem Definition, Constraints, Hints */}
         {/* ============================================================ */}
         <div className="lg:col-span-6 space-y-6">
-          {/* Card 1: Core Metadata */}
+          {/* Card: Problem Basics */}
           <div className="panel-card p-5 border border-[var(--border)] space-y-4">
             <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[var(--accent)]" />
-              <span>Core Specification</span>
+              <BookOpen className="w-4 h-4 text-[var(--accent)]" />
+              <span>Problem Identification</span>
             </h3>
 
-            {/* Title */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                Question Title *
+            {/* Question Title */}
+            <div>
+              <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                Question Title <span className="text-[var(--red)]">*</span>
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Two Sum with Target Index Lookup"
-                className="w-full custom-input text-[13px] font-medium"
+                placeholder="e.g. Reverse Linked List / Group Anagrams / LRU Cache"
+                className="custom-input text-[13px] font-bold"
                 required
               />
             </div>
 
-            {/* Difficulty & Mode Row */}
+            {/* Difficulty & Type Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Difficulty
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Difficulty Level
                 </label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {['Easy', 'Medium', 'Hard'].map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setDifficulty(d)}
-                      className={`py-1.5 text-xs font-mono font-bold rounded border transition ${
-                        difficulty === d
-                          ? d === 'Easy'
-                            ? 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/50 shadow-sm'
-                            : d === 'Hard'
-                            ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/50 shadow-sm'
-                            : 'bg-[var(--amber-bg)] text-[var(--amber)] border-[var(--amber)]/50 shadow-sm'
-                          : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
+                <select
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  className="custom-input text-[12px] cursor-pointer"
+                >
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
+                </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Assessment Mode
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Evaluation Format
                 </label>
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  className="w-full custom-input text-[13px] font-mono capitalize"
+                  className="custom-input text-[12px] cursor-pointer"
                 >
-                  <option value="coding">Coding (Live Workspace)</option>
-                  <option value="verbal_qa">Verbal Q&A</option>
-                  <option value="mcq">Multiple Choice (MCQ)</option>
-                  <option value="discussion">System Discussion</option>
+                  <option value="coding">Live Coding (STDIN/STDOUT Tests)</option>
+                  <option value="verbal_qa">Verbal Q&A / Conceptual</option>
+                  <option value="mcq">Multiple Choice Assessment</option>
+                  <option value="discussion">System Design & Scenario Discussion</option>
                 </select>
               </div>
             </div>
 
-            {/* Problem Statement */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                Problem Statement / Prompt *
+            {/* Problem Statement / Prompt */}
+            <div>
+              <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                Problem Description & Statement <span className="text-[var(--red)]">*</span>
               </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Detailed description of the problem, input definitions, edge conditions..."
-                rows={5}
-                className="w-full custom-input text-[13px] leading-relaxed resize-y"
+                placeholder="Detail the problem statement, context, input format, output format, and rules for the candidate."
+                rows={7}
+                className="custom-input text-[13px] leading-relaxed resize-y font-sans"
                 required
               />
             </div>
+          </div>
 
-            {/* Constraints */}
-            {type === 'coding' && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Constraints & Limits
+          {/* CODING MODE: Problem Constraints & Details */}
+          {type === 'coding' && (
+            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+              <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[var(--accent)]" />
+                <span>Technical Specifications & Constraints</span>
+              </h3>
+
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Input / Output Constraints
                 </label>
                 <textarea
                   value={constraints}
                   onChange={(e) => setConstraints(e.target.value)}
-                  placeholder="e.g.&#10;2 <= nums.length <= 10^4&#10;-10^9 <= nums[i] <= 10^9"
-                  rows={3}
-                  className="w-full custom-input text-[12px] font-mono leading-relaxed resize-y"
+                  placeholder="e.g. 1 <= nums.length <= 10^5&#10;-10^9 <= nums[i] <= 10^9&#10;Time Limit: 2.0s, Memory Limit: 256MB"
+                  rows={4}
+                  className="custom-input text-[12px] font-mono resize-y"
                 />
               </div>
-            )}
-          </div>
-
-          {/* Card 2: Hints & Tips */}
-          <div className="panel-card p-5 border border-[var(--border)] space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <Lightbulb className="w-4 h-4 text-amber-500" />
-                <span>Hints & Assessor Guidance</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => handleArrayAdd(setHints, hints)}
-                className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 font-mono"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Add Hint</span>
-              </button>
             </div>
+          )}
 
-            <div className="space-y-2.5">
+          {/* NON-CODING FORMATS: MCQ, Verbal QA, Discussion */}
+          {type === 'mcq' && (
+            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+              <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
+                MCQ Options & Verification
+              </h3>
+
+              <div className="space-y-3">
+                {mcqOptions.map((opt) => (
+                  <div key={opt.id} className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCorrectOption(opt.id)}
+                      className={`w-7 h-7 rounded-full text-xs font-mono font-bold flex items-center justify-center transition ${
+                        correctOption === opt.id
+                          ? 'bg-[var(--green)] text-white ring-2 ring-[var(--green)]/30'
+                          : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]'
+                      }`}
+                      title="Mark as correct answer"
+                    >
+                      {opt.id}
+                    </button>
+                    <input
+                      type="text"
+                      value={opt.text}
+                      onChange={(e) => {
+                        const updated = mcqOptions.map((o) => (o.id === opt.id ? { ...o, text: e.target.value } : o));
+                        setMcqOptions(updated);
+                      }}
+                      placeholder={`Option ${opt.id} text`}
+                      className="flex-1 custom-input text-[12px]"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Explanation for Correct Option
+                </label>
+                <textarea
+                  value={explanation}
+                  onChange={(e) => setExplanation(e.target.value)}
+                  placeholder="Explain why the selected option is correct."
+                  rows={3}
+                  className="custom-input text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {type === 'verbal_qa' && (
+            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+              <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
+                Assessor Evaluation Benchmark
+              </h3>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Exemplary / Model Answer
+                </label>
+                <textarea
+                  value={idealAnswer}
+                  onChange={(e) => setIdealAnswer(e.target.value)}
+                  placeholder="Provide key points, nuances, and structure the assessor should expect."
+                  rows={5}
+                  className="custom-input text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {type === 'discussion' && (
+            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+              <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
+                System Scenario & Discussion Dimensions
+              </h3>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Practical Scenario Breakdown
+                </label>
+                <textarea
+                  value={scenario}
+                  onChange={(e) => setScenario(e.target.value)}
+                  placeholder="Describe scale, bottlenecks, and expected throughput requirements."
+                  rows={4}
+                  className="custom-input text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Assessor Hints & Interview Tips */}
+          <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+            <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <Lightbulb className="w-4 h-4 text-amber-500" />
+              <span>Assessor Guidance & Tiered Hints</span>
+            </h3>
+
+            {/* Incremental Hints */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)]">
+                  Progressive Hints (Unlocked by Assessor)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleArrayAdd(setHints, hints)}
+                  className="text-[11px] font-mono text-[var(--accent)] hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Hint</span>
+                </button>
+              </div>
+
               {hints.map((hint, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <span className="text-[11px] font-mono font-bold text-[var(--text-muted)] mt-2 w-14 shrink-0">
-                    Hint {i + 1}:
+                  <span className="text-[11px] font-mono text-[var(--text-muted)] pt-2 w-5">
+                    H{i + 1}
                   </span>
                   <input
                     type="text"
                     value={hint}
                     onChange={(e) => handleArrayChange(setHints, hints, i, e.target.value)}
-                    placeholder="e.g. Consider using a hash map to achieve O(1) lookups in a single pass."
+                    placeholder={`Hint tier ${i + 1} (e.g. Try using a HashMap to store complements)`}
                     className="flex-1 custom-input text-[12px]"
                   />
                   {hints.length > 1 && (
@@ -704,11 +676,11 @@ export default function AdminQuestionEditor() {
               ))}
             </div>
 
-            {/* Interviewer Tips */}
-            <div className="pt-3 border-t border-[var(--border)] space-y-2.5">
+            {/* Assessor Probing Tips */}
+            <div className="space-y-3 pt-3 border-t border-[var(--border)]">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Interviewer Assessment Tips
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)]">
+                  Interviewer Probing Tips
                 </label>
                 <button
                   type="button"
@@ -746,81 +718,9 @@ export default function AdminQuestionEditor() {
         </div>
 
         {/* ============================================================ */}
-        {/* RIGHT COLUMN: Multi-Language Code Editor, Test Cases, Solutions */}
+        {/* RIGHT COLUMN: STDIN/STDOUT Test Cases & Solution Benchmark */}
         {/* ============================================================ */}
         <div className="lg:col-span-6 space-y-6">
-          {/* CODING MODE: Multi-Language Starter Code Editor */}
-          {type === 'coding' && (
-            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <FileCode className="w-4 h-4 text-[var(--accent)]" />
-                    <span>Multi-Language Starter Code Boilerplate</span>
-                  </h3>
-                  <p className="text-[11px] text-[var(--text-secondary)] font-mono mt-0.5">
-                    Configure starter function signatures for each language. Candidates receive these templates live.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleResetActiveTemplate}
-                  className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 self-start sm:self-auto font-mono text-amber-500"
-                  title="Auto-generate standard function template for selected language"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Auto-Boilerplate</span>
-                </button>
-              </div>
-
-              {/* Language Switcher Tabs */}
-              <div className="flex items-center gap-1.5 p-1.5 bg-[#21252b] rounded-[var(--radius-sm)] border border-[#181a1f] overflow-x-auto select-none">
-                {CODE_LANGUAGES.map((lang) => {
-                  const isSelected = activeLang === lang.id;
-                  const hasCustom = Boolean(starterTemplates[lang.id]?.trim());
-                  return (
-                    <button
-                      key={lang.id}
-                      type="button"
-                      onClick={() => setActiveLang(lang.id)}
-                      className={`px-3 py-1.5 text-[11px] font-mono font-bold rounded transition-all flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'bg-[#282c34] text-white shadow-sm border border-white/20'
-                          : 'text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <span>{lang.label}</span>
-                      {hasCustom && <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)]" />}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* CodeMirror Editor Box */}
-              <div className="h-[280px] rounded-[var(--radius-md)] border border-[#3e4451] overflow-hidden bg-[#282c34]">
-                <CodeMirror
-                  value={starterTemplates[activeLang] || ''}
-                  height="100%"
-                  minHeight="280px"
-                  theme={oneDark}
-                  extensions={selectedExtension}
-                  onChange={handleTemplateChange}
-                  className="text-[13px] font-mono h-full"
-                  basicSetup={{
-                    lineNumbers: true,
-                    highlightActiveLineGutter: true,
-                    foldGutter: true,
-                    syntaxHighlighting: true,
-                    bracketMatching: true,
-                    closeBrackets: true,
-                    autocompletion: true,
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
           {/* CODING MODE: Sample & Hidden Test Cases */}
           {type === 'coding' && (
             <div className="panel-card p-5 border border-[var(--border)] space-y-5">
@@ -892,20 +792,20 @@ export default function AdminQuestionEditor() {
               </div>
 
               {/* 2. Hidden Verification Test Cases */}
-              <div className="pt-4 border-t border-[var(--border)] space-y-3">
+              <div className="space-y-3 pt-4 border-t border-[var(--border)]">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-[14px] font-bold text-[var(--accent)] flex items-center gap-1.5">
-                      <span>Hidden Grading Test Cases ({hiddenTestCases.length})</span>
+                    <h4 className="text-[14px] font-bold text-[var(--text-primary)]">
+                      Hidden Grading Test Cases ({hiddenTestCases.length})
                     </h4>
                     <p className="text-[11px] text-[var(--text-secondary)]">
-                      Evaluated on code submission. Hidden from candidate during interview.
+                      Executed upon final submission to prevent hardcoding.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleTestCaseAdd(setHiddenTestCases, hiddenTestCases)}
-                    className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 font-mono text-[var(--accent)]"
+                    className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 font-mono"
                   >
                     <Plus className="w-3 h-3" />
                     <span>Add Hidden Case</span>
@@ -914,8 +814,8 @@ export default function AdminQuestionEditor() {
 
                 <div className="space-y-3">
                   {hiddenTestCases.map((tc, idx) => (
-                    <div key={idx} className="p-3 bg-[var(--accent-dim)] rounded-[var(--radius-sm)] border border-[var(--border-accent)] space-y-2">
-                      <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[var(--accent)]">
+                    <div key={idx} className="p-3 bg-[var(--bg-raised)] rounded-[var(--radius-sm)] border border-[var(--border)] space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[var(--text-muted)]">
                         <span>Hidden Case #{idx + 1}</span>
                         {hiddenTestCases.length > 1 && (
                           <button
@@ -935,9 +835,9 @@ export default function AdminQuestionEditor() {
                           <textarea
                             value={tc.input}
                             onChange={(e) => handleTestCaseChange(setHiddenTestCases, hiddenTestCases, idx, 'input', e.target.value)}
-                            placeholder="Hidden stdin input"
+                            placeholder="Input piped to stdin (edge case, large n)"
                             rows={2}
-                            className="custom-input text-[12px] font-mono resize-none w-full bg-[var(--bg-card)]"
+                            className="custom-input text-[12px] font-mono resize-none w-full"
                           />
                         </div>
                         <div>
@@ -949,7 +849,7 @@ export default function AdminQuestionEditor() {
                             onChange={(e) => handleTestCaseChange(setHiddenTestCases, hiddenTestCases, idx, 'output', e.target.value)}
                             placeholder="Expected stdout output"
                             rows={2}
-                            className="custom-input text-[12px] font-mono resize-none w-full bg-[var(--bg-card)]"
+                            className="custom-input text-[12px] font-mono resize-none w-full"
                           />
                         </div>
                       </div>
@@ -960,201 +860,54 @@ export default function AdminQuestionEditor() {
             </div>
           )}
 
-          {/* CODING MODE: Expected Solution & Complexity */}
-          {type === 'coding' && (
-            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
-              <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[var(--green)]" />
-                <span>Optimal Solution & Complexity Rubrics</span>
-              </h3>
+          {/* Solution Benchmark & Complexity Expectations */}
+          <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+            <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-500" />
+              <span>Assessor Solution Benchmark</span>
+            </h3>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Expected Optimal Approach (for Assessor)
-                </label>
-                <textarea
-                  value={expectedApproach}
-                  onChange={(e) => setExpectedApproach(e.target.value)}
-                  placeholder="e.g. Single-pass Hash Map: Store seen values with index. As you iterate, check complement = target - nums[i] in O(1) time."
-                  rows={4}
-                  className="w-full custom-input text-[12px] leading-relaxed resize-y"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Expected Complexity (Time & Space)
-                </label>
-                <textarea
-                  value={expectedComplexity}
-                  onChange={(e) => setExpectedComplexity(e.target.value)}
-                  placeholder="e.g. Time Complexity: O(N) linear pass&#10;Space Complexity: O(N) hash map storage"
-                  rows={2}
-                  className="w-full custom-input text-[12px] font-mono leading-relaxed resize-y"
-                />
-              </div>
+            <div>
+              <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                Optimal Approach & Algorithm Breakdown
+              </label>
+              <textarea
+                value={expectedApproach}
+                onChange={(e) => setExpectedApproach(e.target.value)}
+                placeholder="Explain the optimal algorithmic technique (e.g. Sliding Window with Frequency Map, Two-Pointers, BFS/DFS, DP)."
+                rows={4}
+                className="custom-input text-[12px] font-sans resize-y"
+              />
             </div>
-          )}
 
-          {/* VERBAL Q&A SPECIFIC FIELDS */}
-          {type === 'verbal_qa' && (
-            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
-              <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
-                Verbal Q&A Model Answer & Rubrics
-              </h3>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Model / Ideal Answer
-                </label>
-                <textarea
-                  value={idealAnswer}
-                  onChange={(e) => setIdealAnswer(e.target.value)}
-                  placeholder="Comprehensive ideal answer with key terminology..."
-                  rows={5}
-                  className="w-full custom-input text-[13px] leading-relaxed resize-y"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                    Evaluation Rubrics Criteria
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handleArrayAdd(setRubrics, rubrics)}
-                    className="text-[11px] font-mono text-[var(--accent)] hover:underline flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add Rubric</span>
-                  </button>
-                </div>
-                {rubrics.map((r, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={r}
-                      onChange={(e) => handleArrayChange(setRubrics, rubrics, idx, e.target.value)}
-                      placeholder="e.g. Mentions user-space M:N scheduler vs kernel thread context switch."
-                      className="flex-1 custom-input text-[12px]"
-                    />
-                    {rubrics.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleArrayRemove(setRubrics, rubrics, idx)}
-                        className="p-2 text-[var(--text-muted)] hover:text-[var(--red)]"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+            <div>
+              <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                Target Time & Space Complexity
+              </label>
+              <input
+                type="text"
+                value={expectedComplexity}
+                onChange={(e) => setExpectedComplexity(e.target.value)}
+                placeholder="e.g. Time: O(N), Space: O(1) auxiliary"
+                className="custom-input text-[12px] font-mono"
+              />
             </div>
-          )}
-
-          {/* MCQ SPECIFIC FIELDS */}
-          {type === 'mcq' && (
-            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
-              <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
-                MCQ Options & Answer Key
-              </h3>
-              <div className="space-y-3">
-                {mcqOptions.map((opt, idx) => (
-                  <div key={opt.id} className="flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-full bg-[var(--bg-raised)] border border-[var(--border)] text-[12px] font-mono font-bold flex items-center justify-center shrink-0">
-                      {opt.id}
-                    </span>
-                    <input
-                      type="text"
-                      value={opt.text}
-                      onChange={(e) => {
-                        const updated = [...mcqOptions];
-                        updated[idx].text = e.target.value;
-                        setMcqOptions(updated);
-                      }}
-                      placeholder={`Option ${opt.id} text...`}
-                      className="flex-1 custom-input text-[12px]"
-                    />
-                    <input
-                      type="radio"
-                      name="correctOption"
-                      checked={correctOption === opt.id}
-                      onChange={() => setCorrectOption(opt.id)}
-                      className="w-4 h-4 text-[var(--green)]"
-                      title="Mark as correct answer"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1.5 pt-2">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Explanation & Reference
-                </label>
-                <textarea
-                  value={explanation}
-                  onChange={(e) => setExplanation(e.target.value)}
-                  placeholder="Detailed explanation of why the correct option is right..."
-                  rows={3}
-                  className="w-full custom-input text-[12px]"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* DISCUSSION SPECIFIC FIELDS */}
-          {type === 'discussion' && (
-            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
-              <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
-                System Discussion Scenario & Tradeoffs
-              </h3>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Scenario Overview
-                </label>
-                <textarea
-                  value={scenario}
-                  onChange={(e) => setScenario(e.target.value)}
-                  placeholder="High-scale scenario requirements..."
-                  rows={3}
-                  className="w-full custom-input text-[12px]"
-                />
-              </div>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      </form>
 
-      {/* Bottom Floating / Sticky Save Bar */}
-      <div className="sticky bottom-4 z-20 p-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)]/90 backdrop-blur-md shadow-xl flex items-center justify-between gap-4">
-        <div className="text-xs text-[var(--text-secondary)] font-mono hidden sm:block">
-          Assessment Mode: <strong className="uppercase text-[var(--text-primary)]">{type}</strong> • Difficulty: <strong className="text-[var(--text-primary)]">{difficulty}</strong>
-        </div>
-
-        <div className="flex items-center gap-2.5 ml-auto">
-          <button
-            type="button"
-            onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
-            disabled={saving}
-            className="btn btn-secondary text-xs py-2 px-4"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="btn btn-primary text-xs py-2 px-5 flex items-center gap-1.5 font-bold shadow-md"
-          >
-            <Save className="w-4 h-4" />
-            <span>{saving ? 'Saving...' : 'Save Question Configuration'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Confirmation & Notice Modal */}
-      <ConfirmModal {...modalConfig} onClose={closeModal} />
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={modalConfig.isOpen}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        confirmText={modalConfig.confirmText}
+        cancelText={modalConfig.cancelText}
+        variant={modalConfig.variant}
+        showCancel={modalConfig.showCancel}
+        onConfirm={modalConfig.onConfirm || closeModal}
+        onClose={closeModal}
+      />
     </div>
   );
 }

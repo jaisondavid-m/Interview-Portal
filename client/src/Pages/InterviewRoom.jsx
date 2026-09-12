@@ -34,7 +34,6 @@ import MicPermissionModal from '../Components/MicPermissionModal';
 import AudioCallBanner from '../Components/AudioCallBanner';
 
 import useWebRTCAudio from '../utils/useWebRTCAudio';
-import { getStarterTemplate } from '../utils/starterTemplates';
 
 export default function InterviewRoom() {
   const { sessionId } = useParams();
@@ -168,10 +167,7 @@ export default function InterviewRoom() {
           setRunResults(null);
           setSubmissionResult(null);
 
-          const template = getStarterTemplate(data.session.current_question, targetLang);
-          const initialCode = (data.session.candidate_code && data.session.candidate_code.trim())
-            ? data.session.candidate_code
-            : template;
+          const initialCode = data.session.candidate_code || '';
 
           setCode(initialCode);
           setLanguage(targetLang);
@@ -203,9 +199,8 @@ export default function InterviewRoom() {
                 // ignore parse error
               }
             }
-          } else if (!code || !code.trim()) {
-            const template = getStarterTemplate(data.session.current_question, targetLang);
-            const initialCode = data.session.candidate_code || template;
+          } else if (typeof code !== 'string') {
+            const initialCode = data.session.candidate_code || '';
             setCode(initialCode);
             setLanguage(targetLang);
           }
@@ -325,13 +320,11 @@ export default function InterviewRoom() {
   };
 
   const handleLanguageChange = async (newLang) => {
-    const newTemplate = getStarterTemplate(sessionData?.current_question, newLang);
     setLanguage(newLang);
-    setCode(newTemplate);
     if (currentUserRole === 'interviewee') {
       try {
         await api.post(`/interviews/sessions/${sessionId}/code`, {
-          code: newTemplate,
+          code: code || '',
           lang: newLang,
         });
       } catch (e) {
@@ -1244,12 +1237,6 @@ export default function InterviewRoom() {
               language={language}
               onLanguageChange={handleLanguageChange}
               isEditable={currentUserRole === 'interviewee'}
-              onResetCode={() => {
-                const cleanTemplate = getStarterTemplate(question, language);
-                handleCodeChange(cleanTemplate);
-              }}
-              starterCode={getStarterTemplate(question, language)}
-              question={question}
             />
           </div>
 
