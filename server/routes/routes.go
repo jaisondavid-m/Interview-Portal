@@ -58,7 +58,16 @@ func SetupRouter() *gin.Engine {
 			interviews.GET("/feedback/questions", controllers.GetActiveFeedbackQuestions)
 			interviews.GET("/sessions/:id/feedback", controllers.GetSessionFeedbackStatus)
 			interviews.POST("/sessions/:id/feedback", controllers.SubmitSessionFeedback)
+
+			// WebRTC Live Audio Signaling & Recordings
+			interviews.GET("/sessions/:id/ws", controllers.HandleWebRTCSignaling)
+			interviews.POST("/sessions/:id/recording", controllers.UploadInterviewRecording)
+			interviews.GET("/sessions/:id/recording", controllers.GetSessionRecording)
 		}
+
+		// Public Audio Streaming Route (Supports HTTP byte-range for players)
+		g.GET("/recordings/:filename", controllers.StreamInterviewRecording)
+		g.GET("/interviews/sessions/:id/ws", controllers.HandleWebRTCSignaling) // Fallback for query-token WS upgrades
 
 		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)
 		admin := g.Group("/admin")

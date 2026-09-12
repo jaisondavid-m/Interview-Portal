@@ -15,9 +15,12 @@ import {
   Calendar,
   Filter,
   Eye,
-  GraduationCap
+  GraduationCap,
+  Radio,
+  FileAudio
 } from 'lucide-react';
 import api from '../api/axios';
+import AudioPlayer from '../Components/AudioPlayer';
 
 export default function AdminInterviewHistory() {
   const [sessions, setSessions] = useState([]);
@@ -548,6 +551,19 @@ export default function AdminInterviewHistory() {
                       })}
                     </div>
                   )}
+                </div>
+
+                {/* Interview Audio Recording Section */}
+                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+                  <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-[var(--accent)]" />
+                    <span>Interview Dialogue Audio Recording</span>
+                  </h3>
+
+                  <AudioPlayer
+                    recording={detailedSession?.recording}
+                    title={`Session #${selectedSession.id} Audio Recording`}
+                  />
                 </div>
 
                 {/* Timestamps */}

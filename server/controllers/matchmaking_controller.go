@@ -1675,10 +1675,17 @@ func AdminGetInterviewSessionByID(c *gin.Context) {
 		Order("created_at asc").
 		Find(&feedbacks)
 
+	var recording *models.InterviewRecording
+	var rec models.InterviewRecording
+	if err := database.DB.Preload("Uploader").Where("session_id = ?", session.ID).First(&rec).Error; err == nil {
+		recording = &rec
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "success",
 		"data":      session,
 		"feedbacks": feedbacks,
+		"recording": recording,
 	})
 }
 

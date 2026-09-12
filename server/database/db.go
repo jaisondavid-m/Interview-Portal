@@ -98,6 +98,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.FeedbackQuestionOption{},
 		&models.InterviewFeedback{},
 		&models.InterviewFeedbackResponse{},
+		&models.InterviewRecording{},
 	)
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)

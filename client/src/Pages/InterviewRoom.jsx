@@ -29,7 +29,10 @@ import CodeEditor from '../Components/CodeEditor';
 import TestCasesConsole from '../Components/TestCasesConsole';
 import ConfirmModal from '../Components/ConfirmModal';
 import PeerFeedbackModal from '../Components/PeerFeedbackModal';
+import MicPermissionModal from '../Components/MicPermissionModal';
+import AudioCallBanner from '../Components/AudioCallBanner';
 
+import useWebRTCAudio from '../utils/useWebRTCAudio';
 import { getStarterTemplate } from '../utils/starterTemplates';
 
 export default function InterviewRoom() {
@@ -45,7 +48,29 @@ export default function InterviewRoom() {
   const [ending, setEnding] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [hasFeedbackSubmitted, setHasFeedbackSubmitted] = useState(false);
+  const [micModalOpen, setMicModalOpen] = useState(true);
   const feedbackCheckedRef = useRef(false);
+  const recordingUploadedRef = useRef(false);
+
+  const myUserId = currentUserRole === 'interviewer' ? sessionData?.interviewer_id : sessionData?.interviewee_id;
+  const isCompleted = sessionData?.status === 'completed';
+
+  // Live WebRTC Audio Call Hook
+  const {
+    connectionState,
+    isMuted,
+    peerMuted,
+    isSpeaking,
+    isPeerSpeaking,
+    toggleMute,
+    stopAndUploadRecording,
+    uploadingRecording,
+  } = useWebRTCAudio({
+    sessionId,
+    currentUserId: myUserId,
+    enabled: !micModalOpen && !isCompleted,
+  });
+
   const [elapsedSecs, setElapsedSecs] = useState(() => {
     try {
       const cachedStart = sessionStorage.getItem(`interview_started_${sessionId}`);
@@ -235,25 +260,32 @@ export default function InterviewRoom() {
     };
   }, [sessionData?.started_at, sessionData?.status, sessionData?.ended_at]);
 
-  // Auto-prompt peer feedback popup when session concludes
+  // Auto-prompt peer feedback popup & upload recording when session concludes
   useEffect(() => {
-    if (sessionData?.status === 'completed' && !feedbackCheckedRef.current) {
-      feedbackCheckedRef.current = true;
-      api.get(`/interviews/sessions/${sessionId}/feedback`)
-        .then((res) => {
-          const data = res?.data || res;
-          if (data?.has_submitted) {
-            setHasFeedbackSubmitted(true);
-          } else {
-            setHasFeedbackSubmitted(false);
+    if (sessionData?.status === 'completed') {
+      if (!recordingUploadedRef.current) {
+        recordingUploadedRef.current = true;
+        stopAndUploadRecording();
+      }
+
+      if (!feedbackCheckedRef.current) {
+        feedbackCheckedRef.current = true;
+        api.get(`/interviews/sessions/${sessionId}/feedback`)
+          .then((res) => {
+            const data = res?.data || res;
+            if (data?.has_submitted) {
+              setHasFeedbackSubmitted(true);
+            } else {
+              setHasFeedbackSubmitted(false);
+              setShowFeedbackModal(true);
+            }
+          })
+          .catch(() => {
             setShowFeedbackModal(true);
-          }
-        })
-        .catch(() => {
-          setShowFeedbackModal(true);
-        });
+          });
+      }
     }
-  }, [sessionData?.status, sessionId]);
+  }, [sessionData?.status, sessionId, stopAndUploadRecording]);
 
   // Sync candidate code to server (debounced)
   const handleCodeChange = (newCode) => {
@@ -591,10 +623,8 @@ export default function InterviewRoom() {
   const payload = question?.payload || {};
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
-  const isCompleted = sessionData?.status === 'completed';
 
   // Mutual role switch state calculations
-  const myUserId = currentUserRole === 'interviewer' ? sessionData?.interviewer_id : sessionData?.interviewee_id;
   const switchRequestedBy = sessionData?.switch_requested_by || 0;
   const isSwitchRequestedByMe = switchRequestedBy > 0 && switchRequestedBy === myUserId;
   const isSwitchRequestedByPeer = switchRequestedBy > 0 && switchRequestedBy !== myUserId;
@@ -781,6 +811,20 @@ export default function InterviewRoom() {
           )}
         </div>
       </div>
+
+      {/* Live WebRTC Audio Call Control Banner */}
+      {!isCompleted && !micModalOpen && (
+        <AudioCallBanner
+          connectionState={connectionState}
+          isMuted={isMuted}
+          peerMuted={peerMuted}
+          isSpeaking={isSpeaking}
+          isPeerSpeaking={isPeerSpeaking}
+          onToggleMute={toggleMute}
+          peerName={peerUser?.name || 'Peer Student'}
+          uploadingRecording={uploadingRecording}
+        />
+      )}
 
       {/* MUTUAL CONSENT MODAL / PROMPT BANNER FOR PEER (ROLE SWITCH) */}
       {isSwitchRequestedByPeer && switchCount === 0 && !isCompleted && (
@@ -1215,6 +1259,12 @@ export default function InterviewRoom() {
           setHasFeedbackSubmitted(true);
           fetchSession();
         }}
+      />
+
+      {/* Pre-Flight Microphone Permission & Diagnostics Modal */}
+      <MicPermissionModal
+        isOpen={micModalOpen && !isCompleted}
+        onPermissionGranted={() => setMicModalOpen(false)}
       />
     </div>
   );
