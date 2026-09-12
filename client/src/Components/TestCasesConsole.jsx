@@ -133,13 +133,13 @@ export default function TestCasesConsole({
             <div className="flex items-center gap-2 flex-wrap">
               {openTestCases.map((tc, idx) => {
                 const isSelected = selectedCaseIdx === idx;
-                const result = runResults?.results?.[idx];
+                const result = runResults?.results?.[idx] || submissionResult?.results?.[idx];
                 return (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => setSelectedCaseIdx(idx)}
-                    className={`px-3 py-1 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 border transition-all ${
+                    className={`px-3 py-1 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
                       isSelected
                         ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--accent)]'
                         : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -148,9 +148,9 @@ export default function TestCasesConsole({
                     <span>Case {idx + 1}</span>
                     {result && (
                       result.passed ? (
-                        <CheckCircle2 className="w-3 h-3 text-[var(--green)]" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--green)]" />
                       ) : (
-                        <XCircle className="w-3 h-3 text-[var(--red)]" />
+                        <XCircle className="w-3.5 h-3.5 text-[var(--red)]" />
                       )
                     )}
                   </button>
@@ -159,38 +159,60 @@ export default function TestCasesConsole({
             </div>
 
             {/* Selected Case Content */}
-            {openTestCases[selectedCaseIdx] && (
-              <div className="space-y-2.5 bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)] font-mono text-[12px]">
-                <div>
-                  <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
-                    Input:
-                  </span>
-                  <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--text-primary)]">
-                    {openTestCases[selectedCaseIdx].input || 'N/A'}
+            {openTestCases[selectedCaseIdx] && (() => {
+              const activeResult = runResults?.results?.[selectedCaseIdx] || submissionResult?.results?.[selectedCaseIdx];
+              return (
+                <div className="space-y-2.5 bg-[var(--bg-raised)] p-3.5 rounded-[var(--radius-sm)] border border-[var(--border)] font-mono text-[12px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold">
+                      Case #{selectedCaseIdx + 1} Specification:
+                    </span>
+                    {activeResult && (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
+                        activeResult.passed
+                          ? 'bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30'
+                          : 'bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30'
+                      }`}>
+                        {activeResult.passed ? '✓ Passed' : '✗ Failed'}
+                      </span>
+                    )}
                   </div>
-                </div>
 
-                <div>
-                  <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
-                    Expected Output:
-                  </span>
-                  <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--green)] font-bold">
-                    {openTestCases[selectedCaseIdx].output || 'N/A'}
-                  </div>
-                </div>
-
-                {runResults?.results?.[selectedCaseIdx] && (
                   <div>
                     <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
-                      Actual Execution Output:
+                      Input:
                     </span>
-                    <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--text-primary)]">
-                      {runResults.results[selectedCaseIdx].actual}
+                    <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--text-primary)] font-mono">
+                      {openTestCases[selectedCaseIdx].input || 'N/A'}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
+
+                  <div>
+                    <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
+                      Expected Output:
+                    </span>
+                    <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--green)] font-bold font-mono">
+                      {openTestCases[selectedCaseIdx].output || 'N/A'}
+                    </div>
+                  </div>
+
+                  {activeResult && (
+                    <div>
+                      <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
+                        Actual Execution Output:
+                      </span>
+                      <div className={`p-2 rounded border font-mono ${
+                        activeResult.passed
+                          ? 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-primary)]'
+                          : 'bg-[var(--red-bg)]/40 border-[var(--red)]/40 text-[var(--red)] font-bold'
+                      }`}>
+                        {activeResult.actual}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
