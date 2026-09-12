@@ -75,7 +75,12 @@ export default function StudentInterviews() {
     if (matchStatus === 'searching') {
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const res = await api.get('/interviews/matchmake/status');
+          const params = new URLSearchParams();
+          if (activeQueue?.queueId) params.append('queue_id', activeQueue.queueId);
+          if (activeQueue?.trackId) params.append('track_id', activeQueue.trackId);
+          const queryString = params.toString() ? `?${params.toString()}` : '';
+
+          const res = await api.get(`/interviews/matchmake/status${queryString}`);
           const data = res?.data || res;
           if (data?.status === 'matched' && data?.session_id) {
             setMatchStatus('matched');
@@ -98,7 +103,7 @@ export default function StudentInterviews() {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [matchStatus, navigate]);
+  }, [matchStatus, activeQueue, navigate]);
 
   // Start matchmaking on a selected domain
   const handleTakeInterview = async (track) => {
@@ -108,6 +113,7 @@ export default function StudentInterviews() {
         trackId: track.id,
         trackTitle: track.title,
         trackIcon: track.icon,
+        queueId: null,
       });
       setMatchStatus('searching');
 
@@ -120,6 +126,13 @@ export default function StudentInterviews() {
         setTimeout(() => {
           navigate(`/interviews/room/${data.session_id}`);
         }, 1200);
+      } else if (data?.status === 'waiting' && data?.queue_id) {
+        setActiveQueue({
+          trackId: track.id,
+          trackTitle: track.title,
+          trackIcon: track.icon,
+          queueId: data.queue_id,
+        });
       }
     } catch (err) {
       setMatchStatus('error');
@@ -130,7 +143,8 @@ export default function StudentInterviews() {
   // Cancel matchmaking
   const handleCancelMatchmaking = async () => {
     try {
-      await api.post('/interviews/matchmake/cancel');
+      const qId = activeQueue?.queueId;
+      await api.post(`/interviews/matchmake/cancel${qId ? `?queue_id=${qId}` : ''}`);
     } catch (e) {}
     setMatchStatus('idle');
     setActiveQueue(null);

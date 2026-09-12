@@ -408,14 +408,38 @@ export default function InterviewRoom() {
     }
   };
 
-  // Request End Interview (Requires peer acceptance)
-  const handleRequestEnd = () => {
+  // End Interview Immediately and Exit Room
+  const handleDirectEnd = () => {
     openModal({
-      title: 'Request to End Interview',
-      message: 'Are you sure you want to conclude the interview? Both participants must confirm to end the session. A confirmation request will be sent to your peer.',
-      confirmText: 'Send End Request',
+      title: 'End & Exit Interview',
+      message: 'Are you sure you want to conclude and exit this interview session? The room will be closed and marked completed, allowing you to start fresh interviews.',
+      confirmText: 'End & Exit Now',
       cancelText: 'Stay in Room',
       variant: 'danger',
+      icon: LogOut,
+      onConfirm: async () => {
+        closeModal();
+        try {
+          setEnding(true);
+          await api.post(`/interviews/sessions/${sessionId}/end`);
+          navigate('/interviews');
+        } catch (err) {
+          navigate('/interviews');
+        } finally {
+          setEnding(false);
+        }
+      },
+    });
+  };
+
+  // Request End Interview (Requires peer acceptance or allows instant exit)
+  const handleRequestEnd = () => {
+    openModal({
+      title: 'Conclude Interview Session',
+      message: 'Choose how you want to conclude this interview session. You can ask your peer to confirm, or end & exit immediately.',
+      confirmText: 'Send Request to Peer',
+      cancelText: 'End & Exit Now',
+      variant: 'primary',
       icon: LogOut,
       onConfirm: async () => {
         closeModal();
@@ -669,8 +693,16 @@ export default function InterviewRoom() {
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-mono text-[var(--red)] px-2.5 py-1.5 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-1.5 font-bold">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--red)]" />
-                <span>Waiting for Peer to Confirm End...</span>
+                <span>Waiting for Peer...</span>
               </span>
+              <button
+                onClick={handleDirectEnd}
+                disabled={ending}
+                className="btn btn-danger text-[11px] py-1 px-2.5 cursor-pointer font-bold shadow-sm"
+                title="End interview immediately without waiting"
+              >
+                End & Exit Now
+              </button>
               <button
                 onClick={handleDeclineEnd}
                 disabled={ending}
