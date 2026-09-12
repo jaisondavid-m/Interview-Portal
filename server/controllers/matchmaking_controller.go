@@ -381,7 +381,8 @@ func JoinMatchmaking(c *gin.Context) {
 		var initialQID uint = 0
 		var starterCode string = "// Write your solution here\n"
 		if selectedLevel != nil && len(selectedLevel.Questions) > 0 {
-			initialQ := selectedLevel.Questions[0]
+			rand.Seed(time.Now().UnixNano())
+			initialQ := selectedLevel.Questions[rand.Intn(len(selectedLevel.Questions))]
 			initialQID = initialQ.ID
 			starterCode = extractStarterCode(initialQ, starterCode)
 		}
@@ -615,6 +616,35 @@ func GetInterviewSession(c *gin.Context) {
 			"candidate_code":      session.CandidateCode,
 			"round":               1,
 		})
+	}
+
+	// Ensure Round 2 question is strictly different from Round 1 question
+	if session.Round == 2 && (session.CurrentQuestionID == session.Round1QuestionID || session.Round2QuestionID == 0) {
+		var candidateQuestions []models.InterviewQuestion
+		database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
+			Where("level_id = ? AND id != ?", session.LevelID, session.Round1QuestionID).
+			Find(&candidateQuestions)
+		if len(candidateQuestions) == 0 {
+			database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
+				Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
+				Where("interview_levels.track_id = ? AND interview_questions.id != ?", session.TrackID, session.Round1QuestionID).
+				Find(&candidateQuestions)
+		}
+		if len(candidateQuestions) > 0 {
+			rand.Seed(time.Now().UnixNano())
+			nextQ := candidateQuestions[rand.Intn(len(candidateQuestions))]
+			session.CurrentQuestionID = nextQ.ID
+			session.Round2QuestionID = nextQ.ID
+			session.CurrentQuestion = &nextQ
+			if session.CandidateCode == "" {
+				session.CandidateCode = extractStarterCode(nextQ, "")
+			}
+			database.DB.Model(&session).Updates(map[string]interface{}{
+				"current_question_id": nextQ.ID,
+				"round2_question_id":  nextQ.ID,
+				"candidate_code":      session.CandidateCode,
+			})
+		}
 	}
 
 	// Ensure started_at is populated and persisted
@@ -1098,23 +1128,31 @@ func performRoleSwitchInternal(session *models.InterviewSession) error {
 	session.LastExecutionTotal = 0
 	session.LastExecutedAt = nil
 
-	// 2. Load random next question for Round 2 (different from Round 1 question)
-	var allQuestions []models.InterviewQuestion
-	database.DB.Preload("Templates").Where("level_id = ?", session.LevelID).Find(&allQuestions)
-
+	// 2. Load candidate questions for Round 2 that are strictly DIFFERENT from Round 1
 	var candidateQuestions []models.InterviewQuestion
-	for _, q := range allQuestions {
-		if q.ID != session.Round1QuestionID {
-			candidateQuestions = append(candidateQuestions, q)
-		}
+	database.DB.Preload("Templates").
+		Where("level_id = ? AND id != ?", session.LevelID, session.Round1QuestionID).
+		Find(&candidateQuestions)
+
+	// If no other question found in the exact level, search across the entire track
+	if len(candidateQuestions) == 0 {
+		database.DB.Preload("Templates").
+			Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
+			Where("interview_levels.track_id = ? AND interview_questions.id != ?", session.TrackID, session.Round1QuestionID).
+			Find(&candidateQuestions)
+	}
+
+	// Fallback to any other question in the database
+	if len(candidateQuestions) == 0 {
+		database.DB.Preload("Templates").
+			Where("id != ?", session.Round1QuestionID).
+			Find(&candidateQuestions)
 	}
 
 	var nextQ models.InterviewQuestion
 	if len(candidateQuestions) > 0 {
 		rand.Seed(time.Now().UnixNano())
 		nextQ = candidateQuestions[rand.Intn(len(candidateQuestions))]
-	} else if len(allQuestions) > 0 {
-		nextQ = allQuestions[0]
 	}
 
 	if nextQ.ID > 0 {

@@ -544,6 +544,111 @@ func seedInterviewData(db *gorm.DB) {
 			log.Println("[INFO] Successfully seeded question: 'Valid Anagram Detection' in Level 1 DSA")
 		}
 	}
+
+	// Ensure System Design Level 1 has secondary question for Round 2
+	var sysLevel models.InterviewLevel
+	if err := db.Joins("JOIN interview_tracks ON interview_tracks.id = interview_levels.track_id").
+		Where("interview_tracks.slug = 'system-design' AND interview_levels.level_number = 1").
+		First(&sysLevel).Error; err == nil {
+		var urlCount int64
+		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%URL Shortener%'", sysLevel.ID).Count(&urlCount)
+		if urlCount == 0 {
+			tinyURL := models.InterviewQuestion{
+				LevelID:    sysLevel.ID,
+				Title:      "Design a Scalable URL Shortener (TinyURL)",
+				Prompt:     "Design a high-throughput URL shortening service like TinyURL that generates short aliases for long URLs, handling 100M new URLs created per month with sub-10ms redirect latency.",
+				Difficulty: "Medium",
+				Type:       models.ModeDiscussion,
+			}
+			db.Create(&tinyURL)
+			db.Create(&models.InterviewQuestionDetail{
+				QuestionID: tinyURL.ID,
+				Scenario:   "Global URL redirection system with 10:1 read-to-write ratio, analytics tracking, and high cache availability.",
+			})
+			db.Create(&models.InterviewQuestionHint{QuestionID: tinyURL.ID, Type: "talking_point", Content: "Base62 Encoding vs MD5/SHA256 Hash Truncation vs Distributed Key Generation Service (KGS)", OrderIndex: 1})
+			db.Create(&models.InterviewQuestionHint{QuestionID: tinyURL.ID, Type: "talking_point", Content: "Caching hot URLs with Redis LRU eviction tier", OrderIndex: 2})
+			db.Create(&models.InterviewQuestionHint{QuestionID: tinyURL.ID, Type: "tradeoff", Content: "HTTP 301 (Permanent Redirect - browser cached) vs HTTP 302 (Temporary Redirect - accurate click tracking)", OrderIndex: 3})
+			db.Create(&models.InterviewQuestionHint{QuestionID: tinyURL.ID, Type: "interview_tip", Content: "Probe on how the candidate generates unique 7-character Base62 keys without concurrency lock contention.", OrderIndex: 4})
+			log.Println("[INFO] Successfully seeded question: 'Design a Scalable URL Shortener' in Level 1 System Design")
+		}
+
+		var chatCount int64
+		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%Real-Time Chat%'", sysLevel.ID).Count(&chatCount)
+		if chatCount == 0 {
+			chatQ := models.InterviewQuestion{
+				LevelID:    sysLevel.ID,
+				Title:      "Design a Scalable Real-Time Chat System",
+				Prompt:     "Design a real-time messaging architecture like WhatsApp or Slack that supports 1-on-1 direct messaging, online presence status, and offline push notifications for 50 million daily active users.",
+				Difficulty: "Hard",
+				Type:       models.ModeDiscussion,
+			}
+			db.Create(&chatQ)
+			db.Create(&models.InterviewQuestionDetail{
+				QuestionID: chatQ.ID,
+				Scenario:   "Low-latency bidirectional WebSocket connection pool with distributed message broker (Kafka/RabbitMQ) and Cassandra message storage.",
+			})
+			db.Create(&models.InterviewQuestionHint{QuestionID: chatQ.ID, Type: "talking_point", Content: "WebSockets vs Long Polling vs Server-Sent Events (SSE)", OrderIndex: 1})
+			db.Create(&models.InterviewQuestionHint{QuestionID: chatQ.ID, Type: "talking_point", Content: "User session gateway service with Redis connection mapping", OrderIndex: 2})
+			db.Create(&models.InterviewQuestionHint{QuestionID: chatQ.ID, Type: "tradeoff", Content: "Message ordering guarantees: Sequential ID generation vs Snowflake IDs", OrderIndex: 3})
+			log.Println("[INFO] Successfully seeded question: 'Design a Scalable Real-Time Chat System' in Level 1 System Design")
+		}
+	}
+
+	// Ensure Core CS Level 1 has secondary question for Round 2
+	var coreLevel models.InterviewLevel
+	if err := db.Joins("JOIN interview_tracks ON interview_tracks.id = interview_levels.track_id").
+		Where("interview_tracks.slug = 'cs-core' AND interview_levels.level_number = 1").
+		First(&coreLevel).Error; err == nil {
+		var acidCount int64
+		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%ACID%'", coreLevel.ID).Count(&acidCount)
+		if acidCount == 0 {
+			acidQ := models.InterviewQuestion{
+				LevelID:    coreLevel.ID,
+				Title:      "Database ACID Properties & Isolation Levels",
+				Prompt:     "Walk me through the 4 ACID properties of relational databases and explain the differences between Read Committed, Repeatable Read, and Serializable isolation levels with real concurrency anomalies (Dirty Read, Non-repeatable Read, Phantom Read).",
+				Difficulty: "Medium",
+				Type:       models.ModeVerbalQA,
+			}
+			db.Create(&acidQ)
+			db.Create(&models.InterviewQuestionDetail{
+				QuestionID:  acidQ.ID,
+				IdealAnswer: "Atomicity ensures all-or-nothing transactions; Consistency preserves schema invariants; Isolation defines visibility across concurrent transactions; Durability guarantees committed writes survive crashes. Isolation levels mitigate Dirty Reads (Read Uncommitted), Non-Repeatable Reads (Read Committed), and Phantom Reads (Repeatable Read/Serializable) via MVCC or two-phase locking.",
+			})
+			db.Create(&models.InterviewQuestionHint{QuestionID: acidQ.ID, Type: "rubric", Content: "Defines all 4 ACID properties clearly", OrderIndex: 1})
+			db.Create(&models.InterviewQuestionHint{QuestionID: acidQ.ID, Type: "rubric", Content: "Explains MVCC (Multi-Version Concurrency Control) mechanism", OrderIndex: 2})
+			db.Create(&models.InterviewQuestionHint{QuestionID: acidQ.ID, Type: "rubric", Content: "Distinguishes Dirty Read vs Phantom Read accurately", OrderIndex: 3})
+			log.Println("[INFO] Successfully seeded question: 'Database ACID Properties' in Level 1 CS Core")
+		}
+	}
+
+	// Ensure MCQ Level 1 has secondary question for Round 2
+	var mcqLevel models.InterviewLevel
+	if err := db.Joins("JOIN interview_tracks ON interview_tracks.id = interview_levels.track_id").
+		Where("interview_tracks.slug = 'screening-mcq' AND interview_levels.level_number = 1").
+		First(&mcqLevel).Error; err == nil {
+		var bstCount int64
+		db.Model(&models.InterviewQuestion{}).Where("level_id = ? AND title LIKE '%Binary Search Tree%'", mcqLevel.ID).Count(&bstCount)
+		if bstCount == 0 {
+			bstQ := models.InterviewQuestion{
+				LevelID:    mcqLevel.ID,
+				Title:      "Binary Search Tree In-Order Traversal",
+				Prompt:     "Which tree traversal method always visits all keys of a valid Binary Search Tree (BST) in non-decreasing sorted order?",
+				Difficulty: "Easy",
+				Type:       models.ModeMCQ,
+			}
+			db.Create(&bstQ)
+			db.Create(&models.InterviewQuestionDetail{
+				QuestionID:    bstQ.ID,
+				CorrectOption: "B",
+				Explanation:   "In-order traversal visits the Left Subtree, Root Node, and Right Subtree in sequence. For any BST, this visits every node in strictly sorted ascending order.",
+			})
+			db.Create(&models.InterviewQuestionMCQOption{QuestionID: bstQ.ID, OptionKey: "A", OptionText: "Pre-order Traversal (Root, Left, Right)", IsCorrect: false})
+			db.Create(&models.InterviewQuestionMCQOption{QuestionID: bstQ.ID, OptionKey: "B", OptionText: "In-order Traversal (Left, Root, Right)", IsCorrect: true})
+			db.Create(&models.InterviewQuestionMCQOption{QuestionID: bstQ.ID, OptionKey: "C", OptionText: "Post-order Traversal (Left, Right, Root)", IsCorrect: false})
+			db.Create(&models.InterviewQuestionMCQOption{QuestionID: bstQ.ID, OptionKey: "D", OptionText: "Level-order BFS Traversal", IsCorrect: false})
+			log.Println("[INFO] Successfully seeded question: 'Binary Search Tree In-Order Traversal' in Level 1 MCQ")
+		}
+	}
 }
 
 // seedAdminAndStudents checks and seeds default admin and demo student accounts
