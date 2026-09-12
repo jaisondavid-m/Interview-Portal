@@ -344,14 +344,18 @@ export default function AdminQuestionEditor() {
         await api.post(`/admin/interviews/levels/${levelId}/questions`, requestBody);
       }
 
+      const returnUrl = trackId && levelId
+        ? `/admin/interviews/${trackId}/levels/${levelId}/questions`
+        : '/admin/interviews';
+
       setModalConfig({
         isOpen: true,
         title: 'Success',
         message: `Question "${title}" saved successfully.`,
         variant: 'primary',
         showCancel: false,
-        confirmText: 'Back to Configuration',
-        onConfirm: () => navigate('/admin/interviews/config'),
+        confirmText: 'Back to Questions',
+        onConfirm: () => navigate(returnUrl),
       });
     } catch (err) {
       setModalConfig({
@@ -367,6 +371,10 @@ export default function AdminQuestionEditor() {
       setSaving(false);
     }
   };
+
+  const returnUrl = trackId && levelId
+    ? `/admin/interviews/${trackId}/levels/${levelId}/questions`
+    : '/admin/interviews';
 
   if (loading) {
     return (
@@ -387,11 +395,11 @@ export default function AdminQuestionEditor() {
           <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-muted)]">
             <button
               type="button"
-              onClick={() => navigate('/admin/interviews/config')}
-              className="hover:text-[var(--text-primary)] flex items-center gap-1"
+              onClick={() => navigate(returnUrl)}
+              className="hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Track Hub</span>
+              <span>Back to Questions</span>
             </button>
             <ChevronRight className="w-3 h-3 opacity-40" />
             <span className="text-[var(--accent)] font-bold">{track?.title || 'Track'}</span>
@@ -411,8 +419,8 @@ export default function AdminQuestionEditor() {
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <button
             type="button"
-            onClick={() => navigate('/admin/interviews/config')}
-            className="btn btn-secondary text-xs py-2 px-3.5"
+            onClick={() => navigate(returnUrl)}
+            className="btn btn-secondary text-xs py-2 px-3.5 cursor-pointer"
           >
             Cancel
           </button>
@@ -884,12 +892,12 @@ export default function AdminQuestionEditor() {
               <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
                 Target Time & Space Complexity
               </label>
-              <input
-                type="text"
+              <textarea
                 value={expectedComplexity}
                 onChange={(e) => setExpectedComplexity(e.target.value)}
-                placeholder="e.g. Time: O(N), Space: O(1) auxiliary"
-                className="custom-input text-[12px] font-mono"
+                placeholder="e.g. Time: O(N)&#10;Space: O(1) auxiliary"
+                rows={3}
+                className="custom-input text-[12px] font-mono resize-y"
               />
             </div>
           </div>

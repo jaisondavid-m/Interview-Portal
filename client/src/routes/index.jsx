@@ -77,6 +77,10 @@ export const router = createBrowserRouter([
             element: <AdminInterviewConfig />,
           },
           {
+            path: 'admin/interviews/config',
+            element: <Navigate to="/admin/interviews" replace />,
+          },
+          {
             path: 'admin/feedback',
             element: <AdminFeedbackConfig />,
           },
