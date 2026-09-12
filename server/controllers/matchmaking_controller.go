@@ -1664,8 +1664,21 @@ func AdminGetInterviewSessionByID(c *gin.Context) {
 		return
 	}
 
+	var feedbacks []models.InterviewFeedback
+	database.DB.
+		Where("session_id = ?", session.ID).
+		Preload("Reviewer").
+		Preload("Reviewee").
+		Preload("Responses").
+		Preload("Responses.Question").
+		Preload("Responses.SelectedOption").
+		Order("created_at asc").
+		Find(&feedbacks)
+
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   session,
+		"status":    "success",
+		"data":      session,
+		"feedbacks": feedbacks,
 	})
 }
+

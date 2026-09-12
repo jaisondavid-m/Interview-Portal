@@ -94,10 +94,15 @@ func runMigrations(db *gorm.DB) error {
 		&models.InterviewQuestionMCQOption{},
 		&models.MatchmakingQueueEntry{},
 		&models.InterviewSession{},
+		&models.FeedbackQuestion{},
+		&models.FeedbackQuestionOption{},
+		&models.InterviewFeedback{},
+		&models.InterviewFeedbackResponse{},
 	)
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)
 		seedInterviewData(db)
+		seedFeedbackQuestions(db)
 	}
 	return err
 }
@@ -706,3 +711,97 @@ func seedAdminAndStudents(db *gorm.DB) {
 		}
 	}
 }
+
+// seedFeedbackQuestions creates default relational feedback questions if none exist
+func seedFeedbackQuestions(db *gorm.DB) {
+	var count int64
+	db.Model(&models.FeedbackQuestion{}).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	log.Println("[INFO] Seeding default peer feedback questions...")
+
+	type SeedQuestion struct {
+		Text       string
+		Type       string
+		IsRequired bool
+		OrderIndex int
+		Options    []string
+	}
+
+	questions := []SeedQuestion{
+		{
+			Text:       "How would you rate the student's technical knowledge?",
+			Type:       "mcq",
+			IsRequired: true,
+			OrderIndex: 1,
+			Options:    []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			Text:       "How would you rate the student's communication?",
+			Type:       "mcq",
+			IsRequired: true,
+			OrderIndex: 2,
+			Options:    []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			Text:       "Was the student able to explain their approach clearly?",
+			Type:       "yes_no",
+			IsRequired: true,
+			OrderIndex: 3,
+			Options:    []string{"Yes", "No"},
+		},
+		{
+			Text:       "Did the student actively participate in the interview?",
+			Type:       "yes_no",
+			IsRequired: true,
+			OrderIndex: 4,
+			Options:    []string{"Yes", "No"},
+		},
+		{
+			Text:       "How well did the student handle feedback?",
+			Type:       "mcq",
+			IsRequired: true,
+			OrderIndex: 5,
+			Options:    []string{"Excellent", "Good", "Average", "Poor"},
+		},
+		{
+			Text:       "Additional feedback & suggestions:",
+			Type:       "text",
+			IsRequired: false,
+			OrderIndex: 6,
+			Options:    nil,
+		},
+	}
+
+	for _, q := range questions {
+		questionRecord := models.FeedbackQuestion{
+			QuestionText: q.Text,
+			QuestionType: q.Type,
+			IsRequired:   q.IsRequired,
+			OrderIndex:   q.OrderIndex,
+			IsActive:     true,
+		}
+
+		if err := db.Create(&questionRecord).Error; err != nil {
+			log.Printf("[ERROR] Failed to seed feedback question '%s': %v\n", q.Text, err)
+			continue
+		}
+
+		// Relational child options
+		for optIdx, optText := range q.Options {
+			optRecord := models.FeedbackQuestionOption{
+				QuestionID: questionRecord.ID,
+				OptionText: optText,
+				OrderIndex: optIdx + 1,
+			}
+			if err := db.Create(&optRecord).Error; err != nil {
+				log.Printf("[ERROR] Failed to seed option '%s' for question %d: %v\n", optText, questionRecord.ID, err)
+			}
+		}
+	}
+
+	log.Println("[INFO] Successfully seeded peer feedback questions.")
+}
+

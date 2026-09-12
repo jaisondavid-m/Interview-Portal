@@ -13,6 +13,7 @@ import Login from '../Pages/Login';
 import AdminUsers from '../Pages/AdminUsers';
 import AdminInterviewConfig from '../Pages/AdminInterviewConfig';
 import AdminInterviewHistory from '../Pages/AdminInterviewHistory';
+import AdminFeedbackConfig from '../Pages/AdminFeedbackConfig';
 import AdminQuestionEditor from '../Pages/AdminQuestionEditor';
 import StudentInterviews from '../Pages/StudentInterviews';
 import InterviewRoom from '../Pages/InterviewRoom';
@@ -74,6 +75,10 @@ export const router = createBrowserRouter([
           {
             path: 'admin/interviews',
             element: <AdminInterviewConfig />,
+          },
+          {
+            path: 'admin/feedback',
+            element: <AdminFeedbackConfig />,
           },
           {
             path: 'admin/history',

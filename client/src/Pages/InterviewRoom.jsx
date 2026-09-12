@@ -28,6 +28,7 @@ import api from '../api/axios';
 import CodeEditor from '../Components/CodeEditor';
 import TestCasesConsole from '../Components/TestCasesConsole';
 import ConfirmModal from '../Components/ConfirmModal';
+import PeerFeedbackModal from '../Components/PeerFeedbackModal';
 
 import { getStarterTemplate } from '../utils/starterTemplates';
 
@@ -42,6 +43,9 @@ export default function InterviewRoom() {
   const [error, setError] = useState('');
   const [switching, setSwitching] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [hasFeedbackSubmitted, setHasFeedbackSubmitted] = useState(false);
+  const feedbackCheckedRef = useRef(false);
   const [elapsedSecs, setElapsedSecs] = useState(() => {
     try {
       const cachedStart = sessionStorage.getItem(`interview_started_${sessionId}`);
@@ -230,6 +234,26 @@ export default function InterviewRoom() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [sessionData?.started_at, sessionData?.status, sessionData?.ended_at]);
+
+  // Auto-prompt peer feedback popup when session concludes
+  useEffect(() => {
+    if (sessionData?.status === 'completed' && !feedbackCheckedRef.current) {
+      feedbackCheckedRef.current = true;
+      api.get(`/interviews/sessions/${sessionId}/feedback`)
+        .then((res) => {
+          const data = res?.data || res;
+          if (data?.has_submitted) {
+            setHasFeedbackSubmitted(true);
+          } else {
+            setHasFeedbackSubmitted(false);
+            setShowFeedbackModal(true);
+          }
+        })
+        .catch(() => {
+          setShowFeedbackModal(true);
+        });
+    }
+  }, [sessionData?.status, sessionId]);
 
   // Sync candidate code to server (debounced)
   const handleCodeChange = (newCode) => {
@@ -682,13 +706,23 @@ export default function InterviewRoom() {
 
           {/* MUTUAL CONSENT END INTERVIEW BUTTON */}
           {isCompleted ? (
-            <button
-              onClick={() => navigate('/interviews')}
-              className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Exit Session</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFeedbackModal(true)}
+                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer shadow-sm"
+                title="Give or review feedback for your peer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>{hasFeedbackSubmitted ? 'Peer Feedback Submitted' : 'Give Peer Feedback'}</span>
+              </button>
+              <button
+                onClick={() => navigate('/interviews')}
+                className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Exit Room</span>
+              </button>
+            </div>
           ) : isEndRequestedByMe ? (
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-mono text-[var(--red)] px-2.5 py-1.5 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-1.5 font-bold">
@@ -1170,6 +1204,18 @@ export default function InterviewRoom() {
 
       {/* Confirmation & Alert Modal */}
       <ConfirmModal {...modalConfig} onClose={closeModal} />
+
+      {/* Dynamic Peer Feedback Modal */}
+      <PeerFeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        sessionId={sessionId}
+        peerUser={peerUser}
+        onSubmitted={() => {
+          setHasFeedbackSubmitted(true);
+          fetchSession();
+        }}
+      />
     </div>
   );
 }

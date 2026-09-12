@@ -53,6 +53,11 @@ func SetupRouter() *gin.Engine {
 			interviews.POST("/sessions/:id/request-end", controllers.RequestSessionEndInterview)
 			interviews.POST("/sessions/:id/accept-end", controllers.AcceptSessionEndInterview)
 			interviews.POST("/sessions/:id/decline-end", controllers.DeclineSessionEndInterview)
+
+			// Peer Feedback
+			interviews.GET("/feedback/questions", controllers.GetActiveFeedbackQuestions)
+			interviews.GET("/sessions/:id/feedback", controllers.GetSessionFeedbackStatus)
+			interviews.POST("/sessions/:id/feedback", controllers.SubmitSessionFeedback)
 		}
 
 		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)
@@ -86,6 +91,13 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/interviews/questions/:id", controllers.AdminGetQuestionByID)
 			admin.PUT("/interviews/questions/:id", controllers.AdminUpdateQuestion)
 			admin.DELETE("/interviews/questions/:id", controllers.AdminDeleteQuestion)
+
+			// Peer Feedback Configuration & Submissions
+			admin.GET("/feedback/questions", controllers.AdminGetFeedbackQuestions)
+			admin.POST("/feedback/questions", controllers.AdminCreateFeedbackQuestion)
+			admin.PUT("/feedback/questions/:id", controllers.AdminUpdateFeedbackQuestion)
+			admin.DELETE("/feedback/questions/:id", controllers.AdminDeleteFeedbackQuestion)
+			admin.GET("/feedback/submissions", controllers.AdminGetFeedbackSubmissions)
 
 			// Interview History & Meeting Details
 			admin.GET("/interviews/sessions", controllers.AdminGetInterviewSessions)

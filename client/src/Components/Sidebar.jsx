@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, SlidersHorizontal, Video, History } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, SlidersHorizontal, Video, History, MessageSquareCheck } from 'lucide-react';
 import api from '../api/axios';
 
 export default function Sidebar() {
@@ -28,6 +28,7 @@ export default function Sidebar() {
     ? [
         { name: 'User Management', path: '/admin/users', icon: Users },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
+        { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
         { name: 'Interview History', path: '/admin/history', icon: History },
       ]
     : [

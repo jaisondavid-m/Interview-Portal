@@ -482,6 +482,74 @@ export default function AdminInterviewHistory() {
                   </div>
                 </div>
 
+                {/* Mutual Peer Feedback Section */}
+                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <Award className="w-4 h-4 text-[var(--accent)]" />
+                      <span>Mutual Peer Reviews & Feedback</span>
+                    </h3>
+                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                      {(detailedSession?.feedbacks || []).length} / 2 Submitted
+                    </span>
+                  </div>
+
+                  {(!detailedSession?.feedbacks || detailedSession.feedbacks.length === 0) ? (
+                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] text-center text-xs text-[var(--text-muted)]">
+                      No peer feedback submitted for this session yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {detailedSession.feedbacks.map((fb) => {
+                        const rev = fb.reviewer || {};
+                        const target = fb.reviewee || {};
+                        const responses = fb.responses || [];
+
+                        return (
+                          <div
+                            key={fb.id}
+                            className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3"
+                          >
+                            <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className="font-bold text-[var(--text-primary)]">
+                                  {rev.name}
+                                </span>
+                                <span className="text-[var(--text-muted)] font-mono">evaluated</span>
+                                <span className="font-bold text-purple-600 dark:text-purple-400">
+                                  {target.name}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                {formatDateTime(fb.created_at)}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                              {responses.map((resp) => {
+                                const q = resp.question || {};
+                                return (
+                                  <div
+                                    key={resp.id}
+                                    className="p-2.5 rounded bg-[var(--bg-card)] border border-[var(--border)] space-y-1"
+                                  >
+                                    <p className="text-[var(--text-muted)] font-medium text-[11px]">
+                                      {q.question_text || `Question #${resp.question_id}`}
+                                    </p>
+                                    <p className="font-bold font-mono text-[var(--text-primary)] text-[12px]">
+                                      {resp.answer_value || '—'}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
                 {/* Timestamps */}
                 <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] flex-wrap gap-2">
                   <span>Started: {formatDateTime(selectedSession.started_at)}</span>
