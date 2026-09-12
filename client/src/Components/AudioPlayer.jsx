@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Play,
   Pause,
   Volume2,
   VolumeX,
+  Volume1,
   Download,
   RotateCcw,
   Radio,
@@ -12,7 +13,11 @@ import {
   Loader2,
   RefreshCw,
   FastForward,
-  Rewind
+  Rewind,
+  SkipBack,
+  SkipForward,
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -21,6 +26,10 @@ export default function AudioPlayer({
   title = 'Interview Audio Recording',
 }) {
   const audioRef = useRef(null);
+  const progressBarRef = useRef(null);
+  const blobUrlRef = useRef('');
+  const rafRef = useRef(null);
+
   const [blobUrl, setBlobUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -30,8 +39,27 @@ export default function AudioPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [hoverTime, setHoverTime] = useState(null);
+  const [hoverPosition, setHoverPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   const audioFileName = recording?.file_name || '';
+
+  // Calculate effective duration reliably (fallback to database duration_seconds if audio metadata is Infinity or 0)
+  const effectiveDuration = useMemo(() => {
+    if (duration && isFinite(duration) && duration > 0) {
+      return duration;
+    }
+    if (recording?.duration_seconds && isFinite(recording.duration_seconds) && recording.duration_seconds > 0) {
+      return recording.duration_seconds;
+    }
+    return 0;
+  }, [duration, recording?.duration_seconds]);
+
+  // Keep track of active blob url ref for clean revocation on unmount
+  useEffect(() => {
+    blobUrlRef.current = blobUrl;
+  }, [blobUrl]);
 
   // Resolve base API URL
   let audioBase = '/api/v1';
@@ -53,7 +81,6 @@ export default function AudioPlayer({
     setIsLoading(true);
     setLoadError('');
 
-    // List candidate URLs to fetch audio from
     const candidateUrls = [
       `${audioBase}/recordings/${encodeURIComponent(audioFileName)}`,
       `/recordings/${encodeURIComponent(audioFileName)}`,
@@ -62,7 +89,7 @@ export default function AudioPlayer({
 
     let loadedBlob = null;
 
-    // 1. Try Axios first (uses configured auth cookies & interceptors)
+    // 1. Try Axios first (uses configured auth cookies & credentials)
     for (const url of candidateUrls) {
       try {
         const res = await api.get(url, { responseType: 'blob' });
@@ -101,7 +128,7 @@ export default function AudioPlayer({
       const cleanBlob = new Blob([loadedBlob], { type: mimeType });
       const objectUrl = URL.createObjectURL(cleanBlob);
       setBlobUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
         return objectUrl;
       });
       setLoadError('');
@@ -113,64 +140,133 @@ export default function AudioPlayer({
     setIsLoading(false);
   }, [audioFileName, audioBase, directStreamUrl]);
 
+  // Initial load and unmount teardown
   useEffect(() => {
     if (recording?.duration_seconds && recording.duration_seconds > 0) {
       setDuration(recording.duration_seconds);
     }
+    setCurrentTime(0);
+    setIsPlaying(false);
     loadAudioBlob();
 
     return () => {
-      setBlobUrl((prev) => {
-        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
-        return '';
-      });
+      // Cleanly stop any playing audio on component unmount (e.g. closing modal)
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.removeAttribute('src');
+          audioRef.current.load();
+        } catch (err) {
+          // ignore
+        }
+      }
+      if (blobUrlRef.current && blobUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(blobUrlRef.current);
+      }
     };
   }, [recording?.id, recording?.file_name, loadAudioBlob]);
 
-  // Handle audio element events
+  // Continuously sync currentTime during active playback using requestAnimationFrame
+  useEffect(() => {
+    const updateProgress = () => {
+      if (audioRef.current && !isDragging) {
+        const curr = audioRef.current.currentTime;
+        setCurrentTime(curr);
+
+        // Check if reached end of effective duration
+        if (effectiveDuration > 0 && curr >= effectiveDuration) {
+          setIsPlaying(false);
+          setCurrentTime(effectiveDuration);
+        }
+      }
+      if (isPlaying) {
+        rafRef.current = requestAnimationFrame(updateProgress);
+      }
+    };
+
+    if (isPlaying) {
+      rafRef.current = requestAnimationFrame(updateProgress);
+    } else if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [isPlaying, isDragging, effectiveDuration]);
+
+  // Handle native audio element event listeners
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      if (!isDragging) {
+        setCurrentTime(audio.currentTime);
+      }
     };
 
     const handleLoadedMetadata = () => {
       setLoadError('');
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
         setDuration(audio.duration);
+      } else if (recording?.duration_seconds && recording.duration_seconds > 0) {
+        setDuration(recording.duration_seconds);
       }
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+      setLoadError('');
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
+      if (audio) audio.currentTime = 0;
     };
 
     const handleError = (e) => {
-      console.warn('[AudioPlayer] In-browser playback error:', e);
-      // If error occurs with direct stream, try reloading blob
-      if (!blobUrl.startsWith('blob:')) {
+      // Only set error if audio is not already playing and actually failed
+      if (!audio.paused || audio.currentTime > 0) return;
+      console.warn('[AudioPlayer] Playback error event:', e);
+      if (blobUrl && !blobUrl.startsWith('blob:')) {
         loadAudioBlob();
       } else {
-        setLoadError('Browser was unable to decode the audio format. Click Retry or use Direct Download.');
+        setLoadError('Browser was unable to decode audio format. Use the Download button to listen locally.');
       }
       setIsPlaying(false);
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [blobUrl, loadAudioBlob]);
+  }, [blobUrl, isDragging, loadAudioBlob, recording?.duration_seconds]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -179,20 +275,61 @@ export default function AudioPlayer({
       setIsPlaying(false);
     } else {
       setLoadError('');
-      audioRef.current
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-        })
-        .catch((e) => {
-          console.warn('[AudioPlayer] Play request failed:', e);
-          setLoadError('Failed to play audio in browser.');
-          setIsPlaying(false);
-        });
+      // If at end, restart
+      if (effectiveDuration > 0 && currentTime >= effectiveDuration - 0.2) {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+      }
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch((e) => {
+            console.warn('[AudioPlayer] Play request failed:', e);
+            setLoadError('Failed to play audio in browser.');
+            setIsPlaying(false);
+          });
+      }
     }
   };
 
-  const handleSeek = (e) => {
+  const seekToPosition = (clientPercent) => {
+    if (!audioRef.current) return;
+    const clampedPercent = Math.max(0, Math.min(1, clientPercent));
+    const target = effectiveDuration > 0 ? clampedPercent * effectiveDuration : 0;
+    setCurrentTime(target);
+    audioRef.current.currentTime = target;
+  };
+
+  const handleProgressBarClick = (e) => {
+    if (!progressBarRef.current) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    seekToPosition(percent);
+  };
+
+  const handleProgressBarMouseMove = (e) => {
+    if (!progressBarRef.current || effectiveDuration <= 0) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setHoverTime(percent * effectiveDuration);
+    setHoverPosition(percent * 100);
+
+    if (isDragging) {
+      seekToPosition(percent);
+    }
+  };
+
+  const handleProgressBarMouseLeave = () => {
+    setHoverTime(null);
+    if (isDragging) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleSliderChange = (e) => {
     const seekTarget = parseFloat(e.target.value);
     setCurrentTime(seekTarget);
     if (audioRef.current) {
@@ -202,19 +339,23 @@ export default function AudioPlayer({
 
   const skipTime = (seconds) => {
     if (!audioRef.current) return;
-    const target = Math.max(0, Math.min(duration, audioRef.current.currentTime + seconds));
+    const maxDur = effectiveDuration > 0 ? effectiveDuration : (audioRef.current.duration || 100);
+    const target = Math.max(0, Math.min(maxDur, audioRef.current.currentTime + seconds));
     audioRef.current.currentTime = target;
     setCurrentTime(target);
   };
 
-  const handleSpeedChange = () => {
+  const handleSpeedChange = (speed) => {
+    setPlaybackRate(speed);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = speed;
+    }
+  };
+
+  const cycleSpeed = () => {
     const rates = [0.75, 1, 1.25, 1.5, 2];
     const nextIdx = (rates.indexOf(playbackRate) + 1) % rates.length;
-    const nextRate = rates[nextIdx];
-    setPlaybackRate(nextRate);
-    if (audioRef.current) {
-      audioRef.current.playbackRate = nextRate;
-    }
+    handleSpeedChange(rates[nextIdx]);
   };
 
   const toggleMute = () => {
@@ -250,18 +391,27 @@ export default function AudioPlayer({
 
   if (!recording || !audioFileName) {
     return (
-      <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] text-center text-xs text-[var(--text-muted)] space-y-1">
+      <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] text-center text-xs text-[var(--text-muted)] space-y-1.5">
         <FileAudio className="w-6 h-6 mx-auto opacity-40 text-[var(--text-muted)]" />
-        <p>No audio recording available for this interview session.</p>
+        <p className="font-medium">No audio recording available for this interview session.</p>
       </div>
     );
   }
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercent = effectiveDuration > 0
+    ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
+    : 0;
+
+  // Generate synthetic waveform bars for visual appeal and acoustic feel
+  const waveformBars = [
+    30, 45, 60, 25, 75, 90, 65, 40, 55, 80, 100, 70, 85, 45, 30, 60, 75, 50,
+    95, 80, 60, 40, 70, 85, 90, 55, 35, 65, 80, 95, 70, 50, 40, 60, 75, 90,
+    80, 65, 45, 30, 55, 75, 90, 60, 40, 70, 85, 50, 65, 80
+  ];
 
   return (
-    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border-accent)] space-y-3.5 shadow-sm">
-      {/* HTML5 Audio Element with local blob URL */}
+    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border-2 border-[var(--border-strong)] space-y-4 shadow-md transition-all">
+      {/* Hidden HTML5 Audio Element with local blob URL */}
       {blobUrl && (
         <audio
           ref={audioRef}
@@ -270,39 +420,54 @@ export default function AudioPlayer({
         />
       )}
 
-      {/* Header Info */}
-      <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-[var(--border)]">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold relative">
+      {/* Header Info Banner */}
+      <div className="flex items-center justify-between gap-3 flex-wrap pb-3 border-b border-[var(--border)]">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-[var(--radius-sm)] flex items-center justify-center font-bold relative transition-colors ${
+            isPlaying
+              ? 'bg-[var(--accent)] text-white shadow-sm ring-2 ring-[var(--accent)]/30'
+              : 'bg-[var(--accent-dim)] text-[var(--accent)]'
+          }`}>
             {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : isPlaying ? (
-              <div className="flex items-end gap-0.5 h-3.5">
-                <span className="w-1 bg-[var(--accent)] rounded-xs animate-pulse h-full" />
-                <span className="w-1 bg-[var(--accent)] rounded-xs animate-pulse h-2/3 delay-75" />
-                <span className="w-1 bg-[var(--accent)] rounded-xs animate-pulse h-4/5 delay-150" />
+              <div className="flex items-end gap-0.5 h-4">
+                <span className="w-1 bg-white rounded-xs animate-pulse h-full" />
+                <span className="w-1 bg-white rounded-xs animate-pulse h-2/3 delay-75" />
+                <span className="w-1 bg-white rounded-xs animate-pulse h-4/5 delay-150" />
+                <span className="w-1 bg-white rounded-xs animate-pulse h-1/2 delay-100" />
               </div>
             ) : (
-              <Radio className="w-4 h-4" />
+              <Radio className="w-5 h-5" />
             )}
           </div>
+
           <div>
-            <h4 className="text-[13px] font-bold text-[var(--text-primary)] font-ui">
-              {title}
-            </h4>
-            <p className="text-[11px] font-mono text-[var(--text-muted)]">
-              File: {audioFileName} • {formatFileSize(recording.file_size)}
+            <div className="flex items-center gap-2">
+              <h4 className="text-[13px] font-bold text-[var(--text-primary)] font-ui">
+                {title}
+              </h4>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
+                isPlaying
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]'
+              }`}>
+                {isLoading ? 'Buffering' : isPlaying ? 'Playing' : 'Ready'}
+              </span>
+            </div>
+            <p className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5">
+              {audioFileName} • {formatFileSize(recording.file_size)} • {formatTime(effectiveDuration)}
             </p>
           </div>
         </div>
 
-        {/* Header Actions: Reload + Download */}
-        <div className="flex items-center gap-1.5">
+        {/* Action buttons: Reload & Download */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={loadAudioBlob}
             disabled={isLoading}
-            className="btn btn-secondary text-[11px] py-1 px-2 flex items-center gap-1 font-mono"
+            className="btn btn-secondary text-[11px] py-1.5 px-2.5 flex items-center gap-1.5 font-mono shadow-xs"
             title="Reload audio stream"
           >
             <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
@@ -312,7 +477,7 @@ export default function AudioPlayer({
           <a
             href={blobUrl || directStreamUrl}
             download={audioFileName}
-            className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1.5 font-mono"
+            className="btn btn-primary text-[11px] py-1.5 px-3 flex items-center gap-1.5 font-mono shadow-xs"
             title="Download original audio file"
           >
             <Download className="w-3.5 h-3.5" />
@@ -321,92 +486,182 @@ export default function AudioPlayer({
         </div>
       </div>
 
-      {/* Player Scrubber & Time */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-          <span className="text-[var(--text-primary)] font-bold">{formatTime(currentTime)}</span>
-          <span>{formatTime(duration)}</span>
+      {/* Interactive Waveform & Timeline Track */}
+      <div className="space-y-2 bg-[var(--bg-raised)] p-3.5 rounded-[var(--radius-sm)] border border-[var(--border)]">
+        {/* Waveform Visualization Bars */}
+        <div
+          ref={progressBarRef}
+          onClick={handleProgressBarClick}
+          onMouseMove={handleProgressBarMouseMove}
+          onMouseLeave={handleProgressBarMouseLeave}
+          onMouseDown={() => setIsDragging(true)}
+          onMouseUp={() => setIsDragging(false)}
+          className="relative h-10 w-full flex items-end gap-[3px] px-1 cursor-pointer select-none group"
+          title="Click or drag to seek"
+        >
+          {waveformBars.map((heightPercent, idx) => {
+            const barPercent = (idx / (waveformBars.length - 1)) * 100;
+            const isPlayed = barPercent <= progressPercent;
+
+            return (
+              <div
+                key={idx}
+                className="flex-1 rounded-full transition-all duration-75"
+                style={{
+                  height: `${Math.max(15, heightPercent)}%`,
+                  backgroundColor: isPlayed
+                    ? 'var(--accent)'
+                    : 'var(--border-strong)',
+                  opacity: isPlayed ? 1 : 0.6,
+                }}
+              />
+            );
+          })}
+
+          {/* Hover Time Tooltip */}
+          {hoverTime !== null && (
+            <div
+              className="absolute -top-7 transform -translate-x-1/2 bg-[var(--text-primary)] text-[var(--bg-base)] text-[10px] font-mono font-bold py-0.5 px-1.5 rounded shadow-lg pointer-events-none z-10 whitespace-nowrap"
+              style={{ left: `${hoverPosition}%` }}
+            >
+              {formatTime(hoverTime)}
+            </div>
+          )}
         </div>
 
-        {/* Range Slider with visual fill */}
-        <div className="relative flex items-center">
+        {/* Continuous Scrubbing Progress Line */}
+        <div className="relative pt-1">
+          {/* Visual Track Background */}
+          <div
+            onClick={handleProgressBarClick}
+            className="relative w-full h-2 rounded-full bg-[var(--border)] overflow-hidden cursor-pointer"
+          >
+            <div
+              className="h-full bg-[var(--accent)] transition-all duration-75 rounded-full"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* Native Range Slider Overlay for accessibility and touch scrub */}
           <input
             type="range"
             min="0"
-            max={duration || 100}
-            step="0.1"
+            max={effectiveDuration > 0 ? effectiveDuration : 100}
+            step="0.05"
             value={currentTime}
-            onChange={handleSeek}
-            disabled={isLoading}
-            className="w-full h-2 rounded-lg bg-[var(--border)] accent-[var(--accent)] cursor-pointer"
+            onChange={handleSliderChange}
+            disabled={isLoading || effectiveDuration <= 0}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            aria-label="Audio seeker timeline"
           />
+        </div>
+
+        {/* Time Labels: Start to End */}
+        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] pt-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-[var(--text-primary)]">{formatTime(currentTime)}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">/</span>
+            <span>{formatTime(effectiveDuration)}</span>
+          </div>
+
+          <div className="text-[11px] font-mono text-[var(--text-muted)]">
+            {effectiveDuration > currentTime && (
+              <span>-{formatTime(effectiveDuration - currentTime)} remaining</span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Controls Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-        {/* Play/Pause & Quick Skip & Speed */}
+      {/* Control Buttons & Audio Options */}
+      <div className="flex items-center justify-between gap-4 flex-wrap pt-1">
+        {/* Playback Controls */}
         <div className="flex items-center gap-2">
-          {/* -10s Skip */}
+          {/* Restart / Back to start */}
+          <button
+            type="button"
+            onClick={() => skipTime(-effectiveDuration)}
+            disabled={isLoading}
+            className="p-2 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition-colors cursor-pointer"
+            title="Jump to start"
+          >
+            <SkipBack className="w-4 h-4" />
+          </button>
+
+          {/* -10s Rewind */}
           <button
             type="button"
             onClick={() => skipTime(-10)}
             disabled={isLoading}
-            className="p-1.5 rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
+            className="p-2 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition-colors cursor-pointer"
             title="Rewind 10 seconds"
           >
             <Rewind className="w-4 h-4" />
           </button>
 
-          {/* Play/Pause Primary Button */}
+          {/* Big Play / Pause Button */}
           <button
             type="button"
             onClick={togglePlay}
             disabled={isLoading}
-            className="w-10 h-10 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-            title={isPlaying ? 'Pause' : 'Play'}
+            className="w-11 h-11 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            title={isPlaying ? 'Pause' : 'Play audio'}
           >
             {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <Loader2 className="w-5 h-5 animate-spin text-white" />
             ) : isPlaying ? (
-              <Pause className="w-4 h-4 fill-current" />
+              <Pause className="w-5 h-5 fill-current" />
             ) : (
-              <Play className="w-4 h-4 fill-current ml-0.5" />
+              <Play className="w-5 h-5 fill-current ml-0.5" />
             )}
           </button>
 
-          {/* +10s Skip */}
+          {/* +10s Fast Forward */}
           <button
             type="button"
             onClick={() => skipTime(10)}
             disabled={isLoading}
-            className="p-1.5 rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
+            className="p-2 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition-colors cursor-pointer"
             title="Forward 10 seconds"
           >
             <FastForward className="w-4 h-4" />
           </button>
 
-          {/* Speed Multiplier */}
-          <button
-            type="button"
-            onClick={handleSpeedChange}
-            className="ml-1 px-2.5 py-1 rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors cursor-pointer"
-            title="Change playback speed"
-          >
-            {playbackRate}x
-          </button>
+          {/* Speed Selector Chips */}
+          <div className="flex items-center gap-1 ml-1 bg-[var(--bg-raised)] p-0.5 rounded-[var(--radius-sm)] border border-[var(--border)]">
+            {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
+              <button
+                key={rate}
+                type="button"
+                onClick={() => handleSpeedChange(rate)}
+                className={`px-2 py-1 text-[11px] font-mono font-bold rounded transition-all ${
+                  playbackRate === rate
+                    ? 'bg-[var(--accent)] text-white shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {rate}x
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Volume Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 bg-[var(--bg-raised)] py-1.5 px-3 rounded-[var(--radius-sm)] border border-[var(--border)]">
           <button
             type="button"
             onClick={toggleMute}
             className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             title={isMuted ? 'Unmute' : 'Mute'}
           >
-            {isMuted || volume === 0 ? <VolumeX className="w-4 h-4 text-[var(--red)]" /> : <Volume2 className="w-4 h-4" />}
+            {isMuted || volume === 0 ? (
+              <VolumeX className="w-4 h-4 text-rose-500" />
+            ) : volume < 0.5 ? (
+              <Volume1 className="w-4 h-4 text-[var(--text-primary)]" />
+            ) : (
+              <Volume2 className="w-4 h-4 text-[var(--text-primary)]" />
+            )}
           </button>
+
           <input
             type="range"
             min="0"
@@ -414,23 +669,41 @@ export default function AudioPlayer({
             step="0.05"
             value={isMuted ? 0 : volume}
             onChange={handleVolumeChange}
-            className="w-20 h-1.5 rounded bg-[var(--border)] accent-[var(--accent)] cursor-pointer"
+            className="w-20 h-1.5 rounded-full bg-[var(--border-strong)] accent-[var(--accent)] cursor-pointer"
+            title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
           />
+
+          <span className="text-[10px] font-mono text-[var(--text-muted)] w-8 text-right font-bold">
+            {Math.round((isMuted ? 0 : volume) * 100)}%
+          </span>
         </div>
       </div>
 
-      {/* Error Callout */}
+      {/* Non-intrusive Error / Fallback Banner */}
       {loadError && (
-        <div className="p-2.5 rounded-[var(--radius-xs)] bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-mono flex items-center justify-between gap-2">
-          <span>{loadError}</span>
-          <button
-            type="button"
-            onClick={loadAudioBlob}
-            className="underline font-bold hover:text-amber-600 flex items-center gap-1 cursor-pointer"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>Retry</span>
-          </button>
+        <div className="p-3 rounded-[var(--radius-sm)] bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-mono flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+            <span>{loadError}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={loadAudioBlob}
+              className="underline font-bold hover:text-amber-600 flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry</span>
+            </button>
+            <span>•</span>
+            <a
+              href={blobUrl || directStreamUrl}
+              download={audioFileName}
+              className="underline font-bold hover:text-amber-600"
+            >
+              Direct Download
+            </a>
+          </div>
         </div>
       )}
     </div>

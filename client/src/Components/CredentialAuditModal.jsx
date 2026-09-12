@@ -6,10 +6,11 @@ import {
   AlertTriangle,
   Loader2,
   Lock,
-  FileAudio,
   Radio,
   Send,
-  X
+  X,
+  EyeOff,
+  UserX
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -68,7 +69,7 @@ export default function CredentialAuditModal({
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (askedCredentials === null) {
-      setError('Please select Yes or No to complete the security review.');
+      setError('Please select Yes or No to complete the verification.');
       return;
     }
 
@@ -86,7 +87,7 @@ export default function CredentialAuditModal({
         onCompleted({ asked_credentials: askedCredentials });
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to submit security review.');
+      setError(err.response?.data?.message || err.message || 'Failed to submit verification.');
     } finally {
       setSubmitting(false);
     }
@@ -94,19 +95,19 @@ export default function CredentialAuditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-[var(--radius-lg)] bg-[var(--bg-card)] border border-[var(--border)] shadow-xl overflow-hidden flex flex-col">
+      <div className="w-full max-w-lg rounded-[var(--radius-lg)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--bg-raised)]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-indigo-500/10 text-indigo-500 flex items-center justify-center font-bold">
-              <Lock className="w-4 h-4" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold">
+              <EyeOff className="w-5 h-5" />
             </div>
             <div>
               <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider block font-bold">
-                Security & Integrity Verification
+                Anonymous Interview Guidelines
               </span>
               <h3 className="text-[15px] font-bold text-[var(--text-primary)] font-ui">
-                Peer Identity Audit
+                Peer Anonymity & Identity Verification
               </h3>
             </div>
           </div>
@@ -114,7 +115,7 @@ export default function CredentialAuditModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-[var(--radius-xs)] hover:bg-[var(--bg-hover)] transition-colors"
+            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-[var(--radius-xs)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
             title="Dismiss verification"
           >
             <X className="w-4 h-4" />
@@ -135,19 +136,19 @@ export default function CredentialAuditModal({
               </div>
               <div className="space-y-1">
                 <h4 className="text-[16px] font-bold text-[var(--text-primary)]">
-                  Verification Complete
+                  Verification Recorded
                 </h4>
                 <p className="text-[12px] text-[var(--text-secondary)] max-w-sm mx-auto">
                   {askedCredentials
-                    ? 'Your incident report has been registered. Administrators will review the session audio recording to verify identity solicitation.'
-                    : 'Thank you. Your interview verification has been safely recorded.'}
+                    ? 'Your incident report has been registered. Administrators will review the session audio recording to verify the identity solicitation.'
+                    : 'Thank you. Your interview anonymity verification has been safely recorded.'}
                 </p>
               </div>
               <div className="pt-2">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="btn btn-primary text-xs py-2 px-6 font-bold shadow-sm"
+                  className="btn btn-primary text-xs py-2 px-6 font-bold shadow-sm cursor-pointer"
                 >
                   Conclude & Exit
                 </button>
@@ -163,9 +164,9 @@ export default function CredentialAuditModal({
               )}
 
               {/* Main Question */}
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-[var(--text-primary)] block leading-snug">
-                  Did the peer student ask for your personal identity details (such as your Register / Roll Number, Phone Number, Real Name, or Personal Contact details) during this interview?
+              <div className="space-y-1.5">
+                <label className="text-[13.5px] font-bold text-[var(--text-primary)] block leading-snug">
+                  Did the peer student ask for your personal identity details (such as your Register / Roll Number, Full Name, Phone Number, or Contact info) during this anonymous interview?
                 </label>
                 <p className="text-[11px] text-[var(--text-muted)] font-mono">
                   Target Peer: <span className="text-[var(--text-primary)] font-bold">{peerDisplayName}</span>
@@ -178,9 +179,9 @@ export default function CredentialAuditModal({
                 <button
                   type="button"
                   onClick={() => setAskedCredentials(false)}
-                  className={`p-4 rounded-[var(--radius-md)] border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
+                  className={`p-4 rounded-[var(--radius-md)] border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
                     askedCredentials === false
-                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-900 dark:text-emerald-300 ring-1 ring-emerald-500'
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-950 dark:text-emerald-200 ring-1 ring-emerald-500 shadow-xs'
                       : 'bg-[var(--bg-raised)] border-[var(--border)] hover:border-[var(--border-accent)] text-[var(--text-secondary)]'
                   }`}
                 >
@@ -189,7 +190,7 @@ export default function CredentialAuditModal({
                     <ShieldCheck className={`w-4 h-4 ${askedCredentials === false ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`} />
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] leading-tight">
-                    No identity request was made. Interview remained anonymous and followed guidelines.
+                    Anonymity was maintained. No identity details were requested.
                   </p>
                 </button>
 
@@ -197,37 +198,37 @@ export default function CredentialAuditModal({
                 <button
                   type="button"
                   onClick={() => setAskedCredentials(true)}
-                  className={`p-4 rounded-[var(--radius-md)] border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
+                  className={`p-4 rounded-[var(--radius-md)] border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
                     askedCredentials === true
-                      ? 'bg-rose-500/10 border-rose-500 text-rose-900 dark:text-rose-300 ring-1 ring-rose-500'
+                      ? 'bg-rose-500/10 border-rose-500 text-rose-950 dark:text-rose-200 ring-1 ring-rose-500 shadow-xs'
                       : 'bg-[var(--bg-raised)] border-[var(--border)] hover:border-[var(--border-accent)] text-[var(--text-secondary)]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-[14px]">Yes (Report)</span>
+                    <span className="font-bold text-[14px] text-rose-600 dark:text-rose-400">Yes (Report)</span>
                     <ShieldAlert className={`w-4 h-4 ${askedCredentials === true ? 'text-rose-500' : 'text-[var(--text-muted)]'}`} />
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] leading-tight">
-                    Yes, the student asked for my register number, phone number, name, or contact details.
+                    Yes, the peer asked for my register number, name, phone, or contact.
                   </p>
                 </button>
               </div>
 
               {/* Conditional Detail Form if YES */}
               {askedCredentials === true && (
-                <div className="p-3.5 rounded-[var(--radius-md)] bg-rose-500/5 border border-rose-500/20 space-y-2.5 animate-in fade-in duration-150">
+                <div className="p-4 rounded-[var(--radius-md)] bg-rose-500/5 border border-rose-500/20 space-y-3 animate-in fade-in duration-150">
                   <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 text-[11px] font-bold font-mono">
                     <Radio className="w-3.5 h-3.5 animate-pulse" />
-                    <span>Admin Audit Trigger: Session Audio Will Be Reviewed</span>
+                    <span>Admin Audit Trigger: Dialogue Audio Will Be Inspected</span>
                   </div>
 
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Selecting <strong>Yes</strong> automatically flags this session with high priority in the Administrator portal. Admins will inspect the dual-speaker dialogue audio recording to verify the identity solicitation.
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    Selecting <strong>Yes</strong> automatically flags this session in the Administrator portal. Admins will review the dual-speaker dialogue audio recording to verify the identity solicitation.
                   </p>
 
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <label className="text-[11px] font-mono font-bold text-[var(--text-primary)]">
-                      Additional Context or Notes (Optional):
+                      Additional Details (Optional):
                     </label>
                     <textarea
                       value={details}
@@ -246,7 +247,7 @@ export default function CredentialAuditModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="btn btn-secondary text-xs py-2 px-4"
+                  className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
                   disabled={submitting}
                 >
                   Skip
@@ -269,7 +270,7 @@ export default function CredentialAuditModal({
                   ) : (
                     <>
                       <Send className="w-3.5 h-3.5" />
-                      <span>{askedCredentials === true ? 'Submit Incident Report' : 'Confirm & Complete'}</span>
+                      <span>{askedCredentials === true ? 'Submit Report' : 'Confirm & Complete'}</span>
                     </>
                   )}
                 </button>

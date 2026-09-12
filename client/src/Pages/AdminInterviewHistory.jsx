@@ -402,8 +402,14 @@ export default function AdminInterviewHistory() {
       {/* SESSION INSPECTION DETAIL MODAL */}
       {/* ============================================================ */}
       {selectedSession && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="panel-card w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] rounded-[var(--radius-lg)] p-6 space-y-6 animate-fadeIn custom-scrollbar">
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={closeSessionDetail}
+        >
+          <div
+            className="panel-card w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] rounded-[var(--radius-lg)] p-6 space-y-6 animate-fadeIn custom-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-4 border-b border-[var(--border)]">
               <div>
@@ -435,41 +441,89 @@ export default function AdminInterviewHistory() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Security / Identity Solicitation Alert Banner */}
+                {/* Anonymity Breach & Identity Solicitation Alert Card */}
                 {detailedSession?.security_reports?.some((r) => r.asked_credentials) && (
-                  <div className="p-4 rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/30 space-y-2.5 text-rose-950 dark:text-rose-200 shadow-sm animate-in fade-in">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2 font-bold font-mono text-[13px] text-rose-600 dark:text-rose-400">
-                        <ShieldAlert className="w-4 h-4" />
-                        <span>SECURITY ALERT: Student Identity Solicitation Reported</span>
+                  <div className="rounded-[var(--radius-md)] bg-[var(--bg-card)] border-2 border-rose-500/40 shadow-sm overflow-hidden animate-in fade-in space-y-0">
+                    {/* Header Banner */}
+                    <div className="bg-rose-500/10 px-4 py-3 border-b border-rose-500/20 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center font-bold shadow-xs">
+                          <ShieldAlert className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold block">
+                            Anonymity Rule Violation
+                          </span>
+                          <h4 className="text-[14px] font-bold text-[var(--text-primary)] font-ui">
+                            Peer Identity Solicitation Reported
+                          </h4>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-mono uppercase bg-rose-600 text-white font-bold px-2.5 py-0.5 rounded shadow-xs">
-                        Admin Review Required
+
+                      <span className="text-[11px] font-mono font-bold uppercase bg-rose-600 text-white px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                        <span>Admin Review Required</span>
                       </span>
                     </div>
 
-                    <div className="space-y-2">
+                    {/* Incident Details */}
+                    <div className="p-4 space-y-3.5 bg-[var(--bg-raised)]/40">
                       {detailedSession.security_reports.filter((r) => r.asked_credentials).map((r) => (
-                        <div key={r.id} className="text-xs space-y-1 bg-white/60 dark:bg-black/30 p-3 rounded-[var(--radius-xs)] border border-rose-500/20">
-                          <p className="font-semibold text-[var(--text-primary)]">
-                            Student <span className="text-rose-600 dark:text-rose-400 font-bold">{r.reporter?.name || 'Participant'}</span> reported that peer <span className="font-bold underline">{r.reported_user?.name || 'Peer'}</span> asked for their personal identity details (e.g. Register / Roll No, Phone Number, Full Name, or Contact info).
+                        <div
+                          key={r.id}
+                          className="p-4 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-xs space-y-3"
+                        >
+                          {/* Participant identities involved */}
+                          <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-[var(--border)]">
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="font-bold text-[var(--text-primary)]">
+                                {r.reporter?.name || 'Participant'}
+                              </span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
+                                {r.reporter?.roll_no || 'Reporter'}
+                              </span>
+                              <span className="text-rose-600 dark:text-rose-400 font-medium">reported</span>
+                              <span className="font-bold text-rose-700 dark:text-rose-300">
+                                {r.reported_user?.name || 'Peer'}
+                              </span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 border border-rose-500/20 font-bold">
+                                {r.reported_user?.roll_no || 'Reported Peer'}
+                              </span>
+                            </div>
+
+                            <span className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{formatDateTime(r.created_at)}</span>
+                            </span>
+                          </div>
+
+                          {/* Explanation */}
+                          <p className="text-[13px] text-[var(--text-primary)] leading-relaxed">
+                            The student reported that their peer attempted to <strong>deanonymize the session</strong> by asking for personal identity details (such as their Register / Roll Number, Full Name, Phone Number, or Social Media / Contact info).
                           </p>
+
+                          {/* Student Note */}
                           {r.details && (
-                            <p className="font-mono text-[11px] text-[var(--text-secondary)] mt-1">
-                              <strong>Student Notes:</strong> "{r.details}"
-                            </p>
+                            <div className="p-3 rounded-[var(--radius-xs)] bg-rose-500/5 border border-rose-500/15 space-y-1">
+                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
+                                Student Statement:
+                              </span>
+                              <p className="text-[12px] text-[var(--text-primary)] font-mono italic">
+                                "{r.details}"
+                              </p>
+                            </div>
                           )}
-                          <p className="text-[10px] font-mono text-[var(--text-muted)] pt-1">
-                            Reported on: {formatDateTime(r.created_at)}
-                          </p>
                         </div>
                       ))}
-                    </div>
 
-                    <p className="text-[11px] font-mono text-rose-700 dark:text-rose-300 font-medium flex items-center gap-1.5">
-                      <Radio className="w-3.5 h-3.5 animate-pulse text-rose-500" />
-                      <span>Use the Session Audio Player below to listen to and verify the conversation dialogue.</span>
-                    </p>
+                      {/* Admin Audio Verification Cue */}
+                      <div className="p-3 rounded-[var(--radius-sm)] bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-2.5 text-indigo-900 dark:text-indigo-200 text-xs">
+                        <Radio className="w-4 h-4 text-indigo-500 shrink-0 animate-pulse" />
+                        <span className="font-medium">
+                          <strong>Admin Verification Action:</strong> Listen to the dialogue audio recording below to verify if the student asked for identity details during the interview.
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
