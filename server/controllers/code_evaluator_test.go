@@ -84,3 +84,75 @@ if parts:
 		t.Errorf("Expected Python code to PASS test case, but got: %v (%s)", results[0].Passed, results[0].Actual)
 	}
 }
+
+func TestExecuteTestCasesStandardIO_Cpp(t *testing.T) {
+	testCases := []EvalTestCase{
+		{
+			Index:          1,
+			IsHidden:       false,
+			Name:           "Sample Case 1",
+			Input:          "5 7\n",
+			ExpectedOutput: "12",
+		},
+	}
+
+	correctCpp := `
+#include <iostream>
+using namespace std;
+int main() {
+    int a, b;
+    if (cin >> a >> b) {
+        cout << (a + b) << endl;
+    }
+    return 0;
+}
+`
+	results, err := ExecuteTestCases(correctCpp, "cpp", testCases)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+	if !results[0].Passed {
+		t.Errorf("Expected C++ code to PASS test case, but got: %v (%s)", results[0].Passed, results[0].Actual)
+	}
+}
+
+func TestExecuteTestCasesStandardIO_Java(t *testing.T) {
+	testCases := []EvalTestCase{
+		{
+			Index:          1,
+			IsHidden:       false,
+			Name:           "Sample Case 1",
+			Input:          "5 7\n",
+			ExpectedOutput: "12",
+		},
+	}
+
+	correctJava := `
+import java.util.Scanner;
+
+public class Solution {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        if (sc.hasNextInt()) {
+            int a = sc.nextInt();
+            int b = sc.nextInt();
+            System.out.println(a + b);
+        }
+    }
+}
+`
+	results, err := ExecuteTestCases(correctJava, "java", testCases)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+	if !results[0].Passed {
+		t.Errorf("Expected Java code to PASS test case, but got: %v (%s)", results[0].Passed, results[0].Actual)
+	}
+}
+

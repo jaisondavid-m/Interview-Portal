@@ -27,10 +27,14 @@ COPY --from=python-runtime /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=python-runtime /usr/local/lib/libpython* /usr/local/lib/
 COPY --from=python-runtime /usr/local/include/python3.12 /usr/local/include/python3.12
 
-# Symlink python for universal path resolution
+# Install GCC, G++, libc-dev, and OpenJDK 17 for native C++ and Java compilation
+RUN apk add --no-cache build-base openjdk17
+
+# Symlink python and node for universal path resolution
 RUN ln -sf /usr/local/bin/python3 /usr/bin/python3 && \
     ln -sf /usr/local/bin/python3 /usr/bin/python && \
     ln -sf /usr/local/bin/node /usr/bin/node 2>/dev/null || true
+
 
 # Copy binary from build stage
 COPY --from=builder /app/server /app/server
