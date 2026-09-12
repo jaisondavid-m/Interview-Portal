@@ -5,6 +5,10 @@
 *.log
 tmp/
 bin/
+uploads/
+*.webm
+*.mp3
+*.wav
 .env
 .env.*
 cookies.txt

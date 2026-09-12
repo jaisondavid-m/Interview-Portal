@@ -861,15 +861,11 @@ func RunSessionCode(c *gin.Context) {
 		}
 
 		if len(openCases) == 0 {
-			openCases = append(openCases, models.InterviewQuestionTestCase{
-				Input:          "nums = [2,7,11,15], target = 9",
-				ExpectedOutput: "[0,1]",
-			})
-			openCases = append(openCases, models.InterviewQuestionTestCase{
-				Input:          "nums = [3,2,4], target = 6",
-				ExpectedOutput: "[1,2]",
-			})
-		}
+			// No test cases configured for this question: execute standalone code to check for syntax and runtime validity
+			res, _ := ExecuteCustomInput(input.Code, input.Lang, "")
+			results = append(results, res)
+			allPassed = res.Passed
+		} else {
 
 		evalCases := make([]EvalTestCase, len(openCases))
 		for idx, tc := range openCases {
@@ -905,6 +901,7 @@ func RunSessionCode(c *gin.Context) {
 				allPassed = false
 				break
 			}
+		}
 		}
 	}
 
@@ -989,28 +986,6 @@ func SubmitSessionCode(c *gin.Context) {
 			Find(&hiddenCases)
 	}
 
-	if len(openCases) == 0 {
-		openCases = append(openCases, models.InterviewQuestionTestCase{
-			Input:          "nums = [2,7,11,15], target = 9",
-			ExpectedOutput: "[0,1]",
-		})
-		openCases = append(openCases, models.InterviewQuestionTestCase{
-			Input:          "nums = [3,2,4], target = 6",
-			ExpectedOutput: "[1,2]",
-		})
-	}
-
-	if len(hiddenCases) == 0 {
-		hiddenCases = append(hiddenCases, models.InterviewQuestionTestCase{
-			Input:          "nums = [-1,-2,-3,-4,-5], target = -8",
-			ExpectedOutput: "[2,4]",
-		})
-		hiddenCases = append(hiddenCases, models.InterviewQuestionTestCase{
-			Input:          "nums = [3,3], target = 6",
-			ExpectedOutput: "[0,1]",
-		})
-	}
-
 	var evalQueue []EvalTestCase
 	caseIdx := 1
 	for _, tc := range openCases {
@@ -1037,20 +1012,29 @@ func SubmitSessionCode(c *gin.Context) {
 		hiddenIdx++
 	}
 
-	// Real execution evaluation
-	caseResults, err := ExecuteTestCases(input.Code, input.Lang, evalQueue)
-	if err != nil || len(caseResults) == 0 {
-		caseResults = make([]EvalResult, len(evalQueue))
-		for i, tc := range evalQueue {
-			caseResults[i] = EvalResult{
-				Index:       tc.Index,
-				IsHidden:    tc.IsHidden,
-				Name:        tc.Name,
-				Input:       tc.Input,
-				Expected:    tc.ExpectedOutput,
-				Actual:      "Execution Engine Error",
-				Passed:      false,
-				ExecutionMs: 0,
+	var caseResults []EvalResult
+	if len(evalQueue) == 0 {
+		// No automated test cases configured: execute code standalone to check for syntax and runtime validity
+		res, _ := ExecuteCustomInput(input.Code, input.Lang, "")
+		res.Name = "Code Validation (No Test Cases Configured)"
+		caseResults = append(caseResults, res)
+	} else {
+		// Real execution evaluation against real configured test cases
+		var err error
+		caseResults, err = ExecuteTestCases(input.Code, input.Lang, evalQueue)
+		if err != nil || len(caseResults) == 0 {
+			caseResults = make([]EvalResult, len(evalQueue))
+			for i, tc := range evalQueue {
+				caseResults[i] = EvalResult{
+					Index:       tc.Index,
+					IsHidden:    tc.IsHidden,
+					Name:        tc.Name,
+					Input:       tc.Input,
+					Expected:    tc.ExpectedOutput,
+					Actual:      "Execution Engine Error",
+					Passed:      false,
+					ExecutionMs: 0,
+				}
 			}
 		}
 	}

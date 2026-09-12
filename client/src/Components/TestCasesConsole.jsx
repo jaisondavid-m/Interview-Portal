@@ -12,9 +12,9 @@ export default function TestCasesConsole({
   submissionResult = null,
   lastExecutionInfo = null,
 }) {
-  const [activeTab, setActiveTab] = useState(submissionResult || runResults ? 'result' : 'sample'); // 'sample' | 'custom' | 'result'
+  const [activeTab, setActiveTab] = useState(submissionResult || runResults ? 'result' : (openTestCases.length > 0 ? 'sample' : 'custom')); // 'sample' | 'custom' | 'result'
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(0);
-  const [customInput, setCustomInput] = useState('nums = [2,7,11,15], target = 9');
+  const [customInput, setCustomInput] = useState('');
 
   // Automatically show verdict tab if a new execution comes in
   React.useEffect(() => {
@@ -45,7 +45,7 @@ export default function TestCasesConsole({
                 : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            Sample Cases ({openTestCases.length || 2})
+            Sample Cases ({openTestCases.length})
           </button>
 
           {isCandidate && (
@@ -129,34 +129,44 @@ export default function TestCasesConsole({
         {/* TAB 1: Sample Test Cases */}
         {activeTab === 'sample' && (
           <div className="space-y-3">
-            {/* Case selector pills */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {openTestCases.map((tc, idx) => {
-                const isSelected = selectedCaseIdx === idx;
-                const result = runResults?.results?.[idx] || submissionResult?.results?.[idx];
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setSelectedCaseIdx(idx)}
-                    className={`px-3 py-1 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--accent)]'
-                        : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <span>Case {idx + 1}</span>
-                    {result && (
-                      result.passed ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--green)]" />
-                      ) : (
-                        <XCircle className="w-3.5 h-3.5 text-[var(--red)]" />
-                      )
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {openTestCases.length === 0 ? (
+              <div className="p-6 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)] text-center space-y-2">
+                <FileCode className="w-6 h-6 mx-auto text-[var(--text-muted)] opacity-60" />
+                <p className="text-[12px] font-bold text-[var(--text-primary)]">No Sample Test Cases</p>
+                <p className="text-[11px] text-[var(--text-muted)] max-w-sm mx-auto">
+                  This question does not have automated sample test cases. You can click <strong>Run Code</strong> or test with <strong>Custom Input</strong>.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Case selector pills */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {openTestCases.map((tc, idx) => {
+                    const isSelected = selectedCaseIdx === idx;
+                    const result = runResults?.results?.[idx] || submissionResult?.results?.[idx];
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedCaseIdx(idx)}
+                        className={`px-3 py-1 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--accent)]'
+                            : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        }`}
+                      >
+                        <span>Case {idx + 1}</span>
+                        {result && (
+                          result.passed ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[var(--green)]" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-[var(--red)]" />
+                          )
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
             {/* Selected Case Content */}
             {openTestCases[selectedCaseIdx] && (() => {
@@ -213,6 +223,8 @@ export default function TestCasesConsole({
                 </div>
               );
             })()}
+              </>
+            )}
           </div>
         )}
 

@@ -653,11 +653,8 @@ export default function InterviewRoom() {
   const isEndRequestedByMe = endRequestedBy > 0 && endRequestedBy === myUserId;
   const isEndRequestedByPeer = endRequestedBy > 0 && endRequestedBy !== myUserId;
 
-  // Extract open test cases
-  const openCases = payload?.open_test_cases || payload?.test_cases || [
-    { input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' },
-    { input: 'nums = [3,2,4], target = 6', output: '[1,2]' },
-  ];
+  // Extract open test cases (strictly from question payload, no fallback test cases)
+  const openCases = (Array.isArray(payload?.open_test_cases) ? payload.open_test_cases : (Array.isArray(payload?.test_cases) ? payload.test_cases : []));
 
   return (
     <div className="space-y-4">
@@ -1148,19 +1145,21 @@ export default function InterviewRoom() {
                 {/* 4. All Test Cases (Open & Hidden) */}
                 {interviewerTab === 'testcases' && (
                   <div className="space-y-3 font-mono text-[12px]">
-                    <div>
-                      <span className="font-bold text-[var(--text-muted)] text-[11px] uppercase block mb-1">
-                        Open Sample Test Cases:
-                      </span>
-                      {openCases.map((tc, idx) => (
-                        <div key={idx} className="p-2.5 bg-[var(--bg-raised)] rounded border border-[var(--border)] mb-2 space-y-1">
-                          <div className="text-[var(--text-secondary)]">Input: {tc.input}</div>
-                          <div className="text-[var(--green)] font-bold">Expected: {tc.output}</div>
-                        </div>
-                      ))}
-                    </div>
+                    {openCases.length > 0 ? (
+                      <div>
+                        <span className="font-bold text-[var(--text-muted)] text-[11px] uppercase block mb-1">
+                          Open Sample Test Cases:
+                        </span>
+                        {openCases.map((tc, idx) => (
+                          <div key={idx} className="p-2.5 bg-[var(--bg-raised)] rounded border border-[var(--border)] mb-2 space-y-1">
+                            <div className="text-[var(--text-secondary)]">Input: {tc.input}</div>
+                            <div className="text-[var(--green)] font-bold">Expected: {tc.output}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
 
-                    {payload?.hidden_test_cases && (
+                    {payload?.hidden_test_cases && payload.hidden_test_cases.length > 0 ? (
                       <div>
                         <span className="font-bold text-[var(--accent)] text-[11px] uppercase block mb-1">
                           Hidden Verification Test Cases:
@@ -1171,6 +1170,12 @@ export default function InterviewRoom() {
                             <div className="text-[var(--accent)] font-bold">Expected: {tc.output}</div>
                           </div>
                         ))}
+                      </div>
+                    ) : null}
+
+                    {openCases.length === 0 && (!payload?.hidden_test_cases || payload.hidden_test_cases.length === 0) && (
+                      <div className="p-4 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-muted)] text-center text-xs">
+                        No automated test cases configured for this question.
                       </div>
                     )}
                   </div>
@@ -1208,19 +1213,21 @@ export default function InterviewRoom() {
                 </div>
               )}
 
-              {/* Open Sample Cases */}
-              <div className="space-y-2">
-                <span className="text-[11px] font-mono uppercase font-bold text-[var(--text-muted)] block">
-                  Sample Test Cases:
-                </span>
-                {openCases.map((tc, idx) => (
-                  <div key={idx} className="bg-[var(--bg-raised)] p-3 rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
-                    <span className="font-bold text-[var(--accent)] block">Example {idx + 1}:</span>
-                    <div><span className="text-[var(--text-muted)]">Input:</span> {tc.input}</div>
-                    <div><span className="text-[var(--text-muted)]">Output:</span> <strong className="text-[var(--green)]">{tc.output}</strong></div>
-                  </div>
-                ))}
-              </div>
+              {/* Open Sample Cases (Only shown if test cases exist) */}
+              {openCases.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-mono uppercase font-bold text-[var(--text-muted)] block">
+                    Sample Test Cases:
+                  </span>
+                  {openCases.map((tc, idx) => (
+                    <div key={idx} className="bg-[var(--bg-raised)] p-3 rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
+                      <span className="font-bold text-[var(--accent)] block">Example {idx + 1}:</span>
+                      <div><span className="text-[var(--text-muted)]">Input:</span> {tc.input}</div>
+                      <div><span className="text-[var(--text-muted)]">Output:</span> <strong className="text-[var(--green)]">{tc.output}</strong></div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
