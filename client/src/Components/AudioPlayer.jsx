@@ -329,14 +329,6 @@ export default function AudioPlayer({
     }
   };
 
-  const handleSliderChange = (e) => {
-    const seekTarget = parseFloat(e.target.value);
-    setCurrentTime(seekTarget);
-    if (audioRef.current) {
-      audioRef.current.currentTime = seekTarget;
-    }
-  };
-
   const skipTime = (seconds) => {
     if (!audioRef.current) return;
     const maxDur = effectiveDuration > 0 ? effectiveDuration : (audioRef.current.duration || 100);
@@ -402,11 +394,11 @@ export default function AudioPlayer({
     ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
     : 0;
 
-  // Generate synthetic waveform bars for visual appeal and acoustic feel
+  // Waveform spikes pattern matching modern audio visualizer
   const waveformBars = [
-    30, 45, 60, 25, 75, 90, 65, 40, 55, 80, 100, 70, 85, 45, 30, 60, 75, 50,
-    95, 80, 60, 40, 70, 85, 90, 55, 35, 65, 80, 95, 70, 50, 40, 60, 75, 90,
-    80, 65, 45, 30, 55, 75, 90, 60, 40, 70, 85, 50, 65, 80
+    32, 48, 68, 28, 72, 85, 58, 38, 52, 78, 98, 64, 82, 42, 28, 58,
+    72, 48, 92, 78, 58, 36, 68, 82, 88, 52, 32, 62, 78, 92, 68, 46,
+    36, 58, 74, 88, 76, 62, 42, 28, 52, 72, 88, 56, 38, 68, 82, 46
   ];
 
   return (
@@ -486,9 +478,9 @@ export default function AudioPlayer({
         </div>
       </div>
 
-      {/* Interactive Waveform & Timeline Track */}
-      <div className="space-y-2 bg-[var(--bg-raised)] p-3.5 rounded-[var(--radius-sm)] border border-[var(--border)]">
-        {/* Waveform Visualization Bars */}
+      {/* Interactive Waveform Spikes Timeline Track (Seeker) */}
+      <div className="space-y-2 py-2 px-1">
+        {/* Waveform Visualization Spikes (Direct Scrubber & Tracker) */}
         <div
           ref={progressBarRef}
           onClick={handleProgressBarClick}
@@ -496,8 +488,8 @@ export default function AudioPlayer({
           onMouseLeave={handleProgressBarMouseLeave}
           onMouseDown={() => setIsDragging(true)}
           onMouseUp={() => setIsDragging(false)}
-          className="relative h-10 w-full flex items-end gap-[3px] px-1 cursor-pointer select-none group"
-          title="Click or drag to seek"
+          className="relative h-14 w-full flex items-center justify-between gap-[3px] px-0.5 cursor-pointer select-none group"
+          title="Click or drag across spikes to seek"
         >
           {waveformBars.map((heightPercent, idx) => {
             const barPercent = (idx / (waveformBars.length - 1)) * 100;
@@ -506,13 +498,12 @@ export default function AudioPlayer({
             return (
               <div
                 key={idx}
-                className="flex-1 rounded-full transition-all duration-75"
+                className="flex-1 rounded-full transition-all duration-75 min-w-[3px]"
                 style={{
-                  height: `${Math.max(15, heightPercent)}%`,
+                  height: `${Math.max(20, heightPercent)}%`,
                   backgroundColor: isPlayed
                     ? 'var(--accent)'
-                    : 'var(--border-strong)',
-                  opacity: isPlayed ? 1 : 0.6,
+                    : 'rgba(99, 102, 241, 0.18)',
                 }}
               />
             );
@@ -529,35 +520,8 @@ export default function AudioPlayer({
           )}
         </div>
 
-        {/* Continuous Scrubbing Progress Line */}
-        <div className="relative pt-1">
-          {/* Visual Track Background */}
-          <div
-            onClick={handleProgressBarClick}
-            className="relative w-full h-2 rounded-full bg-[var(--border)] overflow-hidden cursor-pointer"
-          >
-            <div
-              className="h-full bg-[var(--accent)] transition-all duration-75 rounded-full"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-
-          {/* Native Range Slider Overlay for accessibility and touch scrub */}
-          <input
-            type="range"
-            min="0"
-            max={effectiveDuration > 0 ? effectiveDuration : 100}
-            step="0.05"
-            value={currentTime}
-            onChange={handleSliderChange}
-            disabled={isLoading || effectiveDuration <= 0}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            aria-label="Audio seeker timeline"
-          />
-        </div>
-
-        {/* Time Labels: Start to End */}
-        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] pt-0.5">
+        {/* Time Labels: Start to End (No dividing line) */}
+        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] pt-1 px-1">
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-[var(--text-primary)]">{formatTime(currentTime)}</span>
             <span className="text-[10px] text-[var(--text-muted)]">/</span>
