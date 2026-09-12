@@ -1222,8 +1222,8 @@ export default function InterviewRoom() {
                   {openCases.map((tc, idx) => (
                     <div key={idx} className="bg-[var(--bg-raised)] p-3 rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
                       <span className="font-bold text-[var(--accent)] block">Example {idx + 1}:</span>
-                      <div><span className="text-[var(--text-muted)]">Input:</span> {tc.input}</div>
-                      <div><span className="text-[var(--text-muted)]">Output:</span> <strong className="text-[var(--green)]">{tc.output}</strong></div>
+                      <div><span className="text-[var(--text-muted)]">Input (stdin):</span> <span className="whitespace-pre-wrap">{tc.input}</span></div>
+                      <div><span className="text-[var(--text-muted)]">Expected (stdout):</span> <strong className="text-[var(--green)] whitespace-pre-wrap">{tc.output}</strong></div>
                     </div>
                   ))}
                 </div>

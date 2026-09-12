@@ -861,20 +861,30 @@ export default function AdminQuestionEditor() {
                         )}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          value={tc.input}
-                          onChange={(e) => handleTestCaseChange(setOpenTestCases, openTestCases, idx, 'input', e.target.value)}
-                          placeholder="Input: e.g. nums = [2,7,11,15], target = 9"
-                          className="custom-input text-[12px] font-mono"
-                        />
-                        <input
-                          type="text"
-                          value={tc.output}
-                          onChange={(e) => handleTestCaseChange(setOpenTestCases, openTestCases, idx, 'output', e.target.value)}
-                          placeholder="Expected Output: e.g. [0,1]"
-                          className="custom-input text-[12px] font-mono"
-                        />
+                        <div>
+                          <label className="text-[10px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-0.5">
+                            Standard Input (stdin)
+                          </label>
+                          <textarea
+                            value={tc.input}
+                            onChange={(e) => handleTestCaseChange(setOpenTestCases, openTestCases, idx, 'input', e.target.value)}
+                            placeholder="Input piped to stdin (e.g. 5 7 or anagram nagaram)"
+                            rows={2}
+                            className="custom-input text-[12px] font-mono resize-none w-full"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-0.5">
+                            Expected Output (stdout)
+                          </label>
+                          <textarea
+                            value={tc.output}
+                            onChange={(e) => handleTestCaseChange(setOpenTestCases, openTestCases, idx, 'output', e.target.value)}
+                            placeholder="Exact stdout output (e.g. 12 or true)"
+                            rows={2}
+                            className="custom-input text-[12px] font-mono resize-none w-full"
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -918,20 +928,30 @@ export default function AdminQuestionEditor() {
                         )}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          value={tc.input}
-                          onChange={(e) => handleTestCaseChange(setHiddenTestCases, hiddenTestCases, idx, 'input', e.target.value)}
-                          placeholder="Input: e.g. nums = [-1,-2,-3,-4,-5], target = -8"
-                          className="custom-input text-[12px] font-mono bg-[var(--bg-card)]"
-                        />
-                        <input
-                          type="text"
-                          value={tc.output}
-                          onChange={(e) => handleTestCaseChange(setHiddenTestCases, hiddenTestCases, idx, 'output', e.target.value)}
-                          placeholder="Expected Output: e.g. [2,4]"
-                          className="custom-input text-[12px] font-mono bg-[var(--bg-card)]"
-                        />
+                        <div>
+                          <label className="text-[10px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-0.5">
+                            Standard Input (stdin)
+                          </label>
+                          <textarea
+                            value={tc.input}
+                            onChange={(e) => handleTestCaseChange(setHiddenTestCases, hiddenTestCases, idx, 'input', e.target.value)}
+                            placeholder="Hidden stdin input"
+                            rows={2}
+                            className="custom-input text-[12px] font-mono resize-none w-full bg-[var(--bg-card)]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-0.5">
+                            Expected Output (stdout)
+                          </label>
+                          <textarea
+                            value={tc.output}
+                            onChange={(e) => handleTestCaseChange(setHiddenTestCases, hiddenTestCases, idx, 'output', e.target.value)}
+                            placeholder="Expected stdout output"
+                            rows={2}
+                            className="custom-input text-[12px] font-mono resize-none w-full bg-[var(--bg-card)]"
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -35,12 +35,29 @@ func extractStarterCode(q models.InterviewQuestion, defaultCode string) string {
 	return "// Write your solution here\n"
 }
 
+func getDefaultStarterTemplate(lang string) string {
+	switch strings.ToLower(lang) {
+	case "python", "py", "python3":
+		return "# Read from STDIN and print to STDOUT\nimport sys\n\ninput_data = sys.stdin.read().strip()\n# Write your solution here\n"
+	case "javascript", "js", "node", "nodejs":
+		return "// Read from STDIN and print to STDOUT\nconst fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim();\n\n// Write your solution here\n"
+	default:
+		return "// Read from STDIN and print to STDOUT\n"
+	}
+}
+
 // Helper to sanitize questions for candidate (strip hidden test cases, solutions, hints, rubrics)
 func sanitizeQuestionForCandidate(q models.InterviewQuestion) gin.H {
 	// 1. Build starter templates
 	templatesMap := make(map[string]string)
 	for _, t := range q.Templates {
 		templatesMap[t.Language] = t.StarterCode
+	}
+	if templatesMap["javascript"] == "" {
+		templatesMap["javascript"] = getDefaultStarterTemplate("javascript")
+	}
+	if templatesMap["python"] == "" {
+		templatesMap["python"] = getDefaultStarterTemplate("python")
 	}
 	starterCode := templatesMap["javascript"]
 
@@ -105,6 +122,12 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 	templatesMap := make(map[string]string)
 	for _, t := range q.Templates {
 		templatesMap[t.Language] = t.StarterCode
+	}
+	if templatesMap["javascript"] == "" {
+		templatesMap["javascript"] = getDefaultStarterTemplate("javascript")
+	}
+	if templatesMap["python"] == "" {
+		templatesMap["python"] = getDefaultStarterTemplate("python")
 	}
 
 	var openTestCases []gin.H
@@ -1066,6 +1089,25 @@ func SubmitSessionCode(c *gin.Context) {
 		verdict = "Runtime Error"
 	}
 
+	// Sanitize hidden test cases for candidate protection (only reveal pass/fail status, never input/expected values)
+	sanitizedResults := make([]EvalResult, len(caseResults))
+	for i, c := range caseResults {
+		if c.IsHidden {
+			sanitizedResults[i] = EvalResult{
+				Index:       c.Index,
+				IsHidden:    true,
+				Name:        c.Name,
+				Input:       "",
+				Expected:    "",
+				Actual:      "",
+				Passed:      c.Passed,
+				ExecutionMs: c.ExecutionMs,
+			}
+		} else {
+			sanitizedResults[i] = c
+		}
+	}
+
 	subData := gin.H{
 		"status":        "success",
 		"type":          "submit",
@@ -1074,7 +1116,7 @@ func SubmitSessionCode(c *gin.Context) {
 		"total_cases":   len(caseResults),
 		"open_cases":    len(openCases),
 		"hidden_cases":  len(hiddenCases),
-		"results":       caseResults,
+		"results":       sanitizedResults,
 		"all_passed":    verdict == "Accepted",
 		"runtime_ms":    totalExecMs + rand.Intn(15) + 5,
 		"memory_mb":     "14.8 MB",

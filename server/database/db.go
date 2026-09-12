@@ -309,18 +309,13 @@ func seedInterviewData(db *gorm.DB) {
 		})
 		db.Create(&models.InterviewQuestionCodeTemplate{
 			QuestionID:  twoSum.ID,
+			Language:    "javascript",
+			StarterCode: "// Read from STDIN and print to STDOUT\nconst fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\nif (input.length >= 2) {\n    const target = parseInt(input[input.length - 1], 10);\n    const nums = input.slice(0, -1).map(Number);\n    // Write your solution below and print the result:\n    \n}\n",
+		})
+		db.Create(&models.InterviewQuestionCodeTemplate{
+			QuestionID:  twoSum.ID,
 			Language:    "python",
-			StarterCode: "def twoSum(nums: list[int], target: int) -> list[int]:\n    # Write your solution here\n    seen = {}\n    for i, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            return [seen[complement], i]\n        seen[num] = i\n    return []",
-		})
-		db.Create(&models.InterviewQuestionCodeTemplate{
-			QuestionID:  twoSum.ID,
-			Language:    "cpp",
-			StarterCode: "#include <vector>\n#include <unordered_map>\n\nstd::vector<int> twoSum(std::vector<int>& nums, int target) {\n    // Write your solution here\n    std::unordered_map<int, int> seen;\n    for (int i = 0; i < nums.size(); i++) {\n        int comp = target - nums[i];\n        if (seen.find(comp) != seen.end()) return {seen[comp], i};\n        seen[nums[i]] = i;\n    }\n    return {};\n}",
-		})
-		db.Create(&models.InterviewQuestionCodeTemplate{
-			QuestionID:  twoSum.ID,
-			Language:    "java",
-			StarterCode: "import java.util.HashMap;\n\nclass Solution {\n    public int[] twoSum(int[] nums, int target) {\n        // Write your solution here\n        HashMap<Integer, Integer> map = new HashMap<>();\n        for (int i = 0; i < nums.length; i++) {\n            int comp = target - nums[i];\n            if (map.containsKey(comp)) return new int[]{map.get(comp), i};\n            map.put(nums[i], i);\n        }\n        return new int[]{};\n    }\n}",
+			StarterCode: "# Read from STDIN and print to STDOUT\nimport sys\n\ninput_data = sys.stdin.read().split()\nif input_data:\n    target = int(input_data[-1])\n    nums = [int(x) for x in input_data[:-1]]\n    # Write your solution below and print the result:\n    \n",
 		})
 
 		db.Create(&models.InterviewQuestionTestCase{QuestionID: twoSum.ID, Input: "nums = [2,7,11,15], target = 9", ExpectedOutput: "[0,1]", IsHidden: false, OrderIndex: 1})
@@ -533,12 +528,12 @@ func seedInterviewData(db *gorm.DB) {
 			db.Create(&models.InterviewQuestionCodeTemplate{
 				QuestionID:  anagramQ.ID,
 				Language:    "javascript",
-				StarterCode: "function isAnagram(s, t) {\n    // Write your solution here\n    if (s.length !== t.length) return false;\n    const count = {};\n    for (let c of s) count[c] = (count[c] || 0) + 1;\n    for (let c of t) {\n        if (!count[c]) return false;\n        count[c]--;\n    }\n    return true;\n}",
+				StarterCode: "// Read from STDIN and print to STDOUT\nconst fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\nif (input.length >= 2) {\n    const s = input[0];\n    const t = input[1];\n    // Write your anagram check below and print true or false:\n    \n}\n",
 			})
 			db.Create(&models.InterviewQuestionCodeTemplate{
 				QuestionID:  anagramQ.ID,
 				Language:    "python",
-				StarterCode: "def isAnagram(s: str, t: str) -> bool:\n    # Write your solution here\n    if len(s) != len(t): return False\n    count = {}\n    for c in s: count[c] = count.get(c, 0) + 1\n    for c in t:\n        if c not in count or count[c] == 0: return False\n        count[c] -= 1\n    return True",
+				StarterCode: "# Read from STDIN and print to STDOUT\nimport sys\n\ninput_data = sys.stdin.read().split()\nif len(input_data) >= 2:\n    s = input_data[0]\n    t = input_data[1]\n    # Write your anagram check below and print true or false:\n    \n",
 			})
 
 			db.Create(&models.InterviewQuestionTestCase{QuestionID: anagramQ.ID, Input: "s = \"anagram\", t = \"nagaram\"", ExpectedOutput: "true", IsHidden: false, OrderIndex: 1})

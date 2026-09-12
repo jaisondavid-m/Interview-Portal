@@ -190,18 +190,18 @@ export default function TestCasesConsole({
 
                   <div>
                     <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
-                      Input:
+                      Standard Input (stdin):
                     </span>
-                    <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--text-primary)] font-mono">
+                    <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--text-primary)] font-mono whitespace-pre-wrap">
                       {openTestCases[selectedCaseIdx].input || 'N/A'}
                     </div>
                   </div>
 
                   <div>
                     <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
-                      Expected Output:
+                      Expected Output (stdout):
                     </span>
-                    <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--green)] font-bold font-mono">
+                    <div className="bg-[var(--bg-input)] p-2 rounded border border-[var(--border)] text-[var(--green)] font-bold font-mono whitespace-pre-wrap">
                       {openTestCases[selectedCaseIdx].output || 'N/A'}
                     </div>
                   </div>
@@ -209,9 +209,9 @@ export default function TestCasesConsole({
                   {activeResult && (
                     <div>
                       <span className="text-[10px] uppercase text-[var(--text-muted)] font-bold block mb-1">
-                        Actual Execution Output:
+                        Actual Output (stdout):
                       </span>
-                      <div className={`p-2 rounded border font-mono ${
+                      <div className={`p-2 rounded border font-mono whitespace-pre-wrap ${
                         activeResult.passed
                           ? 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-primary)]'
                           : 'bg-[var(--red-bg)]/40 border-[var(--red)]/40 text-[var(--red)] font-bold'
@@ -232,17 +232,17 @@ export default function TestCasesConsole({
         {activeTab === 'custom' && (
           <div className="space-y-2">
             <span className="text-[11px] font-mono text-[var(--text-muted)] font-bold uppercase">
-              Custom Execution Arguments:
+              Custom Standard Input (stdin):
             </span>
             <textarea
               value={customInput}
               onChange={(e) => setCustomInput(e.target.value)}
-              placeholder="e.g. nums = [1, 5, 8], target = 9"
+              placeholder="Type any raw input lines to pipe directly into process stdin..."
               rows={3}
               className="w-full custom-input font-mono text-[12px] p-2.5 resize-none bg-[var(--bg-input)]"
             />
             <p className="text-[11px] text-[var(--text-muted)] font-mono">
-              Tip: Provide parameter assignments to test custom edge cases. Click <strong>Run Code</strong> to evaluate.
+              Input is piped to standard input. Read with <code>fs.readFileSync(0, 'utf-8')</code> (JS) or <code>sys.stdin.read()</code> (Python).
             </p>
           </div>
         )}
@@ -380,13 +380,20 @@ export default function TestCasesConsole({
                                 </span>
                               )}
 
-                              <span className="text-[var(--text-muted)] text-[11px] truncate max-w-[260px] sm:max-w-md font-mono">
-                                {res.input || (isHidden ? 'Verification Dataset Test' : 'Sample Input')}
-                              </span>
+                              {/* Only show input string for open/sample cases or interviewer */}
+                              {!isHidden && res.input && (
+                                <span className="text-[var(--text-muted)] text-[11px] truncate max-w-[260px] sm:max-w-md font-mono">
+                                  {res.input}
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
-                              <span className={`font-bold text-[10px] ${passed ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                              <span className={`font-bold text-[10px] uppercase px-1.5 py-0.2 rounded ${
+                                passed
+                                  ? 'bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30'
+                                  : 'bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30'
+                              }`}>
                                 {passed ? 'Passed' : 'Failed'}
                               </span>
                               {res.execution_ms !== undefined && (
@@ -397,8 +404,8 @@ export default function TestCasesConsole({
                             </div>
                           </div>
 
-                          {/* If case failed, show output diff breakdown */}
-                          {!passed && (
+                          {/* If case failed, only show output diff breakdown for open/sample cases (never for hidden cases) */}
+                          {!passed && !isHidden && (
                             <div className="mt-1 pt-1.5 border-t border-[var(--border)] text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[var(--bg-card)]/60 p-2 rounded">
                               <div>
                                 <span className="text-[var(--text-muted)] block text-[10px] uppercase font-bold">Expected:</span>
