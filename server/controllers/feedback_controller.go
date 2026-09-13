@@ -547,11 +547,6 @@ func GetSessionFeedbackStatus(c *gin.Context) {
 	var myFeedback models.InterviewFeedback
 	errMy := database.DB.
 		Where("session_id = ? AND reviewer_id = ?", session.ID, currentUserID).
-		Preload("Reviewer").
-		Preload("Reviewee").
-		Preload("Responses").
-		Preload("Responses.Question").
-		Preload("Responses.SelectedOption").
 		First(&myFeedback).Error
 
 	hasSubmitted := (errMy == nil && myFeedback.ID > 0)
@@ -560,44 +555,24 @@ func GetSessionFeedbackStatus(c *gin.Context) {
 	var peerFeedback models.InterviewFeedback
 	errPeer := database.DB.
 		Where("session_id = ? AND reviewer_id = ? AND reviewee_id = ?", session.ID, peerID, currentUserID).
-		Preload("Reviewer").
-		Preload("Reviewee").
-		Preload("Responses").
-		Preload("Responses.Question").
-		Preload("Responses.SelectedOption").
 		First(&peerFeedback).Error
 
 	peerHasSubmitted := (errPeer == nil && peerFeedback.ID > 0)
 	bothSubmitted := (hasSubmitted && peerHasSubmitted)
-
-	var feedbacksList []models.InterviewFeedback
-	if hasSubmitted {
-		myFeedback.Reviewer = nil
-		myFeedback.Reviewee = nil
-		feedbacksList = append(feedbacksList, myFeedback)
-	}
-	if peerHasSubmitted {
-		peerFeedback.Reviewer = nil
-		peerFeedback.Reviewee = nil
-		feedbacksList = append(feedbacksList, peerFeedback)
-	}
 
 	peerAnonymous := gin.H{
 		"id":   peerID,
 		"name": "Anonymous Peer",
 	}
 
+	// Blinded peer review: do not leak peer feedback responses, scores, or breakdown during live sessions
 	c.JSON(http.StatusOK, gin.H{
-		"status":              "success",
-		"has_submitted":       hasSubmitted,
-		"peer_has_submitted":  peerHasSubmitted,
-		"both_submitted":      bothSubmitted,
-		"my_feedback":         myFeedback,
-		"peer_feedback":       peerFeedback,
-		"feedbacks":           feedbacksList,
-		"peer":                peerAnonymous,
-		"session_id":          session.ID,
-		"feedback":            myFeedback, // Backward compatibility
+		"status":             "success",
+		"has_submitted":      hasSubmitted,
+		"peer_has_submitted": peerHasSubmitted,
+		"both_submitted":     bothSubmitted,
+		"peer":               peerAnonymous,
+		"session_id":         session.ID,
 	})
 }
 

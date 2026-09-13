@@ -14,9 +14,9 @@ import {
   Users,
   Clock,
   RefreshCw,
-  BarChart3,
-  TrendingUp,
-  Check
+  BookOpen,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -35,10 +35,7 @@ export default function PeerFeedbackModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-
-  // Status state from backend
   const [statusData, setStatusData] = useState(null);
-  const [activeScorecardTab, setActiveScorecardTab] = useState('received'); // 'received' | 'given'
 
   const loadQuestionsAndStatus = async () => {
     try {
@@ -50,7 +47,7 @@ export default function PeerFeedbackModal({
       const qList = Array.isArray(qRes) ? qRes : (qRes?.data || []);
       setQuestions(qList);
 
-      // Pre-populate empty answers object
+      // Initialize answer map
       const initialAnswers = {};
       qList.forEach((q) => {
         initialAnswers[q.id] = {
@@ -60,8 +57,8 @@ export default function PeerFeedbackModal({
       });
       setAnswers(initialAnswers);
 
-      // 2. Check session feedback status (both participants)
-      try {
+      // 2. Fetch mutual submission status
+      if (sessionId) {
         const sRes = await api.get(`/interviews/sessions/${sessionId}/feedback`);
         const sData = sRes?.data || sRes;
         setStatusData(sData);
@@ -69,19 +66,21 @@ export default function PeerFeedbackModal({
         if (sData?.has_submitted) {
           setSuccess(true);
         }
-      } catch (e) {
-        // ignore status check failure
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to load evaluation questions.');
+      console.error('Failed to load feedback setup:', err);
+      setError('Could not load feedback questions.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!isOpen || !sessionId) return;
-    loadQuestionsAndStatus();
+    if (isOpen && sessionId) {
+      setSuccess(false);
+      setError('');
+      loadQuestionsAndStatus();
+    }
   }, [isOpen, sessionId]);
 
   if (!isOpen) return null;
@@ -96,12 +95,12 @@ export default function PeerFeedbackModal({
     }));
   };
 
-  const handleSelectYesNo = (questionId, value, optionId) => {
+  const handleSelectYesNo = (questionId, val, optionId = null) => {
     setAnswers((prev) => ({
       ...prev,
       [questionId]: {
-        selected_option_id: optionId || null,
-        answer_value: value,
+        selected_option_id: optionId,
+        answer_value: val,
       },
     }));
   };
@@ -120,22 +119,22 @@ export default function PeerFeedbackModal({
     e.preventDefault();
     setError('');
 
-    // Validate required fields
+    // Client-side validation: Check required questions
     for (const q of questions) {
       if (q.is_required) {
         const ans = answers[q.id];
-        if (!ans || !ans.answer_value || !ans.answer_value.trim()) {
-          setError(`Please answer required question: "${q.question_text}"`);
+        if (!ans || (!ans.selected_option_id && !ans.answer_value?.trim())) {
+          setError(`Please answer required question #${questions.indexOf(q) + 1}: "${q.question_text}"`);
           return;
         }
       }
     }
 
-    setSubmitting(true);
     try {
+      setSubmitting(true);
       const payloadAnswers = Object.keys(answers).map((qIdStr) => {
         const qId = parseInt(qIdStr, 10);
-        const ans = answers[qId];
+        const ans = answers[qId] || {};
         return {
           question_id: qId,
           selected_option_id: ans.selected_option_id || null,
@@ -163,25 +162,6 @@ export default function PeerFeedbackModal({
   };
 
   const peerDisplayName = 'Anonymous Peer';
-  const peerDisplayRoll = 'PEER';
-
-  const myFeedback = statusData?.my_feedback || statusData?.feedback;
-  const peerFeedback = statusData?.peer_feedback;
-  const bothSubmitted = statusData?.both_submitted;
-  const peerHasSubmitted = statusData?.peer_has_submitted;
-
-  const getScoreBadge = (pct) => {
-    if (pct >= 85) {
-      return { label: 'Outstanding (A+)', color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' };
-    }
-    if (pct >= 70) {
-      return { label: 'Proficient (B)', color: 'text-purple-500 bg-purple-500/10 border-purple-500/20' };
-    }
-    if (pct >= 50) {
-      return { label: 'Average (C)', color: 'text-amber-500 bg-amber-500/10 border-amber-500/20' };
-    }
-    return { label: 'Needs Practice', color: 'text-rose-500 bg-rose-500/10 border-rose-500/20' };
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
@@ -204,14 +184,10 @@ export default function PeerFeedbackModal({
                 </span>
               </div>
               <h2 className="text-[17px] font-bold text-[var(--text-primary)] mt-1">
-                {bothSubmitted
-                  ? 'Mutual Scorecard Results'
-                  : success
-                  ? 'Evaluation Submitted'
-                  : `Evaluate Round ${roundNumber} Candidate: ${peerDisplayName}`}
+                {success ? 'Evaluation Submitted' : `Evaluate Round ${roundNumber} Candidate`}
               </h2>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-                Candidate Assessed: <strong className="text-[var(--text-primary)]">{peerDisplayName}</strong> ({peerDisplayRoll})
+                Target Candidate: <strong className="text-[var(--text-primary)]">{peerDisplayName}</strong>
               </p>
             </div>
           </div>
@@ -230,229 +206,44 @@ export default function PeerFeedbackModal({
           {loading ? (
             <div className="py-16 text-center space-y-3">
               <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-              <p className="text-[13px] text-[var(--text-muted)]">Loading peer evaluation & scores...</p>
+              <p className="text-[13px] text-[var(--text-muted)]">Loading peer evaluation questions...</p>
             </div>
           ) : success ? (
             /* ============================================================ */
-            /* VIEW 1: POST-SUBMISSION / MUTUAL SCORECARDS */
+            /* VIEW 1: CONFIDENTIAL SUBMISSION CONFIRMATION (NO SCORE LEAK) */
             /* ============================================================ */
-            <div className="space-y-5">
-              {/* Mutual Completion Status Banner */}
-              {bothSubmitted ? (
-                <div className="p-4 rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                    <div>
-                      <h4 className="text-[14px] font-bold text-emerald-600 dark:text-emerald-400">
-                        Mutual Peer Reviews Completed!
-                      </h4>
-                      <p className="text-[12px] text-[var(--text-secondary)]">
-                        Both participants have submitted reviews. Your official scorecards are revealed below.
-                      </p>
-                    </div>
-                  </div>
-
-                  <span className="text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded border border-emerald-500/30">
-                    2 / 2 Reviews In
-                  </span>
-                </div>
-              ) : (
-                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2.5">
-                    <Clock className="w-5 h-5 text-[var(--accent)] shrink-0 animate-pulse" />
-                    <div>
-                      <h4 className="text-[14px] font-bold text-[var(--accent)]">
-                        Your Feedback Submitted!
-                      </h4>
-                      <p className="text-[12px] text-[var(--text-secondary)]">
-                        Waiting for <strong>{peerDisplayName}</strong> to submit their review to unlock mutual scorecards.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={loadQuestionsAndStatus}
-                    className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 font-mono font-bold"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>Check Status</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Tab Selector: Score Received vs Score Given */}
-              <div className="flex bg-[var(--bg-raised)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)]">
-                <button
-                  type="button"
-                  onClick={() => setActiveScorecardTab('received')}
-                  className={`flex-1 py-2 rounded-[var(--radius-xs)] text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                    activeScorecardTab === 'received'
-                      ? 'bg-[var(--bg-card)] text-[var(--accent)] shadow-sm'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <Award className="w-4 h-4" />
-                  <span>Score Received From Peer</span>
-                  {peerHasSubmitted && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveScorecardTab('given')}
-                  className={`flex-1 py-2 rounded-[var(--radius-xs)] text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                    activeScorecardTab === 'given'
-                      ? 'bg-[var(--bg-card)] text-[var(--accent)] shadow-sm'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Review Given to Peer</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                </button>
+            <div className="py-8 px-4 text-center space-y-5 animate-fadeIn">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-sm">
+                <ShieldCheck className="w-9 h-9" />
               </div>
 
-              {/* TAB CONTENT: RECEIVED SCORECARD */}
-              {activeScorecardTab === 'received' && (
-                <div className="space-y-4">
-                  {!peerHasSubmitted ? (
-                    <div className="panel-card p-8 text-center space-y-2 border-dashed border border-[var(--border)]">
-                      <Clock className="w-8 h-8 text-[var(--text-muted)] mx-auto opacity-50" />
-                      <h4 className="text-[14px] font-bold text-[var(--text-primary)]">
-                        Peer Review Pending
-                      </h4>
-                      <p className="text-[12px] text-[var(--text-muted)] max-w-sm mx-auto">
-                        <strong>{peerDisplayName}</strong> has not submitted their evaluation yet. As soon as they complete it, your score and breakdown will appear here.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Overall Score Banner */}
-                      {(() => {
-                        const total = peerFeedback?.total_score || 0;
-                        const max = peerFeedback?.max_score || 0;
-                        const pct = Math.round(peerFeedback?.score_percentage || 0);
-                        const badge = getScoreBadge(pct);
+              <div className="space-y-1.5 max-w-md mx-auto">
+                <h3 className="text-[18px] font-bold text-[var(--text-primary)]">
+                  Evaluation Submitted Successfully
+                </h3>
+                <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                  Your feedback for this round has been securely recorded.
+                </p>
+              </div>
 
-                        return (
-                          <div className="p-5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div className="space-y-1 text-center sm:text-left">
-                              <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
-                                Total Evaluated Score
-                              </span>
-                              <div className="flex items-baseline gap-2">
-                                <span className="text-[32px] font-extrabold text-[var(--text-primary)] font-mono">
-                                  {total}
-                                </span>
-                                <span className="text-[16px] text-[var(--text-muted)] font-mono">
-                                  / {max} pts
-                                </span>
-                                <span className="text-[18px] font-bold text-[var(--accent)] font-mono ml-2">
-                                  ({pct}%)
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className={`px-3 py-1.5 rounded-full border text-xs font-bold font-mono ${badge.color}`}>
-                              {badge.label}
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Question Breakdown */}
-                      <div className="space-y-2.5">
-                        <h5 className="text-[12px] font-bold text-[var(--text-secondary)] font-mono uppercase tracking-wider">
-                          Evaluation Breakdown By Question
-                        </h5>
-                        {(peerFeedback?.responses || []).map((resp) => {
-                          const q = resp.question || {};
-                          return (
-                            <div
-                              key={resp.id}
-                              className="p-3.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1.5"
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <p className="text-[12px] font-semibold text-[var(--text-primary)] leading-snug">
-                                  {q.question_text || `Question #${resp.question_id}`}
-                                </p>
-                                {resp.max_marks > 0 && (
-                                  <span className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
-                                    +{resp.awarded_marks} / {resp.max_marks} pts
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[13px] font-bold text-[var(--accent)] font-mono">
-                                {resp.answer_value || '—'}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+              {/* Anti-Retaliation Confidentiality Notice */}
+              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] max-w-lg mx-auto text-left space-y-2">
+                <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--accent)]">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Confidential Peer Assessment</span>
                 </div>
-              )}
-
-              {/* TAB CONTENT: GIVEN SCORECARD */}
-              {activeScorecardTab === 'given' && (
-                <div className="space-y-4">
-                  {(() => {
-                    const total = myFeedback?.total_score || 0;
-                    const max = myFeedback?.max_score || 0;
-                    const pct = Math.round(myFeedback?.score_percentage || 0);
-
-                    return (
-                      <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">
-                            Score Awarded To Peer
-                          </span>
-                          <div className="text-[20px] font-bold font-mono text-[var(--text-primary)]">
-                            {total} / {max} pts ({pct}%)
-                          </div>
-                        </div>
-                        <span className="text-[11px] font-mono text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 font-bold">
-                          Submitted
-                        </span>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="space-y-2.5">
-                    <h5 className="text-[12px] font-bold text-[var(--text-secondary)] font-mono uppercase tracking-wider">
-                      Your Responses
-                    </h5>
-                    {(myFeedback?.responses || []).map((resp) => {
-                      const q = resp.question || {};
-                      return (
-                        <div
-                          key={resp.id}
-                          className="p-3.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1.5"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-[12px] font-semibold text-[var(--text-primary)] leading-snug">
-                              {q.question_text || `Question #${resp.question_id}`}
-                            </p>
-                            {resp.max_marks > 0 && (
-                              <span className="text-[11px] font-mono font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-2 py-0.5 rounded border border-[var(--border-accent)] shrink-0">
-                                +{resp.awarded_marks} / {resp.max_marks} pts
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[13px] font-bold text-[var(--text-primary)] font-mono">
-                            {resp.answer_value || '—'}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
+                  To ensure completely objective and unbiased scoring between peers, individual feedback scorecards and awarded marks are not revealed during the live interview session.
+                </p>
+                <div className="pt-2 border-t border-[var(--border)] flex items-center gap-2 text-[11px] font-mono text-[var(--text-secondary)]">
+                  <BookOpen className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+                  <span>View your complete evaluation scorecards on the <strong>Interview History</strong> page.</span>
                 </div>
-              )}
+              </div>
             </div>
           ) : (
             /* ============================================================ */
-            /* VIEW 2: FEEDBACK FORM WITH MARKS VISIBLE */
+            /* VIEW 2: PEER FEEDBACK EVALUATION FORM */
             /* ============================================================ */
             <form id="peer-feedback-form" onSubmit={handleSubmit} className="space-y-5">
               {error && (
@@ -515,8 +306,8 @@ export default function PeerFeedbackModal({
                       {isYesNo && (
                         <div className="flex items-center gap-3 pt-1">
                           {(q.options && q.options.length === 2 ? q.options : [
-                            { id: null, option_text: 'Yes', marks: 5 },
-                            { id: null, option_text: 'No', marks: 0 },
+                            { id: null, option_text: 'Yes' },
+                            { id: null, option_text: 'No' },
                           ]).map((opt) => {
                             const val = opt.option_text;
                             const isSelected = currentAns.answer_value === val || currentAns.selected_option_id === opt.id;
@@ -570,7 +361,7 @@ export default function PeerFeedbackModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="btn btn-primary text-xs py-2 px-6 font-bold shadow-sm"
+                className="btn btn-primary text-xs py-2 px-6 font-bold shadow-sm cursor-pointer"
               >
                 Done
               </button>
@@ -590,7 +381,7 @@ export default function PeerFeedbackModal({
                   type="button"
                   onClick={onClose}
                   disabled={submitting}
-                  className="btn btn-secondary text-xs py-2 px-4"
+                  className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -598,7 +389,7 @@ export default function PeerFeedbackModal({
                   type="submit"
                   form="peer-feedback-form"
                   disabled={submitting}
-                  className="btn btn-primary text-xs py-2 px-5 font-bold flex items-center gap-2 shadow-sm"
+                  className="btn btn-primary text-xs py-2 px-5 font-bold flex items-center gap-2 shadow-sm cursor-pointer"
                 >
                   {submitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -610,7 +401,7 @@ export default function PeerFeedbackModal({
                       ? isCompleted
                         ? 'Submit Round 1 Feedback'
                         : 'Submit Round 1 Feedback & Continue'
-                      : 'Submit Round 2 Feedback & View Scores'}
+                      : 'Submit Round 2 Feedback'}
                   </span>
                 </button>
               </div>
