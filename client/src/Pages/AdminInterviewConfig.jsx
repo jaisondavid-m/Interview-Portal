@@ -4,7 +4,7 @@ import {
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
   Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
   HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp, Copy,
-  Lightbulb, Target, Sparkles, BookOpen
+  Lightbulb, Target, Sparkles, BookOpen, Layout
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -38,13 +38,13 @@ const INTERVIEW_MODES = [
     desc: 'Objective multiple-choice questions with answer choices and explanations.',
   },
   {
-    id: 'discussion',
-    label: 'Discussion',
-    icon: MessageSquare,
-    color: 'text-sky-600',
-    bg: 'bg-sky-500/10',
-    border: 'border-sky-500/20',
-    desc: 'System architecture, design scenarios, and technical tradeoff analysis.',
+    id: 'whiteboard',
+    label: 'Whiteboard',
+    icon: Layout,
+    color: 'text-indigo-600 dark:text-indigo-400',
+    bg: 'bg-indigo-500/10',
+    border: 'border-indigo-500/20',
+    desc: 'System architecture whiteboard with draggable components, connections, and live sync preview.',
   },
 ];
 
@@ -301,7 +301,7 @@ export default function AdminInterviewConfig() {
           explanation: questionForm.explanation,
           interview_tips: tips,
         };
-      } else if (currentLevel.mode === 'discussion') {
+      } else if (currentLevel.mode === 'whiteboard' || currentLevel.mode === 'discussion') {
         payloadObj = {
           scenario: questionForm.scenario,
           talking_points: questionForm.talking_points.filter((tp) => tp.trim()),
@@ -1464,8 +1464,8 @@ export default function AdminInterviewConfig() {
                   </div>
                 )}
 
-                {/* 4. DISCUSSION SPECIFICATIONS */}
-                {currentLevel?.mode === 'discussion' && (
+                {/* 4. WHITEBOARD & ARCHITECTURE SPECIFICATIONS */}
+                {(currentLevel?.mode === 'whiteboard' || currentLevel?.mode === 'discussion') && (
                   <div className="space-y-6">
                     {parsed.scenario && (
                       <div className="panel-card p-5 space-y-2">
@@ -2258,11 +2258,11 @@ export default function AdminInterviewConfig() {
                 </div>
               )}
 
-              {/* 4. DISCUSSION MODE */}
-              {currentLevel.mode === 'discussion' && (
+              {/* 4. WHITEBOARD MODE */}
+              {(currentLevel.mode === 'whiteboard' || currentLevel.mode === 'discussion') && (
                 <div className="space-y-4 pt-2 border-t border-[var(--border)]">
-                  <h4 className="text-[13px] font-bold text-sky-600 font-mono uppercase tracking-wider">
-                    Discussion & System Design Specifications
+                  <h4 className="text-[13px] font-bold text-indigo-600 dark:text-indigo-400 font-mono uppercase tracking-wider">
+                    Whiteboard & System Architecture Specifications
                   </h4>
 
                   <label>

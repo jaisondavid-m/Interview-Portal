@@ -271,7 +271,7 @@ export default function AdminQuestionEditor() {
           explanation: explanation.trim(),
           interview_tips: interviewTips.filter((t) => t.trim()),
         };
-      } else if (type === 'discussion') {
+      } else if (type === 'whiteboard' || type === 'discussion') {
         payloadObj = {
           scenario: scenario.trim(),
           talking_points: talkingPoints.filter((tp) => tp.trim()),
@@ -501,7 +501,7 @@ export default function AdminQuestionEditor() {
                   <option value="coding">Live Coding (STDIN/STDOUT Tests)</option>
                   <option value="verbal_qa">Verbal Q&A / Conceptual</option>
                   <option value="mcq">Multiple Choice Assessment</option>
-                  <option value="discussion">System Design & Scenario Discussion</option>
+                  <option value="whiteboard">System Design & Architecture Whiteboard</option>
                 </select>
               </div>
             </div>
@@ -616,10 +616,10 @@ export default function AdminQuestionEditor() {
             </div>
           )}
 
-          {type === 'discussion' && (
+          {(type === 'whiteboard' || type === 'discussion') && (
             <div className="panel-card p-5 border border-[var(--border)] space-y-4">
               <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
-                System Scenario & Discussion Dimensions
+                System Architecture & Whiteboard Requirements
               </h3>
               <div>
                 <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">

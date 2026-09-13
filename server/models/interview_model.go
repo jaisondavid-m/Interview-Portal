@@ -13,7 +13,8 @@ const (
 	ModeCoding     InterviewMode = "coding"
 	ModeVerbalQA   InterviewMode = "verbal_qa"
 	ModeMCQ        InterviewMode = "mcq"
-	ModeDiscussion InterviewMode = "discussion"
+	ModeWhiteboard InterviewMode = "whiteboard"
+	ModeDiscussion InterviewMode = "discussion" // legacy alias for whiteboard
 )
 
 // InterviewTrack represents an interview domain / topic (e.g., DSA, System Design)
@@ -160,6 +161,7 @@ type InterviewSession struct {
 	Round2QuestionID  uint               `gorm:"default:0" json:"round2_question_id"`
 	CandidateCode        string             `gorm:"type:longtext" json:"candidate_code"`
 	CandidateLang        string             `gorm:"size:50;default:'javascript'" json:"candidate_lang"`
+	CandidateWhiteboard  string             `gorm:"type:longtext" json:"candidate_whiteboard"`
 	LastExecutionJSON    string             `gorm:"type:longtext" json:"last_execution_json"`
 	LastExecutionType    string             `gorm:"size:50" json:"last_execution_type"`       // "run" | "submit"
 	LastExecutionVerdict string             `gorm:"size:100" json:"last_execution_verdict"`   // "Accepted", "Wrong Answer", "All Sample Cases Passed"

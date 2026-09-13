@@ -745,6 +745,7 @@ func GetInterviewSession(c *gin.Context) {
 				"level_questions":        levelQuestions,
 				"candidate_code":         session.CandidateCode,
 				"candidate_lang":         session.CandidateLang,
+				"candidate_whiteboard":   session.CandidateWhiteboard,
 				"last_execution_type":    session.LastExecutionType,
 				"last_execution_verdict": session.LastExecutionVerdict,
 				"last_execution_passed":  session.LastExecutionPassed,
@@ -808,6 +809,44 @@ func UpdateSessionCode(c *gin.Context) {
 		"status":         "success",
 		"candidate_code": input.Code,
 		"candidate_lang": input.Lang,
+	})
+}
+
+// UpdateSessionWhiteboard synchronizes the whiteboard canvas state created by the candidate
+func UpdateSessionWhiteboard(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var input struct {
+		Whiteboard string `json:"whiteboard"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid whiteboard payload"})
+		return
+	}
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	// Only the active candidate is authorized to update the whiteboard
+	if session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Only the active candidate can edit the whiteboard"})
+		return
+	}
+
+	database.DB.Model(&session).Update("candidate_whiteboard", input.Whiteboard)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":               "success",
+		"candidate_whiteboard": input.Whiteboard,
 	})
 }
 

@@ -27,6 +27,7 @@ import {
 import api from '../api/axios';
 import CodeEditor from '../Components/CodeEditor';
 import TestCasesConsole from '../Components/TestCasesConsole';
+import WhiteboardCanvas from '../Components/Whiteboard/WhiteboardCanvas';
 import ConfirmModal from '../Components/ConfirmModal';
 import PeerFeedbackModal from '../Components/PeerFeedbackModal';
 import CredentialAuditModal from '../Components/CredentialAuditModal';
@@ -104,6 +105,9 @@ export default function InterviewRoom() {
   const [runResults, setRunResults] = useState(null);
   const [submissionResult, setSubmissionResult] = useState(null);
 
+  // Whiteboard system design state
+  const [whiteboardData, setWhiteboardData] = useState('');
+
   // Reusable confirmation modal state
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
@@ -138,7 +142,9 @@ export default function InterviewRoom() {
   const pollRef = useRef(null);
   const timerRef = useRef(null);
   const syncTimeoutRef = useRef(null);
+  const syncWhiteboardTimeoutRef = useRef(null);
   const lastSyncCodeRef = useRef('');
+  const lastSyncWhiteboardRef = useRef('');
   const activeQIdRef = useRef(0);
   const activeRoundRef = useRef(1);
 
@@ -205,8 +211,10 @@ export default function InterviewRoom() {
           setSubmissionResult(null);
 
           const initialCode = data.session.candidate_code || '';
+          const initialWhiteboard = data.session.candidate_whiteboard || '';
 
           setCode(initialCode);
+          setWhiteboardData(initialWhiteboard);
           setLanguage(targetLang);
 
           if (data.current_user_role === 'interviewee') {
@@ -216,9 +224,10 @@ export default function InterviewRoom() {
             }).catch(() => {});
           }
         } else {
-          // If candidate code is received from server and user is Interviewer, update editor stream
+          // If candidate code or whiteboard is received from server and user is Interviewer, update live stream
           if (data.current_user_role === 'interviewer') {
             setCode(data.session.candidate_code || '');
+            setWhiteboardData(data.session.candidate_whiteboard || '');
             setLanguage(targetLang);
 
             // Synchronize candidate execution state for interviewer
@@ -360,6 +369,26 @@ export default function InterviewRoom() {
         }
       }
     }, 800);
+  };
+
+  // Sync candidate whiteboard to server (debounced)
+  const handleWhiteboardChange = (newWhiteboard) => {
+    setWhiteboardData(newWhiteboard);
+    if (currentUserRole !== 'interviewee') return;
+
+    if (syncWhiteboardTimeoutRef.current) clearTimeout(syncWhiteboardTimeoutRef.current);
+    syncWhiteboardTimeoutRef.current = setTimeout(async () => {
+      if (newWhiteboard !== lastSyncWhiteboardRef.current) {
+        lastSyncWhiteboardRef.current = newWhiteboard;
+        try {
+          await api.post(`/interviews/sessions/${sessionId}/whiteboard`, {
+            whiteboard: newWhiteboard,
+          });
+        } catch (e) {
+          // ignore transient sync error
+        }
+      }
+    }, 500);
   };
 
   const handleLanguageChange = async (newLang) => {
@@ -679,6 +708,13 @@ export default function InterviewRoom() {
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
 
+  // Detect if current level or question is Whiteboard mode
+  const isWhiteboardMode =
+    level?.mode === 'whiteboard' ||
+    level?.mode === 'discussion' ||
+    question?.type === 'whiteboard' ||
+    question?.type === 'discussion';
+
   // Mutual role switch state calculations
   const switchRequestedBy = sessionData?.switch_requested_by || 0;
   const isSwitchRequestedByMe = switchRequestedBy > 0 && switchRequestedBy === myUserId;
@@ -731,7 +767,7 @@ export default function InterviewRoom() {
             {track?.title || 'Mock Interview Domain'}
           </h1>
           <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{level?.mode || 'coding'}</strong>
+            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isWhiteboardMode ? 'Whiteboard' : (level?.mode || 'coding')}</strong>
           </p>
         </div>
 
@@ -749,140 +785,81 @@ export default function InterviewRoom() {
               className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer shadow-sm animate-pulse"
               title="Give or review feedback for Round 1 Candidate"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>{hasFeedbackSubmitted ? 'Round 1 Feedback Submitted' : 'Give Round 1 Feedback'}</span>
+              <Award className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Round 1 Scorecard</span>
             </button>
           )}
 
-          {/* MUTUAL CONSENT ROLE SWAP BUTTON */}
-          {switchCount === 0 && !isCompleted ? (
-            isSwitchRequestedByMe ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-mono text-[var(--accent)] px-2.5 py-1.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center gap-1.5 font-bold">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
-                  <span>Waiting for Peer Acceptance...</span>
-                </span>
-                <button
-                  onClick={handleDeclineSwitch}
-                  disabled={switching}
-                  className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--red)] underline px-1 cursor-pointer"
-                  title="Cancel role switch request"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : isSwitchRequestedByPeer ? (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleAcceptSwitch}
-                  disabled={switching}
-                  className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-sm animate-pulse"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Accept Role Switch</span>
-                </button>
-                <button
-                  onClick={handleDeclineSwitch}
-                  disabled={switching}
-                  className="btn btn-secondary text-xs py-1.5 px-2.5"
-                >
-                  <span>Decline</span>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleRequestSwitch}
-                disabled={switching || isEndRequestedByMe || isEndRequestedByPeer}
-                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-[var(--shadow-sm)] border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer disabled:opacity-50"
-                title="Request to finish Round 1 and swap roles to Round 2 (Requires peer confirmation)"
-              >
-                {switching ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
-                ) : (
-                  <Repeat className="w-3.5 h-3.5 text-[var(--accent)]" />
-                )}
-                <span>Request Role Swap (Round 2)</span>
-              </button>
-            )
-          ) : (
-            <span className="text-[11px] font-mono text-[var(--text-muted)] px-2.5 py-1 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-              {isCompleted ? 'Session Ended' : 'Final Round (Swap Locked)'}
-            </span>
+          {/* Role Swap Action Button (Disabled after 1 one-time switch) */}
+          {!isCompleted && (
+            <button
+              onClick={handleRequestSwitch}
+              disabled={switching || switchCount >= 1 || isSwitchRequestedByMe}
+              className={`btn text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-sm transition ${
+                switchCount >= 1
+                  ? 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)] opacity-60 cursor-not-allowed'
+                  : isSwitchRequestedByMe
+                  ? 'bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 animate-pulse'
+                  : 'btn-secondary text-[var(--accent)] hover:border-[var(--accent)] cursor-pointer'
+              }`}
+              title={
+                switchCount >= 1
+                  ? 'Round switch completed. Both candidates have completed their rounds.'
+                  : isSwitchRequestedByMe
+                  ? 'Waiting for peer to accept your round switch request...'
+                  : 'Complete Round 1 and switch roles to Round 2'
+              }
+            >
+              {switching ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Repeat className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {switchCount >= 1
+                  ? 'Roles Swapped (Final)'
+                  : isSwitchRequestedByMe
+                  ? 'Switch Requested (Pending Peer)...'
+                  : 'Switch Roles (Round 2)'}
+              </span>
+            </button>
           )}
 
-          {/* MUTUAL CONSENT END INTERVIEW BUTTON */}
-          {isCompleted ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleOpenFeedback}
-                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer shadow-sm"
-                title="Give or review feedback for your peer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span>{hasFeedbackSubmitted ? 'Peer Feedback Submitted' : 'Give Peer Feedback'}</span>
-              </button>
-              <button
-                onClick={() => navigate('/interviews')}
-                className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Exit Room</span>
-              </button>
-            </div>
-          ) : isEndRequestedByMe ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono text-[var(--red)] px-2.5 py-1.5 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-1.5 font-bold">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--red)]" />
-                <span>Waiting for Peer...</span>
-              </span>
-              <button
-                onClick={handleDirectEnd}
-                disabled={ending}
-                className="btn btn-danger text-[11px] py-1 px-2.5 cursor-pointer font-bold shadow-sm"
-                title="End interview immediately without waiting"
-              >
-                End & Exit Now
-              </button>
-              <button
-                onClick={handleDeclineEnd}
-                disabled={ending}
-                className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--red)] underline px-1 cursor-pointer"
-                title="Cancel end request"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : isEndRequestedByPeer ? (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={handleAcceptEnd}
-                disabled={ending}
-                className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-sm animate-pulse cursor-pointer"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Confirm End Interview</span>
-              </button>
-              <button
-                onClick={handleDeclineEnd}
-                disabled={ending}
-                className="btn btn-secondary text-xs py-1.5 px-2.5 cursor-pointer"
-              >
-                <span>Decline</span>
-              </button>
-            </div>
-          ) : (
+          {/* Mutual End Interview Action Button */}
+          {!isCompleted && (
             <button
               onClick={handleRequestEnd}
-              disabled={ending || isSwitchRequestedByMe}
-              className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="Request mutual consent to conclude and end the interview"
+              disabled={ending || isEndRequestedByMe}
+              className={`btn text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-sm transition ${
+                isEndRequestedByMe
+                  ? 'bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 animate-pulse'
+                  : 'btn-danger cursor-pointer'
+              }`}
+              title={
+                isEndRequestedByMe
+                  ? 'End interview requested! Waiting for peer confirmation...'
+                  : 'Conclude interview session with mutual confirmation'
+              }
             >
               {ending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <LogOut className="w-3.5 h-3.5" />
               )}
-              <span>End Interview</span>
+              <span>
+                {isEndRequestedByMe ? 'End Requested (Pending)...' : 'End Interview'}
+              </span>
+            </button>
+          )}
+
+          {/* Quick Exit Button (if completed or emergency) */}
+          {isCompleted && (
+            <button
+              onClick={() => navigate('/interviews')}
+              className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Exit Room</span>
             </button>
           )}
         </div>
@@ -1026,13 +1003,17 @@ export default function InterviewRoom() {
           <span>
             You are currently the <strong>{currentUserRole === 'interviewer' ? 'Interviewer (Assessor)' : 'Candidate (Interviewee)'}</strong> in Round {currentRound}.
             {currentUserRole === 'interviewer'
-              ? ' You have full visibility into the solutions, rubrics, hints, and test cases.'
-              : ' Write and execute your code in the shared workspace. Your interviewer is observing live.'}
+              ? (isWhiteboardMode
+                  ? ' You are observing the candidate\'s architecture whiteboard live in real-time with full access to scenario rubrics and tradeoffs.'
+                  : ' You have full visibility into the solutions, rubrics, hints, and test cases.')
+              : (isWhiteboardMode
+                  ? ' Design your system architecture on the interactive whiteboard. Add, move, connect, and edit components. Your interviewer is viewing live.'
+                  : ' Write and execute your code in the shared workspace. Your interviewer is observing live.')}
           </span>
         </div>
 
         {/* Live Execution Telemetry Status Pill for Interviewer */}
-        {currentUserRole === 'interviewer' && sessionData?.last_execution_verdict && (
+        {currentUserRole === 'interviewer' && !isWhiteboardMode && sessionData?.last_execution_verdict && (
           <div className={`px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border shrink-0 ${
             sessionData.last_execution_verdict === 'Accepted' || sessionData.last_execution_verdict === 'All Sample Cases Passed'
               ? 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/40'
@@ -1042,6 +1023,13 @@ export default function InterviewRoom() {
             <span>
               Candidate {sessionData.last_execution_type === 'submit' ? 'Submitted' : 'Ran'}: {sessionData.last_execution_verdict} ({sessionData.last_execution_passed}/{sessionData.last_execution_total} Passed)
             </span>
+          </div>
+        )}
+
+        {currentUserRole === 'interviewer' && isWhiteboardMode && (
+          <div className="px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/40 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Live Whiteboard Sync Active</span>
           </div>
         )}
       </div>
@@ -1077,7 +1065,7 @@ export default function InterviewRoom() {
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  Hints & Tips
+                  {isWhiteboardMode ? 'Talking Points' : 'Hints & Tips'}
                 </button>
                 <button
                   type="button"
@@ -1088,19 +1076,21 @@ export default function InterviewRoom() {
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  Approach & Rubrics
+                  {isWhiteboardMode ? 'Tradeoffs & Rubrics' : 'Approach & Rubrics'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setInterviewerTab('testcases')}
-                  className={`px-2.5 py-1.5 rounded transition ${
-                    interviewerTab === 'testcases'
-                      ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  All Cases ({openCases.length + (payload.hidden_test_cases?.length || 2)})
-                </button>
+                {!isWhiteboardMode && (
+                  <button
+                    type="button"
+                    onClick={() => setInterviewerTab('testcases')}
+                    className={`px-2.5 py-1.5 rounded transition ${
+                      interviewerTab === 'testcases'
+                        ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    All Cases ({openCases.length + (payload.hidden_test_cases?.length || 2)})
+                  </button>
+                )}
               </div>
 
               {/* Tab Content */}
@@ -1110,7 +1100,7 @@ export default function InterviewRoom() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
-                        {question?.title || 'Coding Problem Assessment'}
+                        {question?.title || (isWhiteboardMode ? 'System Architecture Design' : 'Coding Assessment')}
                       </h3>
                       <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-bold">
                         {question?.difficulty || 'Medium'}
@@ -1121,9 +1111,18 @@ export default function InterviewRoom() {
                       {question?.prompt || 'No prompt provided.'}
                     </div>
 
+                    {payload?.scenario && (
+                      <div className="bg-[var(--bg-raised)] p-3 rounded border border-[var(--border)] space-y-1">
+                        <span className="font-bold text-[var(--text-primary)] block text-xs">System Scenario Context:</span>
+                        <div className="text-[12px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
+                          {payload.scenario}
+                        </div>
+                      </div>
+                    )}
+
                     {payload?.constraints && (
                       <div className="bg-[var(--bg-raised)] p-3 rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
-                        <span className="font-bold text-[var(--text-primary)] block">Constraints & Limits:</span>
+                        <span className="font-bold text-[var(--text-primary)] block">Scale & Limits:</span>
                         <div className="text-[var(--text-muted)] whitespace-pre-line">
                           {payload.constraints}
                         </div>
@@ -1132,15 +1131,24 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {/* 2. Hints & Guiding Questions */}
+                {/* 2. Hints & Guiding Questions / Talking Points */}
                 {interviewerTab === 'hints' && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-1.5 text-[12px] font-bold text-[var(--accent)]">
                       <Lightbulb className="w-4 h-4" />
-                      <span>Assessor Hints (Share as needed if candidate struggles)</span>
+                      <span>{isWhiteboardMode ? 'Key Architecture Talking Points' : 'Assessor Hints'}</span>
                     </div>
 
-                    {payload?.hints && payload.hints.length > 0 ? (
+                    {payload?.talking_points && payload.talking_points.length > 0 ? (
+                      <div className="space-y-2">
+                        {payload.talking_points.map((tp, i) => (
+                          <div key={i} className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                            <span className="font-bold text-[var(--accent)] block mb-1">Point {i + 1}:</span>
+                            {tp}
+                          </div>
+                        ))}
+                      </div>
+                    ) : payload?.hints && payload.hints.length > 0 ? (
                       <div className="space-y-2">
                         {payload.hints.map((hint, i) => (
                           <div key={i} className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] text-[12px] text-[var(--text-secondary)] leading-relaxed">
@@ -1151,7 +1159,7 @@ export default function InterviewRoom() {
                       </div>
                     ) : (
                       <p className="text-[12px] text-[var(--text-muted)] italic">
-                        No specific hints defined. Probe on brute force vs optimal lookup tradeoffs.
+                        No specific hints defined. Probe candidate on bottlenecks, single points of failure (SPOF), and data consistency.
                       </p>
                     )}
 
@@ -1168,12 +1176,23 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {/* 3. Expected Approach & Rubrics */}
+                {/* 3. Expected Approach & Rubrics / Tradeoffs */}
                 {interviewerTab === 'solution' && (
                   <div className="space-y-3">
+                    {payload?.tradeoffs && payload.tradeoffs.length > 0 && (
+                      <div className="p-3 bg-[var(--amber-bg)]/20 border border-[var(--amber)]/30 rounded space-y-1">
+                        <span className="font-bold text-[var(--amber)] text-[12px] block">Tradeoffs & Edge Cases:</span>
+                        <ul className="list-disc pl-4 space-y-1 text-[12px] text-[var(--text-secondary)]">
+                          {payload.tradeoffs.map((to, i) => (
+                            <li key={i}>{to}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     {payload?.expected_approach && (
                       <div className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] space-y-1">
-                        <span className="font-bold text-[var(--green)] text-[12px] block">Expected Optimal Approach:</span>
+                        <span className="font-bold text-[var(--green)] text-[12px] block">Expected Architecture Design:</span>
                         <div className="text-[12px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
                           {payload.expected_approach}
                         </div>
@@ -1182,7 +1201,7 @@ export default function InterviewRoom() {
 
                     {payload?.expected_complexity && (
                       <div className="p-3 bg-[var(--bg-raised)] rounded border border-[var(--border)] font-mono text-[11px] space-y-1">
-                        <span className="font-bold text-[var(--text-primary)] block">Expected Complexity:</span>
+                        <span className="font-bold text-[var(--text-primary)] block">Target Throughput / Latency:</span>
                         <div className="text-[var(--text-muted)] whitespace-pre-line">
                           {payload.expected_complexity}
                         </div>
@@ -1202,8 +1221,8 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {/* 4. Sample Test Cases (Never show hidden cases to interviewer) */}
-                {interviewerTab === 'testcases' && (
+                {/* 4. Sample Test Cases (Coding mode only) */}
+                {!isWhiteboardMode && interviewerTab === 'testcases' && (
                   <div className="space-y-3 font-mono text-[12px]">
                     {openCases.length > 0 ? (
                       <div>
@@ -1236,29 +1255,38 @@ export default function InterviewRoom() {
                   Question #{question?.id || 1} • {question?.difficulty || 'Medium'}
                 </span>
                 <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
-                  Mode: {question?.type || 'coding'}
+                  Mode: {isWhiteboardMode ? 'Whiteboard' : (question?.type || 'coding')}
                 </span>
               </div>
 
               <h2 className="text-[18px] font-bold text-[var(--text-primary)]">
-                {question?.title || 'Problem Description'}
+                {question?.title || (isWhiteboardMode ? 'System Architecture Challenge' : 'Problem Description')}
               </h2>
 
               <div className="text-[13px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
                 {question?.prompt || 'No prompt provided.'}
               </div>
 
+              {payload?.scenario && (
+                <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)] space-y-1">
+                  <span className="font-bold text-[var(--text-primary)] block text-xs">Scenario Requirements:</span>
+                  <div className="text-[12px] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
+                    {payload.scenario}
+                  </div>
+                </div>
+              )}
+
               {payload?.constraints && (
                 <div className="bg-[var(--bg-raised)] p-3 rounded-[var(--radius-sm)] border border-[var(--border)] font-mono text-[11px] space-y-1">
-                  <span className="font-bold text-[var(--text-primary)] block">Constraints & Limits:</span>
+                  <span className="font-bold text-[var(--text-primary)] block">Scale & Limits:</span>
                   <div className="text-[var(--text-muted)] whitespace-pre-line">
                     {payload.constraints}
                   </div>
                 </div>
               )}
 
-              {/* Open Sample Cases (Only shown if test cases exist) */}
-              {openCases.length > 0 && (
+              {/* Open Sample Cases (Only shown in coding mode if test cases exist) */}
+              {!isWhiteboardMode && openCases.length > 0 && (
                 <div className="space-y-2">
                   <span className="text-[11px] font-mono uppercase font-bold text-[var(--text-muted)] block">
                     Sample Test Cases:
@@ -1277,36 +1305,47 @@ export default function InterviewRoom() {
         </div>
 
         {/* ============================================================ */}
-        {/* RIGHT PANEL: Shared CodeMirror 6 Editor & Test Console */}
+        {/* RIGHT PANEL: System Design Whiteboard OR Code Editor */}
         {/* ============================================================ */}
         <div className="lg:col-span-7 flex flex-col space-y-3">
-          {/* CodeMirror 6 Editor */}
-          <div className="h-[360px]">
-            <CodeEditor
-              code={code}
-              onChange={handleCodeChange}
-              language={language}
-              onLanguageChange={handleLanguageChange}
+          {isWhiteboardMode ? (
+            <WhiteboardCanvas
+              whiteboardData={whiteboardData}
+              onWhiteboardChange={handleWhiteboardChange}
               isEditable={currentUserRole === 'interviewee'}
+              candidateName={peerUser?.name || 'Candidate'}
             />
-          </div>
+          ) : (
+            <>
+              {/* CodeMirror 6 Editor */}
+              <div className="h-[360px]">
+                <CodeEditor
+                  code={code}
+                  onChange={handleCodeChange}
+                  language={language}
+                  onLanguageChange={handleLanguageChange}
+                  isEditable={currentUserRole === 'interviewee'}
+                />
+              </div>
 
-          {/* Test Cases Runner Console */}
-          <TestCasesConsole
-            openTestCases={openCases}
-            onRunCode={handleRunCode}
-            onSubmitCode={handleSubmitCode}
-            isRunning={isRunning}
-            isSubmitting={isSubmitting}
-            isCandidate={currentUserRole === 'interviewee'}
-            runResults={runResults}
-            submissionResult={submissionResult}
-            lastExecutionInfo={
-              sessionData?.last_execution_verdict
-                ? `${sessionData.last_execution_verdict} - ${sessionData.last_execution_passed}/${sessionData.last_execution_total} Passed`
-                : null
-            }
-          />
+              {/* Test Cases Runner Console */}
+              <TestCasesConsole
+                openTestCases={openCases}
+                onRunCode={handleRunCode}
+                onSubmitCode={handleSubmitCode}
+                isRunning={isRunning}
+                isSubmitting={isSubmitting}
+                isCandidate={currentUserRole === 'interviewee'}
+                runResults={runResults}
+                submissionResult={submissionResult}
+                lastExecutionInfo={
+                  sessionData?.last_execution_verdict
+                    ? `${sessionData.last_execution_verdict} - ${sessionData.last_execution_passed}/${sessionData.last_execution_total} Passed`
+                    : null
+                }
+              />
+            </>
+          )}
         </div>
       </div>
 
