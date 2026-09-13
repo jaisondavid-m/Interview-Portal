@@ -376,10 +376,10 @@ export default function AdminFeedbackConfig() {
           <button
             onClick={() => navigate('/admin/leaderboard')}
             className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold shadow-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"
-            title="Open Dedicated Student Score Leaderboard"
+            title="Open Student Score Leaderboard"
           >
             <Trophy className="w-4 h-4 text-amber-500" />
-            <span>Open Student Leaderboard</span>
+            <span>Leaderboard</span>
           </button>
 
           <button

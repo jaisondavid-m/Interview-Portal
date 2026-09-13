@@ -189,7 +189,7 @@ export default function AdminLeaderboard() {
             <span>Student Performance Rankings</span>
           </div>
           <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
-            Person-Wise Interview Leaderboard
+            Leaderboard
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
             Ranked student performance scorecards calculated by total points gained and interview attendance volume.

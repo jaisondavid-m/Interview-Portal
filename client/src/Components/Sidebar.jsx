@@ -29,7 +29,7 @@ export default function Sidebar() {
         { name: 'User Management', path: '/admin/users', icon: Users },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
         { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
-        { name: 'Feedback Leaderboard', path: '/admin/leaderboard', icon: Trophy },
+        { name: 'Leaderboard', path: '/admin/leaderboard', icon: Trophy },
         { name: 'Interview History', path: '/admin/history', icon: History },
       ]
     : [
