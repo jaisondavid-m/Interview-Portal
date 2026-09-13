@@ -36,15 +36,12 @@ export default function AdminLeaderboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Primary Ranking Metric Mode:
-  // 'total_points' | 'points_per_interview' | 'interviews_attended' | 'percentage'
-  const [metricMode, setMetricMode] = useState('total_points');
+  // Active Leaderboard Tab: 'total_points' | 'points_per_interview'
+  const [activeTab, setActiveTab] = useState('total_points');
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
-  const [minInterviews, setMinInterviews] = useState(0);
-  const [minPoints, setMinPoints] = useState(0);
   const [sortField, setSortField] = useState('total_points');
   const [sortOrder, setSortOrder] = useState('desc'); // 'desc' | 'asc'
 
@@ -64,12 +61,6 @@ export default function AdminLeaderboard() {
       if (searchTerm.trim()) {
         params.append('search', searchTerm.trim());
       }
-      if (minInterviews > 0) {
-        params.append('min_matches', minInterviews);
-      }
-      if (minPoints > 0) {
-        params.append('min_points', minPoints);
-      }
 
       const res = await api.get(`/admin/feedback/leaderboard?${params.toString()}`);
       const data = res?.data?.data || res?.data || res;
@@ -84,7 +75,7 @@ export default function AdminLeaderboard() {
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [sortField, sortOrder, selectedDept, minInterviews, minPoints]);
+  }, [sortField, sortOrder, selectedDept]);
 
   // Handle Search Debounce
   useEffect(() => {
@@ -94,32 +85,18 @@ export default function AdminLeaderboard() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // When Metric Mode toggles, update primary sorting
-  const handleMetricModeChange = (mode) => {
-    setMetricMode(mode);
-    if (mode === 'total_points') {
-      setSortField('total_points');
-      setSortOrder('desc');
-    } else if (mode === 'points_per_interview') {
-      setSortField('points_per_interview');
-      setSortOrder('desc');
-    } else if (mode === 'interviews_attended') {
-      setSortField('interviews_attended');
-      setSortOrder('desc');
-    } else if (mode === 'percentage') {
-      setSortField('percentage');
-      setSortOrder('desc');
-    }
+  // When switching between Total Points and Points/Interview tabs
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setSortField(tab);
+    setSortOrder('desc');
   };
 
-  // Reset all filters to default
+  // Reset all active filters to default
   const handleResetFilters = () => {
     setSearchTerm('');
     setSelectedDept('all');
-    setMinInterviews(0);
-    setMinPoints(0);
-    setMetricMode('total_points');
-    setSortField('total_points');
+    setSortField(activeTab);
     setSortOrder('desc');
   };
 
@@ -141,7 +118,7 @@ export default function AdminLeaderboard() {
       .slice(0, 3);
   }, [leaderboard]);
 
-  const hasActiveFilters = searchTerm.trim() !== '' || selectedDept !== 'all' || minInterviews > 0 || minPoints > 0;
+  const hasActiveFilters = searchTerm.trim() !== '' || selectedDept !== 'all';
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12 max-w-7xl mx-auto">
@@ -156,66 +133,40 @@ export default function AdminLeaderboard() {
             Leaderboard
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Ranked student performance scorecards calculated by total points gained and interview attendance volume.
+            {activeTab === 'total_points'
+              ? 'Ranked student leaderboard by cumulative total points gained across all mock interviews.'
+              : 'Ranked student leaderboard by average points scored per completed mock interview.'}
           </p>
         </div>
 
-        {/* Primary Ranking Metric Toggle Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] shadow-xs flex-wrap self-start lg:self-auto">
+        {/* 2 Dedicated Leaderboard Tabs: Total Points Gained vs Points / Interview */}
+        <div className="inline-flex items-center p-1 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] shadow-xs self-start lg:self-auto">
           <button
             type="button"
-            onClick={() => handleMetricModeChange('total_points')}
-            className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-1.5 ${
-              metricMode === 'total_points'
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            onClick={() => handleTabChange('total_points')}
+            className={`px-4 py-2 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'total_points'
+                ? 'bg-[var(--accent)] text-white shadow-sm ring-1 ring-[var(--accent)]/40'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
             }`}
-            title="Rank students by overall cumulative points gained"
+            title="Leaderboard ranked by overall total points gained"
           >
-            <Award className="w-3.5 h-3.5" />
+            <Award className="w-4 h-4" />
             <span>Total Points Gained</span>
           </button>
 
           <button
             type="button"
-            onClick={() => handleMetricModeChange('points_per_interview')}
-            className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-1.5 ${
-              metricMode === 'points_per_interview'
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            onClick={() => handleTabChange('points_per_interview')}
+            className={`px-4 py-2 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'points_per_interview'
+                ? 'bg-[var(--accent)] text-white shadow-sm ring-1 ring-[var(--accent)]/40'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
             }`}
-            title="Rank students by Points / Number of Interviews Attended"
+            title="Leaderboard ranked by points per interview session"
           >
-            <Zap className="w-3.5 h-3.5 text-amber-300" />
+            <Zap className="w-4 h-4 text-amber-300" />
             <span>Points / Interview</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleMetricModeChange('interviews_attended')}
-            className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-1.5 ${
-              metricMode === 'interviews_attended'
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-            title="Rank students by number of interviews attended"
-          >
-            <Video className="w-3.5 h-3.5" />
-            <span>Interviews Attended</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleMetricModeChange('percentage')}
-            className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-1.5 ${
-              metricMode === 'percentage'
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-            title="Rank students by percentage score"
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Percentage (%)</span>
           </button>
         </div>
       </div>
@@ -266,18 +217,26 @@ export default function AdminLeaderboard() {
 
           <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] uppercase">
-              <span>Top Total Points Scorer</span>
+              <span>
+                {activeTab === 'total_points' ? 'Top Total Points' : 'Top Pts / Interview'}
+              </span>
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             </div>
             <div className="text-[22px] font-bold text-amber-500 font-mono truncate">
-              {stats.top_scorer_by_total?.total_score != null
-                ? `${stats.top_scorer_by_total.total_score.toFixed(0)} pts`
-                : stats.top_scorer?.total_score != null
-                ? `${stats.top_scorer.total_score.toFixed(0)} pts`
+              {activeTab === 'total_points'
+                ? stats.top_scorer_by_total?.total_score != null
+                  ? `${stats.top_scorer_by_total.total_score.toFixed(0)} pts`
+                  : stats.top_scorer?.total_score != null
+                  ? `${stats.top_scorer.total_score.toFixed(0)} pts`
+                  : '—'
+                : stats.top_scorer_by_avg?.points_per_interview != null
+                ? `${stats.top_scorer_by_avg.points_per_interview.toFixed(1)} pts/int`
                 : '—'}
             </div>
             <div className="text-[11px] text-amber-600 dark:text-amber-400 font-mono truncate">
-              {stats.top_scorer_by_total?.name || stats.top_scorer?.name || 'No students evaluated yet'}
+              {activeTab === 'total_points'
+                ? stats.top_scorer_by_total?.name || stats.top_scorer?.name || 'No students evaluated yet'
+                : stats.top_scorer_by_avg?.name || 'No students evaluated yet'}
             </div>
           </div>
         </div>
@@ -305,18 +264,12 @@ export default function AdminLeaderboard() {
             <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-end justify-between">
               <div>
                 <span className="text-[10px] text-[var(--text-muted)] uppercase font-mono block">
-                  {metricMode === 'points_per_interview'
-                    ? 'Points / Interview'
-                    : metricMode === 'interviews_attended'
-                    ? 'Interviews Attended'
-                    : 'Total Points Gained'}
+                  {activeTab === 'total_points' ? 'Total Points Gained' : 'Points / Interview'}
                 </span>
                 <span className="text-[20px] font-bold text-[var(--text-primary)] font-mono">
-                  {metricMode === 'points_per_interview'
-                    ? `${(topThree[1]?.points_per_interview || topThree[1]?.avg_score_per_match || 0).toFixed(1)} pts`
-                    : metricMode === 'interviews_attended'
-                    ? `${topThree[1]?.interviews_attended || topThree[1]?.matches_count || 0} int.`
-                    : `${(topThree[1]?.total_score || 0).toFixed(0)} pts`}
+                  {activeTab === 'total_points'
+                    ? `${(topThree[1]?.total_score || 0).toFixed(0)} pts`
+                    : `${(topThree[1]?.points_per_interview || topThree[1]?.avg_score_per_match || 0).toFixed(1)} pts/int`}
                 </span>
               </div>
               <div className="text-right">
@@ -352,18 +305,12 @@ export default function AdminLeaderboard() {
             <div className="mt-4 pt-3 border-t border-amber-500/20 flex items-end justify-between">
               <div>
                 <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-mono font-bold block">
-                  {metricMode === 'points_per_interview'
-                    ? 'Top Points / Interview'
-                    : metricMode === 'interviews_attended'
-                    ? 'Top Attendance'
-                    : 'Top Total Points'}
+                  {activeTab === 'total_points' ? 'Top Total Points' : 'Top Points / Interview'}
                 </span>
                 <span className="text-[24px] font-bold text-amber-500 font-mono">
-                  {metricMode === 'points_per_interview'
-                    ? `${(topThree[0]?.points_per_interview || topThree[0]?.avg_score_per_match || 0).toFixed(1)} pts`
-                    : metricMode === 'interviews_attended'
-                    ? `${topThree[0]?.interviews_attended || topThree[0]?.matches_count || 0} interviews`
-                    : `${(topThree[0]?.total_score || 0).toFixed(0)} pts`}
+                  {activeTab === 'total_points'
+                    ? `${(topThree[0]?.total_score || 0).toFixed(0)} pts`
+                    : `${(topThree[0]?.points_per_interview || topThree[0]?.avg_score_per_match || 0).toFixed(1)} pts/int`}
                 </span>
               </div>
               <div className="text-right">
@@ -396,18 +343,12 @@ export default function AdminLeaderboard() {
             <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-end justify-between">
               <div>
                 <span className="text-[10px] text-[var(--text-muted)] uppercase font-mono block">
-                  {metricMode === 'points_per_interview'
-                    ? 'Points / Interview'
-                    : metricMode === 'interviews_attended'
-                    ? 'Interviews Attended'
-                    : 'Total Points Gained'}
+                  {activeTab === 'total_points' ? 'Total Points Gained' : 'Points / Interview'}
                 </span>
                 <span className="text-[20px] font-bold text-[var(--text-primary)] font-mono">
-                  {metricMode === 'points_per_interview'
-                    ? `${(topThree[2]?.points_per_interview || topThree[2]?.avg_score_per_match || 0).toFixed(1)} pts`
-                    : metricMode === 'interviews_attended'
-                    ? `${topThree[2]?.interviews_attended || topThree[2]?.matches_count || 0} int.`
-                    : `${(topThree[2]?.total_score || 0).toFixed(0)} pts`}
+                  {activeTab === 'total_points'
+                    ? `${(topThree[2]?.total_score || 0).toFixed(0)} pts`
+                    : `${(topThree[2]?.points_per_interview || topThree[2]?.avg_score_per_match || 0).toFixed(1)} pts/int`}
                 </span>
               </div>
               <div className="text-right">
@@ -440,38 +381,6 @@ export default function AdminLeaderboard() {
 
           {/* Quick Filter Selectors */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Filter by Interviews Attended */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono text-[var(--text-muted)]">Interviews Attended:</span>
-              <select
-                value={minInterviews}
-                onChange={(e) => setMinInterviews(Number(e.target.value))}
-                className="custom-input text-xs py-1.5 px-2 font-mono"
-              >
-                <option value="0">All Students (0+)</option>
-                <option value="1">1+ Interviews</option>
-                <option value="2">2+ Interviews</option>
-                <option value="3">3+ Interviews</option>
-                <option value="5">5+ Interviews</option>
-              </select>
-            </div>
-
-            {/* Filter by Total Points Threshold */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono text-[var(--text-muted)]">Min Points:</span>
-              <select
-                value={minPoints}
-                onChange={(e) => setMinPoints(Number(e.target.value))}
-                className="custom-input text-xs py-1.5 px-2 font-mono"
-              >
-                <option value="0">All Points</option>
-                <option value="10">10+ pts</option>
-                <option value="25">25+ pts</option>
-                <option value="50">50+ pts</option>
-                <option value="100">100+ pts</option>
-              </select>
-            </div>
-
             {/* Department Filter */}
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-mono text-[var(--text-muted)]">Dept:</span>
@@ -494,7 +403,7 @@ export default function AdminLeaderboard() {
                 type="button"
                 onClick={handleResetFilters}
                 className="btn btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1 text-[var(--red)] border-red-500/20 hover:bg-red-500/10 font-mono"
-                title="Reset all filters"
+                title="Reset active filters"
               >
                 <RotateCcw className="w-3 h-3" />
                 <span>Reset</span>
@@ -514,12 +423,16 @@ export default function AdminLeaderboard() {
         </div>
       </div>
 
-      {/* Main Person-Wise Leaderboard Table */}
+      {/* Leaderboard Table (Distinct for each tab) */}
       <div className="panel-card bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-20 text-center space-y-3">
             <RefreshCw className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-            <p className="text-xs text-[var(--text-muted)] font-mono">Calculating points & generating person-wise leaderboard...</p>
+            <p className="text-xs text-[var(--text-muted)] font-mono">
+              {activeTab === 'total_points'
+                ? 'Calculating total points & ranking students...'
+                : 'Calculating points per interview & ranking students...'}
+            </p>
           </div>
         ) : error ? (
           <div className="p-8 text-center text-[var(--red)] space-y-2">
@@ -543,7 +456,8 @@ export default function AdminLeaderboard() {
               </button>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'total_points' ? (
+          /* TAB 1: TOTAL POINTS GAINED LEADERBOARD TABLE */
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -563,9 +477,7 @@ export default function AdminLeaderboard() {
                   </th>
                   <th className="py-3 px-4">Department</th>
                   <th
-                    className={`py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors ${
-                      metricMode === 'interviews_attended' ? 'text-[var(--accent)] font-bold' : ''
-                    }`}
+                    className="py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors"
                     onClick={() => {
                       setSortField('interviews_attended');
                       setSortOrder(sortField === 'interviews_attended' && sortOrder === 'desc' ? 'asc' : 'desc');
@@ -577,9 +489,7 @@ export default function AdminLeaderboard() {
                     </div>
                   </th>
                   <th
-                    className={`py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors ${
-                      metricMode === 'total_points' ? 'text-[var(--accent)] font-bold' : ''
-                    }`}
+                    className="py-3 px-4 cursor-pointer text-[var(--accent)] font-bold hover:opacity-80 transition-opacity"
                     onClick={() => {
                       setSortField('total_points');
                       setSortOrder(sortField === 'total_points' && sortOrder === 'desc' ? 'asc' : 'desc');
@@ -590,10 +500,138 @@ export default function AdminLeaderboard() {
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
+                  <th className="py-3 px-4 text-right">Scorecard</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {leaderboard.map((student) => {
+                  const attended = student.interviews_attended ?? student.matches_count ?? 0;
+                  const totalScore = student.total_score ?? 0;
+                  const isTop3 = student.rank <= 3 && (attended > 0 || totalScore > 0);
+
+                  return (
+                    <tr
+                      key={student.student_id}
+                      className={`hover:bg-[var(--bg-hover)] transition-colors ${
+                        student.rank === 1 && (attended > 0 || totalScore > 0)
+                          ? 'bg-amber-500/5 dark:bg-amber-500/5'
+                          : ''
+                      }`}
+                    >
+                      {/* Rank */}
+                      <td className="py-3 px-4 text-center font-mono">
+                        {student.rank === 1 && (attended > 0 || totalScore > 0) ? (
+                          <span className="w-6 h-6 rounded-full bg-amber-400 text-amber-950 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                            1
+                          </span>
+                        ) : student.rank === 2 && (attended > 0 || totalScore > 0) ? (
+                          <span className="w-6 h-6 rounded-full bg-slate-300 text-slate-900 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                            2
+                          </span>
+                        ) : student.rank === 3 && (attended > 0 || totalScore > 0) ? (
+                          <span className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                            3
+                          </span>
+                        ) : (
+                          <span className="text-[var(--text-muted)] font-bold">#{student.rank}</span>
+                        )}
+                      </td>
+
+                      {/* Student Info */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-bold font-mono flex items-center justify-center text-xs border border-[var(--border-accent)] shrink-0">
+                            {student.name ? student.name.charAt(0).toUpperCase() : 'S'}
+                          </div>
+                          <div>
+                            <div className="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                              <span>{student.name}</span>
+                              {isTop3 && <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />}
+                            </div>
+                            <div className="text-[11px] text-[var(--text-muted)] font-mono">
+                              {student.roll_no || 'NO ROLL'} • {student.email}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Department */}
+                      <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">
+                        {student.department || 'General'}
+                      </td>
+
+                      {/* Interviews Attended */}
+                      <td className="py-3 px-4 font-mono">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--bg-raised)] border border-[var(--border)] font-bold text-[var(--text-primary)]">
+                          <Video className="w-3 h-3 text-[var(--accent)]" />
+                          <span>{attended}</span>
+                        </span>
+                      </td>
+
+                      {/* Total Points Gained */}
+                      <td className="py-3 px-4 font-mono">
+                        <div className="space-y-0.5">
+                          <span className="text-[14px] font-extrabold text-[var(--accent)]">
+                            {totalScore.toFixed(0)} pts
+                          </span>
+                          <span className="text-[10px] text-[var(--text-muted)] block">
+                            / {student.total_max_score ? student.total_max_score.toFixed(0) : '0'} max
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Action Button */}
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudent(student)}
+                          className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 ml-auto font-mono hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                          title="View student's interview scorecard and evaluation breakdown"
+                        >
+                          <BookOpen className="w-3 h-3" />
+                          <span>Scorecard</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* TAB 2: POINTS / INTERVIEW LEADERBOARD TABLE */
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[var(--text-muted)] font-mono text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4 w-14 text-center">Rank</th>
                   <th
-                    className={`py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors ${
-                      metricMode === 'points_per_interview' ? 'text-[var(--accent)] font-bold' : ''
-                    }`}
+                    className="py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors"
+                    onClick={() => {
+                      setSortField('name');
+                      setSortOrder(sortField === 'name' && sortOrder === 'desc' ? 'asc' : 'desc');
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Student</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                  <th className="py-3 px-4">Department</th>
+                  <th
+                    className="py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors"
+                    onClick={() => {
+                      setSortField('interviews_attended');
+                      setSortOrder(sortField === 'interviews_attended' && sortOrder === 'desc' ? 'asc' : 'desc');
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Interviews Attended</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                  <th
+                    className="py-3 px-4 cursor-pointer text-amber-500 font-bold hover:opacity-80 transition-opacity"
                     onClick={() => {
                       setSortField('points_per_interview');
                       setSortOrder(sortField === 'points_per_interview' && sortOrder === 'desc' ? 'asc' : 'desc');
@@ -673,30 +711,14 @@ export default function AdminLeaderboard() {
                         </span>
                       </td>
 
-                      {/* Total Points Gained */}
-                      <td className="py-3 px-4 font-mono">
-                        <div className="space-y-0.5">
-                          <span className={`text-[13px] font-bold ${
-                            metricMode === 'total_points' ? 'text-[var(--accent)] font-extrabold' : 'text-[var(--text-primary)]'
-                          }`}>
-                            {totalScore.toFixed(0)} pts
-                          </span>
-                          <span className="text-[10px] text-[var(--text-muted)] block">
-                            / {student.total_max_score ? student.total_max_score.toFixed(0) : '0'} max
-                          </span>
-                        </div>
-                      </td>
-
                       {/* Points / Interview Attended */}
                       <td className="py-3 px-4 font-mono">
                         <div className="space-y-0.5">
-                          <span className={`text-[13px] font-bold ${
-                            metricMode === 'points_per_interview' ? 'text-amber-500 font-extrabold' : 'text-[var(--text-primary)]'
-                          }`}>
-                            {pointsPerInt.toFixed(1)}
+                          <span className="text-[14px] font-extrabold text-amber-500">
+                            {pointsPerInt.toFixed(1)} pts
                           </span>
                           <span className="text-[10px] text-[var(--text-muted)] block">
-                            pts / interview
+                            avg / interview
                           </span>
                         </div>
                       </td>
