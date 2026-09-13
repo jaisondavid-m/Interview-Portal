@@ -874,7 +874,7 @@ export default function InterviewRoom() {
           isSpeaking={isSpeaking}
           isPeerSpeaking={isPeerSpeaking}
           onToggleMute={toggleMute}
-          peerName={peerUser?.name || 'Peer Student'}
+          peerName="Anonymous Peer"
           uploadingRecording={uploadingRecording}
         />
       )}
@@ -1313,7 +1313,7 @@ export default function InterviewRoom() {
               whiteboardData={whiteboardData}
               onWhiteboardChange={handleWhiteboardChange}
               isEditable={currentUserRole === 'interviewee'}
-              candidateName={peerUser?.name || 'Candidate'}
+              candidateName="Anonymous Candidate"
             />
           ) : (
             <>

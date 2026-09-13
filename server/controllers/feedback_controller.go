@@ -536,13 +536,10 @@ func GetSessionFeedbackStatus(c *gin.Context) {
 		return
 	}
 
-	var peer *models.User
 	var peerID uint
 	if session.InterviewerID == currentUserID {
-		peer = session.Interviewee
 		peerID = session.IntervieweeID
 	} else {
-		peer = session.Interviewer
 		peerID = session.InterviewerID
 	}
 
@@ -575,10 +572,19 @@ func GetSessionFeedbackStatus(c *gin.Context) {
 
 	var feedbacksList []models.InterviewFeedback
 	if hasSubmitted {
+		myFeedback.Reviewer = nil
+		myFeedback.Reviewee = nil
 		feedbacksList = append(feedbacksList, myFeedback)
 	}
 	if peerHasSubmitted {
+		peerFeedback.Reviewer = nil
+		peerFeedback.Reviewee = nil
 		feedbacksList = append(feedbacksList, peerFeedback)
+	}
+
+	peerAnonymous := gin.H{
+		"id":   peerID,
+		"name": "Anonymous Peer",
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -589,7 +595,7 @@ func GetSessionFeedbackStatus(c *gin.Context) {
 		"my_feedback":         myFeedback,
 		"peer_feedback":       peerFeedback,
 		"feedbacks":           feedbacksList,
-		"peer":                peer,
+		"peer":                peerAnonymous,
 		"session_id":          session.ID,
 		"feedback":            myFeedback, // Backward compatibility
 	})
@@ -886,23 +892,8 @@ func GetStudentInterviewHistory(c *gin.Context) {
 		}
 
 		myRole := "interviewee"
-		var peer *models.User
 		if s.InterviewerID == currentUserID {
 			myRole = "interviewer"
-			peer = s.Interviewee
-		} else {
-			peer = s.Interviewer
-		}
-
-		peerName := "Peer Student"
-		peerRollNo := ""
-		peerDept := ""
-		peerEmail := ""
-		if peer != nil {
-			peerName = peer.Name
-			peerRollNo = peer.RollNo
-			peerDept = peer.Department
-			peerEmail = peer.Email
 		}
 
 		durationSecs := 0
@@ -914,7 +905,6 @@ func GetStudentInterviewHistory(c *gin.Context) {
 		}
 
 		fb, hasFb := feedbackMap[s.ID]
-		evaluatorName := ""
 		reviewNotes := ""
 		var responses []models.InterviewFeedbackResponse
 		var totalScore, maxScore, scorePct float64
@@ -923,9 +913,6 @@ func GetStudentInterviewHistory(c *gin.Context) {
 			totalScore = fb.TotalScore
 			maxScore = fb.MaxScore
 			scorePct = fb.ScorePercentage
-			if fb.Reviewer != nil {
-				evaluatorName = fb.Reviewer.Name
-			}
 			responses = fb.Responses
 			for _, r := range fb.Responses {
 				if r.Question != nil && r.Question.QuestionType == "text" && r.AnswerValue != "" {
@@ -944,10 +931,10 @@ func GetStudentInterviewHistory(c *gin.Context) {
 			LevelName:       levelName,
 			LevelMode:       levelMode,
 			Role:            myRole,
-			PeerName:        peerName,
-			PeerRollNo:      peerRollNo,
-			PeerDepartment:  peerDept,
-			PeerEmail:       peerEmail,
+			PeerName:        "Anonymous Peer",
+			PeerRollNo:      "",
+			PeerDepartment:  "",
+			PeerEmail:       "",
 			Status:          s.Status,
 			StartedAt:       s.StartedAt,
 			EndedAt:         s.EndedAt,
@@ -957,7 +944,7 @@ func GetStudentInterviewHistory(c *gin.Context) {
 			MaxScore:        maxScore,
 			ScorePercentage: scorePct,
 			HasScorecard:    hasFb,
-			EvaluatorName:   evaluatorName,
+			EvaluatorName:   "Anonymous Peer",
 			ReviewNotes:     reviewNotes,
 			Responses:       responses,
 		})
@@ -1081,6 +1068,22 @@ func GetStudentFeedbackHistory(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	// Anonymize peer details
+	for i := range feedbacks {
+		if feedbacks[i].ReviewerID != currentUserID && feedbacks[i].Reviewer != nil {
+			feedbacks[i].Reviewer = &models.User{
+				ID:   feedbacks[i].ReviewerID,
+				Name: "Anonymous Peer",
+			}
+		}
+		if feedbacks[i].RevieweeID != currentUserID && feedbacks[i].Reviewee != nil {
+			feedbacks[i].Reviewee = &models.User{
+				ID:   feedbacks[i].RevieweeID,
+				Name: "Anonymous Peer",
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

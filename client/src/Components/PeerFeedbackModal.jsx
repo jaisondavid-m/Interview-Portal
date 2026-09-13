@@ -162,8 +162,8 @@ export default function PeerFeedbackModal({
     }
   };
 
-  const peerDisplayName = peerUser?.name || statusData?.peer?.name || 'Peer Candidate';
-  const peerDisplayRoll = peerUser?.roll_no || statusData?.peer?.roll_no || peerUser?.email || 'STUDENT';
+  const peerDisplayName = 'Anonymous Peer';
+  const peerDisplayRoll = 'PEER';
 
   const myFeedback = statusData?.my_feedback || statusData?.feedback;
   const peerFeedback = statusData?.peer_feedback;

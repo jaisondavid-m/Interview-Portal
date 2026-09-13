@@ -29,7 +29,7 @@ export default function CredentialAuditModal({
   const [hasReportedBefore, setHasReportedBefore] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
 
-  const peerDisplayName = peerUser?.name || 'Peer Student';
+  const peerDisplayName = 'Anonymous Peer';
 
   // Check if student already submitted this verification
   useEffect(() => {

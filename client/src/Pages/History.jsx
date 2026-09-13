@@ -178,8 +178,7 @@ export default function History() {
                       )}
 
                       <span>
-                        Peer: <strong className="text-[var(--text-primary)]">{sess.peer_name}</strong>
-                        {sess.peer_roll_no && ` (${sess.peer_roll_no})`}
+                        Peer: <strong className="text-[var(--text-primary)]">Anonymous Peer</strong>
                       </span>
 
                       <span>
@@ -226,7 +225,7 @@ export default function History() {
                   <div className="pt-4 border-t border-[var(--border)] space-y-3.5 bg-[var(--bg-raised)] p-4 rounded-[var(--radius-md)] animate-fadeIn">
                     <div className="flex items-center justify-between pb-2 border-b border-[var(--border)] flex-wrap gap-2 text-xs font-mono">
                       <span className="font-bold text-[var(--text-primary)] uppercase tracking-wider text-[11px]">
-                        Evaluation Breakdown from {sess.evaluatorName || 'Peer Evaluator'}:
+                        Evaluation Breakdown from Anonymous Peer:
                       </span>
                       <span className="text-emerald-600 dark:text-emerald-400 font-bold">
                         Score: {sess.total_score} of {sess.max_score} Total Points ({pct}%)
