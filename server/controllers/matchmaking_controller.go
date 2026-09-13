@@ -113,17 +113,13 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 	}
 
 	var openTestCases []gin.H
-	var hiddenTestCases []gin.H
 	for _, tc := range q.TestCases {
-		tcObj := gin.H{
-			"input":       tc.Input,
-			"output":      tc.ExpectedOutput,
-			"explanation": tc.Explanation,
-		}
-		if tc.IsHidden {
-			hiddenTestCases = append(hiddenTestCases, tcObj)
-		} else {
-			openTestCases = append(openTestCases, tcObj)
+		if !tc.IsHidden {
+			openTestCases = append(openTestCases, gin.H{
+				"input":       tc.Input,
+				"output":      tc.ExpectedOutput,
+				"explanation": tc.Explanation,
+			})
 		}
 	}
 
@@ -182,7 +178,6 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 		"starter_code_cpp":    templatesMap["cpp"],
 		"starter_code_java":   templatesMap["java"],
 		"open_test_cases":     openTestCases,
-		"hidden_test_cases":   hiddenTestCases,
 		"constraints":         constraints,
 		"expected_approach":   expectedApproach,
 		"expected_complexity": expectedComplexity,
@@ -207,7 +202,7 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 		"type":        q.Type,
 		"detail":      q.Detail,
 		"templates":   q.Templates,
-		"test_cases":  q.TestCases,
+		"test_cases":  openTestCases,
 		"hints":       q.Hints,
 		"mcq_options": q.MCQOptions,
 		"payload":     fullPayload,
@@ -1071,22 +1066,11 @@ func SubmitSessionCode(c *gin.Context) {
 		verdict = "Runtime Error"
 	}
 
-	// Sanitize hidden test cases for candidate protection (only reveal pass/fail status, never input/expected values)
-	sanitizedResults := make([]EvalResult, len(caseResults))
-	for i, c := range caseResults {
-		if c.IsHidden {
-			sanitizedResults[i] = EvalResult{
-				Index:       c.Index,
-				IsHidden:    true,
-				Name:        c.Name,
-				Input:       "",
-				Expected:    "",
-				Actual:      "",
-				Passed:      c.Passed,
-				ExecutionMs: c.ExecutionMs,
-			}
-		} else {
-			sanitizedResults[i] = c
+	// Only return open/sample test case execution results (never return hidden test cases to candidate or interviewer)
+	var sampleResults []EvalResult
+	for _, c := range caseResults {
+		if !c.IsHidden {
+			sampleResults = append(sampleResults, c)
 		}
 	}
 
@@ -1097,8 +1081,7 @@ func SubmitSessionCode(c *gin.Context) {
 		"passed_cases":  passedCount,
 		"total_cases":   len(caseResults),
 		"open_cases":    len(openCases),
-		"hidden_cases":  len(hiddenCases),
-		"results":       sanitizedResults,
+		"results":       sampleResults,
 		"all_passed":    verdict == "Accepted",
 		"runtime_ms":    totalExecMs + rand.Intn(15) + 5,
 		"memory_mb":     "14.8 MB",

@@ -47,10 +47,14 @@ export default function InterviewRoom() {
   const [switching, setSwitching] = useState(false);
   const [ending, setEnding] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackRound, setFeedbackRound] = useState(1);
   const [hasFeedbackSubmitted, setHasFeedbackSubmitted] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [hasSecuritySubmitted, setHasSecuritySubmitted] = useState(false);
   const [micModalOpen, setMicModalOpen] = useState(true);
+  const initialRoleRef = useRef(null); // Initial role in Round 1: 'interviewer' | 'interviewee'
+  const r1FeedbackPromptedRef = useRef(false);
+  const r2FeedbackPromptedRef = useRef(false);
   const feedbackCheckedRef = useRef(false);
   const securityCheckedRef = useRef(false);
   const recordingUploadedRef = useRef(false);
@@ -156,6 +160,39 @@ export default function InterviewRoom() {
         setPeerUser(data.peer || null);
         setError('');
 
+        // 1. Initialize starting role in Round 1
+        if (initialRoleRef.current === null) {
+          if (data.session.round === 1 && (data.session.switch_count || 0) === 0) {
+            initialRoleRef.current = data.current_user_role;
+          } else if (data.session.round === 2 || (data.session.switch_count || 0) >= 1) {
+            initialRoleRef.current = data.current_user_role === 'interviewee' ? 'interviewer' : 'interviewee';
+          }
+        }
+
+        // 2. TRIGGER 1: When Round 1 finishes (role swap to Round 2), show feedback modal for Round 1 Interviewer
+        if (
+          (data.session.round === 2 || (data.session.switch_count || 0) >= 1) &&
+          data.session.status !== 'completed' &&
+          initialRoleRef.current === 'interviewer' &&
+          !r1FeedbackPromptedRef.current
+        ) {
+          r1FeedbackPromptedRef.current = true;
+          setFeedbackRound(1);
+          api.get(`/interviews/sessions/${sessionId}/feedback`)
+            .then((fRes) => {
+              const fData = fRes?.data || fRes;
+              if (fData?.has_submitted) {
+                setHasFeedbackSubmitted(true);
+              } else {
+                setHasFeedbackSubmitted(false);
+                setShowFeedbackModal(true);
+              }
+            })
+            .catch(() => {
+              setShowFeedbackModal(true);
+            });
+        }
+
         const targetLang = data.session.candidate_lang || 'javascript';
         const isRoundOrQuestionChanged =
           (data.session.current_question_id && data.session.current_question_id !== activeQIdRef.current) ||
@@ -259,7 +296,7 @@ export default function InterviewRoom() {
     };
   }, [sessionData?.started_at, sessionData?.status, sessionData?.ended_at]);
 
-  // Auto-prompt peer feedback popup & upload recording when session concludes
+  // TRIGGER 2: Auto-prompt peer feedback popup & upload recording when Round 2 concludes (session completion)
   useEffect(() => {
     if (sessionData?.status === 'completed') {
       if (!recordingUploadedRef.current) {
@@ -267,8 +304,14 @@ export default function InterviewRoom() {
         stopAndUploadRecording();
       }
 
-      if (!feedbackCheckedRef.current) {
-        feedbackCheckedRef.current = true;
+      if (!r2FeedbackPromptedRef.current) {
+        r2FeedbackPromptedRef.current = true;
+
+        // Determine target evaluation round: Round 2 interviewer evaluates Round 2 candidate, or Round 1 if single round
+        const isR2Interviewer = initialRoleRef.current === 'interviewee' && (sessionData?.switch_count || 0) >= 1;
+        const targetRound = isR2Interviewer ? 2 : 1;
+        setFeedbackRound(targetRound);
+
         api.get(`/interviews/sessions/${sessionId}/feedback`)
           .then((res) => {
             const data = res?.data || res;
@@ -296,7 +339,7 @@ export default function InterviewRoom() {
           });
       }
     }
-  }, [sessionData?.status, sessionId, stopAndUploadRecording]);
+  }, [sessionData?.status, sessionData?.switch_count, sessionId, stopAndUploadRecording]);
 
   // Sync candidate code to server (debounced)
   const handleCodeChange = (newCode) => {
@@ -649,6 +692,18 @@ export default function InterviewRoom() {
   // Extract open test cases (strictly from question payload, no fallback test cases)
   const openCases = (Array.isArray(payload?.open_test_cases) ? payload.open_test_cases : (Array.isArray(payload?.test_cases) ? payload.test_cases : []));
 
+  const handleOpenFeedback = () => {
+    if (isCompleted) {
+      const isR2Interviewer = initialRoleRef.current === 'interviewee' && (sessionData?.switch_count || 0) >= 1;
+      setFeedbackRound(isR2Interviewer ? 2 : 1);
+    } else if (sessionData?.round === 2 || (sessionData?.switch_count || 0) >= 1) {
+      setFeedbackRound(1);
+    } else {
+      setFeedbackRound(1);
+    }
+    setShowFeedbackModal(true);
+  };
+
   return (
     <div className="space-y-4">
       {/* Top Header Bar */}
@@ -686,6 +741,18 @@ export default function InterviewRoom() {
             <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Session: <strong>{formatTime(elapsedSecs)}</strong></span>
           </div>
+
+          {/* Round 1 Feedback Shortcut for Round 1 Interviewer during Round 2 */}
+          {currentRound === 2 && !isCompleted && initialRoleRef.current === 'interviewer' && (
+            <button
+              onClick={handleOpenFeedback}
+              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer shadow-sm animate-pulse"
+              title="Give or review feedback for Round 1 Candidate"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>{hasFeedbackSubmitted ? 'Round 1 Feedback Submitted' : 'Give Round 1 Feedback'}</span>
+            </button>
+          )}
 
           {/* MUTUAL CONSENT ROLE SWAP BUTTON */}
           {switchCount === 0 && !isCompleted ? (
@@ -747,7 +814,7 @@ export default function InterviewRoom() {
           {isCompleted ? (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowFeedbackModal(true)}
+                onClick={handleOpenFeedback}
                 className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer shadow-sm"
                 title="Give or review feedback for your peer"
               >
@@ -1135,13 +1202,13 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {/* 4. All Test Cases (Open & Hidden) */}
+                {/* 4. Sample Test Cases (Never show hidden cases to interviewer) */}
                 {interviewerTab === 'testcases' && (
                   <div className="space-y-3 font-mono text-[12px]">
                     {openCases.length > 0 ? (
                       <div>
                         <span className="font-bold text-[var(--text-muted)] text-[11px] uppercase block mb-1">
-                          Open Sample Test Cases:
+                          Sample Test Cases:
                         </span>
                         {openCases.map((tc, idx) => (
                           <div key={idx} className="p-2.5 bg-[var(--bg-raised)] rounded border border-[var(--border)] mb-2 space-y-1">
@@ -1150,23 +1217,7 @@ export default function InterviewRoom() {
                           </div>
                         ))}
                       </div>
-                    ) : null}
-
-                    {payload?.hidden_test_cases && payload.hidden_test_cases.length > 0 ? (
-                      <div>
-                        <span className="font-bold text-[var(--accent)] text-[11px] uppercase block mb-1">
-                          Hidden Verification Test Cases:
-                        </span>
-                        {payload.hidden_test_cases.map((tc, idx) => (
-                          <div key={idx} className="p-2.5 bg-[var(--accent-dim)] rounded border border-[var(--border-accent)] mb-2 space-y-1">
-                            <div className="text-[var(--text-secondary)]">Input: {tc.input}</div>
-                            <div className="text-[var(--accent)] font-bold">Expected: {tc.output}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {openCases.length === 0 && (!payload?.hidden_test_cases || payload.hidden_test_cases.length === 0) && (
+                    ) : (
                       <div className="p-4 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-muted)] text-center text-xs">
                         No automated test cases configured for this question.
                       </div>
@@ -1267,17 +1318,21 @@ export default function InterviewRoom() {
         isOpen={showFeedbackModal}
         onClose={() => {
           setShowFeedbackModal(false);
-          if (!hasSecuritySubmitted) {
+          if (isCompleted && !hasSecuritySubmitted) {
             setShowSecurityModal(true);
           }
         }}
         sessionId={sessionId}
         peerUser={peerUser}
+        roundNumber={feedbackRound}
+        isCompleted={isCompleted}
         onSubmitted={() => {
           setHasFeedbackSubmitted(true);
           fetchSession();
-          setShowFeedbackModal(false);
-          setShowSecurityModal(true);
+          if (isCompleted) {
+            setShowFeedbackModal(false);
+            setShowSecurityModal(true);
+          }
         }}
       />
 

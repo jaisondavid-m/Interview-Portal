@@ -268,7 +268,7 @@ export default function TestCasesConsole({
                     </h4>
                   </div>
                   <p className="text-[11px] opacity-90">
-                    Passed {submissionResult.passed_cases} of {submissionResult.total_cases} test cases ({submissionResult.hidden_cases || 0} hidden test cases evaluated)
+                    Passed {submissionResult.passed_cases} of {submissionResult.total_cases} test cases
                   </p>
                 </div>
 
@@ -302,9 +302,9 @@ export default function TestCasesConsole({
               </div>
             )}
 
-            {/* Execution Output Summary (Lists all Sample Cases AND Hidden Cases individually) */}
+            {/* Execution Output Summary (Lists Sample Cases only - hidden cases never exposed) */}
             {(() => {
-              const activeResults = submissionResult?.results || runResults?.results || [];
+              const activeResults = (submissionResult?.results || runResults?.results || []).filter(r => !r.is_hidden);
               const isSubmission = !!submissionResult;
               const allPassed = isSubmission
                 ? (submissionResult.verdict === 'Accepted' || submissionResult.all_passed)
@@ -330,11 +330,6 @@ export default function TestCasesConsole({
                   <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)]">
                     <span className="flex items-center gap-1.5">
                       <span>Execution Output Summary:</span>
-                      {isSubmission && (
-                        <span className="text-[10px] font-mono font-normal text-[var(--text-muted)]">
-                          ({submissionResult.open_cases || 0} Sample + {submissionResult.hidden_cases || 0} Hidden)
-                        </span>
-                      )}
                     </span>
                     <span className={allPassed ? 'text-[var(--green)]' : 'text-[var(--red)]'}>
                       {allPassed
@@ -345,7 +340,6 @@ export default function TestCasesConsole({
 
                   <div className="space-y-1.5">
                     {activeResults.map((res, i) => {
-                      const isHidden = !!res.is_hidden;
                       const passed = !!res.passed;
 
                       return (
@@ -365,23 +359,12 @@ export default function TestCasesConsole({
                                 <XCircle className="w-3.5 h-3.5 text-[var(--red)] shrink-0" />
                               )}
 
-                              {isHidden ? (
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                                    Hidden Case
-                                  </span>
-                                  <span className="font-bold text-[var(--text-primary)] text-[11px]">
-                                    Case {res.index}:
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="font-bold text-[var(--text-primary)] shrink-0 text-[11px]">
-                                  Case {res.index}:
-                                </span>
-                              )}
+                              <span className="font-bold text-[var(--text-primary)] shrink-0 text-[11px]">
+                                Sample Case {res.index || i + 1}:
+                              </span>
 
-                              {/* Only show input string for open/sample cases or interviewer */}
-                              {!isHidden && res.input && (
+                              {/* Only show input string for open sample cases */}
+                              {res.input && (
                                 <span className="text-[var(--text-muted)] text-[11px] truncate max-w-[260px] sm:max-w-md font-mono">
                                   {res.input}
                                 </span>
