@@ -161,7 +161,7 @@ export default function History() {
                       {sess.track_title}
                     </h3>
 
-                    {/* Metadata: When it happened, Peer Partner info, Role */}
+                    {/* Metadata: When it happened, Duration */}
                     <div className="flex items-center gap-4 text-xs font-mono text-[var(--text-muted)] flex-wrap pt-0.5">
                       <span className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -176,14 +176,6 @@ export default function History() {
                           <span>Duration: {formatDuration(sess.duration_seconds)}</span>
                         </span>
                       )}
-
-                      <span>
-                        Peer: <strong className="text-[var(--text-primary)]">Anonymous Peer</strong>
-                      </span>
-
-                      <span>
-                        Role: <strong className="capitalize text-[var(--text-primary)]">{sess.role}</strong>
-                      </span>
                     </div>
                   </div>
 
@@ -225,7 +217,7 @@ export default function History() {
                   <div className="pt-4 border-t border-[var(--border)] space-y-3.5 bg-[var(--bg-raised)] p-4 rounded-[var(--radius-md)] animate-fadeIn">
                     <div className="flex items-center justify-between pb-2 border-b border-[var(--border)] flex-wrap gap-2 text-xs font-mono">
                       <span className="font-bold text-[var(--text-primary)] uppercase tracking-wider text-[11px]">
-                        Evaluation Breakdown from Anonymous Peer:
+                        Evaluation Scorecard Breakdown:
                       </span>
                       <span className="text-emerald-600 dark:text-emerald-400 font-bold">
                         Score: {sess.total_score} of {sess.max_score} Total Points ({pct}%)

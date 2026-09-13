@@ -263,10 +263,6 @@ export default function Dashboard() {
                     {sess.track_title}
                   </h3>
                   <p className="text-[11px] text-[var(--text-muted)] font-mono flex items-center gap-2">
-                    <span>Peer: <strong>{sess.peer_name}</strong></span>
-                    <span>•</span>
-                    <span>Role: <strong className="capitalize">{sess.role}</strong></span>
-                    <span>•</span>
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-[var(--text-muted)]" />
                       {formatDateTime(sess.started_at || sess.created_at)}
