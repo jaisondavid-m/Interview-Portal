@@ -64,7 +64,8 @@ export default function PeerFeedbackModal({
         setStatusData(sData);
 
         if (sData?.has_submitted) {
-          setSuccess(true);
+          if (onClose) onClose();
+          return;
         }
       }
     } catch (err) {
@@ -150,10 +151,9 @@ export default function PeerFeedbackModal({
       if (onSubmitted) {
         onSubmitted();
       }
-
-      // Re-fetch mutual status
-      const sRes = await api.get(`/interviews/sessions/${sessionId}/feedback`);
-      setStatusData(sRes?.data || sRes);
+      if (onClose) {
+        onClose();
+      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to submit feedback.');
     } finally {
@@ -175,7 +175,7 @@ export default function PeerFeedbackModal({
             <div>
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider font-bold">
                 <span className="px-2 py-0.5 rounded bg-[var(--accent)] text-white">
-                  Peer Feedback
+                  Round {roundNumber} Peer Feedback
                 </span>
                 <span className="text-[var(--text-muted)]">•</span>
                 <span className="text-[var(--accent)] flex items-center gap-1">
@@ -184,10 +184,10 @@ export default function PeerFeedbackModal({
                 </span>
               </div>
               <h2 className="text-[17px] font-bold text-[var(--text-primary)] mt-1">
-                {success ? 'Evaluation Submitted' : 'Peer Performance Evaluation'}
+                Evaluate Round {roundNumber} Candidate
               </h2>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-                Target Candidate: <strong className="text-[var(--text-primary)]">{peerDisplayName}</strong>
+                Target Candidate: <strong className="text-[var(--text-primary)]">{peerDisplayName}</strong> (Feedback scores will be available in Interview History after completion)
               </p>
             </div>
           </div>
@@ -208,42 +208,9 @@ export default function PeerFeedbackModal({
               <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
               <p className="text-[13px] text-[var(--text-muted)]">Loading peer evaluation questions...</p>
             </div>
-          ) : success ? (
-            /* ============================================================ */
-            /* VIEW 1: CONFIDENTIAL SUBMISSION CONFIRMATION (NO SCORE LEAK) */
-            /* ============================================================ */
-            <div className="py-8 px-4 text-center space-y-5 animate-fadeIn">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-sm">
-                <ShieldCheck className="w-9 h-9" />
-              </div>
-
-              <div className="space-y-1.5 max-w-md mx-auto">
-                <h3 className="text-[18px] font-bold text-[var(--text-primary)]">
-                  Evaluation Submitted Successfully
-                </h3>
-                <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-                  Your feedback for this round has been securely recorded.
-                </p>
-              </div>
-
-              {/* Anti-Retaliation Confidentiality Notice */}
-              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] max-w-lg mx-auto text-left space-y-2">
-                <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--accent)]">
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Confidential Peer Assessment</span>
-                </div>
-                <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
-                  To ensure completely objective and unbiased scoring between peers, individual feedback scorecards and awarded marks are not revealed during the live interview session.
-                </p>
-                <div className="pt-2 border-t border-[var(--border)] flex items-center gap-2 text-[11px] font-mono text-[var(--text-secondary)]">
-                  <BookOpen className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
-                  <span>View your complete evaluation scorecards on the <strong>Interview History</strong> page.</span>
-                </div>
-              </div>
-            </div>
           ) : (
             /* ============================================================ */
-            /* VIEW 2: PEER FEEDBACK EVALUATION FORM */
+            /* PEER FEEDBACK EVALUATION FORM */
             /* ============================================================ */
             <form id="peer-feedback-form" onSubmit={handleSubmit} className="space-y-5">
               {error && (
