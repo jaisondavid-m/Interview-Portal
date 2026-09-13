@@ -29,6 +29,7 @@ import {
   Sparkles,
   Info,
   Maximize2,
+  Minimize2,
   FolderPlus,
   Activity
 } from 'lucide-react';
@@ -199,11 +200,12 @@ export default function WhiteboardCanvas({
   const [showCatalogModal, setShowCatalogModal] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState('All');
 
-  // Canvas viewport navigation
+  // Canvas viewport navigation & Fullscreen
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Dragging state
   const [draggingNodeId, setDraggingNodeId] = useState(null);
@@ -211,6 +213,17 @@ export default function WhiteboardCanvas({
 
   const canvasRef = useRef(null);
   const isInternalChangeRef = useRef(false);
+
+  // Listen to Escape key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   // Parse external whiteboard JSON or initial state
   useEffect(() => {
@@ -541,7 +554,13 @@ export default function WhiteboardCanvas({
     : COMPONENT_CATALOG.filter((c) => c.category === catalogFilter);
 
   return (
-    <div className="relative w-full h-[620px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] shadow-inner overflow-hidden select-none flex flex-col font-sans">
+    <div
+      className={`select-none flex flex-col font-sans transition-all duration-200 ${
+        isFullscreen
+          ? 'fixed inset-0 z-50 w-screen h-screen bg-[var(--bg-card)] shadow-2xl'
+          : 'relative w-full h-[620px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] shadow-inner overflow-hidden'
+      }`}
+    >
       {/* ============================================================ */}
       {/* TOP CONTROLS & STATUS TOOLBAR */}
       {/* ============================================================ */}
@@ -552,11 +571,21 @@ export default function WhiteboardCanvas({
             <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] text-xs font-mono font-bold">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Whiteboard Editor</span>
+              {isFullscreen && (
+                <span className="text-[10px] bg-[var(--accent)] text-white px-1.5 py-0.2 rounded ml-1 uppercase">
+                  Fullscreen
+                </span>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3 py-1 rounded bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30 text-xs font-mono font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Live Observer Preview • {candidateName}</span>
+              {isFullscreen && (
+                <span className="text-[10px] bg-[var(--green)] text-white px-1.5 py-0.2 rounded ml-1 uppercase">
+                  Fullscreen
+                </span>
+              )}
             </div>
           )}
 
@@ -616,7 +645,7 @@ export default function WhiteboardCanvas({
           )}
         </div>
 
-        {/* Viewport & Zoom Controls */}
+        {/* Viewport & Zoom & Fullscreen Controls */}
         <div className="flex items-center gap-1 text-xs">
           <span className="text-[11px] font-mono text-[var(--text-muted)] mr-2 hidden sm:inline">
             {nodes.length} Components • {connections.length} Links
@@ -625,7 +654,7 @@ export default function WhiteboardCanvas({
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(1))))}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
             title="Zoom Out"
           >
             <ZoomOut className="w-4 h-4" />
@@ -638,7 +667,7 @@ export default function WhiteboardCanvas({
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(2.0, Number((z + 0.1).toFixed(1))))}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
             title="Zoom In"
           >
             <ZoomIn className="w-4 h-4" />
@@ -647,7 +676,7 @@ export default function WhiteboardCanvas({
           <button
             type="button"
             onClick={handleResetView}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
             title="Reset Zoom & Pan"
           >
             <RotateCcw className="w-4 h-4" />
@@ -657,12 +686,29 @@ export default function WhiteboardCanvas({
             <button
               type="button"
               onClick={handleClearCanvas}
-              className="p-1.5 rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-500 transition ml-1"
+              className="p-1.5 rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-500 transition ml-0.5 cursor-pointer"
               title="Clear Whiteboard"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           )}
+
+          {/* Fullscreen / Minimize Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setIsFullscreen((prev) => !prev)}
+            className={`px-2.5 py-1.5 rounded transition flex items-center gap-1.5 ml-1.5 border cursor-pointer ${
+              isFullscreen
+                ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
+                : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent)]'
+            }`}
+            title={isFullscreen ? 'Minimize / Exit Fullscreen (Esc)' : 'Expand to Fullscreen View'}
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span className="text-[11px] font-mono font-bold hidden md:inline">
+              {isFullscreen ? 'Minimize' : 'Fullscreen'}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -967,7 +1013,7 @@ export default function WhiteboardCanvas({
       {/* COMPONENT CATALOG MODAL */}
       {/* ============================================================ */}
       {showCatalogModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in">
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="p-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
@@ -1049,7 +1095,7 @@ export default function WhiteboardCanvas({
       {/* EDIT COMPONENT MODAL / PROPERTIES */}
       {/* ============================================================ */}
       {editingNode && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in">
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-md w-full p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-2">
