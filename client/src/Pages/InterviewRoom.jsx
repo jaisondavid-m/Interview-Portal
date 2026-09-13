@@ -708,12 +708,14 @@ export default function InterviewRoom() {
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
 
-  // Detect if current level or question is Whiteboard mode
+  // Detect if current level or question is Whiteboard mode (case-insensitive & supports fallback aliases)
+  const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
+  const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
   const isWhiteboardMode =
-    level?.mode === 'whiteboard' ||
-    level?.mode === 'discussion' ||
-    question?.type === 'whiteboard' ||
-    question?.type === 'discussion';
+    levelMode === 'whiteboard' ||
+    levelMode === 'discussion' ||
+    questionType === 'whiteboard' ||
+    questionType === 'discussion';
 
   // Mutual role switch state calculations
   const switchRequestedBy = sessionData?.switch_requested_by || 0;
