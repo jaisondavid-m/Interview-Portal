@@ -758,6 +758,20 @@ func SubmitSessionFeedback(c *gin.Context) {
 
 	tx.Commit()
 
+	// Automatically conclude and complete the session once both students have submitted feedback
+	var totalSessionFeedbacks int64
+	database.DB.Model(&models.InterviewFeedback{}).Where("session_id = ?", session.ID).Count(&totalSessionFeedbacks)
+	if totalSessionFeedbacks >= 2 {
+		now := time.Now()
+		database.DB.Model(&session).Updates(map[string]interface{}{
+			"status":   "completed",
+			"ended_at": &now,
+		})
+		database.DB.Model(&models.MatchmakingQueueEntry{}).
+			Where("matched_session_id = ?", session.ID).
+			Update("status", "completed")
+	}
+
 	var createdFeedback models.InterviewFeedback
 	database.DB.
 		Preload("Reviewer").

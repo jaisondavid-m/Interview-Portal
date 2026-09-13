@@ -570,13 +570,13 @@ export default function InterviewRoom() {
     });
   };
 
-  // Request End Interview (Requires peer acceptance or allows instant exit)
+  // Request End Interview (Requires mutual peer acceptance - no force end)
   const handleRequestEnd = () => {
     openModal({
-      title: 'Conclude Interview Session',
-      message: 'Choose how you want to conclude this interview session. You can ask your peer to confirm, or end & exit immediately.',
+      title: 'Request to Conclude Interview',
+      message: 'Both participants must agree to conclude the session. Would you like to send a conclusion request to your peer?',
       confirmText: 'Send Request to Peer',
-      cancelText: 'End & Exit Now',
+      cancelText: 'Keep Practicing',
       variant: 'primary',
       icon: LogOut,
       onConfirm: async () => {
@@ -587,7 +587,8 @@ export default function InterviewRoom() {
           const data = res?.data || res;
           if (data?.ended) {
             await stopAndUploadRecording();
-            navigate('/interviews');
+            await fetchSession();
+            setShowFeedbackModal(true);
             return;
           }
           await fetchSession();
@@ -608,26 +609,14 @@ export default function InterviewRoom() {
     });
   };
 
-  // Accept End Interview from Peer
+  // Accept End Interview from Peer (Mutually agreed - prompt feedback)
   const handleAcceptEnd = async () => {
     try {
       setEnding(true);
       await stopAndUploadRecording();
-      const res = await api.post(`/interviews/sessions/${sessionId}/accept-end`);
-      const data = res?.data || res;
+      await api.post(`/interviews/sessions/${sessionId}/accept-end`);
       await fetchSession();
-      openModal({
-        title: 'Interview Concluded',
-        message: 'Both participants have agreed to conclude the interview session. You can now return to the interview dashboard.',
-        confirmText: 'Go to Dashboard',
-        showCancel: false,
-        variant: 'primary',
-        icon: Award,
-        onConfirm: () => {
-          closeModal();
-          navigate('/interviews');
-        },
-      });
+      setShowFeedbackModal(true);
     } catch (err) {
       openModal({
         title: 'End Session Notice',

@@ -1512,7 +1512,7 @@ func DeclineSessionEndInterview(c *gin.Context) {
 	})
 }
 
-// EndInterviewSession terminates the session immediately (for direct exit / completion)
+// EndInterviewSession terminates the session only with mutual consent or feedback submission
 func EndInterviewSession(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -1530,6 +1530,18 @@ func EndInterviewSession(c *gin.Context) {
 
 	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	// Check if user has submitted feedback or mutual agreement exists
+	var feedbackCount int64
+	database.DB.Model(&models.InterviewFeedback{}).Where("session_id = ? AND reviewer_id = ?", session.ID, currentUserID).Count(&feedbackCount)
+
+	if feedbackCount == 0 && session.EndRequestedBy == 0 && session.Status != "completed" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Force end is disabled. Both students must mutually agree to conclude the session, or complete peer evaluation.",
+		})
 		return
 	}
 
