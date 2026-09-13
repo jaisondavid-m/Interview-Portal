@@ -18,7 +18,7 @@ func main() {
 	// 2. Set Gin mode
 	gin.SetMode(cfg.GinMode)
 
-	// 3. Connect to MySQL Database & Run Auto-Migrations / Admin Seeding
+	// 3. Connect to MySQL Database & Run Auto-Migrations
 	_, err := database.ConnectDB(cfg)
 	if err != nil {
 		log.Printf("[WARN] Database connection failed: %v\n", err)
