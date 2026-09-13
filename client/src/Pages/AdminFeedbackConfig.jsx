@@ -156,13 +156,14 @@ export default function AdminFeedbackConfig() {
       ],
     });
     setCustomOptionText('');
-    setCustomOptionMarks(5);
+    setCustomOptionMarks('');
     setShowModal(true);
   };
 
   const openEditModal = (q) => {
     setEditingQuestion(q);
     const existingOpts = (q.options || []).map((o) => ({
+      id: o.id,
       option_text: o.option_text,
       marks: o.marks ?? 0,
     }));
@@ -195,7 +196,7 @@ export default function AdminFeedbackConfig() {
       options: defaultOpts,
     });
     setCustomOptionText('');
-    setCustomOptionMarks(5);
+    setCustomOptionMarks('');
     setShowModal(true);
   };
 
@@ -203,11 +204,13 @@ export default function AdminFeedbackConfig() {
     const trimmed = customOptionText.trim();
     if (trimmed && !formData.options.some((o) => o.option_text === trimmed)) {
       setFormData((prev) => {
+        const parsedMarks = customOptionMarks === '' ? 0 : (parseFloat(customOptionMarks) || 0);
         const nextOpts = [
           ...prev.options,
-          { option_text: trimmed, marks: parseFloat(customOptionMarks) || 0 },
+          { option_text: trimmed, marks: parsedMarks },
         ];
-        const computedMax = Math.max(...nextOpts.map((o) => o.marks || 0), 0);
+        const validMarks = nextOpts.map((o) => (o.marks === '' ? 0 : parseFloat(o.marks) || 0));
+        const computedMax = validMarks.length > 0 ? Math.max(...validMarks) : 0;
         return {
           ...prev,
           options: nextOpts,
@@ -222,7 +225,8 @@ export default function AdminFeedbackConfig() {
   const handleRemoveOption = (indexToRemove) => {
     setFormData((prev) => {
       const nextOpts = prev.options.filter((_, idx) => idx !== indexToRemove);
-      const computedMax = nextOpts.length > 0 ? Math.max(...nextOpts.map((o) => o.marks || 0), 0) : 0;
+      const validMarks = nextOpts.map((o) => (o.marks === '' ? 0 : parseFloat(o.marks) || 0));
+      const computedMax = validMarks.length > 0 ? Math.max(...validMarks) : 0;
       return {
         ...prev,
         options: nextOpts,
@@ -232,12 +236,12 @@ export default function AdminFeedbackConfig() {
   };
 
   const handleUpdateOptionMarks = (index, newMarks) => {
-    const numericMarks = parseFloat(newMarks) || 0;
     setFormData((prev) => {
       const nextOpts = prev.options.map((opt, idx) =>
-        idx === index ? { ...opt, marks: numericMarks } : opt
+        idx === index ? { ...opt, marks: newMarks } : opt
       );
-      const computedMax = Math.max(...nextOpts.map((o) => o.marks || 0), 0);
+      const validMarks = nextOpts.map((o) => (o.marks === '' ? 0 : parseFloat(o.marks) || 0));
+      const computedMax = validMarks.length > 0 ? Math.max(...validMarks) : 0;
       return {
         ...prev,
         options: nextOpts,
@@ -247,7 +251,8 @@ export default function AdminFeedbackConfig() {
   };
 
   const handleApplyPreset = (presetOptions) => {
-    const computedMax = Math.max(...presetOptions.map((o) => o.marks || 0), 0);
+    const validMarks = presetOptions.map((o) => (o.marks === '' ? 0 : parseFloat(o.marks) || 0));
+    const computedMax = validMarks.length > 0 ? Math.max(...validMarks) : 0;
     setFormData((prev) => ({
       ...prev,
       options: [...presetOptions],
@@ -274,17 +279,26 @@ export default function AdminFeedbackConfig() {
     try {
       let optionsPayload = [];
       if (formData.question_type === 'mcq') {
-        optionsPayload = formData.options;
+        optionsPayload = formData.options.map((o) => ({
+          id: o.id || undefined,
+          option_text: o.option_text,
+          marks: o.marks === '' ? 0 : (parseFloat(o.marks) || 0),
+        }));
       } else if (formData.question_type === 'yes_no') {
-        optionsPayload = formData.options.length === 2 ? formData.options : [
+        const raw = formData.options.length === 2 ? formData.options : [
           { option_text: 'Yes', marks: 5 },
           { option_text: 'No', marks: 0 },
         ];
+        optionsPayload = raw.map((o) => ({
+          id: o.id || undefined,
+          option_text: o.option_text,
+          marks: o.marks === '' ? 0 : (parseFloat(o.marks) || 0),
+        }));
       }
 
       const computedMax = optionsPayload.length > 0
         ? Math.max(...optionsPayload.map((o) => o.marks || 0), parseFloat(formData.max_marks) || 0)
-        : parseFloat(formData.max_marks) || 0;
+        : (parseFloat(formData.max_marks) || 0);
 
       const payload = {
         question_text: formData.question_text.trim(),
@@ -946,8 +960,10 @@ export default function AdminFeedbackConfig() {
                             min="0"
                             max="100"
                             step="0.5"
-                            value={opt.marks ?? 0}
+                            value={opt.marks ?? ''}
                             onChange={(e) => handleUpdateOptionMarks(idx, e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            placeholder="0"
                             className="custom-input text-xs py-1 px-2 w-16 text-center font-mono font-bold"
                           />
                           <button
@@ -985,8 +1001,10 @@ export default function AdminFeedbackConfig() {
                         min="0"
                         max="100"
                         step="0.5"
-                        value={customOptionMarks}
+                        value={customOptionMarks ?? ''}
                         onChange={(e) => setCustomOptionMarks(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        placeholder="5"
                         className="custom-input text-xs py-1.5 w-16 text-center font-mono font-bold"
                       />
                     </div>
@@ -1023,8 +1041,10 @@ export default function AdminFeedbackConfig() {
                             min="0"
                             max="100"
                             step="0.5"
-                            value={opt.marks ?? (isYes ? 5 : 0)}
+                            value={opt.marks ?? ''}
                             onChange={(e) => handleUpdateOptionMarks(idx, e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            placeholder={isYes ? '5' : '0'}
                             className="custom-input text-xs py-1 px-2 w-full font-mono font-bold"
                           />
                         </div>
@@ -1044,8 +1064,10 @@ export default function AdminFeedbackConfig() {
                     type="number"
                     min="0"
                     step="0.5"
-                    value={formData.max_marks}
+                    value={formData.max_marks ?? ''}
                     onChange={(e) => setFormData({ ...formData, max_marks: e.target.value })}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="5"
                     className="custom-input text-xs py-1.5 font-mono font-bold"
                   />
                 </div>
@@ -1057,8 +1079,9 @@ export default function AdminFeedbackConfig() {
                   <input
                     type="number"
                     min="1"
-                    value={formData.order_index}
+                    value={formData.order_index ?? ''}
                     onChange={(e) => setFormData({ ...formData, order_index: e.target.value })}
+                    onFocus={(e) => e.target.select()}
                     className="custom-input text-xs py-1.5 font-mono"
                   />
                 </div>

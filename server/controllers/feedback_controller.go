@@ -13,8 +13,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// FeedbackOptionInput represents option text and its marks/weightage
+// FeedbackOptionInput represents option text, ID, and its marks/weightage
 type FeedbackOptionInput struct {
+	ID         uint    `json:"id,omitempty"`
 	OptionText string  `json:"option_text"`
 	Marks      float64 `json:"marks"`
 }
@@ -42,6 +43,7 @@ func parseOptionsInput(raw json.RawMessage, qType string) []FeedbackOptionInput 
 				trimmed := strings.TrimSpace(item.OptionText)
 				if trimmed != "" {
 					result = append(result, FeedbackOptionInput{
+						ID:         item.ID,
 						OptionText: trimmed,
 						Marks:      item.Marks,
 					})
@@ -279,30 +281,105 @@ func AdminUpdateFeedbackQuestion(c *gin.Context) {
 		return
 	}
 
-	// Delete old options and recreate relational rows
-	if err := tx.Where("question_id = ?", question.ID).Delete(&models.FeedbackQuestionOption{}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to sync question options",
-			"error":   err.Error(),
-		})
-		return
+	// Smart Sync Options: update existing, create new, delete removed
+	var existingOptions []models.FeedbackQuestionOption
+	tx.Where("question_id = ?", question.ID).Find(&existingOptions)
+
+	existingMap := make(map[uint]*models.FeedbackQuestionOption)
+	for i := range existingOptions {
+		existingMap[existingOptions[i].ID] = &existingOptions[i]
 	}
+
+	usedIDs := make(map[uint]bool)
 
 	if qType != "text" {
 		for idx, opt := range parsedOptions {
-			optRecord := models.FeedbackQuestionOption{
-				QuestionID: question.ID,
-				OptionText: opt.OptionText,
-				Marks:      opt.Marks,
-				OrderIndex: idx + 1,
+			// 1. Try matching by ID if provided
+			if opt.ID > 0 && existingMap[opt.ID] != nil {
+				usedIDs[opt.ID] = true
+				if err := tx.Model(&models.FeedbackQuestionOption{}).
+					Where("id = ?", opt.ID).
+					Updates(map[string]interface{}{
+						"option_text": opt.OptionText,
+						"marks":       opt.Marks,
+						"order_index": idx + 1,
+					}).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"status":  "error",
+						"message": "Failed to update question option",
+						"error":   err.Error(),
+					})
+					return
+				}
+				continue
 			}
-			if err := tx.Create(&optRecord).Error; err != nil {
+
+			// 2. Try matching by OptionText with an unused existing option
+			var matchedID uint = 0
+			for _, existOpt := range existingOptions {
+				if !usedIDs[existOpt.ID] && strings.EqualFold(existOpt.OptionText, opt.OptionText) {
+					matchedID = existOpt.ID
+					break
+				}
+			}
+
+			// 3. Fallback: match by index if exists and unused
+			if matchedID == 0 && idx < len(existingOptions) && !usedIDs[existingOptions[idx].ID] {
+				matchedID = existingOptions[idx].ID
+			}
+
+			if matchedID > 0 {
+				usedIDs[matchedID] = true
+				if err := tx.Model(&models.FeedbackQuestionOption{}).
+					Where("id = ?", matchedID).
+					Updates(map[string]interface{}{
+						"option_text": opt.OptionText,
+						"marks":       opt.Marks,
+						"order_index": idx + 1,
+					}).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"status":  "error",
+						"message": "Failed to update question option",
+						"error":   err.Error(),
+					})
+					return
+				}
+			} else {
+				// Insert brand new option
+				newOpt := models.FeedbackQuestionOption{
+					QuestionID: question.ID,
+					OptionText: opt.OptionText,
+					Marks:      opt.Marks,
+					OrderIndex: idx + 1,
+				}
+				if err := tx.Create(&newOpt).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"status":  "error",
+						"message": "Failed to create new question option",
+						"error":   err.Error(),
+					})
+					return
+				}
+			}
+		}
+	}
+
+	// Delete any existing options that were explicitly removed
+	for _, existOpt := range existingOptions {
+		if !usedIDs[existOpt.ID] {
+			// Disconnect any foreign key references in responses to avoid constraint violation
+			tx.Model(&models.InterviewFeedbackResponse{}).
+				Where("selected_option_id = ?", existOpt.ID).
+				Update("selected_option_id", nil)
+
+			if err := tx.Delete(&models.FeedbackQuestionOption{}, existOpt.ID).Error; err != nil {
 				tx.Rollback()
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"status":  "error",
-					"message": "Failed to save updated question option",
+					"message": "Failed to delete removed question option",
 					"error":   err.Error(),
 				})
 				return
@@ -331,15 +408,21 @@ func AdminDeleteFeedbackQuestion(c *gin.Context) {
 	id := c.Param("id")
 
 	tx := database.DB.Begin()
+
+	// Disconnect foreign key references before deleting
+	tx.Model(&models.InterviewFeedbackResponse{}).
+		Where("question_id = ?", id).
+		Update("selected_option_id", nil)
+
 	if err := tx.Where("question_id = ?", id).Delete(&models.FeedbackQuestionOption{}).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete question options"})
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete question options", "error": err.Error()})
 		return
 	}
 
 	if err := tx.Delete(&models.FeedbackQuestion{}, id).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete feedback question"})
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete feedback question", "error": err.Error()})
 		return
 	}
 	tx.Commit()
