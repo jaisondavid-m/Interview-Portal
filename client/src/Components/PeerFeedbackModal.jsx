@@ -175,7 +175,7 @@ export default function PeerFeedbackModal({
             <div>
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider font-bold">
                 <span className="px-2 py-0.5 rounded bg-[var(--accent)] text-white">
-                  Round {roundNumber} Interviewer
+                  Peer Feedback
                 </span>
                 <span className="text-[var(--text-muted)]">•</span>
                 <span className="text-[var(--accent)] flex items-center gap-1">
@@ -184,7 +184,7 @@ export default function PeerFeedbackModal({
                 </span>
               </div>
               <h2 className="text-[17px] font-bold text-[var(--text-primary)] mt-1">
-                {success ? 'Evaluation Submitted' : `Evaluate Round ${roundNumber} Candidate`}
+                {success ? 'Evaluation Submitted' : 'Peer Performance Evaluation'}
               </h2>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
                 Target Candidate: <strong className="text-[var(--text-primary)]">{peerDisplayName}</strong>

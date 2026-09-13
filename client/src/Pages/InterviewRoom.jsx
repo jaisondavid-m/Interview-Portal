@@ -167,36 +167,13 @@ export default function InterviewRoom() {
         setError('');
 
         // 1. Initialize starting role in Round 1
+        // Initialize starting role in Round 1
         if (initialRoleRef.current === null) {
           if (data.session.round === 1 && (data.session.switch_count || 0) === 0) {
             initialRoleRef.current = data.current_user_role;
           } else if (data.session.round === 2 || (data.session.switch_count || 0) >= 1) {
             initialRoleRef.current = data.current_user_role === 'interviewee' ? 'interviewer' : 'interviewee';
           }
-        }
-
-        // 2. TRIGGER 1: When Round 1 finishes (role swap to Round 2), show feedback modal for Round 1 Interviewer
-        if (
-          (data.session.round === 2 || (data.session.switch_count || 0) >= 1) &&
-          data.session.status !== 'completed' &&
-          initialRoleRef.current === 'interviewer' &&
-          !r1FeedbackPromptedRef.current
-        ) {
-          r1FeedbackPromptedRef.current = true;
-          setFeedbackRound(1);
-          api.get(`/interviews/sessions/${sessionId}/feedback`)
-            .then((fRes) => {
-              const fData = fRes?.data || fRes;
-              if (fData?.has_submitted) {
-                setHasFeedbackSubmitted(true);
-              } else {
-                setHasFeedbackSubmitted(false);
-                setShowFeedbackModal(true);
-              }
-            })
-            .catch(() => {
-              setShowFeedbackModal(true);
-            });
         }
 
         const targetLang = data.session.candidate_lang || 'javascript';
