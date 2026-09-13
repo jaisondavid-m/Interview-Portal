@@ -357,60 +357,160 @@ func UploadInterviewRecording(c *gin.Context) {
 	})
 }
 
-// StreamInterviewRecording serves audio files with byte-range seeking, restricted strictly to Administrators
+// StreamInterviewRecording serves audio files with byte-range seeking, supporting Admin and Session Participants
 func StreamInterviewRecording(c *gin.Context) {
 	filename := c.Param("filename")
-	cleanedFilename := filepath.Base(filename)
+	sessionID := c.Param("id")
 
+	if filename == "" && sessionID != "" {
+		filename = fmt.Sprintf("session_%s.webm", sessionID)
+	}
+
+	cleanedFilename := filepath.Base(filename)
+	if cleanedFilename == "." || cleanedFilename == "/" || cleanedFilename == "" {
+		if sessionID != "" {
+			cleanedFilename = fmt.Sprintf("session_%s.webm", sessionID)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid recording filename"})
+			return
+		}
+	}
+
+	// If filename has no extension, append .webm default
+	if filepath.Ext(cleanedFilename) == "" {
+		cleanedFilename = cleanedFilename + ".webm"
+	}
+
+	// 1. Check database for recording metadata
+	var rec models.InterviewRecording
+	var dbFound bool
+
+	if sessionID != "" {
+		if err := database.DB.Where("session_id = ?", sessionID).First(&rec).Error; err == nil {
+			dbFound = true
+			if rec.FileName != "" {
+				cleanedFilename = rec.FileName
+			}
+		}
+	}
+
+	if !dbFound {
+		if err := database.DB.Where("file_name = ?", cleanedFilename).First(&rec).Error; err == nil {
+			dbFound = true
+		} else if strings.HasPrefix(cleanedFilename, "session_") {
+			// Extract session ID number
+			trimmed := strings.TrimPrefix(cleanedFilename, "session_")
+			trimmed = strings.TrimSuffix(trimmed, filepath.Ext(trimmed))
+			if sID, err := strconv.Atoi(trimmed); err == nil && sID > 0 {
+				if err2 := database.DB.Where("session_id = ?", sID).First(&rec).Error; err2 == nil {
+					dbFound = true
+				}
+			}
+		}
+	}
+
+	// 2. Authorization check: Admin or session participant
+	userRole, _ := c.Get("userRole")
+	roleStr := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", userRole)))
+	isAdmin := roleStr == "admin"
+
+	if !isAdmin && dbFound && rec.SessionID > 0 {
+		rawUserID, exists := c.Get("userID")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Authentication required to stream recording"})
+			return
+		}
+		currentUserID := rawUserID.(uint)
+		var session models.InterviewSession
+		if err := database.DB.First(&session, rec.SessionID).Error; err == nil {
+			if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+				c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied to this interview recording"})
+				return
+			}
+		}
+	}
+
+	// 3. Locate file on disk across all possible directories
 	possibleDirs := []string{
 		getUploadsDir(),
 		"server/uploads/recordings",
 		"uploads/recordings",
-		"../uploads/recordings",
 		"/app/uploads/recordings",
+		"../uploads/recordings",
+		"uploads",
+		"server/uploads",
+		"/app/uploads",
+		filepath.Join(os.TempDir(), "recordings"),
 	}
 
-	var filePath string
+	var targetPath string
 	found := false
 
-	var rec models.InterviewRecording
-	if err := database.DB.Where("file_name = ?", cleanedFilename).First(&rec).Error; err == nil && rec.FilePath != "" {
-		if fi, err := os.Stat(rec.FilePath); err == nil && !fi.IsDir() {
-			filePath = rec.FilePath
+	// Try database path first
+	if dbFound && rec.FilePath != "" {
+		if fi, err := os.Stat(rec.FilePath); err == nil && !fi.IsDir() && fi.Size() > 0 {
+			targetPath = rec.FilePath
 			found = true
 		}
 	}
 
+	// Try all candidate directories
 	if !found {
+		namesToTry := []string{cleanedFilename}
+		if sessionID != "" {
+			namesToTry = append(namesToTry, fmt.Sprintf("session_%s.webm", sessionID))
+		}
+		if rec.FileName != "" && rec.FileName != cleanedFilename {
+			namesToTry = append(namesToTry, rec.FileName)
+		}
+
 		for _, dir := range possibleDirs {
-			candidate := filepath.Join(dir, cleanedFilename)
-			if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
-				filePath = candidate
-				found = true
+			for _, name := range namesToTry {
+				candidate := filepath.Join(dir, name)
+				if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Size() > 0 {
+					targetPath = candidate
+					found = true
+					break
+				}
+			}
+			if found {
 				break
 			}
 		}
 	}
 
 	if !found {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Audio recording file not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":   "error",
+			"message":  "Audio recording file not found on server",
+			"filename": cleanedFilename,
+		})
 		return
 	}
 
+	// 4. Set streaming headers
 	if strings.HasSuffix(cleanedFilename, ".webm") {
 		c.Header("Content-Type", "audio/webm")
 	} else if strings.HasSuffix(cleanedFilename, ".ogg") {
 		c.Header("Content-Type", "audio/ogg")
 	} else if strings.HasSuffix(cleanedFilename, ".mp3") {
 		c.Header("Content-Type", "audio/mpeg")
+	} else if strings.HasSuffix(cleanedFilename, ".mp4") || strings.HasSuffix(cleanedFilename, ".m4a") {
+		c.Header("Content-Type", "audio/mp4")
 	} else {
 		c.Header("Content-Type", "audio/webm")
 	}
 
 	c.Header("Accept-Ranges", "bytes")
-	c.Header("Cache-Control", "no-cache, private")
+	c.Header("Cache-Control", "private, no-cache, no-store, must-revalidate")
 
-	c.File(filePath)
+	if c.Query("download") == "true" || c.Query("dl") == "1" {
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", cleanedFilename))
+	} else {
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", cleanedFilename))
+	}
+
+	http.ServeFile(c.Writer, c.Request, targetPath)
 }
 
 // GetSessionRecording returns metadata for a session's audio recording (Admin & participant access)

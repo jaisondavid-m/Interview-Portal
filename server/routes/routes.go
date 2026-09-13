@@ -78,7 +78,12 @@ func SetupRouter() *gin.Engine {
 			interviews.POST("/sessions/:id/recording/finalize", controllers.FinalizeInterviewRecording)
 			interviews.POST("/sessions/:id/recording", controllers.UploadInterviewRecording)
 			interviews.GET("/sessions/:id/recording", controllers.GetSessionRecording)
+			interviews.GET("/sessions/:id/recording/stream", controllers.StreamInterviewRecording)
+			interviews.GET("/recordings/:filename", controllers.StreamInterviewRecording)
 		}
+
+		// Direct authenticated recording route
+		g.GET("/recordings/:filename", middlewares.AuthMiddleware(), controllers.StreamInterviewRecording)
 
 		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)
 		admin := g.Group("/admin")
@@ -86,6 +91,7 @@ func SetupRouter() *gin.Engine {
 		{
 			// Admin-Only Audio Recording Streaming Route (Supports HTTP byte-range for players)
 			admin.GET("/recordings/:filename", controllers.StreamInterviewRecording)
+			admin.GET("/interviews/sessions/:id/recording/stream", controllers.StreamInterviewRecording)
 
 			// User Management
 			admin.GET("/users", controllers.AdminGetUsers)
@@ -131,6 +137,7 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/interviews/sessions", controllers.AdminGetInterviewSessions)
 			admin.GET("/interviews/sessions/:id", controllers.AdminGetInterviewSessionByID)
 			admin.GET("/interviews/sessions/:id/recording", controllers.GetSessionRecording)
+			admin.GET("/interviews/sessions/:id/recording/stream", controllers.StreamInterviewRecording)
 		}
 	}
 

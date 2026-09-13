@@ -70,9 +70,22 @@ export default function AudioPlayer({
     audioBase = 'http://localhost:8080/api/v1';
   }
 
-  const directStreamUrl = audioFileName
-    ? `${audioBase}/recordings/${encodeURIComponent(audioFileName)}`
-    : '';
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') || '' : '';
+  const tokenQuery = token ? `token=${encodeURIComponent(token)}` : '';
+  const sessionId = recording?.session_id;
+
+  const directStreamUrl = useMemo(() => {
+    if (!audioFileName) return '';
+    const base = `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`;
+    return tokenQuery ? `${base}?${tokenQuery}` : base;
+  }, [audioBase, audioFileName, tokenQuery]);
+
+  const directDownloadUrl = useMemo(() => {
+    if (!audioFileName) return '';
+    const base = `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`;
+    const dlParams = tokenQuery ? `?${tokenQuery}&download=true` : '?download=true';
+    return `${base}${dlParams}`;
+  }, [audioBase, audioFileName, tokenQuery]);
 
   // Load audio file as local Blob URL for 100% reliable in-browser playback
   const loadAudioBlob = useCallback(async () => {
@@ -82,9 +95,16 @@ export default function AudioPlayer({
     setLoadError('');
 
     const candidateUrls = [
+      `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`,
       `${audioBase}/recordings/${encodeURIComponent(audioFileName)}`,
+      `/api/v1/admin/recordings/${encodeURIComponent(audioFileName)}`,
+      `/api/v1/recordings/${encodeURIComponent(audioFileName)}`,
+      `/admin/recordings/${encodeURIComponent(audioFileName)}`,
       `/recordings/${encodeURIComponent(audioFileName)}`,
-      `/api/recordings/${encodeURIComponent(audioFileName)}`,
+      ...(sessionId ? [
+        `${audioBase}/admin/interviews/sessions/${sessionId}/recording/stream`,
+        `${audioBase}/interviews/sessions/${sessionId}/recording/stream`,
+      ] : []),
     ];
 
     let loadedBlob = null;
@@ -105,11 +125,16 @@ export default function AudioPlayer({
       }
     }
 
-    // 2. Fallback: Try native fetch with credentials
+    // 2. Fallback: Try native fetch with credentials and bearer auth
     if (!loadedBlob) {
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       for (const url of candidateUrls) {
         try {
-          const resp = await fetch(url, { credentials: 'include' });
+          const fetchUrl = token ? (url.includes('?') ? `${url}&token=${encodeURIComponent(token)}` : `${url}?token=${encodeURIComponent(token)}`) : url;
+          const resp = await fetch(fetchUrl, { headers, credentials: 'include' });
           if (resp.ok) {
             const b = await resp.blob();
             if (b && b.size > 0) {
@@ -138,7 +163,7 @@ export default function AudioPlayer({
     }
 
     setIsLoading(false);
-  }, [audioFileName, audioBase, directStreamUrl]);
+  }, [audioFileName, audioBase, sessionId, token, directStreamUrl]);
 
   // Initial load and unmount teardown
   useEffect(() => {
@@ -390,6 +415,55 @@ export default function AudioPlayer({
     );
   }
 
+  // Handle direct safe download without triggering 404 or missing headers
+  const handleDownload = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    // 1. If active blob URL already in memory, download instantly
+    if (blobUrl && blobUrl.startsWith('blob:')) {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = audioFileName || `interview_session_${recording?.session_id || 'recording'}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
+    // 2. Otherwise fetch blob with credentials/bearer token
+    setIsLoading(true);
+    try {
+      const candidate = directDownloadUrl || `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}?download=true`;
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(candidate, { headers, credentials: 'include' });
+      if (res.ok) {
+        const b = await res.blob();
+        if (b && b.size > 0) {
+          const dlUrl = URL.createObjectURL(b);
+          const a = document.createElement('a');
+          a.href = dlUrl;
+          a.download = audioFileName || `interview_session_${recording?.session_id || 'recording'}.webm`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(dlUrl), 10000);
+          setIsLoading(false);
+          return;
+        }
+      }
+      // Fallback
+      window.open(directDownloadUrl, '_blank');
+    } catch (err) {
+      console.warn('[AudioPlayer] Download fetch error, fallback to URL:', err);
+      window.open(directDownloadUrl, '_blank');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const progressPercent = effectiveDuration > 0
     ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
     : 0;
@@ -452,22 +526,23 @@ export default function AudioPlayer({
             type="button"
             onClick={loadAudioBlob}
             disabled={isLoading}
-            className="btn btn-secondary text-[11px] py-1.5 px-2.5 flex items-center gap-1.5 font-mono shadow-xs"
+            className="btn btn-secondary text-[11px] py-1.5 px-2.5 flex items-center gap-1.5 font-mono shadow-xs cursor-pointer"
             title="Reload audio stream"
           >
             <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
             <span>Reload</span>
           </button>
 
-          <a
-            href={blobUrl || directStreamUrl}
-            download={audioFileName}
-            className="btn btn-primary text-[11px] py-1.5 px-3 flex items-center gap-1.5 font-mono shadow-xs"
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={isLoading}
+            className="btn btn-primary text-[11px] py-1.5 px-3 flex items-center gap-1.5 font-mono shadow-xs cursor-pointer"
             title="Download original audio file"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Download</span>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -658,13 +733,13 @@ export default function AudioPlayer({
               <span>Retry</span>
             </button>
             <span>•</span>
-            <a
-              href={blobUrl || directStreamUrl}
-              download={audioFileName}
-              className="underline font-bold hover:text-amber-600"
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="underline font-bold hover:text-amber-600 cursor-pointer"
             >
               Direct Download
-            </a>
+            </button>
           </div>
         </div>
       )}
