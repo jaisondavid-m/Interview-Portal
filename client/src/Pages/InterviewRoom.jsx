@@ -870,80 +870,94 @@ export default function InterviewRoom() {
         />
       )}
 
-      {/* MUTUAL CONSENT MODAL / PROMPT BANNER FOR PEER (ROLE SWITCH) */}
+      {/* ROLE SWITCH PROMPT MODAL (MUTUAL CONSENT) */}
       {isSwitchRequestedByPeer && switchCount === 0 && !isCompleted && (
-        <div className="p-4 rounded-[var(--radius-md)] border-2 border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-md)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-full bg-[var(--accent)] text-white shrink-0 mt-0.5 sm:mt-0">
-              <Repeat className="w-5 h-5 animate-spin" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="panel-card w-full max-w-md bg-[var(--bg-card)] border-2 border-[var(--border-accent)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden p-6 space-y-4 animate-scaleUp">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shrink-0">
+                <Repeat className="w-5 h-5 animate-spin" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--accent)] text-white uppercase font-bold">
+                    Action Required
+                  </span>
+                </div>
+                <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
+                  Peer Requested Round Switch
+                </h3>
+                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                  Your peer has completed their part of Round 1 and requested to switch roles. When you confirm, roles will swap and a new question will be assigned for Round 2.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Peer Requested Round Switch (Round 2)</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--accent)] text-white uppercase font-bold">
-                  Action Required
-                </span>
-              </h4>
-              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-                Your peer has completed their part of Round 1 and requested to switch roles. When you confirm, roles will swap and a new random question will be assigned for Round 2.
-              </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={handleDeclineSwitch}
+                disabled={switching}
+                className="btn btn-secondary text-xs py-2 px-3.5 font-medium cursor-pointer"
+              >
+                Not Ready
+              </button>
+              <button
+                type="button"
+                onClick={handleAcceptSwitch}
+                disabled={switching}
+                className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
+              >
+                {switching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span>Accept & Switch to Round 2</span>
+              </button>
             </div>
-          </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-            <button
-              onClick={handleAcceptSwitch}
-              disabled={switching}
-              className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
-            >
-              {switching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              <span>Accept & Switch to Round 2</span>
-            </button>
-            <button
-              onClick={handleDeclineSwitch}
-              disabled={switching}
-              className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1 font-medium cursor-pointer"
-            >
-              <span>Not Ready</span>
-            </button>
           </div>
         </div>
       )}
 
-      {/* MUTUAL CONSENT MODAL / PROMPT BANNER FOR PEER (END INTERVIEW) */}
+      {/* END INTERVIEW PROMPT MODAL (MUTUAL CONSENT) */}
       {isEndRequestedByPeer && !isCompleted && (
-        <div className="p-4 rounded-[var(--radius-md)] border-2 border-[var(--red)] bg-red-500/10 dark:bg-red-950/20 shadow-[var(--shadow-md)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-full bg-[var(--red)] text-white shrink-0 mt-0.5 sm:mt-0">
-              <LogOut className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="panel-card w-full max-w-md bg-[var(--bg-card)] border-2 border-red-500/50 rounded-[var(--radius-lg)] shadow-2xl overflow-hidden p-6 space-y-4 animate-scaleUp">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-full bg-[var(--red)] text-white flex items-center justify-center shrink-0">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--red)] text-white uppercase font-bold">
+                    Action Required
+                  </span>
+                </div>
+                <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
+                  Peer Requested to Conclude Interview
+                </h3>
+                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                  Your peer has requested to end the live interview session. When both participants confirm, the session will conclude and proceed to peer evaluation.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Peer Requested to Conclude & End Interview</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--red)] text-white uppercase font-bold">
-                  Action Required
-                </span>
-              </h4>
-              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-                Your peer has requested to end the live interview session. Both participants must confirm to conclude the session and finalize results.
-              </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={handleDeclineEnd}
+                disabled={ending}
+                className="btn btn-secondary text-xs py-2 px-3.5 font-medium cursor-pointer"
+              >
+                Keep Practicing
+              </button>
+              <button
+                type="button"
+                onClick={handleAcceptEnd}
+                disabled={ending}
+                className="btn btn-danger text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
+              >
+                {ending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span>Accept & Conclude</span>
+              </button>
             </div>
-          </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-            <button
-              onClick={handleAcceptEnd}
-              disabled={ending}
-              className="btn btn-danger text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
-            >
-              {ending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              <span>Accept & Conclude Interview</span>
-            </button>
-            <button
-              onClick={handleDeclineEnd}
-              disabled={ending}
-              className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1 font-medium cursor-pointer"
-            >
-              <span>Keep Practicing</span>
-            </button>
           </div>
         </div>
       )}
