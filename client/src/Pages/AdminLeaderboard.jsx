@@ -11,8 +11,6 @@ import {
   Users,
   BarChart3,
   Flame,
-  ChevronUp,
-  ChevronDown,
   Sparkles,
   ExternalLink,
   SlidersHorizontal,
@@ -22,7 +20,13 @@ import {
   ArrowUpDown,
   BookOpen,
   Calendar,
-  Layers
+  Layers,
+  Video,
+  Zap,
+  Target,
+  GraduationCap,
+  ChevronRight,
+  RotateCcw
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -32,17 +36,19 @@ export default function AdminLeaderboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Primary Ranking / Score Filter: 'avg_points' | 'total_points' | 'percentage'
-  const [metricMode, setMetricMode] = useState('avg_points');
+  // Primary Ranking Metric Mode:
+  // 'total_points' | 'points_per_interview' | 'interviews_attended' | 'percentage'
+  const [metricMode, setMetricMode] = useState('total_points');
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
-  const [minMatches, setMinMatches] = useState(0);
-  const [sortField, setSortField] = useState('avg_points');
+  const [minInterviews, setMinInterviews] = useState(0);
+  const [minPoints, setMinPoints] = useState(0);
+  const [sortField, setSortField] = useState('total_points');
   const [sortOrder, setSortOrder] = useState('desc'); // 'desc' | 'asc'
 
-  // Detailed Modal for viewing a student's match evaluations
+  // Detailed Modal for viewing an individual student's scorecard & interview performance breakdown
   const [selectedStudent, setSelectedStudent] = useState(null);
 
   const fetchLeaderboard = async () => {
@@ -58,8 +64,11 @@ export default function AdminLeaderboard() {
       if (searchTerm.trim()) {
         params.append('search', searchTerm.trim());
       }
-      if (minMatches > 0) {
-        params.append('min_matches', minMatches);
+      if (minInterviews > 0) {
+        params.append('min_matches', minInterviews);
+      }
+      if (minPoints > 0) {
+        params.append('min_points', minPoints);
       }
 
       const res = await api.get(`/admin/feedback/leaderboard?${params.toString()}`);
@@ -75,7 +84,7 @@ export default function AdminLeaderboard() {
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [sortField, sortOrder, selectedDept, minMatches]);
+  }, [sortField, sortOrder, selectedDept, minInterviews, minPoints]);
 
   // Handle Search Debounce
   useEffect(() => {
@@ -85,14 +94,17 @@ export default function AdminLeaderboard() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // When Metric Mode toggles (Avg Points vs Total Points vs Percentage), update sorting
+  // When Metric Mode toggles, update primary sorting
   const handleMetricModeChange = (mode) => {
     setMetricMode(mode);
-    if (mode === 'avg_points') {
-      setSortField('avg_points');
-      setSortOrder('desc');
-    } else if (mode === 'total_points') {
+    if (mode === 'total_points') {
       setSortField('total_points');
+      setSortOrder('desc');
+    } else if (mode === 'points_per_interview') {
+      setSortField('points_per_interview');
+      setSortOrder('desc');
+    } else if (mode === 'interviews_attended') {
+      setSortField('interviews_attended');
       setSortOrder('desc');
     } else if (mode === 'percentage') {
       setSortField('percentage');
@@ -100,7 +112,18 @@ export default function AdminLeaderboard() {
     }
   };
 
-  // Unique list of departments from returned students
+  // Reset all filters to default
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedDept('all');
+    setMinInterviews(0);
+    setMinPoints(0);
+    setMetricMode('total_points');
+    setSortField('total_points');
+    setSortOrder('desc');
+  };
+
+  // Unique list of departments
   const departments = useMemo(() => {
     const depts = new Set();
     leaderboard.forEach((s) => {
@@ -111,12 +134,21 @@ export default function AdminLeaderboard() {
     return Array.from(depts);
   }, [leaderboard]);
 
-  // Top 3 Podium
+  // Top 3 Podium Students
   const topThree = useMemo(() => {
-    return leaderboard.filter((s) => s.matches_count > 0).slice(0, 3);
+    return leaderboard
+      .filter((s) => (s.interviews_attended > 0 || s.matches_count > 0 || s.total_score > 0))
+      .slice(0, 3);
   }, [leaderboard]);
 
-  const getGradeBadge = (grade, pct) => {
+  const getGradeBadge = (grade, pct, attended) => {
+    if (attended === 0 && (!pct || pct === 0)) {
+      return {
+        bg: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20',
+        dot: 'bg-zinc-400',
+        label: 'Unranked',
+      };
+    }
     if (pct >= 85) {
       return {
         bg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
@@ -145,38 +177,27 @@ export default function AdminLeaderboard() {
     };
   };
 
+  const hasActiveFilters = searchTerm.trim() !== '' || selectedDept !== 'all' || minInterviews > 0 || minPoints > 0;
+
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
+    <div className="space-y-6 animate-fadeIn pb-12 max-w-7xl mx-auto">
+      {/* Header Banner */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
         <div>
           <div className="flex items-center gap-2 text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--accent)] mb-1">
-            <Trophy className="w-3.5 h-3.5" />
-            <span>Official Peer Performance Rankings</span>
+            <Trophy className="w-3.5 h-3.5 text-amber-500" />
+            <span>Student Performance Rankings</span>
           </div>
           <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
-            Peer Feedback Leaderboard
+            Person-Wise Interview Leaderboard
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Real-time student rankings computed from peer evaluations, question marking weightages, and match scores.
+            Ranked student performance scorecards calculated by total points gained and interview attendance volume.
           </p>
         </div>
 
-        {/* Primary Metric Filter Toggle */}
-        <div className="flex items-center gap-1.5 p-1 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] shadow-xs self-start md:self-auto">
-          <button
-            type="button"
-            onClick={() => handleMetricModeChange('avg_points')}
-            className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-1.5 ${
-              metricMode === 'avg_points'
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>Avg Points / Match</span>
-          </button>
-
+        {/* Primary Ranking Metric Toggle Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] shadow-xs flex-wrap self-start lg:self-auto">
           <button
             type="button"
             onClick={() => handleMetricModeChange('total_points')}
@@ -185,9 +206,38 @@ export default function AdminLeaderboard() {
                 ? 'bg-[var(--accent)] text-white shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
+            title="Rank students by overall cumulative points gained"
           >
             <Award className="w-3.5 h-3.5" />
-            <span>Total Points</span>
+            <span>Total Points Gained</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleMetricModeChange('points_per_interview')}
+            className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-1.5 ${
+              metricMode === 'points_per_interview'
+                ? 'bg-[var(--accent)] text-white shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+            title="Rank students by Points / Number of Interviews Attended"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-300" />
+            <span>Points / Interview</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleMetricModeChange('interviews_attended')}
+            className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-1.5 ${
+              metricMode === 'interviews_attended'
+                ? 'bg-[var(--accent)] text-white shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+            title="Rank students by number of interviews attended"
+          >
+            <Video className="w-3.5 h-3.5" />
+            <span>Interviews Attended</span>
           </button>
 
           <button
@@ -198,6 +248,7 @@ export default function AdminLeaderboard() {
                 ? 'bg-[var(--accent)] text-white shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
+            title="Rank students by percentage score"
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Percentage (%)</span>
@@ -205,63 +256,72 @@ export default function AdminLeaderboard() {
         </div>
       </div>
 
-      {/* Top Stat Counters */}
+      {/* Cohort KPI Stat Cards */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] uppercase">
-              <span>Evaluated Students</span>
+              <span>Active Students</span>
               <Users className="w-3.5 h-3.5 text-[var(--accent)]" />
             </div>
             <div className="text-[22px] font-bold text-[var(--text-primary)] font-mono">
-              {stats.evaluated_students} <span className="text-xs text-[var(--text-muted)] font-normal">/ {stats.total_students}</span>
+              {stats.active_students ?? stats.evaluated_students ?? 0}{' '}
+              <span className="text-xs text-[var(--text-muted)] font-normal">/ {stats.total_students ?? 0} total</span>
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)] font-mono">
+              {stats.evaluated_students ?? 0} students evaluated
             </div>
           </div>
 
-          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1">
+          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] uppercase">
-              <span>Total Reviews Recorded</span>
-              <Award className="w-3.5 h-3.5 text-purple-500" />
+              <span>Total Interviews Completed</span>
+              <Video className="w-3.5 h-3.5 text-purple-500" />
             </div>
             <div className="text-[22px] font-bold text-[var(--text-primary)] font-mono">
-              {stats.total_reviews}
+              {stats.total_interviews_attended ?? stats.total_reviews ?? 0}
+            </div>
+            <div className="text-[11px] text-purple-600 dark:text-purple-400 font-mono">
+              {stats.total_reviews ?? 0} peer evaluations logged
             </div>
           </div>
 
-          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1">
+          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] uppercase">
-              <span>Class Match Average</span>
+              <span>Cohort Average</span>
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             </div>
             <div className="text-[22px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
               {stats.overall_avg_score ? stats.overall_avg_score.toFixed(1) : '0.0'}{' '}
-              <span className="text-xs text-[var(--text-muted)] font-normal">pts/match</span>
+              <span className="text-xs text-[var(--text-muted)] font-normal">pts/student</span>
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)] font-mono">
+              {stats.overall_avg_percentage ? `${stats.overall_avg_percentage.toFixed(0)}% average score` : '—'}
             </div>
           </div>
 
-          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1">
+          <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] uppercase">
-              <span>Top Score</span>
+              <span>Top Total Points Scorer</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             </div>
-            <div className="text-[22px] font-bold text-amber-500 font-mono">
-              {stats.top_scorer ? (
-                metricMode === 'total_points'
-                  ? `${stats.top_scorer.total_score.toFixed(0)} pts`
-                  : metricMode === 'percentage'
-                  ? `${stats.top_scorer.score_percentage.toFixed(0)}%`
-                  : `${stats.top_scorer.avg_score_per_match.toFixed(1)} pts`
-              ) : (
-                '—'
-              )}
+            <div className="text-[22px] font-bold text-amber-500 font-mono truncate">
+              {stats.top_scorer_by_total?.total_score != null
+                ? `${stats.top_scorer_by_total.total_score.toFixed(0)} pts`
+                : stats.top_scorer?.total_score != null
+                ? `${stats.top_scorer.total_score.toFixed(0)} pts`
+                : '—'}
+            </div>
+            <div className="text-[11px] text-amber-600 dark:text-amber-400 font-mono truncate">
+              {stats.top_scorer_by_total?.name || stats.top_scorer?.name || 'No students evaluated yet'}
             </div>
           </div>
         </div>
       )}
 
       {/* Top 3 Podium Cards */}
-      {topThree.length >= 3 && !searchTerm && selectedDept === 'all' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+      {topThree.length >= 3 && !hasActiveFilters && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
           {/* Rank 2 (Silver) */}
           <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-slate-500/10 to-[var(--bg-card)] border border-slate-400/30 flex flex-col justify-between relative overflow-hidden shadow-md md:order-1">
             <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-300 text-slate-900 flex items-center justify-center font-mono font-bold text-xs shadow-sm">
@@ -270,9 +330,9 @@ export default function AdminLeaderboard() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-slate-500 font-bold">
                 <Medal className="w-3.5 h-3.5 text-slate-400" />
-                <span>Silver Medalist</span>
+                <span>Silver Performer</span>
               </div>
-              <h3 className="text-[17px] font-bold text-[var(--text-primary)]">{topThree[1]?.name}</h3>
+              <h3 className="text-[17px] font-bold text-[var(--text-primary)] truncate">{topThree[1]?.name}</h3>
               <p className="text-[11px] text-[var(--text-muted)] font-mono">
                 {topThree[1]?.roll_no || 'STUDENT'} • {topThree[1]?.department || 'General'}
               </p>
@@ -281,21 +341,32 @@ export default function AdminLeaderboard() {
             <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-end justify-between">
               <div>
                 <span className="text-[10px] text-[var(--text-muted)] uppercase font-mono block">
-                  {metricMode === 'total_points' ? 'Total Marks' : 'Single Match Average'}
+                  {metricMode === 'points_per_interview'
+                    ? 'Points / Interview'
+                    : metricMode === 'interviews_attended'
+                    ? 'Interviews Attended'
+                    : 'Total Points Gained'}
                 </span>
                 <span className="text-[20px] font-bold text-[var(--text-primary)] font-mono">
-                  {metricMode === 'total_points'
-                    ? `${topThree[1]?.total_score.toFixed(1)} pts`
-                    : `${topThree[1]?.avg_score_per_match.toFixed(1)} pts`}
+                  {metricMode === 'points_per_interview'
+                    ? `${(topThree[1]?.points_per_interview || topThree[1]?.avg_score_per_match || 0).toFixed(1)} pts`
+                    : metricMode === 'interviews_attended'
+                    ? `${topThree[1]?.interviews_attended || topThree[1]?.matches_count || 0} int.`
+                    : `${(topThree[1]?.total_score || 0).toFixed(0)} pts`}
                 </span>
               </div>
-              <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-500/10 px-2 py-0.5 rounded border border-slate-500/20">
-                {topThree[1]?.score_percentage.toFixed(0)}%
-              </span>
+              <div className="text-right">
+                <span className="text-[10px] font-mono text-[var(--text-muted)] block">
+                  {topThree[1]?.interviews_attended || topThree[1]?.matches_count || 0} attended
+                </span>
+                <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-500/10 px-2 py-0.5 rounded border border-slate-500/20">
+                  {(topThree[1]?.score_percentage || 0).toFixed(0)}%
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Rank 1 (Gold - Center highlighted) */}
+          {/* Rank 1 (Gold - Center Highlighted) */}
           <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-[var(--bg-card)] border-2 border-amber-500/40 flex flex-col justify-between relative overflow-hidden shadow-xl scale-102 md:order-2">
             <div className="absolute top-3 right-3 w-9 h-9 rounded-full bg-gradient-to-tr from-amber-400 to-amber-200 text-amber-950 flex items-center justify-center font-mono font-bold text-sm shadow-md">
               #1
@@ -303,9 +374,9 @@ export default function AdminLeaderboard() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-amber-500 font-bold">
                 <Trophy className="w-3.5 h-3.5 text-amber-500" />
-                <span>Gold Champion</span>
+                <span>Gold Leader</span>
               </div>
-              <h3 className="text-[19px] font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+              <h3 className="text-[19px] font-bold text-[var(--text-primary)] flex items-center gap-1.5 truncate">
                 <span>{topThree[0]?.name}</span>
                 <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
               </h3>
@@ -317,17 +388,28 @@ export default function AdminLeaderboard() {
             <div className="mt-4 pt-3 border-t border-amber-500/20 flex items-end justify-between">
               <div>
                 <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-mono font-bold block">
-                  {metricMode === 'total_points' ? 'Top Total Marks' : 'Top Match Average'}
+                  {metricMode === 'points_per_interview'
+                    ? 'Top Points / Interview'
+                    : metricMode === 'interviews_attended'
+                    ? 'Top Attendance'
+                    : 'Top Total Points'}
                 </span>
                 <span className="text-[24px] font-bold text-amber-500 font-mono">
-                  {metricMode === 'total_points'
-                    ? `${topThree[0]?.total_score.toFixed(1)} pts`
-                    : `${topThree[0]?.avg_score_per_match.toFixed(1)} pts`}
+                  {metricMode === 'points_per_interview'
+                    ? `${(topThree[0]?.points_per_interview || topThree[0]?.avg_score_per_match || 0).toFixed(1)} pts`
+                    : metricMode === 'interviews_attended'
+                    ? `${topThree[0]?.interviews_attended || topThree[0]?.matches_count || 0} interviews`
+                    : `${(topThree[0]?.total_score || 0).toFixed(0)} pts`}
                 </span>
               </div>
-              <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded border border-amber-500/30">
-                {topThree[0]?.score_percentage.toFixed(0)}%
-              </span>
+              <div className="text-right">
+                <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 block font-semibold">
+                  {topThree[0]?.interviews_attended || topThree[0]?.matches_count || 0} attended
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded border border-amber-500/30">
+                  {(topThree[0]?.score_percentage || 0).toFixed(0)}%
+                </span>
+              </div>
             </div>
           </div>
 
@@ -339,9 +421,9 @@ export default function AdminLeaderboard() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-amber-700 dark:text-amber-400 font-bold">
                 <Medal className="w-3.5 h-3.5 text-amber-600" />
-                <span>Bronze Medalist</span>
+                <span>Bronze Performer</span>
               </div>
-              <h3 className="text-[17px] font-bold text-[var(--text-primary)]">{topThree[2]?.name}</h3>
+              <h3 className="text-[17px] font-bold text-[var(--text-primary)] truncate">{topThree[2]?.name}</h3>
               <p className="text-[11px] text-[var(--text-muted)] font-mono">
                 {topThree[2]?.roll_no || 'STUDENT'} • {topThree[2]?.department || 'General'}
               </p>
@@ -350,86 +432,130 @@ export default function AdminLeaderboard() {
             <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-end justify-between">
               <div>
                 <span className="text-[10px] text-[var(--text-muted)] uppercase font-mono block">
-                  {metricMode === 'total_points' ? 'Total Marks' : 'Single Match Average'}
+                  {metricMode === 'points_per_interview'
+                    ? 'Points / Interview'
+                    : metricMode === 'interviews_attended'
+                    ? 'Interviews Attended'
+                    : 'Total Points Gained'}
                 </span>
                 <span className="text-[20px] font-bold text-[var(--text-primary)] font-mono">
-                  {metricMode === 'total_points'
-                    ? `${topThree[2]?.total_score.toFixed(1)} pts`
-                    : `${topThree[2]?.avg_score_per_match.toFixed(1)} pts`}
+                  {metricMode === 'points_per_interview'
+                    ? `${(topThree[2]?.points_per_interview || topThree[2]?.avg_score_per_match || 0).toFixed(1)} pts`
+                    : metricMode === 'interviews_attended'
+                    ? `${topThree[2]?.interviews_attended || topThree[2]?.matches_count || 0} int.`
+                    : `${(topThree[2]?.total_score || 0).toFixed(0)} pts`}
                 </span>
               </div>
-              <span className="text-xs font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-700/15 px-2 py-0.5 rounded border border-amber-700/25">
-                {topThree[2]?.score_percentage.toFixed(0)}%
-              </span>
+              <div className="text-right">
+                <span className="text-[10px] font-mono text-[var(--text-muted)] block">
+                  {topThree[2]?.interviews_attended || topThree[2]?.matches_count || 0} attended
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-700/15 px-2 py-0.5 rounded border border-amber-700/25">
+                  {(topThree[2]?.score_percentage || 0).toFixed(0)}%
+                </span>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Filter & Search Bar */}
-      <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
-        <div className="flex-1 relative">
-          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search students by name, roll number, or email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="custom-input w-full pl-9 text-xs py-2"
-          />
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Department Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-mono text-[var(--text-muted)]">Dept:</span>
-            <select
-              value={selectedDept}
-              onChange={(e) => setSelectedDept(e.target.value)}
-              className="custom-input text-xs py-1.5 px-2 font-mono"
-            >
-              <option value="all">All Departments</option>
-              {departments.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+      <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-3 shadow-xs">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Search Input */}
+          <div className="flex-1 relative">
+            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search students by name, roll number, or email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="custom-input w-full pl-9 text-xs py-2"
+            />
           </div>
 
-          {/* Min Matches Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-mono text-[var(--text-muted)]">Min Matches:</span>
-            <select
-              value={minMatches}
-              onChange={(e) => setMinMatches(Number(e.target.value))}
-              className="custom-input text-xs py-1.5 px-2 font-mono"
-            >
-              <option value="0">All Students (0+)</option>
-              <option value="1">1+ Matches</option>
-              <option value="2">2+ Matches</option>
-              <option value="5">5+ Matches</option>
-            </select>
-          </div>
+          {/* Quick Filter Selectors */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Filter by Interviews Attended */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">Interviews Attended:</span>
+              <select
+                value={minInterviews}
+                onChange={(e) => setMinInterviews(Number(e.target.value))}
+                className="custom-input text-xs py-1.5 px-2 font-mono"
+              >
+                <option value="0">All Students (0+)</option>
+                <option value="1">1+ Interviews</option>
+                <option value="2">2+ Interviews</option>
+                <option value="3">3+ Interviews</option>
+                <option value="5">5+ Interviews</option>
+              </select>
+            </div>
 
-          <button
-            type="button"
-            onClick={fetchLeaderboard}
-            className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 font-mono font-bold"
-            title="Refresh Leaderboard"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
+            {/* Filter by Total Points Threshold */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">Min Points:</span>
+              <select
+                value={minPoints}
+                onChange={(e) => setMinPoints(Number(e.target.value))}
+                className="custom-input text-xs py-1.5 px-2 font-mono"
+              >
+                <option value="0">All Points</option>
+                <option value="10">10+ pts</option>
+                <option value="25">25+ pts</option>
+                <option value="50">50+ pts</option>
+                <option value="100">100+ pts</option>
+              </select>
+            </div>
+
+            {/* Department Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">Dept:</span>
+              <select
+                value={selectedDept}
+                onChange={(e) => setSelectedDept(e.target.value)}
+                className="custom-input text-xs py-1.5 px-2 font-mono"
+              >
+                <option value="all">All Depts</option>
+                {departments.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="btn btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1 text-[var(--red)] border-red-500/20 hover:bg-red-500/10 font-mono"
+                title="Reset all filters"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={fetchLeaderboard}
+              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 font-mono font-bold"
+              title="Refresh Leaderboard"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Main Leaderboard Table */}
+      {/* Main Person-Wise Leaderboard Table */}
       <div className="panel-card bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-20 text-center space-y-3">
             <RefreshCw className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-            <p className="text-xs text-[var(--text-muted)] font-mono">Computing marks & generating leaderboard...</p>
+            <p className="text-xs text-[var(--text-muted)] font-mono">Calculating points & generating person-wise leaderboard...</p>
           </div>
         ) : error ? (
           <div className="p-8 text-center text-[var(--red)] space-y-2">
@@ -443,6 +569,15 @@ export default function AdminLeaderboard() {
             <Users className="w-8 h-8 mx-auto opacity-50" />
             <p className="text-sm font-bold text-[var(--text-primary)]">No Students Found</p>
             <p className="text-xs">No student matches the selected filter criteria.</p>
+            {hasActiveFilters && (
+              <button
+                onClick={handleResetFilters}
+                className="btn btn-secondary text-xs py-1 px-3 inline-flex items-center gap-1 mt-2"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Clear Filters</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -450,31 +585,30 @@ export default function AdminLeaderboard() {
               <thead>
                 <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[var(--text-muted)] font-mono text-[11px] uppercase tracking-wider">
                   <th className="py-3 px-4 w-14 text-center">Rank</th>
-                  <th className="py-3 px-4">Student</th>
-                  <th className="py-3 px-4">Department</th>
                   <th
                     className="py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors"
                     onClick={() => {
-                      setSortField('matches_count');
-                      setSortOrder(sortField === 'matches_count' && sortOrder === 'desc' ? 'asc' : 'desc');
+                      setSortField('name');
+                      setSortOrder(sortField === 'name' && sortOrder === 'desc' ? 'asc' : 'desc');
                     }}
                   >
                     <div className="flex items-center gap-1">
-                      <span>Matches</span>
+                      <span>Student</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
+                  <th className="py-3 px-4">Department</th>
                   <th
                     className={`py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors ${
-                      metricMode === 'avg_points' ? 'text-[var(--accent)] font-bold' : ''
+                      metricMode === 'interviews_attended' ? 'text-[var(--accent)] font-bold' : ''
                     }`}
                     onClick={() => {
-                      setSortField('avg_points');
-                      setSortOrder(sortField === 'avg_points' && sortOrder === 'desc' ? 'asc' : 'desc');
+                      setSortField('interviews_attended');
+                      setSortOrder(sortField === 'interviews_attended' && sortOrder === 'desc' ? 'asc' : 'desc');
                     }}
                   >
                     <div className="flex items-center gap-1">
-                      <span>Avg Points / Match</span>
+                      <span>Interviews Attended</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -488,7 +622,21 @@ export default function AdminLeaderboard() {
                     }}
                   >
                     <div className="flex items-center gap-1">
-                      <span>Total Marks</span>
+                      <span>Total Points Gained</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                  <th
+                    className={`py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors ${
+                      metricMode === 'points_per_interview' ? 'text-[var(--accent)] font-bold' : ''
+                    }`}
+                    onClick={() => {
+                      setSortField('points_per_interview');
+                      setSortOrder(sortField === 'points_per_interview' && sortOrder === 'desc' ? 'asc' : 'desc');
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Points / Interview</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -502,39 +650,43 @@ export default function AdminLeaderboard() {
                     }}
                   >
                     <div className="flex items-center gap-1">
-                      <span>Percentage</span>
+                      <span>Score %</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
                   <th className="py-3 px-4">Grade</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4 text-right">Scorecard</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {leaderboard.map((student) => {
-                  const badge = getGradeBadge(student.grade, student.score_percentage);
-                  const isTop3 = student.rank <= 3 && student.matches_count > 0;
+                  const attended = student.interviews_attended ?? student.matches_count ?? 0;
+                  const totalScore = student.total_score ?? 0;
+                  const pointsPerInt = student.points_per_interview ?? student.avg_score_per_match ?? 0;
+                  const pct = student.score_percentage ?? 0;
+                  const badge = getGradeBadge(student.grade, pct, attended);
+                  const isTop3 = student.rank <= 3 && (attended > 0 || totalScore > 0);
 
                   return (
                     <tr
                       key={student.student_id}
                       className={`hover:bg-[var(--bg-hover)] transition-colors ${
-                        student.rank === 1 && student.matches_count > 0
+                        student.rank === 1 && (attended > 0 || totalScore > 0)
                           ? 'bg-amber-500/5 dark:bg-amber-500/5'
                           : ''
                       }`}
                     >
                       {/* Rank */}
                       <td className="py-3 px-4 text-center font-mono">
-                        {student.rank === 1 && student.matches_count > 0 ? (
+                        {student.rank === 1 && (attended > 0 || totalScore > 0) ? (
                           <span className="w-6 h-6 rounded-full bg-amber-400 text-amber-950 font-bold inline-flex items-center justify-center text-xs shadow-sm">
                             1
                           </span>
-                        ) : student.rank === 2 && student.matches_count > 0 ? (
+                        ) : student.rank === 2 && (attended > 0 || totalScore > 0) ? (
                           <span className="w-6 h-6 rounded-full bg-slate-300 text-slate-900 font-bold inline-flex items-center justify-center text-xs shadow-sm">
                             2
                           </span>
-                        ) : student.rank === 3 && student.matches_count > 0 ? (
+                        ) : student.rank === 3 && (attended > 0 || totalScore > 0) ? (
                           <span className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 font-bold inline-flex items-center justify-center text-xs shadow-sm">
                             3
                           </span>
@@ -566,34 +718,21 @@ export default function AdminLeaderboard() {
                         {student.department || 'General'}
                       </td>
 
-                      {/* Evaluated Matches */}
+                      {/* Interviews Attended */}
                       <td className="py-3 px-4 font-mono">
-                        <span className="px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] font-bold text-[var(--text-primary)]">
-                          {student.matches_count}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--bg-raised)] border border-[var(--border)] font-bold text-[var(--text-primary)]">
+                          <Video className="w-3 h-3 text-[var(--accent)]" />
+                          <span>{attended}</span>
                         </span>
                       </td>
 
-                      {/* Single Match Average */}
+                      {/* Total Points Gained */}
                       <td className="py-3 px-4 font-mono">
                         <div className="space-y-0.5">
                           <span className={`text-[13px] font-bold ${
-                            metricMode === 'avg_points' ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]'
+                            metricMode === 'total_points' ? 'text-[var(--accent)] font-extrabold' : 'text-[var(--text-primary)]'
                           }`}>
-                            {student.avg_score_per_match ? student.avg_score_per_match.toFixed(1) : '0.0'}
-                          </span>
-                          <span className="text-[10px] text-[var(--text-muted)] block">
-                            / {student.avg_max_score_per_match ? student.avg_max_score_per_match.toFixed(0) : '0'} pts
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Total Marks */}
-                      <td className="py-3 px-4 font-mono">
-                        <div className="space-y-0.5">
-                          <span className={`text-[13px] font-bold ${
-                            metricMode === 'total_points' ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]'
-                          }`}>
-                            {student.total_score ? student.total_score.toFixed(0) : '0'}
+                            {totalScore.toFixed(0)} pts
                           </span>
                           <span className="text-[10px] text-[var(--text-muted)] block">
                             / {student.total_max_score ? student.total_max_score.toFixed(0) : '0'} max
@@ -601,26 +740,40 @@ export default function AdminLeaderboard() {
                         </div>
                       </td>
 
-                      {/* Percentage Bar */}
+                      {/* Points / Interview Attended */}
+                      <td className="py-3 px-4 font-mono">
+                        <div className="space-y-0.5">
+                          <span className={`text-[13px] font-bold ${
+                            metricMode === 'points_per_interview' ? 'text-amber-500 font-extrabold' : 'text-[var(--text-primary)]'
+                          }`}>
+                            {pointsPerInt.toFixed(1)}
+                          </span>
+                          <span className="text-[10px] text-[var(--text-muted)] block">
+                            pts / interview
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Score Percentage Bar */}
                       <td className="py-3 px-4 font-mono">
                         <div className="space-y-1 w-24">
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="font-bold text-[var(--text-primary)]">
-                              {student.score_percentage ? student.score_percentage.toFixed(0) : '0'}%
+                              {pct.toFixed(0)}%
                             </span>
                           </div>
                           <div className="w-full bg-[var(--bg-raised)] h-1.5 rounded-full overflow-hidden border border-[var(--border)]">
                             <div
-                              className={`h-full rounded-full ${
-                                student.score_percentage >= 85
+                              className={`h-full rounded-full transition-all ${
+                                pct >= 85
                                   ? 'bg-emerald-500'
-                                  : student.score_percentage >= 70
+                                  : pct >= 70
                                   ? 'bg-purple-500'
-                                  : student.score_percentage >= 50
+                                  : pct >= 50
                                   ? 'bg-amber-500'
                                   : 'bg-rose-500'
                               }`}
-                              style={{ width: `${Math.min(100, student.score_percentage || 0)}%` }}
+                              style={{ width: `${Math.min(100, pct)}%` }}
                             />
                           </div>
                         </div>
@@ -639,11 +792,11 @@ export default function AdminLeaderboard() {
                         <button
                           type="button"
                           onClick={() => setSelectedStudent(student)}
-                          className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 ml-auto font-mono"
-                          title="View student's peer review history"
+                          className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 ml-auto font-mono hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                          title="View student's interview scorecard and evaluation breakdown"
                         >
                           <BookOpen className="w-3 h-3" />
-                          <span>Evaluations</span>
+                          <span>Scorecard</span>
                         </button>
                       </td>
                     </tr>
@@ -655,11 +808,11 @@ export default function AdminLeaderboard() {
         )}
       </div>
 
-      {/* Modal: Detailed Match Reviews for Selected Student */}
+      {/* Modal: Comprehensive Student Scorecard & Performance Breakdown */}
       {selectedStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
           <div className="panel-card w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-scaleUp flex flex-col max-h-[85vh]">
-            {/* Header */}
+            {/* Modal Header */}
             <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-bold font-mono flex items-center justify-center text-sm border border-[var(--border-accent)]">
@@ -682,24 +835,45 @@ export default function AdminLeaderboard() {
               </button>
             </div>
 
-            {/* Score Snapshot Header */}
-            <div className="px-6 py-3 bg-[var(--bg-card)] border-b border-[var(--border)] grid grid-cols-3 gap-3 text-center font-mono">
-              <div className="p-2 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-                <span className="text-[10px] text-[var(--text-muted)] uppercase block">Single Match Avg</span>
-                <span className="text-[16px] font-bold text-[var(--accent)]">
-                  {selectedStudent.avg_score_per_match.toFixed(1)} pts
-                </span>
-              </div>
-              <div className="p-2 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
+            {/* Performance Summary Metrics */}
+            <div className="px-6 py-3.5 bg-[var(--bg-card)] border-b border-[var(--border)] grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono">
+              <div className="p-2.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] space-y-0.5">
                 <span className="text-[10px] text-[var(--text-muted)] uppercase block">Total Points</span>
-                <span className="text-[16px] font-bold text-[var(--text-primary)]">
-                  {selectedStudent.total_score.toFixed(0)} / {selectedStudent.total_max_score.toFixed(0)}
+                <span className="text-[17px] font-bold text-[var(--accent)]">
+                  {(selectedStudent.total_score || 0).toFixed(0)} pts
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] block">
+                  / {(selectedStudent.total_max_score || 0).toFixed(0)} max
                 </span>
               </div>
-              <div className="p-2 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
+
+              <div className="p-2.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] space-y-0.5">
+                <span className="text-[10px] text-[var(--text-muted)] uppercase block">Interviews Attended</span>
+                <span className="text-[17px] font-bold text-[var(--text-primary)]">
+                  {selectedStudent.interviews_attended ?? selectedStudent.matches_count ?? 0}
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] block">
+                  sessions
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] space-y-0.5">
+                <span className="text-[10px] text-[var(--text-muted)] uppercase block">Points / Interview</span>
+                <span className="text-[17px] font-bold text-amber-500">
+                  {(selectedStudent.points_per_interview || selectedStudent.avg_score_per_match || 0).toFixed(1)}
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] block">
+                  pts / session
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] space-y-0.5">
                 <span className="text-[10px] text-[var(--text-muted)] uppercase block">Percentage</span>
-                <span className="text-[16px] font-bold text-emerald-600 dark:text-emerald-400">
-                  {selectedStudent.score_percentage.toFixed(0)}%
+                <span className="text-[17px] font-bold text-emerald-600 dark:text-emerald-400">
+                  {(selectedStudent.score_percentage || 0).toFixed(0)}%
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-bold">
+                  {selectedStudent.grade}
                 </span>
               </div>
             </div>
@@ -707,7 +881,7 @@ export default function AdminLeaderboard() {
             {/* Match History List */}
             <div className="p-6 overflow-y-auto space-y-3.5 flex-1 custom-scrollbar">
               <h4 className="text-[12px] font-mono uppercase tracking-wider font-bold text-[var(--text-secondary)]">
-                Recent Peer Evaluations Received ({selectedStudent.recent_sessions?.length || 0})
+                Evaluations Received for Attended Mock Interviews ({selectedStudent.recent_sessions?.length || 0})
               </h4>
 
               {selectedStudent.recent_sessions && selectedStudent.recent_sessions.length > 0 ? (
@@ -724,7 +898,7 @@ export default function AdminLeaderboard() {
                         </span>
                       </div>
                       <div className="text-[11px] text-[var(--text-secondary)]">
-                        Assessed by: <strong>{rec.reviewer_name}</strong> •{' '}
+                        Evaluated by: <strong>{rec.reviewer_name}</strong> •{' '}
                         {rec.created_at ? new Date(rec.created_at).toLocaleDateString() : 'Recent'}
                       </div>
                     </div>
@@ -741,7 +915,7 @@ export default function AdminLeaderboard() {
                 ))
               ) : (
                 <div className="p-8 text-center text-[var(--text-muted)] border border-dashed border-[var(--border)] rounded-[var(--radius-md)]">
-                  No evaluation sessions recorded for this student yet.
+                  No evaluations recorded for this student yet.
                 </div>
               )}
             </div>

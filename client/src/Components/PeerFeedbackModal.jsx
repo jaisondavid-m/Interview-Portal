@@ -474,7 +474,7 @@ export default function PeerFeedbackModal({
                       key={q.id}
                       className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3 shadow-xs"
                     >
-                      {/* Question Label with Max Weightage */}
+                      {/* Question Label */}
                       <div className="flex items-start justify-between gap-2">
                         <label className="text-[13px] font-bold text-[var(--text-primary)] flex items-start gap-1.5 leading-snug">
                           <span className="text-[var(--accent)] font-mono">{idx + 1}.</span>
@@ -483,12 +483,6 @@ export default function PeerFeedbackModal({
                             <span className="text-[var(--red)] font-bold ml-0.5">*</span>
                           )}
                         </label>
-
-                        {q.max_marks > 0 && (
-                          <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
-                            Max: {q.max_marks} pts
-                          </span>
-                        )}
                       </div>
 
                       {/* Render MCQ Option Chips / Buttons */}
@@ -504,18 +498,13 @@ export default function PeerFeedbackModal({
                                 type="button"
                                 key={opt.id}
                                 onClick={() => handleSelectOption(q.id, opt)}
-                                className={`px-3.5 py-2 rounded-[var(--radius-sm)] text-xs font-mono font-semibold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                                className={`px-4 py-2 rounded-[var(--radius-sm)] text-xs font-mono font-semibold transition-all cursor-pointer border flex items-center justify-center min-w-[48px] ${
                                   isSelected
-                                    ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-[0_2px_8px_rgba(110,86,207,0.35)] scale-102'
+                                    ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-[0_2px_8px_rgba(110,86,207,0.35)] scale-102 font-bold'
                                     : 'bg-[var(--bg-card)] text-[var(--text-primary)] border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--bg-hover)]'
                                 }`}
                               >
                                 <span>{opt.option_text}</span>
-                                {opt.marks !== undefined && (
-                                  <span className={`text-[10px] font-bold opacity-80 ${isSelected ? 'text-white/90' : 'text-[var(--text-muted)]'}`}>
-                                    ({opt.marks} pts)
-                                  </span>
-                                )}
                               </button>
                             );
                           })}
@@ -548,7 +537,6 @@ export default function PeerFeedbackModal({
                               >
                                 {isYes ? <ThumbsUp className="w-3.5 h-3.5" /> : <ThumbsDown className="w-3.5 h-3.5" />}
                                 <span>{val}</span>
-                                <span className="text-[10px] opacity-80">({opt.marks ?? (isYes ? 5 : 0)} pts)</span>
                               </button>
                             );
                           })}

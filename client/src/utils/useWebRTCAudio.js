@@ -111,7 +111,11 @@ export default function useWebRTCAudio({
           sum += dataArray[i];
         }
         const avg = sum / dataArray.length;
-        setIsPeerSpeaking(avg > 15);
+        const peerSpeaking = avg > 15;
+        setIsPeerSpeaking(peerSpeaking);
+        if (peerSpeaking) {
+          setConnectionState((prev) => (prev !== 'connected' ? 'connected' : prev));
+        }
       } else {
         setIsPeerSpeaking(false);
       }
@@ -385,25 +389,53 @@ export default function useWebRTCAudio({
           }
         };
 
-        // Handle connection state changes
-        pc.onconnectionstatechange = () => {
+        // Multi-signal connection state calculator (evaluates connectionState, iceConnectionState, and live audio tracks)
+        const updateCalculatedConnectionState = () => {
           if (isDestroyed) return;
-          const state = pc.connectionState;
-          if (state === 'connected') {
+          const connState = pc.connectionState;
+          const iceState = pc.iceConnectionState;
+
+          const hasRemoteTracks =
+            remoteStreamRef.current &&
+            remoteStreamRef.current.getAudioTracks().some((t) => t.readyState === 'live');
+
+          if (
+            connState === 'connected' ||
+            iceState === 'connected' ||
+            iceState === 'completed' ||
+            hasRemoteTracks
+          ) {
             setConnectionState('connected');
-          } else if (state === 'connecting') {
+          } else if (connState === 'connecting' || iceState === 'checking' || connState === 'new' || iceState === 'new') {
             setConnectionState('connecting');
-          } else if (state === 'disconnected' || state === 'failed') {
-            setConnectionState('reconnecting');
-          } else if (state === 'closed') {
+          } else if (connState === 'disconnected' || iceState === 'disconnected') {
+            if (hasRemoteTracks) {
+              setConnectionState('connected');
+            } else {
+              setConnectionState('reconnecting');
+            }
+          } else if (connState === 'failed' || iceState === 'failed') {
+            if (hasRemoteTracks) {
+              setConnectionState('connected');
+            } else {
+              setConnectionState('reconnecting');
+            }
+          } else if (connState === 'closed' || iceState === 'closed') {
             setConnectionState('disconnected');
           }
         };
 
-        // Handle incoming remote audio track
+        pc.onconnectionstatechange = updateCalculatedConnectionState;
+        pc.oniceconnectionstatechange = updateCalculatedConnectionState;
+
+        // Handle incoming remote audio track (supports both stream event and direct track fallback)
         pc.ontrack = (event) => {
-          if (event.streams && event.streams[0]) {
-            const remoteStream = event.streams[0];
+          let remoteStream = event.streams && event.streams[0] ? event.streams[0] : null;
+          if (!remoteStream && event.track) {
+            remoteStream = new MediaStream([event.track]);
+          }
+
+          if (remoteStream) {
             remoteStreamRef.current = remoteStream;
 
             if (remoteAudioElRef.current) {
@@ -412,6 +444,7 @@ export default function useWebRTCAudio({
             }
 
             connectRemoteToMixer(remoteStream);
+            setConnectionState('connected');
           }
         };
 
@@ -439,8 +472,16 @@ export default function useWebRTCAudio({
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
+        let pingTimer = null;
+
         ws.onopen = () => {
           sendSignaling('join');
+          sendSignaling('mute-status', null, { is_muted: isMutedRef.current });
+          pingTimer = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              sendSignaling('ping');
+            }
+          }, 15000);
         };
 
         ws.onmessage = async (event) => {
@@ -450,41 +491,75 @@ export default function useWebRTCAudio({
 
             switch (msg.type) {
               case 'peer_joined': {
-                const offer = await pc.createOffer({
-                  offerToReceiveAudio: true,
-                });
-                await pc.setLocalDescription(offer);
-                sendSignaling('offer', offer);
+                sendSignaling('mute-status', null, { is_muted: isMutedRef.current });
+                try {
+                  const offer = await pc.createOffer({
+                    offerToReceiveAudio: true,
+                  });
+                  await pc.setLocalDescription(offer);
+                  sendSignaling('offer', offer);
+                } catch (offerErr) {
+                  console.warn('[WebRTC Audio] Create offer error on peer_joined:', offerErr);
+                }
                 break;
               }
 
               case 'peer_ready': {
+                sendSignaling('mute-status', null, { is_muted: isMutedRef.current });
+                // If offer hasn't been established after brief delay, send offer as reliable initiator
+                setTimeout(async () => {
+                  if (!isDestroyed && pc.signalingState === 'stable' && !pc.remoteDescription) {
+                    try {
+                      const offer = await pc.createOffer({ offerToReceiveAudio: true });
+                      await pc.setLocalDescription(offer);
+                      sendSignaling('offer', offer);
+                    } catch (e) {}
+                  }
+                }, 1000);
                 break;
               }
 
               case 'offer': {
                 if (msg.payload) {
-                  await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+                  try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
 
-                  while (iceCandidatesQueueRef.current.length > 0) {
-                    const cand = iceCandidatesQueueRef.current.shift();
-                    await pc.addIceCandidate(new RTCIceCandidate(cand));
+                    while (iceCandidatesQueueRef.current.length > 0) {
+                      const cand = iceCandidatesQueueRef.current.shift();
+                      try {
+                        await pc.addIceCandidate(new RTCIceCandidate(cand));
+                      } catch (candErr) {
+                        console.warn('[WebRTC Audio] Queued candidate error:', candErr);
+                      }
+                    }
+
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    sendSignaling('answer', answer);
+                    updateCalculatedConnectionState();
+                  } catch (err) {
+                    console.error('[WebRTC Audio] Offer processing error:', err);
                   }
-
-                  const answer = await pc.createAnswer();
-                  await pc.setLocalDescription(answer);
-                  sendSignaling('answer', answer);
                 }
                 break;
               }
 
               case 'answer': {
                 if (msg.payload) {
-                  await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+                  try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
 
-                  while (iceCandidatesQueueRef.current.length > 0) {
-                    const cand = iceCandidatesQueueRef.current.shift();
-                    await pc.addIceCandidate(new RTCIceCandidate(cand));
+                    while (iceCandidatesQueueRef.current.length > 0) {
+                      const cand = iceCandidatesQueueRef.current.shift();
+                      try {
+                        await pc.addIceCandidate(new RTCIceCandidate(cand));
+                      } catch (candErr) {
+                        console.warn('[WebRTC Audio] Queued candidate error:', candErr);
+                      }
+                    }
+                    updateCalculatedConnectionState();
+                  } catch (err) {
+                    console.error('[WebRTC Audio] Answer processing error:', err);
                   }
                 }
                 break;
@@ -492,10 +567,15 @@ export default function useWebRTCAudio({
 
               case 'ice-candidate': {
                 if (msg.payload) {
-                  if (pc.remoteDescription && pc.remoteDescription.type) {
-                    await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
-                  } else {
-                    iceCandidatesQueueRef.current.push(msg.payload);
+                  try {
+                    if (pc.remoteDescription && pc.remoteDescription.type) {
+                      await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+                    } else {
+                      iceCandidatesQueueRef.current.push(msg.payload);
+                    }
+                    updateCalculatedConnectionState();
+                  } catch (candErr) {
+                    console.warn('[WebRTC Audio] ICE candidate add error:', candErr);
                   }
                 }
                 break;
@@ -527,8 +607,20 @@ export default function useWebRTCAudio({
           }
         };
 
+        ws.onclose = () => {
+          if (pingTimer) clearInterval(pingTimer);
+        };
+
         ws.onerror = () => {
-          if (!isDestroyed) setConnectionState('failed');
+          if (pingTimer) clearInterval(pingTimer);
+          if (!isDestroyed) {
+            const hasRemoteTracks =
+              remoteStreamRef.current &&
+              remoteStreamRef.current.getAudioTracks().some((t) => t.readyState === 'live');
+            if (!hasRemoteTracks) {
+              setConnectionState('reconnecting');
+            }
+          }
         };
 
         startVAD();

@@ -23,9 +23,9 @@ export default function AudioCallBanner({
   peerName = 'Peer Student',
   uploadingRecording = false,
 }) {
-  const isConnected = connectionState === 'connected';
-  const isConnecting = connectionState === 'connecting';
-  const isFailed = connectionState === 'failed' || connectionState === 'disconnected';
+  const isConnected = connectionState === 'connected' || isPeerSpeaking;
+  const isConnecting = !isConnected && (connectionState === 'connecting' || connectionState === 'reconnecting');
+  const isFailed = !isConnected && (connectionState === 'failed' || connectionState === 'disconnected');
 
   return (
     <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">

@@ -70,11 +70,6 @@ export default function AdminFeedbackConfig() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Active tab: 'config' or 'submissions'
-  const [activeTab, setActiveTab] = useState('config');
-  const [submissions, setSubmissions] = useState([]);
-  const [submissionsLoading, setSubmissionsLoading] = useState(false);
-
   // Modal states
   const [showModal, setShowModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -116,29 +111,9 @@ export default function AdminFeedbackConfig() {
     }
   };
 
-  // Fetch recent peer feedback submissions
-  const fetchSubmissions = async () => {
-    try {
-      setSubmissionsLoading(true);
-      const res = await api.get('/admin/feedback/submissions');
-      const list = Array.isArray(res) ? res : (res?.data || []);
-      setSubmissions(list);
-    } catch (err) {
-      console.error('Failed to load feedback submissions:', err);
-    } finally {
-      setSubmissionsLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchQuestions();
   }, []);
-
-  useEffect(() => {
-    if (activeTab === 'submissions') {
-      fetchSubmissions();
-    }
-  }, [activeTab]);
 
   const openCreateModal = () => {
     setEditingQuestion(null);
@@ -396,49 +371,24 @@ export default function AdminFeedbackConfig() {
           </p>
         </div>
 
-        {/* Tab Switcher & New Question Button */}
+        {/* Actions */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex bg-[var(--bg-raised)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)]">
-            <button
-              onClick={() => setActiveTab('config')}
-              className={`px-3 py-1.5 rounded-[var(--radius-xs)] text-xs font-semibold font-ui transition-all ${
-                activeTab === 'config'
-                  ? 'bg-[var(--bg-card)] text-[var(--accent)] shadow-sm'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Questions & Marks ({questions.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('submissions')}
-              className={`px-3 py-1.5 rounded-[var(--radius-xs)] text-xs font-semibold font-ui transition-all ${
-                activeTab === 'submissions'
-                  ? 'bg-[var(--bg-card)] text-[var(--accent)] shadow-sm'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Audits & Scorecards
-            </button>
-          </div>
-
           <button
             onClick={() => navigate('/admin/leaderboard')}
-            className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"
-            title="View Official Student Score Leaderboard"
+            className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold shadow-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"
+            title="Open Dedicated Student Score Leaderboard"
           >
-            <Trophy className="w-3.5 h-3.5 text-amber-500" />
-            <span>Score Leaderboard</span>
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <span>Open Student Leaderboard</span>
           </button>
 
-          {activeTab === 'config' && (
-            <button
-              onClick={openCreateModal}
-              className="btn btn-primary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Question</span>
-            </button>
-          )}
+          <button
+            onClick={openCreateModal}
+            className="btn btn-primary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Question</span>
+          </button>
         </div>
       </div>
 
@@ -456,392 +406,242 @@ export default function AdminFeedbackConfig() {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* TAB 1: QUESTIONS CONFIGURATION */}
-      {/* ============================================================ */}
-      {activeTab === 'config' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Questions List (2 Cols) */}
-          <div className="lg:col-span-2 space-y-4">
-            {loading ? (
-              <div className="panel-card p-12 text-center space-y-3">
-                <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-                <p className="text-[13px] text-[var(--text-muted)]">Loading peer feedback questions & marks...</p>
-              </div>
-            ) : questions.length === 0 ? (
-              <div className="panel-card p-12 text-center space-y-3 border-dashed">
-                <MessageSquare className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
-                <h3 className="text-[16px] font-bold text-[var(--text-primary)]">No feedback questions configured</h3>
-                <p className="text-[13px] text-[var(--text-muted)] max-w-md mx-auto">
-                  Add evaluation questions with mark weightage for students to complete after concluding mutual mock interviews.
-                </p>
-                <button
-                  onClick={openCreateModal}
-                  className="btn btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create First Question</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {questions.map((q, idx) => {
-                  const opts = q.options || [];
-                  const isMCQ = q.question_type === 'mcq';
-                  const isYesNo = q.question_type === 'yes_no';
-                  const isText = q.question_type === 'text';
-
-                  return (
-                    <div
-                      key={q.id}
-                      className={`panel-card p-5 border transition-all ${
-                        q.is_active
-                          ? 'border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)]'
-                          : 'border-[var(--border)]/60 bg-[var(--bg-raised)]/50 opacity-70'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3.5 flex-1">
-                          {/* Order Index Badge */}
-                          <div className="w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center text-[var(--accent)] font-mono text-xs font-bold shrink-0 mt-0.5">
-                            #{q.order_index || idx + 1}
-                          </div>
-
-                          <div className="space-y-2 flex-1">
-                            {/* Question Title & Type Badges */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span
-                                className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                                  isMCQ
-                                    ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
-                                    : isYesNo
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                                }`}
-                              >
-                                {isMCQ ? 'MCQ Choice' : isYesNo ? 'Yes / No' : 'Written Text'}
-                              </span>
-
-                              {/* Max Marks Pill */}
-                              {q.max_marks > 0 && (
-                                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold flex items-center gap-1">
-                                  <Star className="w-3 h-3 fill-emerald-500/20 text-emerald-500" />
-                                  Max: {q.max_marks} pts
-                                </span>
-                              )}
-
-                              {q.is_required && (
-                                <span className="text-[10px] font-mono text-[var(--accent)] bg-[var(--accent-dim)] px-1.5 py-0.5 rounded border border-[var(--border-accent)] font-semibold">
-                                  Required
-                                </span>
-                              )}
-
-                              <span
-                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
-                                  q.is_active
-                                    ? 'bg-green-500/10 text-green-600 border-green-500/20 font-bold'
-                                    : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
-                                }`}
-                              >
-                                {q.is_active ? 'Active' : 'Disabled'}
-                              </span>
-                            </div>
-
-                            <h3 className="text-[15px] font-bold text-[var(--text-primary)] leading-snug">
-                              {q.question_text}
-                            </h3>
-
-                            {/* Render Options Preview with Marks */}
-                            {isMCQ && (
-                              <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                                <span className="text-[11px] font-mono text-[var(--text-muted)] mr-1">
-                                  Options & Weightage:
-                                </span>
-                                {opts.map((opt) => (
-                                  <span
-                                    key={opt.id}
-                                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-primary)] border border-[var(--border)] flex items-center gap-1"
-                                  >
-                                    <span>{opt.option_text}</span>
-                                    <span className="text-[10px] font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-1 rounded">
-                                      +{opt.marks ?? 0}m
-                                    </span>
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {isYesNo && (
-                              <div className="flex items-center gap-2 pt-1">
-                                {opts.map((opt) => {
-                                  const isYes = opt.option_text.toLowerCase() === 'yes';
-                                  return (
-                                    <span
-                                      key={opt.id}
-                                      className={`text-[11px] font-mono px-2.5 py-0.5 rounded font-bold border flex items-center gap-1.5 ${
-                                        isYes
-                                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                                          : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                                      }`}
-                                    >
-                                      <span>{opt.option_text}</span>
-                                      <span className="text-[10px] opacity-80">({opt.marks ?? (isYes ? 5 : 0)} pts)</span>
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
-
-                            {isText && (
-                              <p className="text-[11px] font-mono text-[var(--text-muted)] italic pt-0.5">
-                                Single or multi-line student qualitative text review
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => handleToggleActive(q)}
-                            className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
-                            title={q.is_active ? 'Disable question' : 'Activate question'}
-                          >
-                            {q.is_active ? (
-                              <ToggleRight className="w-5 h-5 text-[var(--accent)]" />
-                            ) : (
-                              <ToggleLeft className="w-5 h-5 text-[var(--text-muted)]" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => openEditModal(q)}
-                            className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
-                            title="Edit question and mark weightage"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setQuestionToDelete(q);
-                              setShowDeleteModal(true);
-                            }}
-                            className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-colors"
-                            title="Delete question"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Live Student Modal Preview */}
-          <div className="space-y-4">
-            <div className="panel-card p-5 border border-[var(--border)] bg-[var(--bg-card)] sticky top-20 shadow-[var(--shadow-sm)]">
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] mb-4">
-                <div className="flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-[var(--accent)]" />
-                  <h3 className="text-[13px] font-bold text-[var(--text-primary)] font-ui">
-                    Student Popup Preview
-                  </h3>
-                </div>
-                <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">
-                  Live View
-                </span>
-              </div>
-
-              {/* Mock Student Dialog */}
-              <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-raised)] p-4 space-y-4">
-                <div className="pb-3 border-b border-[var(--border)]">
-                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--accent)] font-bold">
-                    <Award className="w-3.5 h-3.5" />
-                    <span>MUTUAL PEER EVALUATION</span>
-                  </div>
-                  <h4 className="text-[14px] font-bold text-[var(--text-primary)] mt-0.5">
-                    Evaluate Peer: Jaison David (7376251CS221)
-                  </h4>
-                  <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                    Your ratings calculate your peer's official mock interview score.
-                  </p>
-                </div>
-
-                {/* Render active questions list */}
-                <div className="space-y-3.5 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
-                  {questions.filter((q) => q.is_active).length === 0 ? (
-                    <p className="text-[11px] text-[var(--text-muted)] text-center py-4">
-                      No active questions to display.
-                    </p>
-                  ) : (
-                    questions
-                      .filter((q) => q.is_active)
-                      .map((q, idx) => (
-                        <div key={q.id} className="space-y-1.5 text-left">
-                          <label className="text-[12px] font-semibold text-[var(--text-primary)] flex items-baseline justify-between gap-1">
-                            <span>{idx + 1}. {q.question_text} {q.is_required && <span className="text-[var(--red)]">*</span>}</span>
-                            {q.max_marks > 0 && (
-                              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
-                                {q.max_marks} pts
-                              </span>
-                            )}
-                          </label>
-
-                          {q.question_type === 'mcq' && (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {(q.options || []).map((opt) => (
-                                <span
-                                  key={opt.id}
-                                  className="text-[11px] font-mono px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] shadow-xs"
-                                >
-                                  {opt.option_text}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          {q.question_type === 'yes_no' && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-mono px-3 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]">
-                                Yes
-                              </span>
-                              <span className="text-[11px] font-mono px-3 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]">
-                                No
-                              </span>
-                            </div>
-                          )}
-
-                          {q.question_type === 'text' && (
-                            <div className="w-full h-14 rounded bg-[var(--bg-card)] border border-[var(--border)] p-2 text-[11px] text-[var(--text-muted)]">
-                              Write constructive comments...
-                            </div>
-                          )}
-                        </div>
-                      ))
-                  )}
-                </div>
-
-                <div className="pt-2 border-t border-[var(--border)] flex justify-end">
-                  <div className="btn btn-primary text-[11px] py-1 px-3 opacity-80 cursor-default">
-                    Submit Peer Feedback
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* TAB 2: AUDIT & SUBMISSIONS WITH SCORES */}
-      {/* ============================================================ */}
-      {activeTab === 'submissions' && (
-        <div className="panel-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] flex-wrap gap-2">
-            <div>
-              <h2 className="text-[16px] font-bold text-[var(--text-primary)]">
-                Peer Feedback & Evaluated Scorecards
-              </h2>
-              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-                Audit mutual evaluations, calculated total marks, and score percentages configured by admin weightage.
-              </p>
-            </div>
-            <button
-              onClick={fetchSubmissions}
-              className="btn btn-secondary text-xs py-1.5 px-3"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {submissionsLoading ? (
-            <div className="p-12 text-center space-y-3">
+      {/* Questions Configuration Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Questions List (2 Cols) */}
+        <div className="lg:col-span-2 space-y-4">
+          {loading ? (
+            <div className="panel-card p-12 text-center space-y-3">
               <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-              <p className="text-[13px] text-[var(--text-muted)]">Loading feedback records...</p>
+              <p className="text-[13px] text-[var(--text-muted)]">Loading peer feedback questions & marks...</p>
             </div>
-          ) : submissions.length === 0 ? (
-            <div className="p-12 text-center space-y-2 border-dashed border border-[var(--border)] rounded-[var(--radius-md)]">
-              <MessageSquareCheck className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-40" />
-              <h4 className="text-[15px] font-bold text-[var(--text-primary)]">No feedback submissions found</h4>
-              <p className="text-[13px] text-[var(--text-muted)]">
-                When students complete peer mock sessions, their mutual evaluations and scorecards will be logged here.
+          ) : questions.length === 0 ? (
+            <div className="panel-card p-12 text-center space-y-3 border-dashed">
+              <MessageSquare className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
+              <h3 className="text-[16px] font-bold text-[var(--text-primary)]">No feedback questions configured</h3>
+              <p className="text-[13px] text-[var(--text-muted)] max-w-md mx-auto">
+                Create structured peer review rubrics and mark weightages that students will use during their mock interviews.
               </p>
+              <button
+                onClick={openCreateModal}
+                className="btn btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 mt-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create First Question</span>
+              </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {submissions.map((sub) => {
-                const reviewer = sub.reviewer || {};
-                const reviewee = sub.reviewee || {};
-                const responses = sub.responses || [];
-                const pct = Math.round(sub.score_percentage || 0);
-
-                return (
-                  <div
-                    key={sub.id}
-                    className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3 shadow-xs"
-                  >
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[var(--border)]">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] font-mono font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-2 py-0.5 rounded border border-[var(--border-accent)]">
-                          Session #{sub.session_id}
+            <div className="space-y-3.5">
+              {questions.map((q, idx) => (
+                <div
+                  key={q.id}
+                  className={`panel-card p-5 border transition-all ${
+                    q.is_active
+                      ? 'border-[var(--border)] bg-[var(--bg-card)]'
+                      : 'border-[var(--border)] bg-[var(--bg-raised)] opacity-70'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2 flex-1">
+                      {/* Badge bar */}
+                      <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono">
+                        <span className="px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] font-bold text-[var(--text-secondary)]">
+                          #{q.order_index || idx + 1}
                         </span>
-                        <span className="text-[13px] font-bold text-[var(--text-primary)]">
-                          {reviewer.name} ({reviewer.roll_no || reviewer.email})
+                        <span className="px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-bold uppercase border border-[var(--border-accent)]">
+                          {q.question_type}
                         </span>
-                        <span className="text-[12px] text-[var(--text-muted)] font-mono">evaluated</span>
-                        <span className="text-[13px] font-bold text-purple-600 dark:text-purple-400">
-                          {reviewee.name} ({reviewee.roll_no || reviewee.email})
-                        </span>
+                        {q.max_marks > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                            Max {q.max_marks} pts
+                          </span>
+                        )}
+                        {q.is_required ? (
+                          <span className="text-[var(--red)] font-semibold text-[11px]">
+                            * Required
+                          </span>
+                        ) : (
+                          <span className="text-[var(--text-muted)] text-[11px]">
+                            Optional
+                          </span>
+                        )}
+                        {!q.is_active && (
+                          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
+                            Inactive
+                          </span>
+                        )}
                       </div>
 
-                      {/* Score Badge */}
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-bold">
-                          <Star className="w-3.5 h-3.5 fill-emerald-500/20" />
-                          <span>Score: {sub.total_score} / {sub.max_score} ({pct}%)</span>
+                      {/* Question Text */}
+                      <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
+                        {q.question_text}
+                      </h3>
+
+                      {/* MCQ / Options Display */}
+                      {q.options && q.options.length > 0 && (
+                        <div className="pt-2 border-t border-[var(--border)] space-y-1.5">
+                          <p className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                            Scored Options & Mark Weightage:
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {q.options.map((opt) => (
+                              <div
+                                key={opt.id}
+                                className="flex items-center justify-between px-3 py-1.5 rounded-[var(--radius-xs)] bg-[var(--bg-raised)] border border-[var(--border)] text-xs font-mono"
+                              >
+                                <span className="text-[var(--text-primary)] font-medium">
+                                  {opt.option_text}
+                                </span>
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                  +{opt.marks ?? 0} pts
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                          {formatDateTime(sub.created_at)}
-                        </span>
-                      </div>
+                      )}
                     </div>
 
-                    {/* Responses Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                      {responses.map((resp) => {
-                        const question = resp.question || {};
-                        return (
-                          <div
-                            key={resp.id}
-                            className="p-3 rounded bg-[var(--bg-card)] border border-[var(--border)] space-y-1.5 text-xs"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-[var(--text-muted)] font-medium text-[11px]">
-                                {question.question_text || `Question #${resp.question_id}`}
-                              </p>
-                              {resp.max_marks > 0 && (
-                                <span className="text-[10px] font-mono font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-1.5 py-0.5 rounded shrink-0">
-                                  +{resp.awarded_marks} / {resp.max_marks} pts
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[13px] font-bold text-[var(--text-primary)] font-mono">
-                              {resp.answer_value || '—'}
-                            </p>
-                          </div>
-                        );
-                      })}
+                    {/* Actions Menu */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(q)}
+                        className={`p-1.5 rounded-[var(--radius-xs)] border transition-all ${
+                          q.is_active
+                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20'
+                            : 'bg-slate-500/10 text-slate-500 border-slate-500/20 hover:bg-slate-500/20'
+                        }`}
+                        title={q.is_active ? 'Deactivate Question' : 'Activate Question'}
+                      >
+                        {q.is_active ? (
+                          <ToggleRight className="w-4 h-4" />
+                        ) : (
+                          <ToggleLeft className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(q)}
+                        className="p-1.5 rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+                        title="Edit Question & Marks"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuestionToDelete(q);
+                          setShowDeleteModal(true);
+                        }}
+                        className="p-1.5 rounded-[var(--radius-xs)] border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 text-red-600 dark:text-red-400 transition-all"
+                        title="Delete Question"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
-      )}
+
+        {/* Right Column: Live Student Modal Preview */}
+        <div className="space-y-4">
+          <div className="panel-card p-5 border border-[var(--border)] bg-[var(--bg-card)] sticky top-20 shadow-[var(--shadow-sm)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] mb-4">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-[var(--accent)]" />
+                <h3 className="text-[13px] font-bold text-[var(--text-primary)] font-ui">
+                  Student Evaluation Dialog Preview
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">
+                Live View
+              </span>
+            </div>
+
+            {/* Mock Student Dialog */}
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-raised)] p-4 space-y-4">
+              <div className="pb-3 border-b border-[var(--border)]">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--accent)] font-bold">
+                  <Award className="w-3.5 h-3.5" />
+                  <span>MUTUAL PEER EVALUATION</span>
+                </div>
+                <h4 className="text-[14px] font-bold text-[var(--text-primary)] mt-0.5">
+                  Evaluate Peer: Jaison David (7376251CS221)
+                </h4>
+                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                  Ratings calculate official mock interview leaderboard marks.
+                </p>
+              </div>
+
+              {/* Render active questions list */}
+              <div className="space-y-3.5 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
+                {questions.filter((q) => q.is_active).length === 0 ? (
+                  <p className="text-[11px] text-[var(--text-muted)] text-center py-4">
+                    No active questions to display.
+                  </p>
+                ) : (
+                  questions
+                    .filter((q) => q.is_active)
+                    .map((q, idx) => (
+                      <div key={q.id} className="space-y-1.5 text-left">
+                        <label className="text-[12px] font-semibold text-[var(--text-primary)] flex items-baseline justify-between gap-1">
+                          <span>{idx + 1}. {q.question_text} {q.is_required && <span className="text-[var(--red)]">*</span>}</span>
+                          {q.max_marks > 0 && (
+                            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                              {q.max_marks} pts
+                            </span>
+                          )}
+                        </label>
+
+                        {q.question_type === 'mcq' && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {(q.options || []).map((opt) => (
+                              <span
+                                key={opt.id}
+                                className="text-[11px] font-mono px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] shadow-xs"
+                              >
+                                {opt.option_text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {q.question_type === 'yes_no' && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono px-3 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]">
+                              Yes
+                            </span>
+                            <span className="text-[11px] font-mono px-3 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]">
+                              No
+                            </span>
+                          </div>
+                        )}
+
+                        {q.question_type === 'text' && (
+                          <div className="w-full h-14 rounded bg-[var(--bg-card)] border border-[var(--border)] p-2 text-[11px] text-[var(--text-muted)]">
+                            Write constructive comments...
+                          </div>
+                        )}
+                      </div>
+                    ))
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-[var(--border)] flex justify-end">
+                <div className="btn btn-primary text-[11px] py-1 px-3 opacity-80 cursor-default">
+                  Submit Peer Feedback
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ============================================================ */}
       {/* ADD / EDIT QUESTION MODAL */}

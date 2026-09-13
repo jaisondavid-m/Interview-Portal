@@ -501,6 +501,14 @@ func GetActiveFeedbackQuestions(c *gin.Context) {
 		return
 	}
 
+	// Sanitize points/marks from student view
+	for i := range questions {
+		questions[i].MaxMarks = 0
+		for j := range questions[i].Options {
+			questions[i].Options[j].Marks = 0
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   questions,
@@ -831,11 +839,13 @@ type StudentLeaderboardEntry struct {
 	RollNo              string                    `json:"roll_no"`
 	Department          string                    `json:"department"`
 	Email               string                    `json:"email"`
-	MatchesCount        int                       `json:"matches_count"`
+	InterviewsAttended  int                       `json:"interviews_attended"`
+	MatchesCount        int                       `json:"matches_count"` // Backwards-compatible alias
 	ReviewsCount        int                       `json:"reviews_count"`
 	TotalScore          float64                   `json:"total_score"`
 	TotalMaxScore       float64                   `json:"total_max_score"`
-	AvgScorePerMatch    float64                   `json:"avg_score_per_match"`
+	PointsPerInterview  float64                   `json:"points_per_interview"`
+	AvgScorePerMatch    float64                   `json:"avg_score_per_match"` // Backwards-compatible alias
 	AvgMaxScorePerMatch float64                   `json:"avg_max_score_per_match"`
 	ScorePercentage     float64                   `json:"score_percentage"`
 	Grade               string                    `json:"grade"`
@@ -853,22 +863,32 @@ type RecentEvaluationSummary struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-// AdminGetFeedbackLeaderboard generates a ranked leaderboard of students based on peer evaluation marks
+// AdminGetFeedbackLeaderboard generates a ranked person-wise leaderboard of students based on points gained and interviews attended
 func AdminGetFeedbackLeaderboard(c *gin.Context) {
-	sortBy := strings.ToLower(strings.TrimSpace(c.DefaultQuery("sort_by", "avg_points"))) // "avg_points", "total_points", "matches_count", "percentage", "name"
+	sortBy := strings.ToLower(strings.TrimSpace(c.DefaultQuery("sort_by", "total_points"))) // "total_points", "points_per_interview" (or "avg_points"), "interviews_attended" (or "matches_count"), "percentage", "name"
 	order := strings.ToLower(strings.TrimSpace(c.DefaultQuery("order", "desc")))
 	deptFilter := strings.TrimSpace(c.Query("department"))
 	searchQuery := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	
 	minMatchesStr := strings.TrimSpace(c.Query("min_matches"))
+	if minMatchesStr == "" {
+		minMatchesStr = strings.TrimSpace(c.Query("min_interviews"))
+	}
 	minMatches := 0
 	if minMatchesStr != "" {
 		fmt.Sscanf(minMatchesStr, "%d", &minMatches)
 	}
 
+	minPointsStr := strings.TrimSpace(c.Query("min_points"))
+	var minPoints float64 = 0
+	if minPointsStr != "" {
+		fmt.Sscanf(minPointsStr, "%f", &minPoints)
+	}
+
 	// 1. Fetch all student users
 	var students []models.User
 	userQuery := database.DB.Where("role = ?", "student")
-	if deptFilter != "" {
+	if deptFilter != "" && !strings.EqualFold(deptFilter, "all") {
 		userQuery = userQuery.Where("LOWER(department) LIKE ?", "%"+strings.ToLower(deptFilter)+"%")
 	}
 	if searchQuery != "" {
@@ -883,7 +903,26 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		return
 	}
 
-	// 2. Fetch all feedback records with relational session & user info
+	// 2. Fetch all completed/active interview sessions to compute actual attendance per student
+	var allSessions []models.InterviewSession
+	database.DB.Where("status != ?", "cancelled").Find(&allSessions)
+	studentSessionsMap := make(map[uint]map[uint]bool)
+	for _, sess := range allSessions {
+		if sess.InterviewerID > 0 {
+			if studentSessionsMap[sess.InterviewerID] == nil {
+				studentSessionsMap[sess.InterviewerID] = make(map[uint]bool)
+			}
+			studentSessionsMap[sess.InterviewerID][sess.ID] = true
+		}
+		if sess.IntervieweeID > 0 {
+			if studentSessionsMap[sess.IntervieweeID] == nil {
+				studentSessionsMap[sess.IntervieweeID] = make(map[uint]bool)
+			}
+			studentSessionsMap[sess.IntervieweeID][sess.ID] = true
+		}
+	}
+
+	// 3. Fetch all feedback records with relational session & user info
 	var allFeedbacks []models.InterviewFeedback
 	if err := database.DB.
 		Preload("Reviewer").
@@ -899,12 +938,12 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		return
 	}
 
-	// 3. Map feedbacks by RevieweeID (student receiving the marks)
+	// 4. Map feedbacks by RevieweeID (student receiving the marks)
 	type studentAgg struct {
-		totalScore     float64
-		totalMaxScore  float64
-		sessionIDs     map[uint]bool
-		reviews        []RecentEvaluationSummary
+		totalScore    float64
+		totalMaxScore float64
+		sessionIDs    map[uint]bool
+		reviews       []RecentEvaluationSummary
 	}
 	aggMap := make(map[uint]*studentAgg)
 
@@ -946,37 +985,53 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		}
 	}
 
-	// 4. Build leaderboard entries for all matching students
+	// 5. Build leaderboard entries for all matching students
 	var entries []StudentLeaderboardEntry
 
 	for _, s := range students {
 		agg := aggMap[s.ID]
-		matchesCount := 0
-		reviewsCount := 0
-		var totalScore, totalMaxScore, avgScore, avgMaxScore, pct float64
+		
+		// Interviews attended: from session map or fallback to evaluated session IDs
+		interviewsAttended := len(studentSessionsMap[s.ID])
+		if interviewsAttended == 0 && agg != nil {
+			interviewsAttended = len(agg.sessionIDs)
+		}
 
+		reviewsCount := 0
+		var totalScore, totalMaxScore, pointsPerInterview, avgMaxScore, pct float64
 		var recent []RecentEvaluationSummary
 
 		if agg != nil {
-			matchesCount = len(agg.sessionIDs)
-			if matchesCount == 0 && len(agg.reviews) > 0 {
-				matchesCount = len(agg.reviews)
-			}
 			reviewsCount = len(agg.reviews)
 			totalScore = agg.totalScore
 			totalMaxScore = agg.totalMaxScore
-			if matchesCount > 0 {
-				avgScore = totalScore / float64(matchesCount)
-				avgMaxScore = totalMaxScore / float64(matchesCount)
+			
+			// Efficiency: points per interview attended
+			divisor := interviewsAttended
+			if divisor <= 0 {
+				divisor = len(agg.sessionIDs)
 			}
+			if divisor <= 0 && reviewsCount > 0 {
+				divisor = reviewsCount
+			}
+			if divisor > 0 {
+				pointsPerInterview = totalScore / float64(divisor)
+				avgMaxScore = totalMaxScore / float64(divisor)
+			}
+			
 			if totalMaxScore > 0 {
 				pct = (totalScore / totalMaxScore) * 100.0
 			}
 			recent = agg.reviews
 		}
 
-		// Filter by min matches if requested
-		if minMatches > 0 && matchesCount < minMatches {
+		// Filter by min interviews attended if requested
+		if minMatches > 0 && interviewsAttended < minMatches {
+			continue
+		}
+
+		// Filter by min points if requested
+		if minPoints > 0 && totalScore < minPoints {
 			continue
 		}
 
@@ -988,8 +1043,8 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 			grade = "Proficient (B)"
 		} else if pct >= 50 {
 			grade = "Average (C)"
-		} else if matchesCount == 0 {
-			grade = "Unranked (No Matches)"
+		} else if interviewsAttended == 0 && totalScore == 0 {
+			grade = "Unranked (No Interviews)"
 		}
 
 		entries = append(entries, StudentLeaderboardEntry{
@@ -998,11 +1053,13 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 			RollNo:              s.RollNo,
 			Department:          s.Department,
 			Email:               s.Email,
-			MatchesCount:        matchesCount,
+			InterviewsAttended:  interviewsAttended,
+			MatchesCount:        interviewsAttended,
 			ReviewsCount:        reviewsCount,
 			TotalScore:          totalScore,
 			TotalMaxScore:       totalMaxScore,
-			AvgScorePerMatch:    avgScore,
+			PointsPerInterview:  pointsPerInterview,
+			AvgScorePerMatch:    pointsPerInterview,
 			AvgMaxScorePerMatch: avgMaxScore,
 			ScorePercentage:     pct,
 			Grade:               grade,
@@ -1010,29 +1067,41 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		})
 	}
 
-	// 5. Sort entries based on requested criteria
+	// 6. Sort entries based on requested criteria
 	isAsc := (order == "asc")
 	for i := 0; i < len(entries)-1; i++ {
 		for j := i + 1; j < len(entries); j++ {
 			var swap bool
 			switch sortBy {
-			case "total_points":
+			case "avg_points", "points_per_interview", "points_per_attendance":
 				if isAsc {
-					swap = entries[i].TotalScore > entries[j].TotalScore
+					swap = entries[i].PointsPerInterview > entries[j].PointsPerInterview
 				} else {
-					swap = entries[i].TotalScore < entries[j].TotalScore
+					if entries[i].PointsPerInterview == entries[j].PointsPerInterview {
+						swap = entries[i].TotalScore < entries[j].TotalScore
+					} else {
+						swap = entries[i].PointsPerInterview < entries[j].PointsPerInterview
+					}
 				}
-			case "matches_count":
+			case "matches_count", "interviews_attended", "attendance":
 				if isAsc {
-					swap = entries[i].MatchesCount > entries[j].MatchesCount
+					swap = entries[i].InterviewsAttended > entries[j].InterviewsAttended
 				} else {
-					swap = entries[i].MatchesCount < entries[j].MatchesCount
+					if entries[i].InterviewsAttended == entries[j].InterviewsAttended {
+						swap = entries[i].TotalScore < entries[j].TotalScore
+					} else {
+						swap = entries[i].InterviewsAttended < entries[j].InterviewsAttended
+					}
 				}
-			case "percentage":
+			case "percentage", "score_percentage":
 				if isAsc {
 					swap = entries[i].ScorePercentage > entries[j].ScorePercentage
 				} else {
-					swap = entries[i].ScorePercentage < entries[j].ScorePercentage
+					if entries[i].ScorePercentage == entries[j].ScorePercentage {
+						swap = entries[i].TotalScore < entries[j].TotalScore
+					} else {
+						swap = entries[i].ScorePercentage < entries[j].ScorePercentage
+					}
 				}
 			case "name":
 				if isAsc {
@@ -1040,15 +1109,14 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 				} else {
 					swap = entries[i].Name < entries[j].Name
 				}
-			default: // "avg_points" (Points per single match average)
+			default: // "total_points", "total_score"
 				if isAsc {
-					swap = entries[i].AvgScorePerMatch > entries[j].AvgScorePerMatch
+					swap = entries[i].TotalScore > entries[j].TotalScore
 				} else {
-					// Break ties with total points
-					if entries[i].AvgScorePerMatch == entries[j].AvgScorePerMatch {
-						swap = entries[i].TotalScore < entries[j].TotalScore
+					if entries[i].TotalScore == entries[j].TotalScore {
+						swap = entries[i].PointsPerInterview < entries[j].PointsPerInterview
 					} else {
-						swap = entries[i].AvgScorePerMatch < entries[j].AvgScorePerMatch
+						swap = entries[i].TotalScore < entries[j].TotalScore
 					}
 				}
 			}
@@ -1058,16 +1126,42 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		}
 	}
 
-	// 6. Assign Ranks (1-indexed)
+	// 7. Assign Ranks (1-indexed) & Compute Cohort Statistics
 	var totalOverallScore, totalOverallMaxScore float64
 	evaluatedStudentsCount := 0
+	activeStudentsCount := 0
+	totalInterviewsAttended := 0
+
+	var topScorerByTotal *StudentLeaderboardEntry
+	var topScorerByAvg *StudentLeaderboardEntry
+	var mostActiveStudent *StudentLeaderboardEntry
 
 	for i := range entries {
 		entries[i].Rank = i + 1
-		if entries[i].MatchesCount > 0 {
+		if entries[i].InterviewsAttended > 0 {
+			activeStudentsCount++
+			totalInterviewsAttended += entries[i].InterviewsAttended
+		}
+		if entries[i].TotalScore > 0 || entries[i].ReviewsCount > 0 {
 			totalOverallScore += entries[i].TotalScore
 			totalOverallMaxScore += entries[i].TotalMaxScore
 			evaluatedStudentsCount++
+		}
+
+		if topScorerByTotal == nil || entries[i].TotalScore > topScorerByTotal.TotalScore {
+			if entries[i].TotalScore > 0 {
+				topScorerByTotal = &entries[i]
+			}
+		}
+		if topScorerByAvg == nil || (entries[i].InterviewsAttended > 0 && entries[i].PointsPerInterview > topScorerByAvg.PointsPerInterview) {
+			if entries[i].PointsPerInterview > 0 {
+				topScorerByAvg = &entries[i]
+			}
+		}
+		if mostActiveStudent == nil || entries[i].InterviewsAttended > mostActiveStudent.InterviewsAttended {
+			if entries[i].InterviewsAttended > 0 {
+				mostActiveStudent = &entries[i]
+			}
 		}
 	}
 
@@ -1079,9 +1173,9 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		overallAvgPct = (totalOverallScore / totalOverallMaxScore) * 100.0
 	}
 
-	var topScorer *StudentLeaderboardEntry
-	if len(entries) > 0 && entries[0].MatchesCount > 0 {
-		topScorer = &entries[0]
+	var primaryLeader *StudentLeaderboardEntry
+	if len(entries) > 0 && (entries[0].TotalScore > 0 || entries[0].InterviewsAttended > 0) {
+		primaryLeader = &entries[0]
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1089,17 +1183,24 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		"data": gin.H{
 			"leaderboard": entries,
 			"stats": gin.H{
-				"total_students":          len(students),
-				"evaluated_students":      evaluatedStudentsCount,
-				"total_reviews":           len(allFeedbacks),
-				"overall_avg_score":       overallAvgScore,
-				"overall_avg_percentage":  overallAvgPct,
-				"top_scorer":              topScorer,
+				"total_students":            len(students),
+				"active_students":           activeStudentsCount,
+				"evaluated_students":        evaluatedStudentsCount,
+				"total_interviews_attended": totalInterviewsAttended,
+				"total_reviews":             len(allFeedbacks),
+				"total_points_awarded":      totalOverallScore,
+				"overall_avg_score":         overallAvgScore,
+				"overall_avg_percentage":    overallAvgPct,
+				"top_scorer":                primaryLeader,
+				"top_scorer_by_total":       topScorerByTotal,
+				"top_scorer_by_avg":         topScorerByAvg,
+				"most_active_student":       mostActiveStudent,
 			},
 			"sort_by": sortBy,
 			"order":   order,
 		},
 	})
 }
+
 
 
