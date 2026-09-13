@@ -114,6 +114,7 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/feedback/questions/:id", controllers.AdminUpdateFeedbackQuestion)
 			admin.DELETE("/feedback/questions/:id", controllers.AdminDeleteFeedbackQuestion)
 			admin.GET("/feedback/submissions", controllers.AdminGetFeedbackSubmissions)
+			admin.GET("/feedback/leaderboard", controllers.AdminGetFeedbackLeaderboard)
 
 			// Security Incident & Credential Solicitation Audits
 			admin.GET("/security-reports", controllers.AdminGetSecurityReports)

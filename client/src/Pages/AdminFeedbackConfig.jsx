@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   MessageSquareCheck,
   Plus,
@@ -18,7 +19,8 @@ import {
   Star,
   MessageSquare,
   ShieldCheck,
-  Hash
+  Hash,
+  Trophy
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -62,6 +64,7 @@ const PRESETS = [
 ];
 
 export default function AdminFeedbackConfig() {
+  const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -394,7 +397,7 @@ export default function AdminFeedbackConfig() {
         </div>
 
         {/* Tab Switcher & New Question Button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex bg-[var(--bg-raised)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)]">
             <button
               onClick={() => setActiveTab('config')}
@@ -417,6 +420,15 @@ export default function AdminFeedbackConfig() {
               Audits & Scorecards
             </button>
           </div>
+
+          <button
+            onClick={() => navigate('/admin/leaderboard')}
+            className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold shadow-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"
+            title="View Official Student Score Leaderboard"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-500" />
+            <span>Score Leaderboard</span>
+          </button>
 
           {activeTab === 'config' && (
             <button
