@@ -6,42 +6,58 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
   Eye,
   X,
   Loader2,
   Sparkles,
-  ArrowUpDown,
-  ListOrdered,
   ToggleLeft,
   ToggleRight,
-  ChevronRight,
   Check,
-  Users,
+  Award,
+  Sliders,
   Star,
   MessageSquare,
   ShieldCheck,
-  Sliders,
-  Award
+  Hash
 } from 'lucide-react';
 import api from '../api/axios';
 
 const PRESETS = [
   {
-    name: '1 to 5 Rating',
-    options: ['1', '2', '3', '4', '5'],
+    name: '1 to 5 Rating (1–5 pts)',
+    options: [
+      { option_text: '1', marks: 1 },
+      { option_text: '2', marks: 2 },
+      { option_text: '3', marks: 3 },
+      { option_text: '4', marks: 4 },
+      { option_text: '5', marks: 5 },
+    ],
   },
   {
-    name: 'Excellent / Good / Average / Poor',
-    options: ['Excellent', 'Good', 'Average', 'Poor'],
+    name: 'Excellent / Good / Avg / Poor',
+    options: [
+      { option_text: 'Excellent', marks: 10 },
+      { option_text: 'Good', marks: 7 },
+      { option_text: 'Average', marks: 4 },
+      { option_text: 'Poor', marks: 1 },
+    ],
   },
   {
-    name: 'Agreement Scale',
-    options: ['Strongly Agree', 'Agree', 'Neutral', 'Disagree'],
+    name: 'Agreement Scale (10/7/4/0)',
+    options: [
+      { option_text: 'Strongly Agree', marks: 10 },
+      { option_text: 'Agree', marks: 7 },
+      { option_text: 'Neutral', marks: 4 },
+      { option_text: 'Disagree', marks: 0 },
+    ],
   },
   {
-    name: 'High / Medium / Low',
-    options: ['High', 'Medium', 'Low'],
+    name: 'High / Medium / Low (10/5/0)',
+    options: [
+      { option_text: 'High', marks: 10 },
+      { option_text: 'Medium', marks: 5 },
+      { option_text: 'Low', marks: 0 },
+    ],
   },
 ];
 
@@ -68,11 +84,19 @@ export default function AdminFeedbackConfig() {
     question_text: '',
     question_type: 'mcq', // 'mcq' | 'yes_no' | 'text'
     is_required: true,
+    max_marks: 5,
     order_index: 1,
     is_active: true,
-    options: ['1', '2', '3', '4', '5'],
+    options: [
+      { option_text: '1', marks: 1 },
+      { option_text: '2', marks: 2 },
+      { option_text: '3', marks: 3 },
+      { option_text: '4', marks: 4 },
+      { option_text: '5', marks: 5 },
+    ],
   });
   const [customOptionText, setCustomOptionText] = useState('');
+  const [customOptionMarks, setCustomOptionMarks] = useState(5);
 
   // Fetch configured feedback questions
   const fetchQuestions = async () => {
@@ -120,51 +144,114 @@ export default function AdminFeedbackConfig() {
       question_text: '',
       question_type: 'mcq',
       is_required: true,
+      max_marks: 5,
       order_index: nextOrder,
       is_active: true,
-      options: ['1', '2', '3', '4', '5'],
+      options: [
+        { option_text: '1', marks: 1 },
+        { option_text: '2', marks: 2 },
+        { option_text: '3', marks: 3 },
+        { option_text: '4', marks: 4 },
+        { option_text: '5', marks: 5 },
+      ],
     });
     setCustomOptionText('');
+    setCustomOptionMarks(5);
     setShowModal(true);
   };
 
   const openEditModal = (q) => {
     setEditingQuestion(q);
-    const existingOpts = (q.options || []).map((o) => o.option_text);
+    const existingOpts = (q.options || []).map((o) => ({
+      option_text: o.option_text,
+      marks: o.marks ?? 0,
+    }));
+
+    let defaultOpts = existingOpts;
+    if (defaultOpts.length === 0) {
+      if (q.question_type === 'yes_no') {
+        defaultOpts = [
+          { option_text: 'Yes', marks: 5 },
+          { option_text: 'No', marks: 0 },
+        ];
+      } else if (q.question_type === 'mcq') {
+        defaultOpts = [
+          { option_text: '1', marks: 1 },
+          { option_text: '2', marks: 2 },
+          { option_text: '3', marks: 3 },
+          { option_text: '4', marks: 4 },
+          { option_text: '5', marks: 5 },
+        ];
+      }
+    }
+
     setFormData({
       question_text: q.question_text || '',
       question_type: q.question_type || 'mcq',
       is_required: q.is_required ?? true,
+      max_marks: q.max_marks ?? 5,
       order_index: q.order_index || 1,
       is_active: q.is_active ?? true,
-      options: existingOpts.length > 0 ? existingOpts : (q.question_type === 'yes_no' ? ['Yes', 'No'] : ['1', '2', '3', '4', '5']),
+      options: defaultOpts,
     });
     setCustomOptionText('');
+    setCustomOptionMarks(5);
     setShowModal(true);
   };
 
   const handleAddOption = () => {
     const trimmed = customOptionText.trim();
-    if (trimmed && !formData.options.includes(trimmed)) {
-      setFormData((prev) => ({
-        ...prev,
-        options: [...prev.options, trimmed],
-      }));
+    if (trimmed && !formData.options.some((o) => o.option_text === trimmed)) {
+      setFormData((prev) => {
+        const nextOpts = [
+          ...prev.options,
+          { option_text: trimmed, marks: parseFloat(customOptionMarks) || 0 },
+        ];
+        const computedMax = Math.max(...nextOpts.map((o) => o.marks || 0), 0);
+        return {
+          ...prev,
+          options: nextOpts,
+          max_marks: computedMax > 0 ? computedMax : prev.max_marks,
+        };
+      });
       setCustomOptionText('');
+      setCustomOptionMarks(5);
     }
   };
 
   const handleRemoveOption = (indexToRemove) => {
-    setFormData((prev) => ({
-      ...prev,
-      options: prev.options.filter((_, idx) => idx !== indexToRemove),
-    }));
+    setFormData((prev) => {
+      const nextOpts = prev.options.filter((_, idx) => idx !== indexToRemove);
+      const computedMax = nextOpts.length > 0 ? Math.max(...nextOpts.map((o) => o.marks || 0), 0) : 0;
+      return {
+        ...prev,
+        options: nextOpts,
+        max_marks: computedMax > 0 ? computedMax : prev.max_marks,
+      };
+    });
+  };
+
+  const handleUpdateOptionMarks = (index, newMarks) => {
+    const numericMarks = parseFloat(newMarks) || 0;
+    setFormData((prev) => {
+      const nextOpts = prev.options.map((opt, idx) =>
+        idx === index ? { ...opt, marks: numericMarks } : opt
+      );
+      const computedMax = Math.max(...nextOpts.map((o) => o.marks || 0), 0);
+      return {
+        ...prev,
+        options: nextOpts,
+        max_marks: computedMax > 0 ? computedMax : prev.max_marks,
+      };
+    });
   };
 
   const handleApplyPreset = (presetOptions) => {
+    const computedMax = Math.max(...presetOptions.map((o) => o.marks || 0), 0);
     setFormData((prev) => ({
       ...prev,
       options: [...presetOptions],
+      max_marks: computedMax > 0 ? computedMax : prev.max_marks,
     }));
   };
 
@@ -185,23 +272,36 @@ export default function AdminFeedbackConfig() {
     setSuccessMsg('');
 
     try {
+      let optionsPayload = [];
+      if (formData.question_type === 'mcq') {
+        optionsPayload = formData.options;
+      } else if (formData.question_type === 'yes_no') {
+        optionsPayload = formData.options.length === 2 ? formData.options : [
+          { option_text: 'Yes', marks: 5 },
+          { option_text: 'No', marks: 0 },
+        ];
+      }
+
+      const computedMax = optionsPayload.length > 0
+        ? Math.max(...optionsPayload.map((o) => o.marks || 0), parseFloat(formData.max_marks) || 0)
+        : parseFloat(formData.max_marks) || 0;
+
       const payload = {
         question_text: formData.question_text.trim(),
         question_type: formData.question_type,
         is_required: formData.is_required,
+        max_marks: computedMax,
         order_index: parseInt(formData.order_index, 10) || 1,
         is_active: formData.is_active,
-        options: formData.question_type === 'mcq'
-          ? formData.options
-          : (formData.question_type === 'yes_no' ? ['Yes', 'No'] : []),
+        options: optionsPayload,
       };
 
       if (editingQuestion) {
         await api.put(`/admin/feedback/questions/${editingQuestion.id}`, payload);
-        setSuccessMsg('Feedback question updated successfully.');
+        setSuccessMsg('Feedback question & mark weightage updated successfully.');
       } else {
         await api.post('/admin/feedback/questions', payload);
-        setSuccessMsg('Feedback question created successfully.');
+        setSuccessMsg('Feedback question created successfully with mark weightage.');
       }
 
       setShowModal(false);
@@ -232,11 +332,15 @@ export default function AdminFeedbackConfig() {
   const handleToggleActive = async (q) => {
     try {
       const updatedActive = !q.is_active;
-      const opts = (q.options || []).map((o) => o.option_text);
+      const opts = (q.options || []).map((o) => ({
+        option_text: o.option_text,
+        marks: o.marks ?? 0,
+      }));
       await api.put(`/admin/feedback/questions/${q.id}`, {
         question_text: q.question_text,
         question_type: q.question_type,
         is_required: q.is_required,
+        max_marks: q.max_marks ?? 0,
         order_index: q.order_index,
         is_active: updatedActive,
         options: opts,
@@ -268,10 +372,10 @@ export default function AdminFeedbackConfig() {
             <span>Admin Configuration Portal</span>
           </div>
           <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
-            Peer Feedback Questions
+            Peer Feedback Questions & Mark Weightage
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Configure dynamic evaluation questions shown to students after mock interviews finish.
+            Set up evaluation questions, mark weightage per option, and review mutual scorecards calculated for students.
           </p>
         </div>
 
@@ -286,7 +390,7 @@ export default function AdminFeedbackConfig() {
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
-              Questions ({questions.length})
+              Questions & Marks ({questions.length})
             </button>
             <button
               onClick={() => setActiveTab('submissions')}
@@ -296,7 +400,7 @@ export default function AdminFeedbackConfig() {
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
-              Audits & Submissions
+              Audits & Scorecards
             </button>
           </div>
 
@@ -336,14 +440,14 @@ export default function AdminFeedbackConfig() {
             {loading ? (
               <div className="panel-card p-12 text-center space-y-3">
                 <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-                <p className="text-[13px] text-[var(--text-muted)]">Loading peer feedback questions...</p>
+                <p className="text-[13px] text-[var(--text-muted)]">Loading peer feedback questions & marks...</p>
               </div>
             ) : questions.length === 0 ? (
               <div className="panel-card p-12 text-center space-y-3 border-dashed">
                 <MessageSquare className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
                 <h3 className="text-[16px] font-bold text-[var(--text-primary)]">No feedback questions configured</h3>
                 <p className="text-[13px] text-[var(--text-muted)] max-w-md mx-auto">
-                  Add evaluation questions for students to complete after concluding mutual mock interviews.
+                  Add evaluation questions with mark weightage for students to complete after concluding mutual mock interviews.
                 </p>
                 <button
                   onClick={openCreateModal}
@@ -392,6 +496,14 @@ export default function AdminFeedbackConfig() {
                                 {isMCQ ? 'MCQ Choice' : isYesNo ? 'Yes / No' : 'Written Text'}
                               </span>
 
+                              {/* Max Marks Pill */}
+                              {q.max_marks > 0 && (
+                                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-emerald-500/20 text-emerald-500" />
+                                  Max: {q.max_marks} pts
+                                </span>
+                              )}
+
                               {q.is_required && (
                                 <span className="text-[10px] font-mono text-[var(--accent)] bg-[var(--accent-dim)] px-1.5 py-0.5 rounded border border-[var(--border-accent)] font-semibold">
                                   Required
@@ -413,18 +525,21 @@ export default function AdminFeedbackConfig() {
                               {q.question_text}
                             </h3>
 
-                            {/* Render Options Preview */}
+                            {/* Render Options Preview with Marks */}
                             {isMCQ && (
                               <div className="flex items-center gap-1.5 flex-wrap pt-1">
                                 <span className="text-[11px] font-mono text-[var(--text-muted)] mr-1">
-                                  Options ({opts.length}):
+                                  Options & Weightage:
                                 </span>
                                 {opts.map((opt) => (
                                   <span
                                     key={opt.id}
-                                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-primary)] border border-[var(--border)]"
+                                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-primary)] border border-[var(--border)] flex items-center gap-1"
                                   >
-                                    {opt.option_text}
+                                    <span>{opt.option_text}</span>
+                                    <span className="text-[10px] font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-1 rounded">
+                                      +{opt.marks ?? 0}m
+                                    </span>
                                   </span>
                                 ))}
                               </div>
@@ -432,18 +547,28 @@ export default function AdminFeedbackConfig() {
 
                             {isYesNo && (
                               <div className="flex items-center gap-2 pt-1">
-                                <span className="text-[11px] font-mono px-2.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20">
-                                  Yes
-                                </span>
-                                <span className="text-[11px] font-mono px-2.5 py-0.5 rounded bg-rose-500/10 text-rose-600 font-bold border border-rose-500/20">
-                                  No
-                                </span>
+                                {opts.map((opt) => {
+                                  const isYes = opt.option_text.toLowerCase() === 'yes';
+                                  return (
+                                    <span
+                                      key={opt.id}
+                                      className={`text-[11px] font-mono px-2.5 py-0.5 rounded font-bold border flex items-center gap-1.5 ${
+                                        isYes
+                                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                          : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                                      }`}
+                                    >
+                                      <span>{opt.option_text}</span>
+                                      <span className="text-[10px] opacity-80">({opt.marks ?? (isYes ? 5 : 0)} pts)</span>
+                                    </span>
+                                  );
+                                })}
                               </div>
                             )}
 
                             {isText && (
                               <p className="text-[11px] font-mono text-[var(--text-muted)] italic pt-0.5">
-                                Single or multi-line student text feedback box
+                                Single or multi-line student qualitative text review
                               </p>
                             )}
                           </div>
@@ -465,7 +590,7 @@ export default function AdminFeedbackConfig() {
                           <button
                             onClick={() => openEditModal(q)}
                             className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
-                            title="Edit question"
+                            title="Edit question and mark weightage"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
@@ -514,7 +639,7 @@ export default function AdminFeedbackConfig() {
                     Evaluate Peer: Jaison David (7376251CS221)
                   </h4>
                   <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                    Your feedback helps your peer improve their interview readiness.
+                    Your ratings calculate your peer's official mock interview score.
                   </p>
                 </div>
 
@@ -529,9 +654,13 @@ export default function AdminFeedbackConfig() {
                       .filter((q) => q.is_active)
                       .map((q, idx) => (
                         <div key={q.id} className="space-y-1.5 text-left">
-                          <label className="text-[12px] font-semibold text-[var(--text-primary)] flex items-baseline gap-1">
-                            <span>{idx + 1}. {q.question_text}</span>
-                            {q.is_required && <span className="text-[var(--red)] text-xs">*</span>}
+                          <label className="text-[12px] font-semibold text-[var(--text-primary)] flex items-baseline justify-between gap-1">
+                            <span>{idx + 1}. {q.question_text} {q.is_required && <span className="text-[var(--red)]">*</span>}</span>
+                            {q.max_marks > 0 && (
+                              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                                {q.max_marks} pts
+                              </span>
+                            )}
                           </label>
 
                           {q.question_type === 'mcq' && (
@@ -580,17 +709,17 @@ export default function AdminFeedbackConfig() {
       )}
 
       {/* ============================================================ */}
-      {/* TAB 2: AUDIT & SUBMISSIONS */}
+      {/* TAB 2: AUDIT & SUBMISSIONS WITH SCORES */}
       {/* ============================================================ */}
       {activeTab === 'submissions' && (
         <div className="panel-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] flex-wrap gap-2">
             <div>
               <h2 className="text-[16px] font-bold text-[var(--text-primary)]">
-                Peer Feedback Submissions History
+                Peer Feedback & Evaluated Scorecards
               </h2>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-                Audit feedback records submitted by students. Kept strictly separate from coding scores.
+                Audit mutual evaluations, calculated total marks, and score percentages configured by admin weightage.
               </p>
             </div>
             <button
@@ -611,7 +740,7 @@ export default function AdminFeedbackConfig() {
               <MessageSquareCheck className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-40" />
               <h4 className="text-[15px] font-bold text-[var(--text-primary)]">No feedback submissions found</h4>
               <p className="text-[13px] text-[var(--text-muted)]">
-                When students complete peer mock sessions, their mutual evaluations will be logged here.
+                When students complete peer mock sessions, their mutual evaluations and scorecards will be logged here.
               </p>
             </div>
           ) : (
@@ -619,13 +748,13 @@ export default function AdminFeedbackConfig() {
               {submissions.map((sub) => {
                 const reviewer = sub.reviewer || {};
                 const reviewee = sub.reviewee || {};
-                const session = sub.session || {};
                 const responses = sub.responses || [];
+                const pct = Math.round(sub.score_percentage || 0);
 
                 return (
                   <div
                     key={sub.id}
-                    className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3"
+                    className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3 shadow-xs"
                   >
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[var(--border)]">
@@ -641,9 +770,17 @@ export default function AdminFeedbackConfig() {
                           {reviewee.name} ({reviewee.roll_no || reviewee.email})
                         </span>
                       </div>
-                      <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                        {formatDateTime(sub.created_at)}
-                      </span>
+
+                      {/* Score Badge */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-bold">
+                          <Star className="w-3.5 h-3.5 fill-emerald-500/20" />
+                          <span>Score: {sub.total_score} / {sub.max_score} ({pct}%)</span>
+                        </div>
+                        <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                          {formatDateTime(sub.created_at)}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Responses Grid */}
@@ -653,11 +790,18 @@ export default function AdminFeedbackConfig() {
                         return (
                           <div
                             key={resp.id}
-                            className="p-3 rounded bg-[var(--bg-card)] border border-[var(--border)] space-y-1 text-xs"
+                            className="p-3 rounded bg-[var(--bg-card)] border border-[var(--border)] space-y-1.5 text-xs"
                           >
-                            <p className="text-[var(--text-muted)] font-medium">
-                              {question.question_text || `Question #${resp.question_id}`}
-                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[var(--text-muted)] font-medium text-[11px]">
+                                {question.question_text || `Question #${resp.question_id}`}
+                              </p>
+                              {resp.max_marks > 0 && (
+                                <span className="text-[10px] font-mono font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-1.5 py-0.5 rounded shrink-0">
+                                  +{resp.awarded_marks} / {resp.max_marks} pts
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[13px] font-bold text-[var(--text-primary)] font-mono">
                               {resp.answer_value || '—'}
                             </p>
@@ -678,13 +822,13 @@ export default function AdminFeedbackConfig() {
       {/* ============================================================ */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="panel-card w-full max-w-xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-scaleUp">
+          <div className="panel-card w-full max-w-xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-scaleUp max-h-[90vh] flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-[var(--accent)]" />
                 <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
-                  {editingQuestion ? 'Edit Feedback Question' : 'Add New Feedback Question'}
+                  {editingQuestion ? 'Edit Feedback Question & Marks' : 'Add New Feedback Question & Marks'}
                 </h3>
               </div>
               <button
@@ -696,7 +840,7 @@ export default function AdminFeedbackConfig() {
             </div>
 
             {/* Modal Form Body */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
               {/* Question Text */}
               <div className="space-y-1.5">
                 <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
@@ -706,7 +850,7 @@ export default function AdminFeedbackConfig() {
                   rows={2}
                   value={formData.question_text}
                   onChange={(e) => setFormData({ ...formData, question_text: e.target.value })}
-                  placeholder="e.g. How would you rate the student's technical communication?"
+                  placeholder="e.g. How would you rate the candidate's algorithm problem-solving?"
                   className="custom-input text-xs w-full py-2 resize-none"
                   required
                 />
@@ -719,14 +863,27 @@ export default function AdminFeedbackConfig() {
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'mcq', label: 'MCQ (Select One)', desc: 'Custom options or rating scale' },
-                    { id: 'yes_no', label: 'Yes / No', desc: 'Binary choice' },
-                    { id: 'text', label: 'Written Text', desc: 'Optional open comment' },
+                    { id: 'mcq', label: 'MCQ (Select One)', desc: 'Custom options with weightage marks' },
+                    { id: 'yes_no', label: 'Yes / No', desc: 'Binary choice with marks' },
+                    { id: 'text', label: 'Written Text', desc: 'Optional qualitative comment' },
                   ].map((t) => (
                     <button
                       type="button"
                       key={t.id}
-                      onClick={() => setFormData({ ...formData, question_type: t.id })}
+                      onClick={() => {
+                        let newOpts = formData.options;
+                        if (t.id === 'yes_no' && formData.options.length !== 2) {
+                          newOpts = [
+                            { option_text: 'Yes', marks: 5 },
+                            { option_text: 'No', marks: 0 },
+                          ];
+                        }
+                        setFormData({
+                          ...formData,
+                          question_type: t.id,
+                          options: newOpts,
+                        });
+                      }}
                       className={`p-2.5 rounded-[var(--radius-sm)] border text-left transition-all ${
                         formData.question_type === t.id
                           ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--accent)] font-bold'
@@ -742,13 +899,13 @@ export default function AdminFeedbackConfig() {
 
               {/* Options Builder for MCQ */}
               {formData.question_type === 'mcq' && (
-                <div className="space-y-2.5 p-3 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)]">
+                <div className="space-y-3 p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)]">
                   <div className="flex items-center justify-between">
                     <label className="text-[12px] font-semibold text-[var(--text-primary)]">
-                      MCQ Options / Ratings (Stored Relationally)
+                      MCQ Options & Marks Weightage
                     </label>
                     <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                      {formData.options.length} options
+                      {formData.options.length} options configured
                     </span>
                   </div>
 
@@ -771,28 +928,43 @@ export default function AdminFeedbackConfig() {
                     </div>
                   </div>
 
-                  {/* Active options chips */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  {/* Active options list with marks inputs */}
+                  <div className="space-y-2 pt-1">
                     {formData.options.map((opt, idx) => (
                       <div
                         key={idx}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono text-[var(--text-primary)] shadow-xs"
+                        className="flex items-center justify-between gap-2 p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] shadow-xs"
                       >
-                        <span>{opt}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveOption(idx)}
-                          className="text-[var(--text-muted)] hover:text-[var(--red)] p-0.5 ml-0.5"
-                          title="Remove option"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                        <span className="text-xs font-mono font-bold text-[var(--text-primary)] flex-1">
+                          {opt.option_text}
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">Marks:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            value={opt.marks ?? 0}
+                            onChange={(e) => handleUpdateOptionMarks(idx, e.target.value)}
+                            className="custom-input text-xs py-1 px-2 w-16 text-center font-mono font-bold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOption(idx)}
+                            className="text-[var(--text-muted)] hover:text-[var(--red)] p-1 ml-1"
+                            title="Remove option"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
 
                   {/* Add Custom Option Input */}
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2 pt-2 border-t border-[var(--border)]">
                     <input
                       type="text"
                       value={customOptionText}
@@ -803,13 +975,25 @@ export default function AdminFeedbackConfig() {
                           handleAddOption();
                         }
                       }}
-                      placeholder="Type option (e.g. Strongly Agree) & hit Add..."
+                      placeholder="Option label (e.g. Mastered)..."
                       className="custom-input text-xs py-1.5 flex-1"
                     />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-mono text-[var(--text-muted)]">Pts:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={customOptionMarks}
+                        onChange={(e) => setCustomOptionMarks(e.target.value)}
+                        className="custom-input text-xs py-1.5 w-16 text-center font-mono font-bold"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={handleAddOption}
-                      className="btn btn-secondary text-xs py-1.5 px-3"
+                      className="btn btn-secondary text-xs py-1.5 px-3 font-semibold"
                     >
                       Add Option
                     </button>
@@ -817,8 +1001,55 @@ export default function AdminFeedbackConfig() {
                 </div>
               )}
 
-              {/* Order index & Toggles */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {/* Options Builder for Yes/No */}
+              {formData.question_type === 'yes_no' && (
+                <div className="space-y-3 p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)]">
+                  <label className="text-[12px] font-semibold text-[var(--text-primary)]">
+                    Yes / No Mark Weightage
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {formData.options.map((opt, idx) => {
+                      const isYes = opt.option_text.toLowerCase() === 'yes';
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3 rounded bg-[var(--bg-card)] border border-[var(--border)] space-y-1.5"
+                        >
+                          <span className={`text-xs font-bold font-mono ${isYes ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                            {opt.option_text} Option Marks:
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            value={opt.marks ?? (isYes ? 5 : 0)}
+                            onChange={(e) => handleUpdateOptionMarks(idx, e.target.value)}
+                            className="custom-input text-xs py-1 px-2 w-full font-mono font-bold"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Order index, Max Marks & Toggles */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-[var(--text-secondary)] font-mono">
+                    Max Marks
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={formData.max_marks}
+                    onChange={(e) => setFormData({ ...formData, max_marks: e.target.value })}
+                    className="custom-input text-xs py-1.5 font-mono font-bold"
+                  />
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-[var(--text-secondary)] font-mono">
                     Order Index
@@ -828,7 +1059,7 @@ export default function AdminFeedbackConfig() {
                     min="1"
                     value={formData.order_index}
                     onChange={(e) => setFormData({ ...formData, order_index: e.target.value })}
-                    className="custom-input text-xs py-1.5"
+                    className="custom-input text-xs py-1.5 font-mono"
                   />
                 </div>
 
@@ -843,7 +1074,7 @@ export default function AdminFeedbackConfig() {
                 </div>
 
                 <div className="flex items-center justify-between p-2 rounded bg-[var(--bg-raised)] border border-[var(--border)] self-end">
-                  <span className="text-[11px] font-semibold text-[var(--text-primary)]">Active Status</span>
+                  <span className="text-[11px] font-semibold text-[var(--text-primary)]">Active</span>
                   <input
                     type="checkbox"
                     checked={formData.is_active}
@@ -869,7 +1100,7 @@ export default function AdminFeedbackConfig() {
                   className="btn btn-primary text-xs py-2 px-5 font-bold flex items-center gap-1.5 shadow-sm"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  <span>{editingQuestion ? 'Update Question' : 'Create Question'}</span>
+                  <span>{editingQuestion ? 'Update Question & Marks' : 'Create Question'}</span>
                 </button>
               </div>
             </form>
@@ -891,7 +1122,7 @@ export default function AdminFeedbackConfig() {
                 Delete Feedback Question?
               </h3>
               <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-                Are you sure you want to delete <strong className="text-[var(--text-primary)]">"{questionToDelete?.question_text}"</strong>? This will remove its relational child options.
+                Are you sure you want to delete <strong className="text-[var(--text-primary)]">"{questionToDelete?.question_text}"</strong>? This will remove its relational child options and mark weightages.
               </p>
             </div>
             <div className="flex items-center justify-center gap-2.5 pt-2">

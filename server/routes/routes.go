@@ -59,6 +59,7 @@ func SetupRouter() *gin.Engine {
 
 			// Peer Feedback
 			interviews.GET("/feedback/questions", controllers.GetActiveFeedbackQuestions)
+			interviews.GET("/feedback/history", controllers.GetStudentFeedbackHistory)
 			interviews.GET("/sessions/:id/feedback", controllers.GetSessionFeedbackStatus)
 			interviews.POST("/sessions/:id/feedback", controllers.SubmitSessionFeedback)
 

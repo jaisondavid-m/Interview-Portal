@@ -525,13 +525,14 @@ export default function AdminInterviewSessionDetail() {
               const rev = fb.reviewer || {};
               const target = fb.reviewee || {};
               const responses = fb.responses || [];
+              const pct = Math.round(fb.score_percentage || 0);
 
               return (
                 <div
                   key={fb.id}
-                  className="p-5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-4"
+                  className="p-5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-4 shadow-xs"
                 >
-                  <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+                  <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] flex-wrap gap-2">
                     <div className="flex items-center gap-2 text-xs flex-wrap">
                       <span className="font-bold text-[var(--text-primary)]">
                         {rev.name || 'Participant'}
@@ -541,9 +542,15 @@ export default function AdminInterviewSessionDetail() {
                         {target.name || 'Peer'}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                      {formatDateTime(fb.created_at)}
-                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded border border-emerald-500/20">
+                        Score: {fb.total_score} / {fb.max_score} ({pct}%)
+                      </span>
+                      <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                        {formatDateTime(fb.created_at)}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 text-xs">
@@ -554,9 +561,16 @@ export default function AdminInterviewSessionDetail() {
                           key={resp.id}
                           className="p-3 rounded bg-[var(--bg-card)] border border-[var(--border)] space-y-1"
                         >
-                          <p className="text-[var(--text-muted)] font-medium text-[11px]">
-                            {q.question_text || `Question #${resp.question_id}`}
-                          </p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[var(--text-muted)] font-medium text-[11px]">
+                              {q.question_text || `Question #${resp.question_id}`}
+                            </p>
+                            {resp.max_marks > 0 && (
+                              <span className="text-[10px] font-mono font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-1.5 py-0.5 rounded shrink-0">
+                                +{resp.awarded_marks} / {resp.max_marks} pts
+                              </span>
+                            )}
+                          </div>
                           <p className="font-bold font-mono text-[var(--text-primary)] text-[13px]">
                             {resp.answer_value || '—'}
                           </p>

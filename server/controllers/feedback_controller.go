@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,21 +13,85 @@ import (
 	"gorm.io/gorm"
 )
 
+// FeedbackOptionInput represents option text and its marks/weightage
+type FeedbackOptionInput struct {
+	OptionText string  `json:"option_text"`
+	Marks      float64 `json:"marks"`
+}
+
 // FeedbackQuestionInput represents incoming payload for creating/updating a question
 type FeedbackQuestionInput struct {
-	QuestionText string   `json:"question_text" binding:"required"`
-	QuestionType string   `json:"question_type" binding:"required"` // "mcq", "yes_no", "text"
-	IsRequired   bool     `json:"is_required"`
-	OrderIndex   int      `json:"order_index"`
-	IsActive     *bool    `json:"is_active"`
-	Options      []string `json:"options"` // For MCQ and Yes/No choices
+	QuestionText string          `json:"question_text" binding:"required"`
+	QuestionType string          `json:"question_type" binding:"required"` // "mcq", "yes_no", "text"
+	IsRequired   bool            `json:"is_required"`
+	MaxMarks     float64         `json:"max_marks"`
+	OrderIndex   int             `json:"order_index"`
+	IsActive     *bool           `json:"is_active"`
+	Options      json.RawMessage `json:"options"` // Can be []string or []FeedbackOptionInput
+}
+
+// helper to parse options input flexibly
+func parseOptionsInput(raw json.RawMessage, qType string) []FeedbackOptionInput {
+	var result []FeedbackOptionInput
+
+	if len(raw) > 0 && string(raw) != "null" {
+		// Try parsing as []FeedbackOptionInput first
+		var structured []FeedbackOptionInput
+		if err := json.Unmarshal(raw, &structured); err == nil && len(structured) > 0 {
+			for _, item := range structured {
+				trimmed := strings.TrimSpace(item.OptionText)
+				if trimmed != "" {
+					result = append(result, FeedbackOptionInput{
+						OptionText: trimmed,
+						Marks:      item.Marks,
+					})
+				}
+			}
+			return result
+		}
+
+		// Fallback: parse as []string
+		var strList []string
+		if err := json.Unmarshal(raw, &strList); err == nil && len(strList) > 0 {
+			for idx, str := range strList {
+				trimmed := strings.TrimSpace(str)
+				if trimmed != "" {
+					marks := 0.0
+					if qType == "yes_no" {
+						if strings.EqualFold(trimmed, "yes") {
+							marks = 5.0
+						} else {
+							marks = 0.0
+						}
+					} else if qType == "mcq" {
+						marks = float64(idx + 1)
+					}
+					result = append(result, FeedbackOptionInput{
+						OptionText: trimmed,
+						Marks:      marks,
+					})
+				}
+			}
+			return result
+		}
+	}
+
+	// Default fallback for yes_no
+	if qType == "yes_no" {
+		return []FeedbackOptionInput{
+			{OptionText: "Yes", Marks: 5.0},
+			{OptionText: "No", Marks: 0.0},
+		}
+	}
+
+	return result
 }
 
 // ============================================================
 // ADMIN CONTROLLER METHODS
 // ============================================================
 
-// AdminGetFeedbackQuestions retrieves all configured feedback questions
+// AdminGetFeedbackQuestions retrieves all configured feedback questions with options & marks
 func AdminGetFeedbackQuestions(c *gin.Context) {
 	var questions []models.FeedbackQuestion
 	err := database.DB.
@@ -51,7 +116,7 @@ func AdminGetFeedbackQuestions(c *gin.Context) {
 	})
 }
 
-// AdminCreateFeedbackQuestion creates a new feedback question with relational options
+// AdminCreateFeedbackQuestion creates a new feedback question with relational options and marks
 func AdminCreateFeedbackQuestion(c *gin.Context) {
 	var input FeedbackQuestionInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -84,10 +149,23 @@ func AdminCreateFeedbackQuestion(c *gin.Context) {
 		input.OrderIndex = maxOrder + 1
 	}
 
+	parsedOptions := parseOptionsInput(input.Options, qType)
+
+	// Calculate max marks for the question
+	maxMarks := input.MaxMarks
+	if maxMarks <= 0 {
+		for _, opt := range parsedOptions {
+			if opt.Marks > maxMarks {
+				maxMarks = opt.Marks
+			}
+		}
+	}
+
 	question := models.FeedbackQuestion{
 		QuestionText: strings.TrimSpace(input.QuestionText),
 		QuestionType: qType,
 		IsRequired:   input.IsRequired,
+		MaxMarks:     maxMarks,
 		OrderIndex:   input.OrderIndex,
 		IsActive:     isActive,
 	}
@@ -103,37 +181,24 @@ func AdminCreateFeedbackQuestion(c *gin.Context) {
 		return
 	}
 
-	// Handle relational options based on question type
-	var optionsToInsert []string
-	if qType == "mcq" {
-		for _, opt := range input.Options {
-			trimmed := strings.TrimSpace(opt)
-			if trimmed != "" {
-				optionsToInsert = append(optionsToInsert, trimmed)
+	// Insert options
+	if qType != "text" {
+		for idx, opt := range parsedOptions {
+			optRecord := models.FeedbackQuestionOption{
+				QuestionID: question.ID,
+				OptionText: opt.OptionText,
+				Marks:      opt.Marks,
+				OrderIndex: idx + 1,
 			}
-		}
-	} else if qType == "yes_no" {
-		if len(input.Options) > 0 {
-			optionsToInsert = input.Options
-		} else {
-			optionsToInsert = []string{"Yes", "No"}
-		}
-	}
-
-	for idx, optText := range optionsToInsert {
-		optRecord := models.FeedbackQuestionOption{
-			QuestionID: question.ID,
-			OptionText: optText,
-			OrderIndex: idx + 1,
-		}
-		if err := tx.Create(&optRecord).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to save question option",
-				"error":   err.Error(),
-			})
-			return
+			if err := tx.Create(&optRecord).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": "Failed to save question option",
+					"error":   err.Error(),
+				})
+				return
+			}
 		}
 	}
 
@@ -153,7 +218,7 @@ func AdminCreateFeedbackQuestion(c *gin.Context) {
 	})
 }
 
-// AdminUpdateFeedbackQuestion updates a question and its relational options
+// AdminUpdateFeedbackQuestion updates a question and its relational options with marks
 func AdminUpdateFeedbackQuestion(c *gin.Context) {
 	id := c.Param("id")
 	var question models.FeedbackQuestion
@@ -180,9 +245,22 @@ func AdminUpdateFeedbackQuestion(c *gin.Context) {
 		qType = question.QuestionType
 	}
 
+	parsedOptions := parseOptionsInput(input.Options, qType)
+
+	// Calculate max marks
+	maxMarks := input.MaxMarks
+	if maxMarks <= 0 {
+		for _, opt := range parsedOptions {
+			if opt.Marks > maxMarks {
+				maxMarks = opt.Marks
+			}
+		}
+	}
+
 	question.QuestionText = strings.TrimSpace(input.QuestionText)
 	question.QuestionType = qType
 	question.IsRequired = input.IsRequired
+	question.MaxMarks = maxMarks
 	if input.OrderIndex > 0 {
 		question.OrderIndex = input.OrderIndex
 	}
@@ -212,36 +290,23 @@ func AdminUpdateFeedbackQuestion(c *gin.Context) {
 		return
 	}
 
-	var optionsToInsert []string
-	if qType == "mcq" {
-		for _, opt := range input.Options {
-			trimmed := strings.TrimSpace(opt)
-			if trimmed != "" {
-				optionsToInsert = append(optionsToInsert, trimmed)
+	if qType != "text" {
+		for idx, opt := range parsedOptions {
+			optRecord := models.FeedbackQuestionOption{
+				QuestionID: question.ID,
+				OptionText: opt.OptionText,
+				Marks:      opt.Marks,
+				OrderIndex: idx + 1,
 			}
-		}
-	} else if qType == "yes_no" {
-		if len(input.Options) > 0 {
-			optionsToInsert = input.Options
-		} else {
-			optionsToInsert = []string{"Yes", "No"}
-		}
-	}
-
-	for idx, optText := range optionsToInsert {
-		optRecord := models.FeedbackQuestionOption{
-			QuestionID: question.ID,
-			OptionText: optText,
-			OrderIndex: idx + 1,
-		}
-		if err := tx.Create(&optRecord).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to save updated question option",
-				"error":   err.Error(),
-			})
-			return
+			if err := tx.Create(&optRecord).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": "Failed to save updated question option",
+					"error":   err.Error(),
+				})
+				return
+			}
 		}
 	}
 
@@ -266,7 +331,6 @@ func AdminDeleteFeedbackQuestion(c *gin.Context) {
 	id := c.Param("id")
 
 	tx := database.DB.Begin()
-	// Remove child options
 	if err := tx.Where("question_id = ?", id).Delete(&models.FeedbackQuestionOption{}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete question options"})
@@ -359,7 +423,7 @@ func GetActiveFeedbackQuestions(c *gin.Context) {
 	})
 }
 
-// GetSessionFeedbackStatus checks if current user has already submitted peer feedback for a session
+// GetSessionFeedbackStatus checks mutual review submissions for both students in a session
 func GetSessionFeedbackStatus(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -370,7 +434,7 @@ func GetSessionFeedbackStatus(c *gin.Context) {
 	sessionID := c.Param("id")
 
 	var session models.InterviewSession
-	if err := database.DB.Preload("Interviewer").Preload("Interviewee").First(&session, sessionID).Error; err != nil {
+	if err := database.DB.Preload("Interviewer").Preload("Interviewee").Preload("Track").Preload("Level").First(&session, sessionID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
 		return
 	}
@@ -381,28 +445,61 @@ func GetSessionFeedbackStatus(c *gin.Context) {
 	}
 
 	var peer *models.User
+	var peerID uint
 	if session.InterviewerID == currentUserID {
 		peer = session.Interviewee
+		peerID = session.IntervieweeID
 	} else {
 		peer = session.Interviewer
+		peerID = session.InterviewerID
 	}
 
-	var existingFeedback models.InterviewFeedback
-	err := database.DB.
+	// 1. My feedback given to peer
+	var myFeedback models.InterviewFeedback
+	errMy := database.DB.
 		Where("session_id = ? AND reviewer_id = ?", session.ID, currentUserID).
+		Preload("Reviewer").
+		Preload("Reviewee").
 		Preload("Responses").
 		Preload("Responses.Question").
 		Preload("Responses.SelectedOption").
-		First(&existingFeedback).Error
+		First(&myFeedback).Error
 
-	hasSubmitted := (err == nil && existingFeedback.ID > 0)
+	hasSubmitted := (errMy == nil && myFeedback.ID > 0)
+
+	// 2. Peer's feedback given to me
+	var peerFeedback models.InterviewFeedback
+	errPeer := database.DB.
+		Where("session_id = ? AND reviewer_id = ? AND reviewee_id = ?", session.ID, peerID, currentUserID).
+		Preload("Reviewer").
+		Preload("Reviewee").
+		Preload("Responses").
+		Preload("Responses.Question").
+		Preload("Responses.SelectedOption").
+		First(&peerFeedback).Error
+
+	peerHasSubmitted := (errPeer == nil && peerFeedback.ID > 0)
+	bothSubmitted := (hasSubmitted && peerHasSubmitted)
+
+	var feedbacksList []models.InterviewFeedback
+	if hasSubmitted {
+		feedbacksList = append(feedbacksList, myFeedback)
+	}
+	if peerHasSubmitted {
+		feedbacksList = append(feedbacksList, peerFeedback)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":        "success",
-		"has_submitted": hasSubmitted,
-		"peer":          peer,
-		"session_id":    session.ID,
-		"feedback":      existingFeedback,
+		"status":              "success",
+		"has_submitted":       hasSubmitted,
+		"peer_has_submitted":  peerHasSubmitted,
+		"both_submitted":      bothSubmitted,
+		"my_feedback":         myFeedback,
+		"peer_feedback":       peerFeedback,
+		"feedbacks":           feedbacksList,
+		"peer":                peer,
+		"session_id":          session.ID,
+		"feedback":            myFeedback, // Backward compatibility
 	})
 }
 
@@ -415,7 +512,7 @@ type SubmitFeedbackInput struct {
 	} `json:"answers" binding:"required"`
 }
 
-// SubmitSessionFeedback records a student's peer evaluation for their interview partner
+// SubmitSessionFeedback records a student's peer evaluation and automatically computes scores
 func SubmitSessionFeedback(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -486,25 +583,73 @@ func SubmitSessionFeedback(c *gin.Context) {
 		return
 	}
 
-	// Insert relational response rows
+	var totalScore float64 = 0
+	var totalMaxScore float64 = 0
+
+	// Insert relational response rows & calculate score
 	for _, ans := range input.Answers {
 		if ans.QuestionID == 0 {
 			continue
+		}
+
+		var q models.FeedbackQuestion
+		if err := tx.Preload("Options").First(&q, ans.QuestionID).Error; err != nil {
+			continue
+		}
+
+		// Calculate question max marks
+		qMax := q.MaxMarks
+		if qMax <= 0 && len(q.Options) > 0 {
+			for _, o := range q.Options {
+				if o.Marks > qMax {
+					qMax = o.Marks
+				}
+			}
+		}
+
+		var awardedMarks float64 = 0
+		ansValue := strings.TrimSpace(ans.AnswerValue)
+
+		// Determine marks from selected option or answer value
+		if ans.SelectedOptionID != nil && *ans.SelectedOptionID > 0 {
+			for _, opt := range q.Options {
+				if opt.ID == *ans.SelectedOptionID {
+					awardedMarks = opt.Marks
+					if ansValue == "" {
+						ansValue = opt.OptionText
+					}
+					break
+				}
+			}
+		} else if q.QuestionType == "yes_no" {
+			for _, opt := range q.Options {
+				if strings.EqualFold(opt.OptionText, ansValue) {
+					awardedMarks = opt.Marks
+					break
+				}
+			}
+		} else if q.QuestionType == "mcq" {
+			for _, opt := range q.Options {
+				if strings.EqualFold(opt.OptionText, ansValue) {
+					awardedMarks = opt.Marks
+					break
+				}
+			}
+		}
+
+		// Text questions don't contribute to standard numeric totalMaxScore unless max_marks configured
+		if q.QuestionType != "text" || qMax > 0 {
+			totalScore += awardedMarks
+			totalMaxScore += qMax
 		}
 
 		responseRecord := models.InterviewFeedbackResponse{
 			FeedbackID:       feedback.ID,
 			QuestionID:       ans.QuestionID,
 			SelectedOptionID: ans.SelectedOptionID,
-			AnswerValue:      strings.TrimSpace(ans.AnswerValue),
-		}
-
-		// If selected option ID is present, make sure answer_value contains option text if empty
-		if responseRecord.SelectedOptionID != nil && responseRecord.AnswerValue == "" {
-			var opt models.FeedbackQuestionOption
-			if err := tx.First(&opt, *responseRecord.SelectedOptionID).Error; err == nil {
-				responseRecord.AnswerValue = opt.OptionText
-			}
+			AnswerValue:      ansValue,
+			AwardedMarks:     awardedMarks,
+			MaxMarks:         qMax,
 		}
 
 		if err := tx.Create(&responseRecord).Error; err != nil {
@@ -516,6 +661,26 @@ func SubmitSessionFeedback(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	var scorePercentage float64 = 0
+	if totalMaxScore > 0 {
+		scorePercentage = (totalScore / totalMaxScore) * 100.0
+	}
+
+	// Update totals on feedback header
+	if err := tx.Model(&feedback).Updates(map[string]interface{}{
+		"total_score":      totalScore,
+		"max_score":        totalMaxScore,
+		"score_percentage": scorePercentage,
+	}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to update feedback total scores",
+			"error":   err.Error(),
+		})
+		return
 	}
 
 	tx.Commit()
@@ -531,7 +696,46 @@ func SubmitSessionFeedback(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
-		"message": "Peer feedback submitted successfully. Thank you for your review!",
+		"message": "Peer feedback submitted successfully. Scores calculated!",
 		"data":    createdFeedback,
 	})
 }
+
+// GetStudentFeedbackHistory retrieves all past peer evaluations received and given by the logged in student
+func GetStudentFeedbackHistory(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+
+	var feedbacks []models.InterviewFeedback
+	err := database.DB.
+		Where("reviewee_id = ? OR reviewer_id = ?", currentUserID, currentUserID).
+		Preload("Reviewer").
+		Preload("Reviewee").
+		Preload("Session").
+		Preload("Session.Track").
+		Preload("Session.Level").
+		Preload("Responses").
+		Preload("Responses.Question").
+		Preload("Responses.SelectedOption").
+		Order("created_at desc").
+		Find(&feedbacks).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to fetch student feedback history",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   feedbacks,
+	})
+}
+
