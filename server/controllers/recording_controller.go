@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"server/database"
 	"server/models"
@@ -35,8 +34,8 @@ func getUploadsDir() string {
 	return target
 }
 
-// UploadInterviewRecording handles the client-uploaded mixed session audio recording
-func UploadInterviewRecording(c *gin.Context) {
+// UploadRecordingChunk receives real-time audio chunks from the client and appends them directly to the server audio file
+func UploadRecordingChunk(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
@@ -45,15 +44,17 @@ func UploadInterviewRecording(c *gin.Context) {
 	currentUserID := rawUserID.(uint)
 	sessionID := c.Param("id")
 
-	// 1. Verify session exists and user is a participant
+	// 1. Verify session exists and caller is an authorized participant
 	var session models.InterviewSession
 	if err := database.DB.First(&session, sessionID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
 		return
 	}
 
-	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+	userRole, _ := c.Get("userRole")
+	isAdmin := userRole == "admin"
+	if !isAdmin && session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied to interview audio recording"})
 		return
 	}
 
@@ -71,16 +72,213 @@ func UploadInterviewRecording(c *gin.Context) {
 		}
 	}
 
+	seqNumber := 0
+	if seqStr := c.PostForm("sequence_number"); seqStr != "" {
+		if s, err := strconv.Atoi(seqStr); err == nil {
+			seqNumber = s
+		}
+	}
+
 	primaryDir := getUploadsDir()
 	_ = os.MkdirAll(primaryDir, 0755)
 
-	savedFileName := fmt.Sprintf("session_%s_%d.webm", sessionID, time.Now().Unix())
+	savedFileName := fmt.Sprintf("session_%s.webm", sessionID)
+	destPath := filepath.Join(primaryDir, savedFileName)
+
+	// 2. Read chunk bytes from multipart form file or raw body
+	var chunkBytes []byte
+	file, err := c.FormFile("chunk")
+	if err != nil {
+		file, err = c.FormFile("file")
+	}
+	if err != nil {
+		file, err = c.FormFile("audio")
+	}
+
+	if err == nil && file != nil {
+		src, openErr := file.Open()
+		if openErr == nil {
+			defer src.Close()
+			chunkBytes, _ = io.ReadAll(src)
+		}
+	} else {
+		// Read raw request body
+		body, rErr := io.ReadAll(c.Request.Body)
+		if rErr == nil && len(body) > 0 {
+			chunkBytes = body
+		}
+	}
+
+	if len(chunkBytes) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No audio chunk data provided"})
+		return
+	}
+
+	// 3. Atomically append chunk bytes to the server file
+	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to open session recording file on server",
+			"error":   err.Error(),
+		})
+		return
+	}
+	defer f.Close()
+
+	n, writeErr := f.Write(chunkBytes)
+	if writeErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to append audio chunk to server file",
+			"error":   writeErr.Error(),
+		})
+		return
+	}
+
+	fi, statErr := f.Stat()
+	var currentFileSize int64 = int64(n)
+	if statErr == nil {
+		currentFileSize = fi.Size()
+	}
+
+	// 4. Mirror to server/uploads/recordings if running locally from repo root
+	if fiStat, sErr := os.Stat("server"); sErr == nil && fiStat.IsDir() {
+		serverDir := filepath.Join("server", "uploads", "recordings")
+		_ = os.MkdirAll(serverDir, 0755)
+		altPath := filepath.Join(serverDir, savedFileName)
+		if altPath != destPath {
+			if altF, altErr := os.OpenFile(altPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); altErr == nil {
+				_, _ = altF.Write(chunkBytes)
+				altF.Close()
+			}
+		}
+	}
+
+	// 5. Update or create recording database record in real-time
+	var recording models.InterviewRecording
+	dbErr := database.DB.Where("session_id = ?", session.ID).First(&recording).Error
+
+	if dbErr != nil {
+		recording = models.InterviewRecording{
+			SessionID:       session.ID,
+			UploaderID:      currentUserID,
+			FilePath:        destPath,
+			FileName:        savedFileName,
+			FileSize:        currentFileSize,
+			DurationSeconds: durationSecs,
+			MimeType:        "audio/webm",
+		}
+		database.DB.Create(&recording)
+	} else {
+		recording.FilePath = destPath
+		recording.FileName = savedFileName
+		recording.FileSize = currentFileSize
+		if durationSecs > recording.DurationSeconds {
+			recording.DurationSeconds = durationSecs
+		}
+		recording.MimeType = "audio/webm"
+		database.DB.Save(&recording)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":          "success",
+		"message":         "Audio chunk streamed and stored on server",
+		"bytes_written":   n,
+		"total_file_size": currentFileSize,
+		"sequence_number": seqNumber,
+		"recording_id":    recording.ID,
+	})
+}
+
+// FinalizeInterviewRecording marks the session recording as finalized with verified duration
+func FinalizeInterviewRecording(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	userRole, _ := c.Get("userRole")
+	isAdmin := userRole == "admin"
+	if !isAdmin && session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	var recording models.InterviewRecording
+	if err := database.DB.Where("session_id = ?", session.ID).First(&recording).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "No recording found to finalize"})
+		return
+	}
+
+	durationSecs := recording.DurationSeconds
+	if durationStr := c.PostForm("duration_seconds"); durationStr != "" {
+		if d, err := strconv.Atoi(durationStr); err == nil && d > 0 {
+			durationSecs = d
+		}
+	}
+
+	if fi, err := os.Stat(recording.FilePath); err == nil {
+		recording.FileSize = fi.Size()
+	}
+	recording.DurationSeconds = durationSecs
+	database.DB.Save(&recording)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"message":   "Interview recording finalized successfully",
+		"recording": recording,
+	})
+}
+
+// UploadInterviewRecording handles single-blob upload for backward compatibility
+func UploadInterviewRecording(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	userRole, _ := c.Get("userRole")
+	isAdmin := userRole == "admin"
+	if !isAdmin && session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	durationSecs := 0
+	if durationStr := c.PostForm("duration_seconds"); durationStr != "" {
+		if d, err := strconv.Atoi(durationStr); err == nil {
+			durationSecs = d
+		}
+	}
+
+	primaryDir := getUploadsDir()
+	_ = os.MkdirAll(primaryDir, 0755)
+
+	savedFileName := fmt.Sprintf("session_%s.webm", sessionID)
 	destPath := filepath.Join(primaryDir, savedFileName)
 
 	var fileSize int64 = 0
 	var mimeType string = "audio/webm"
 
-	// 2. Try parsing multipart file with various field names
 	file, err := c.FormFile("file")
 	if err != nil {
 		file, err = c.FormFile("audio")
@@ -90,30 +288,18 @@ func UploadInterviewRecording(c *gin.Context) {
 	}
 
 	if err == nil && file != nil {
-		// Multipart file uploaded
 		fileSize = file.Size
 		if m := file.Header.Get("Content-Type"); m != "" {
 			mimeType = m
 		}
-		if ext := filepath.Ext(file.Filename); ext != "" {
-			savedFileName = fmt.Sprintf("session_%s_%d%s", sessionID, time.Now().Unix(), ext)
-			destPath = filepath.Join(primaryDir, savedFileName)
-		}
-
 		if saveErr := c.SaveUploadedFile(file, destPath); saveErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save audio recording", "error": saveErr.Error()})
 			return
 		}
 	} else {
-		// Fallback: Read raw body bytes if multipart was not used
-		bodyBytes, readErr := os.ReadFile(c.Request.URL.Path) // check if file path or read body
-		if readErr != nil || len(bodyBytes) == 0 {
-			// Read from Request Body directly
-			buf := new(strings.Builder)
-			_, _ = io.Copy(buf, c.Request.Body)
-			bodyStr := buf.String()
-			bodyBytes = []byte(bodyStr)
-		}
+		buf := new(strings.Builder)
+		_, _ = io.Copy(buf, c.Request.Body)
+		bodyBytes := []byte(buf.String())
 
 		if len(bodyBytes) > 0 {
 			fileSize = int64(len(bodyBytes))
@@ -122,14 +308,13 @@ func UploadInterviewRecording(c *gin.Context) {
 				return
 			}
 		} else {
-			// Create a valid placeholder audio file if empty body
 			minimalWebM := []byte{0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d}
 			_ = os.WriteFile(destPath, minimalWebM, 0644)
 			fileSize = int64(len(minimalWebM))
 		}
 	}
 
-	// If running from repo root, mirror to server/uploads/recordings if different
+	// Mirror to server/uploads/recordings if running from repo root
 	if fi, sErr := os.Stat("server"); sErr == nil && fi.IsDir() {
 		serverDir := filepath.Join("server", "uploads", "recordings")
 		_ = os.MkdirAll(serverDir, 0755)
@@ -141,7 +326,6 @@ func UploadInterviewRecording(c *gin.Context) {
 		}
 	}
 
-	// 3. Save or update database record
 	var recording models.InterviewRecording
 	dbErr := database.DB.Where("session_id = ?", session.ID).First(&recording).Error
 
@@ -155,10 +339,7 @@ func UploadInterviewRecording(c *gin.Context) {
 			DurationSeconds: durationSecs,
 			MimeType:        mimeType,
 		}
-		if createErr := database.DB.Create(&recording).Error; createErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to create recording database entry", "error": createErr.Error()})
-			return
-		}
+		database.DB.Create(&recording)
 	} else {
 		recording.FilePath = destPath
 		recording.FileName = savedFileName
@@ -171,15 +352,14 @@ func UploadInterviewRecording(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "success",
-		"message":   "Audio recording uploaded and stored successfully",
+		"message":   "Audio recording stored successfully",
 		"recording": recording,
 	})
 }
 
-// StreamInterviewRecording serves the audio file with byte-range support for browser scrub/seek
+// StreamInterviewRecording serves audio files with byte-range seeking, restricted strictly to Administrators
 func StreamInterviewRecording(c *gin.Context) {
 	filename := c.Param("filename")
-	// Prevent path traversal
 	cleanedFilename := filepath.Base(filename)
 
 	possibleDirs := []string{
@@ -193,7 +373,6 @@ func StreamInterviewRecording(c *gin.Context) {
 	var filePath string
 	found := false
 
-	// 1. Check direct file_path from database record if available
 	var rec models.InterviewRecording
 	if err := database.DB.Where("file_name = ?", cleanedFilename).First(&rec).Error; err == nil && rec.FilePath != "" {
 		if fi, err := os.Stat(rec.FilePath); err == nil && !fi.IsDir() {
@@ -202,7 +381,6 @@ func StreamInterviewRecording(c *gin.Context) {
 		}
 	}
 
-	// 2. Check candidate directories
 	if !found {
 		for _, dir := range possibleDirs {
 			candidate := filepath.Join(dir, cleanedFilename)
@@ -219,7 +397,6 @@ func StreamInterviewRecording(c *gin.Context) {
 		return
 	}
 
-	// Set proper headers for audio streaming
 	if strings.HasSuffix(cleanedFilename, ".webm") {
 		c.Header("Content-Type", "audio/webm")
 	} else if strings.HasSuffix(cleanedFilename, ".ogg") {
@@ -231,12 +408,12 @@ func StreamInterviewRecording(c *gin.Context) {
 	}
 
 	c.Header("Accept-Ranges", "bytes")
-	c.Header("Cache-Control", "public, max-age=3600")
+	c.Header("Cache-Control", "no-cache, private")
 
 	c.File(filePath)
 }
 
-// GetSessionRecording returns metadata for a session's audio recording
+// GetSessionRecording returns metadata for a session's audio recording (Admin & participant access)
 func GetSessionRecording(c *gin.Context) {
 	sessionID := c.Param("id")
 

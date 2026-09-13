@@ -67,19 +67,21 @@ func SetupRouter() *gin.Engine {
 			interviews.GET("/sessions/:id/security-report", controllers.GetSessionSecurityReportStatus)
 			interviews.POST("/sessions/:id/security-report", controllers.SubmitSecurityReport)
 
-			// WebRTC Live Audio Signaling & Recordings
+			// WebRTC Live Audio Signaling & Chunk Streaming Recordings
 			interviews.GET("/sessions/:id/ws", controllers.HandleWebRTCSignaling)
+			interviews.POST("/sessions/:id/recording/chunk", controllers.UploadRecordingChunk)
+			interviews.POST("/sessions/:id/recording/finalize", controllers.FinalizeInterviewRecording)
 			interviews.POST("/sessions/:id/recording", controllers.UploadInterviewRecording)
 			interviews.GET("/sessions/:id/recording", controllers.GetSessionRecording)
 		}
-
-		// Public Audio Streaming Route (Supports HTTP byte-range for players)
-		g.GET("/recordings/:filename", controllers.StreamInterviewRecording)
 
 		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)
 		admin := g.Group("/admin")
 		admin.Use(middlewares.AuthMiddleware(), middlewares.RequireAdmin())
 		{
+			// Admin-Only Audio Recording Streaming Route (Supports HTTP byte-range for players)
+			admin.GET("/recordings/:filename", controllers.StreamInterviewRecording)
+
 			// User Management
 			admin.GET("/users", controllers.AdminGetUsers)
 			admin.GET("/users/:id", controllers.AdminGetUserByID)

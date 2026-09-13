@@ -49,14 +49,18 @@ export default function useWebRTCAudio({
   const remoteStreamRef = useRef(null);
   const remoteAudioElRef = useRef(null);
 
-  // Web Audio Mixer & Recorder Refs
+  // Web Audio Mixer & Real-time Chunk Streaming Refs
   const audioContextRef = useRef(null);
   const mixedDestRef = useRef(null);
   const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
   const recordingStartTimeRef = useRef(null);
-  const isUploadingRef = useRef(false);
+  const isFinalizingRef = useRef(false);
   const uploadSuccessRef = useRef(false);
+
+  // Chunk Streaming Queue (Zero client-side disk storage - streamed & discarded immediately)
+  const chunkQueueRef = useRef([]);
+  const isStreamingChunkRef = useRef(false);
+  const chunkSequenceRef = useRef(0);
 
   // Audio Analysers for Voice Activity Detection
   const localAnalyserRef = useRef(null);
@@ -83,7 +87,7 @@ export default function useWebRTCAudio({
     };
   }, []);
 
-  // Voice Activity Detection (VAD) Loop - Completely decoupled from effect re-triggers using refs
+  // Voice Activity Detection (VAD) Loop
   const startVAD = useCallback(() => {
     if (vadIntervalRef.current) clearInterval(vadIntervalRef.current);
 
@@ -121,6 +125,80 @@ export default function useWebRTCAudio({
       }
     }, 150);
   }, []);
+
+  // Process and stream chunks asynchronously to the server
+  const processChunkQueue = useCallback(async () => {
+    if (isStreamingChunkRef.current || chunkQueueRef.current.length === 0 || !sessionId) {
+      return;
+    }
+
+    isStreamingChunkRef.current = true;
+    const item = chunkQueueRef.current.shift();
+
+    if (!item || !item.blob || item.blob.size === 0) {
+      isStreamingChunkRef.current = false;
+      if (chunkQueueRef.current.length > 0) {
+        processChunkQueue();
+      }
+      return;
+    }
+
+    try {
+      const durationSecs = recordingStartTimeRef.current
+        ? Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000))
+        : 1;
+
+      const formData = new FormData();
+      formData.append('chunk', item.blob, `chunk_${sessionId}_${item.seq}.webm`);
+      formData.append('sequence_number', String(item.seq));
+      formData.append('duration_seconds', String(durationSecs));
+
+      let chunkUrl = `/api/v1/interviews/sessions/${sessionId}/recording/chunk`;
+      const envApiUrl = import.meta.env.VITE_API_URL;
+      if (envApiUrl && envApiUrl.startsWith('http')) {
+        chunkUrl = `${envApiUrl.replace(/\/+$/, '')}/interviews/sessions/${sessionId}/recording/chunk`;
+      } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '5173') {
+        chunkUrl = `http://localhost:8080/api/v1/interviews/sessions/${sessionId}/recording/chunk`;
+      }
+
+      const token = localStorage.getItem('token') || '';
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(chunkUrl, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        console.warn(`[WebRTC Audio Stream] Chunk ${item.seq} upload returned status ${res.status}`);
+      }
+    } catch (err) {
+      console.warn('[WebRTC Audio Stream] Error streaming chunk to server:', err);
+    } finally {
+      // Chunk is uploaded and memory is freed immediately
+      isStreamingChunkRef.current = false;
+      if (chunkQueueRef.current.length > 0) {
+        processChunkQueue();
+      }
+    }
+  }, [sessionId]);
+
+  // Queue incoming audio chunk from MediaRecorder
+  const queueAudioChunk = useCallback((blob) => {
+    if (!blob || blob.size === 0) return;
+    chunkSequenceRef.current += 1;
+    chunkQueueRef.current.push({
+      blob,
+      seq: chunkSequenceRef.current,
+      time: Date.now(),
+    });
+    processChunkQueue();
+  }, [processChunkQueue]);
 
   // Setup Web Audio Mixer for Dual-Speaker Recording
   const initAudioMixer = useCallback(async (localStream) => {
@@ -163,11 +241,11 @@ export default function useWebRTCAudio({
       const recorderOptions = mimeType ? { mimeType } : undefined;
       const recorder = new MediaRecorder(recordingStream, recorderOptions);
       mediaRecorderRef.current = recorder;
-      recordedChunksRef.current = [];
 
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
+          // Stream chunk directly to server; zero client-side disk storage
+          queueAudioChunk(event.data);
         }
       };
 
@@ -175,9 +253,10 @@ export default function useWebRTCAudio({
         console.warn('[WebRTC Audio] MediaRecorder error:', e);
       };
 
-      recorder.start(1000); // 1-second chunks for continuous buffer population
+      // Emit chunk every 3 seconds for continuous streaming to server
+      recorder.start(3000);
       recordingStartTimeRef.current = Date.now();
-      console.log('[WebRTC Audio] MediaRecorder started recording dialogue with mimeType:', mimeType || 'default');
+      console.log('[WebRTC Audio] Real-time chunk streaming active with mimeType:', mimeType || 'default');
     } catch (err) {
       console.warn('[WebRTC Audio] Mixer init warning:', err);
       // Direct stream fallback
@@ -185,19 +264,18 @@ export default function useWebRTCAudio({
         const mimeType = getSupportedAudioMimeType();
         const fallbackRecorder = new MediaRecorder(localStream, mimeType ? { mimeType } : undefined);
         mediaRecorderRef.current = fallbackRecorder;
-        recordedChunksRef.current = [];
         fallbackRecorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) {
-            recordedChunksRef.current.push(e.data);
+            queueAudioChunk(e.data);
           }
         };
-        fallbackRecorder.start(1000);
+        fallbackRecorder.start(3000);
         recordingStartTimeRef.current = Date.now();
       } catch (fallbackErr) {
         console.error('[WebRTC Audio] Fallback recorder error:', fallbackErr);
       }
     }
-  }, []);
+  }, [queueAudioChunk]);
 
   // Connect remote stream to mixer when track is received
   const connectRemoteToMixer = useCallback(async (remoteStream) => {
@@ -218,7 +296,7 @@ export default function useWebRTCAudio({
 
       remoteSource.connect(remoteAnalyser);
       remoteSource.connect(mixedDestRef.current);
-      console.log('[WebRTC Audio] Remote peer audio attached to mixer destination');
+      console.log('[WebRTC Audio] Remote peer audio attached to real-time mixer');
     } catch (err) {
       console.warn('[WebRTC Audio] Remote mixer connect warning:', err);
     }
@@ -236,93 +314,78 @@ export default function useWebRTCAudio({
     }
   }, []);
 
-  // Stop recording and upload to server
+  // Stop recording, flush remaining chunks, and finalize server recording metadata
   const stopAndUploadRecording = useCallback(async () => {
     if (!sessionId) return null;
-    if (isUploadingRef.current) {
-      console.log('[WebRTC Audio] Upload already in progress, ignoring duplicate request');
+    if (isFinalizingRef.current) {
+      console.log('[WebRTC Audio] Finalize already in progress, ignoring duplicate request');
       return null;
     }
     if (uploadSuccessRef.current) {
-      console.log('[WebRTC Audio] Recording already uploaded for session:', sessionId);
+      console.log('[WebRTC Audio] Recording already finalized for session:', sessionId);
       return null;
     }
 
-    isUploadingRef.current = true;
+    isFinalizingRef.current = true;
     setUploadingRecording(true);
 
     try {
-      console.log('[WebRTC Audio] Finalizing audio recording for session:', sessionId);
+      console.log('[WebRTC Audio] Finalizing real-time recording for session:', sessionId);
 
-      // Stop recorder and wait for final chunks
+      // 1. Request final data chunk and stop recorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try {
           mediaRecorderRef.current.requestData();
         } catch (e) {}
 
         await new Promise((resolve) => {
-          mediaRecorderRef.current.onstop = () => {
-            resolve();
-          };
+          mediaRecorderRef.current.onstop = () => resolve();
           try {
             mediaRecorderRef.current.stop();
           } catch (e) {
             resolve();
           }
-          // Safety timeout fallback
-          setTimeout(resolve, 800);
+          setTimeout(resolve, 600);
         });
       }
 
-      let blob;
-      if (recordedChunksRef.current && recordedChunksRef.current.length > 0) {
-        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-        blob = new Blob(recordedChunksRef.current, { type: mimeType });
-      }
-
-      if (!blob || blob.size === 0) {
-        console.warn('[WebRTC Audio] Empty chunks, creating minimum valid container');
-        blob = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d])], { type: 'audio/webm' });
+      // 2. Wait for all pending chunks in the queue to be transmitted
+      let waitIterations = 0;
+      while ((chunkQueueRef.current.length > 0 || isStreamingChunkRef.current) && waitIterations < 20) {
+        await new Promise((r) => setTimeout(r, 150));
+        waitIterations++;
       }
 
       const durationSecs = recordingStartTimeRef.current
         ? Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000))
         : 1;
 
-      const formData = new FormData();
-      formData.append('file', blob, `interview_${sessionId}_${Date.now()}.webm`);
-      formData.append('duration_seconds', String(durationSecs));
-
-      let uploadUrl = `/api/v1/interviews/sessions/${sessionId}/recording`;
+      // 3. Notify server to seal the recording metadata
+      let finalizeUrl = `/api/v1/interviews/sessions/${sessionId}/recording/finalize`;
       const envApiUrl = import.meta.env.VITE_API_URL;
       if (envApiUrl && envApiUrl.startsWith('http')) {
-        uploadUrl = `${envApiUrl.replace(/\/+$/, '')}/interviews/sessions/${sessionId}/recording`;
+        finalizeUrl = `${envApiUrl.replace(/\/+$/, '')}/interviews/sessions/${sessionId}/recording/finalize`;
       } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '5173') {
-        uploadUrl = `http://localhost:8080/api/v1/interviews/sessions/${sessionId}/recording`;
+        finalizeUrl = `http://localhost:8080/api/v1/interviews/sessions/${sessionId}/recording/finalize`;
       }
 
-      console.log('[WebRTC Audio] Dispatching audio upload to:', uploadUrl, 'Blob size:', blob.size, 'bytes');
-
       const token = localStorage.getItem('token') || '';
-      const headers = {};
+      const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(uploadUrl, {
+      const response = await fetch(finalizeUrl, {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: formData,
+        body: `duration_seconds=${durationSecs}`,
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Upload failed with HTTP ${response.status}: ${errText}`);
+      let resData = null;
+      if (response.ok) {
+        resData = await response.json();
       }
-
-      const resData = await response.json();
-      console.log('[WebRTC Audio] Audio successfully stored on server:', resData);
 
       uploadSuccessRef.current = true;
       setUploadSuccess(true);
@@ -331,15 +394,15 @@ export default function useWebRTCAudio({
       }
       return resData?.recording;
     } catch (err) {
-      console.error('[WebRTC Audio] Failed to upload recording:', err);
+      console.error('[WebRTC Audio] Failed to finalize recording:', err);
       return null;
     } finally {
-      isUploadingRef.current = false;
+      isFinalizingRef.current = false;
       setUploadingRecording(false);
     }
   }, [sessionId, onRecordingUploaded]);
 
-  // Main WebRTC & WebSocket initialization - Stable lifecycle on [enabled, sessionId]
+  // Main WebRTC & WebSocket initialization
   useEffect(() => {
     if (!enabled || !sessionId) return;
 
@@ -365,7 +428,6 @@ export default function useWebRTCAudio({
         }
 
         localStreamRef.current = stream;
-        // Ensure track enabled matches initial mute state
         const audioTracks = stream.getAudioTracks();
         if (audioTracks.length > 0) {
           audioTracks[0].enabled = !isMutedRef.current;
@@ -377,19 +439,16 @@ export default function useWebRTCAudio({
         const pc = new RTCPeerConnection(RTC_CONFIG);
         pcRef.current = pc;
 
-        // Add local tracks to RTCPeerConnection
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
         });
 
-        // Handle ICE candidate generation
         pc.onicecandidate = (event) => {
           if (event.candidate) {
             sendSignaling('ice-candidate', event.candidate);
           }
         };
 
-        // Multi-signal connection state calculator (evaluates connectionState, iceConnectionState, and live audio tracks)
         const updateCalculatedConnectionState = () => {
           if (isDestroyed) return;
           const connState = pc.connectionState;
@@ -428,7 +487,6 @@ export default function useWebRTCAudio({
         pc.onconnectionstatechange = updateCalculatedConnectionState;
         pc.oniceconnectionstatechange = updateCalculatedConnectionState;
 
-        // Handle incoming remote audio track (supports both stream event and direct track fallback)
         pc.ontrack = (event) => {
           let remoteStream = event.streams && event.streams[0] ? event.streams[0] : null;
           if (!remoteStream && event.track) {
@@ -506,7 +564,6 @@ export default function useWebRTCAudio({
 
               case 'peer_ready': {
                 sendSignaling('mute-status', null, { is_muted: isMutedRef.current });
-                // If offer hasn't been established after brief delay, send offer as reliable initiator
                 setTimeout(async () => {
                   if (!isDestroyed && pc.signalingState === 'stable' && !pc.remoteDescription) {
                     try {
@@ -652,7 +709,7 @@ export default function useWebRTCAudio({
     };
   }, [enabled, sessionId, initAudioMixer, connectRemoteToMixer, sendSignaling, startVAD]);
 
-  // Resume AudioContext on any user interaction (browser autoplay policy)
+  // Resume AudioContext on any user interaction
   useEffect(() => {
     const handleUserGesture = () => {
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
@@ -667,7 +724,7 @@ export default function useWebRTCAudio({
     };
   }, []);
 
-  // Toggle local mute - purely adjusts track.enabled with ZERO reconnection or effect interruption
+  // Toggle local mute
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
       const audioTracks = localStreamRef.current.getAudioTracks();
