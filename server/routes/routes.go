@@ -57,6 +57,10 @@ func SetupRouter() *gin.Engine {
 			interviews.POST("/sessions/:id/decline-end", controllers.DeclineSessionEndInterview)
 			interviews.POST("/sessions/:id/cancel-end", controllers.DeclineSessionEndInterview)
 
+			// Student Dashboard Stats & Attended Interview History
+			interviews.GET("/dashboard/stats", controllers.GetStudentDashboardStats)
+			interviews.GET("/history", controllers.GetStudentInterviewHistory)
+
 			// Peer Feedback
 			interviews.GET("/feedback/questions", controllers.GetActiveFeedbackQuestions)
 			interviews.GET("/feedback/history", controllers.GetStudentFeedbackHistory)

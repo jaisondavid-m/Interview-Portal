@@ -793,6 +793,264 @@ func SubmitSessionFeedback(c *gin.Context) {
 	})
 }
 
+// StudentInterviewItem represents an interview session attended by the student
+type StudentInterviewItem struct {
+	SessionID       uint                                `json:"session_id"`
+	TrackTitle      string                              `json:"track_title"`
+	TrackCategory   string                              `json:"track_category"`
+	TrackIcon       string                              `json:"track_icon"`
+	LevelNumber     int                                 `json:"level_number"`
+	LevelName       string                              `json:"level_name"`
+	LevelMode       string                              `json:"level_mode"`
+	Role            string                              `json:"role"` // "interviewer" | "interviewee"
+	PeerName        string                              `json:"peer_name"`
+	PeerRollNo      string                              `json:"peer_roll_no"`
+	PeerDepartment  string                              `json:"peer_department"`
+	PeerEmail       string                              `json:"peer_email"`
+	Status          string                              `json:"status"`
+	StartedAt       time.Time                           `json:"started_at"`
+	EndedAt         *time.Time                          `json:"ended_at"`
+	CreatedAt       time.Time                           `json:"created_at"`
+	DurationSecs    int                                 `json:"duration_seconds"`
+	TotalScore      float64                             `json:"total_score"`
+	MaxScore        float64                             `json:"max_score"`
+	ScorePercentage float64                             `json:"score_percentage"`
+	HasScorecard    bool                                `json:"has_scorecard"`
+	EvaluatorName   string                              `json:"evaluator_name"`
+	ReviewNotes     string                              `json:"review_notes"`
+	Responses       []models.InterviewFeedbackResponse  `json:"responses"`
+}
+
+// GetStudentInterviewHistory retrieves all interview sessions attended by the logged-in student with track, level, date, and scorecard
+func GetStudentInterviewHistory(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+
+	// Fetch all sessions where student was either Interviewer or Interviewee
+	var sessions []models.InterviewSession
+	err := database.DB.
+		Where("(interviewer_id = ? OR interviewee_id = ?) AND status != ?", currentUserID, currentUserID, "cancelled").
+		Preload("Track").
+		Preload("Level").
+		Preload("Interviewer").
+		Preload("Interviewee").
+		Order("created_at desc").
+		Find(&sessions).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to fetch student interview history",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Fetch all feedbacks received by this student
+	var feedbacks []models.InterviewFeedback
+	database.DB.
+		Where("reviewee_id = ?", currentUserID).
+		Preload("Reviewer").
+		Preload("Responses").
+		Preload("Responses.Question").
+		Preload("Responses.SelectedOption").
+		Find(&feedbacks)
+
+	feedbackMap := make(map[uint]models.InterviewFeedback)
+	for _, fb := range feedbacks {
+		feedbackMap[fb.SessionID] = fb
+	}
+
+	var items []StudentInterviewItem
+	for _, s := range sessions {
+		trackTitle := "Technical Mock Interview"
+		trackCategory := "Technical"
+		trackIcon := "Code"
+		if s.Track != nil {
+			if s.Track.Title != "" { trackTitle = s.Track.Title }
+			if s.Track.Category != "" { trackCategory = s.Track.Category }
+			if s.Track.Icon != "" { trackIcon = s.Track.Icon }
+		}
+
+		levelNumber := 1
+		levelName := "Foundation Level"
+		levelMode := "coding"
+		if s.Level != nil {
+			if s.Level.LevelNumber > 0 { levelNumber = s.Level.LevelNumber }
+			if s.Level.Name != "" { levelName = s.Level.Name }
+			if s.Level.Mode != "" { levelMode = string(s.Level.Mode) }
+		}
+
+		myRole := "interviewee"
+		var peer *models.User
+		if s.InterviewerID == currentUserID {
+			myRole = "interviewer"
+			peer = s.Interviewee
+		} else {
+			peer = s.Interviewer
+		}
+
+		peerName := "Peer Student"
+		peerRollNo := ""
+		peerDept := ""
+		peerEmail := ""
+		if peer != nil {
+			peerName = peer.Name
+			peerRollNo = peer.RollNo
+			peerDept = peer.Department
+			peerEmail = peer.Email
+		}
+
+		durationSecs := 0
+		if s.EndedAt != nil && !s.StartedAt.IsZero() {
+			diff := s.EndedAt.Sub(s.StartedAt).Seconds()
+			if diff > 0 {
+				durationSecs = int(diff)
+			}
+		}
+
+		fb, hasFb := feedbackMap[s.ID]
+		evaluatorName := ""
+		reviewNotes := ""
+		var responses []models.InterviewFeedbackResponse
+		var totalScore, maxScore, scorePct float64
+
+		if hasFb {
+			totalScore = fb.TotalScore
+			maxScore = fb.MaxScore
+			scorePct = fb.ScorePercentage
+			if fb.Reviewer != nil {
+				evaluatorName = fb.Reviewer.Name
+			}
+			responses = fb.Responses
+			for _, r := range fb.Responses {
+				if r.Question != nil && r.Question.QuestionType == "text" && r.AnswerValue != "" {
+					reviewNotes = r.AnswerValue
+					break
+				}
+			}
+		}
+
+		items = append(items, StudentInterviewItem{
+			SessionID:       s.ID,
+			TrackTitle:      trackTitle,
+			TrackCategory:   trackCategory,
+			TrackIcon:       trackIcon,
+			LevelNumber:     levelNumber,
+			LevelName:       levelName,
+			LevelMode:       levelMode,
+			Role:            myRole,
+			PeerName:        peerName,
+			PeerRollNo:      peerRollNo,
+			PeerDepartment:  peerDept,
+			PeerEmail:       peerEmail,
+			Status:          s.Status,
+			StartedAt:       s.StartedAt,
+			EndedAt:         s.EndedAt,
+			CreatedAt:       s.CreatedAt,
+			DurationSecs:    durationSecs,
+			TotalScore:      totalScore,
+			MaxScore:        maxScore,
+			ScorePercentage: scorePct,
+			HasScorecard:    hasFb,
+			EvaluatorName:   evaluatorName,
+			ReviewNotes:     reviewNotes,
+			Responses:       responses,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   items,
+	})
+}
+
+// GetStudentDashboardStats retrieves computed real-time performance KPI metrics for the student dashboard
+func GetStudentDashboardStats(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+
+	// 1. Total sessions attended
+	var sessions []models.InterviewSession
+	database.DB.
+		Where("(interviewer_id = ? OR interviewee_id = ?) AND status != ?", currentUserID, currentUserID, "cancelled").
+		Find(&sessions)
+
+	interviewsAttended := len(sessions)
+
+	var totalPracticeSecs float64
+	for _, s := range sessions {
+		if s.EndedAt != nil && !s.StartedAt.IsZero() {
+			diff := s.EndedAt.Sub(s.StartedAt).Seconds()
+			if diff > 0 {
+				totalPracticeSecs += diff
+			}
+		} else {
+			totalPracticeSecs += 2700 // default 45 mins per completed session
+		}
+	}
+	totalPracticeHours := totalPracticeSecs / 3600.0
+
+	// 2. Feedbacks received (scores gained)
+	var feedbacks []models.InterviewFeedback
+	database.DB.
+		Where("reviewee_id = ?", currentUserID).
+		Find(&feedbacks)
+
+	var totalPoints float64
+	var totalMaxPoints float64
+	for _, fb := range feedbacks {
+		totalPoints += fb.TotalScore
+		totalMaxPoints += fb.MaxScore
+	}
+
+	// 3. Average points = Total Points / Interviews Attended
+	var avgPoints float64
+	if interviewsAttended > 0 {
+		avgPoints = totalPoints / float64(interviewsAttended)
+	} else if len(feedbacks) > 0 {
+		avgPoints = totalPoints / float64(len(feedbacks))
+	}
+
+	var scorePct float64
+	if totalMaxPoints > 0 {
+		scorePct = (totalPoints / totalMaxPoints) * 100.0
+	}
+
+	grade := "Needs Practice"
+	if scorePct >= 85 {
+		grade = "Outstanding (A+)"
+	} else if scorePct >= 70 {
+		grade = "Proficient (B)"
+	} else if scorePct >= 50 {
+		grade = "Average (C)"
+	} else if interviewsAttended == 0 && totalPoints == 0 {
+		grade = "Unranked"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"total_points":           totalPoints,
+			"total_max_points":       totalMaxPoints,
+			"interviews_attended":    interviewsAttended,
+			"average_points":         avgPoints,
+			"score_percentage":       scorePct,
+			"total_practice_hours":   totalPracticeHours,
+			"total_reviews_received": len(feedbacks),
+			"grade":                  grade,
+		},
+	})
+}
+
 // GetStudentFeedbackHistory retrieves all past peer evaluations received and given by the logged in student
 func GetStudentFeedbackHistory(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")

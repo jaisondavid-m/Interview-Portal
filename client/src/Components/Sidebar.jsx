@@ -35,6 +35,7 @@ export default function Sidebar() {
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Interviews', path: '/interviews', icon: Video },
+        { name: 'Interview History', path: '/history', icon: History },
       ];
 
   return (
