@@ -141,42 +141,6 @@ export default function AdminLeaderboard() {
       .slice(0, 3);
   }, [leaderboard]);
 
-  const getGradeBadge = (grade, pct, attended) => {
-    if (attended === 0 && (!pct || pct === 0)) {
-      return {
-        bg: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20',
-        dot: 'bg-zinc-400',
-        label: 'Unranked',
-      };
-    }
-    if (pct >= 85) {
-      return {
-        bg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-        dot: 'bg-emerald-500',
-        label: 'Outstanding (A+)',
-      };
-    }
-    if (pct >= 70) {
-      return {
-        bg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
-        dot: 'bg-purple-500',
-        label: 'Proficient (B)',
-      };
-    }
-    if (pct >= 50) {
-      return {
-        bg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-        dot: 'bg-amber-500',
-        label: 'Average (C)',
-      };
-    }
-    return {
-      bg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-      dot: 'bg-rose-500',
-      label: 'Needs Practice',
-    };
-  };
-
   const hasActiveFilters = searchTerm.trim() !== '' || selectedDept !== 'all' || minInterviews > 0 || minPoints > 0;
 
   return (
@@ -640,21 +604,6 @@ export default function AdminLeaderboard() {
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
-                  <th
-                    className={`py-3 px-4 cursor-pointer hover:text-[var(--text-primary)] transition-colors ${
-                      metricMode === 'percentage' ? 'text-[var(--accent)] font-bold' : ''
-                    }`}
-                    onClick={() => {
-                      setSortField('percentage');
-                      setSortOrder(sortField === 'percentage' && sortOrder === 'desc' ? 'asc' : 'desc');
-                    }}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Score %</span>
-                      <ArrowUpDown className="w-3 h-3" />
-                    </div>
-                  </th>
-                  <th className="py-3 px-4">Grade</th>
                   <th className="py-3 px-4 text-right">Scorecard</th>
                 </tr>
               </thead>
@@ -663,8 +612,6 @@ export default function AdminLeaderboard() {
                   const attended = student.interviews_attended ?? student.matches_count ?? 0;
                   const totalScore = student.total_score ?? 0;
                   const pointsPerInt = student.points_per_interview ?? student.avg_score_per_match ?? 0;
-                  const pct = student.score_percentage ?? 0;
-                  const badge = getGradeBadge(student.grade, pct, attended);
                   const isTop3 = student.rank <= 3 && (attended > 0 || totalScore > 0);
 
                   return (
@@ -752,39 +699,6 @@ export default function AdminLeaderboard() {
                             pts / interview
                           </span>
                         </div>
-                      </td>
-
-                      {/* Score Percentage Bar */}
-                      <td className="py-3 px-4 font-mono">
-                        <div className="space-y-1 w-24">
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-[var(--text-primary)]">
-                              {pct.toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-[var(--bg-raised)] h-1.5 rounded-full overflow-hidden border border-[var(--border)]">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                pct >= 85
-                                  ? 'bg-emerald-500'
-                                  : pct >= 70
-                                  ? 'bg-purple-500'
-                                  : pct >= 50
-                                  ? 'bg-amber-500'
-                                  : 'bg-rose-500'
-                              }`}
-                              style={{ width: `${Math.min(100, pct)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Grade Badge */}
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border inline-flex items-center gap-1 ${badge.bg}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-                          <span>{badge.label}</span>
-                        </span>
                       </td>
 
                       {/* Action Button */}
