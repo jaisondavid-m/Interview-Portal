@@ -42,8 +42,9 @@ type InterviewLevel struct {
 	Name        string              `gorm:"size:150;not null" json:"name" binding:"required"`
 	Description string              `gorm:"type:text" json:"description"`
 	Mode        InterviewMode       `gorm:"size:50;default:'coding';not null" json:"mode" binding:"required"`
-	DurationMin int                 `gorm:"default:45" json:"duration_minutes"`
-	Questions   []InterviewQuestion `gorm:"foreignKey:LevelID;constraint:OnDelete:CASCADE" json:"questions,omitempty"`
+	DurationMin   int                 `gorm:"default:45" json:"duration_minutes"`
+	QuestionCount int                 `gorm:"default:1" json:"question_count"`
+	Questions     []InterviewQuestion `gorm:"foreignKey:LevelID;constraint:OnDelete:CASCADE" json:"questions,omitempty"`
 	CreatedAt   time.Time           `json:"created_at"`
 	UpdatedAt   time.Time           `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt      `gorm:"index" json:"-"`

@@ -95,9 +95,12 @@ export default function QuestionListView({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-[12px] font-mono text-[var(--text-secondary)]">
+        <div className="flex items-center gap-2 text-[12px] font-mono text-[var(--text-secondary)] flex-wrap">
           <span className="bg-[var(--bg-card)] px-2.5 py-1 rounded border border-[var(--border)]">
             ⏱ {currentLevel?.duration_minutes || 45} mins allotted
+          </span>
+          <span className="bg-[var(--bg-card)] px-2.5 py-1 rounded border border-[var(--border)] font-semibold text-[var(--accent)]" title="Configured number of questions loaded per session">
+            🎯 {currentLevel?.question_count || (currentLevel?.mode === 'mcq' ? 10 : 1)} { (currentLevel?.question_count === 1 || (!currentLevel?.question_count && currentLevel?.mode !== 'mcq')) ? 'qn / session' : 'qns / session' }
           </span>
         </div>
       </div>

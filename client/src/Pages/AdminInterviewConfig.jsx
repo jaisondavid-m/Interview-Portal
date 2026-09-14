@@ -142,7 +142,7 @@ export default function AdminInterviewConfig() {
 
   // Form States
   const [trackForm, setTrackForm] = useState({ id: null, title: '', icon: 'Code', description: '' });
-  const [levelForm, setLevelForm] = useState({ id: null, level_number: 1, name: '', description: '', mode: 'coding', duration_minutes: 45 });
+  const [levelForm, setLevelForm] = useState({ id: null, level_number: 1, name: '', description: '', mode: 'coding', duration_minutes: 45, question_count: 1 });
   const [questionForm, setQuestionForm] = useState({
     id: null,
     title: '',
@@ -542,6 +542,7 @@ export default function AdminInterviewConfig() {
                       description: '',
                       mode: 'coding',
                       duration_minutes: 45,
+                      question_count: 1,
                     });
                     setFormError('');
                     setShowLevelModal(true);
@@ -602,11 +603,12 @@ export default function AdminInterviewConfig() {
           onCreateLevel={() => {
             setLevelForm({
               id: null,
-              level_number: 1,
+              level_number: (levels?.length || 0) + 1,
               name: '',
               description: '',
               mode: 'coding',
               duration_minutes: 45,
+              question_count: 1,
             });
             setFormError('');
             setShowLevelModal(true);
@@ -618,7 +620,8 @@ export default function AdminInterviewConfig() {
               name: formatLevelName(level),
               description: level.description,
               mode: level.mode,
-              duration_minutes: level.duration_minutes,
+              duration_minutes: level.duration_minutes || 45,
+              question_count: level.question_count || (level.mode === 'mcq' ? 10 : 1),
             });
             setFormError('');
             setShowLevelModal(true);

@@ -238,6 +238,13 @@ func AdminGetLevels(c *gin.Context) {
 
 	var levelDTOs []LevelDTO
 	for _, l := range levels {
+		if l.QuestionCount <= 0 {
+			if l.Mode == models.ModeMCQ {
+				l.QuestionCount = 10
+			} else {
+				l.QuestionCount = 1
+			}
+		}
 		var qCount int64
 		database.DB.Model(&models.InterviewQuestion{}).Where("level_id = ?", l.ID).Count(&qCount)
 		levelDTOs = append(levelDTOs, LevelDTO{
@@ -261,6 +268,14 @@ func AdminGetLevelByID(c *gin.Context) {
 		return
 	}
 
+	if level.QuestionCount <= 0 {
+		if level.Mode == models.ModeMCQ {
+			level.QuestionCount = 10
+		} else {
+			level.QuestionCount = 1
+		}
+	}
+
 	var qCount int64
 	database.DB.Model(&models.InterviewQuestion{}).Where("level_id = ?", level.ID).Count(&qCount)
 
@@ -274,6 +289,7 @@ func AdminGetLevelByID(c *gin.Context) {
 			"description":      level.Description,
 			"mode":             level.Mode,
 			"duration_minutes": level.DurationMin,
+			"question_count":   level.QuestionCount,
 			"questions_count":  qCount,
 			"created_at":       level.CreatedAt,
 			"updated_at":       level.UpdatedAt,
@@ -288,11 +304,12 @@ func AdminCreateLevel(c *gin.Context) {
 		trackID = c.Param("trackId")
 	}
 	var input struct {
-		LevelNumber int                  `json:"level_number" binding:"required"`
-		Name        string               `json:"name" binding:"required"`
-		Description string               `json:"description"`
-		Mode        models.InterviewMode `json:"mode" binding:"required"` // coding, verbal_qa, mcq, discussion
-		DurationMin int                  `json:"duration_minutes"`
+		LevelNumber   int                  `json:"level_number" binding:"required"`
+		Name          string               `json:"name" binding:"required"`
+		Description   string               `json:"description"`
+		Mode          models.InterviewMode `json:"mode" binding:"required"` // coding, verbal_qa, mcq, discussion
+		DurationMin   int                  `json:"duration_minutes"`
+		QuestionCount int                  `json:"question_count"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -309,6 +326,15 @@ func AdminCreateLevel(c *gin.Context) {
 		duration = 45
 	}
 
+	questionCount := input.QuestionCount
+	if questionCount <= 0 {
+		if input.Mode == models.ModeMCQ {
+			questionCount = 10
+		} else {
+			questionCount = 1
+		}
+	}
+
 	var trackIDUint uint
 	if _, err := fmt.Sscanf(trackID, "%d", &trackIDUint); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid track ID"})
@@ -316,12 +342,13 @@ func AdminCreateLevel(c *gin.Context) {
 	}
 
 	level := models.InterviewLevel{
-		TrackID:     trackIDUint,
-		LevelNumber: input.LevelNumber,
-		Name:        input.Name,
-		Description: input.Description,
-		Mode:        input.Mode,
-		DurationMin: duration,
+		TrackID:       trackIDUint,
+		LevelNumber:   input.LevelNumber,
+		Name:          input.Name,
+		Description:   input.Description,
+		Mode:          input.Mode,
+		DurationMin:   duration,
+		QuestionCount: questionCount,
 	}
 
 	if err := database.DB.Create(&level).Error; err != nil {
@@ -350,11 +377,12 @@ func AdminUpdateLevel(c *gin.Context) {
 	}
 
 	var input struct {
-		Name        string               `json:"name"`
-		Description string               `json:"description"`
-		Mode        models.InterviewMode `json:"mode"`
-		DurationMin int                  `json:"duration_minutes"`
-		LevelNumber int                  `json:"level_number"`
+		Name          string               `json:"name"`
+		Description   string               `json:"description"`
+		Mode          models.InterviewMode `json:"mode"`
+		DurationMin   int                  `json:"duration_minutes"`
+		QuestionCount int                  `json:"question_count"`
+		LevelNumber   int                  `json:"level_number"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -373,6 +401,15 @@ func AdminUpdateLevel(c *gin.Context) {
 	}
 	if input.DurationMin > 0 {
 		level.DurationMin = input.DurationMin
+	}
+	if input.QuestionCount > 0 {
+		level.QuestionCount = input.QuestionCount
+	} else if level.QuestionCount <= 0 {
+		if level.Mode == models.ModeMCQ {
+			level.QuestionCount = 10
+		} else {
+			level.QuestionCount = 1
+		}
 	}
 	if input.LevelNumber > 0 {
 		level.LevelNumber = input.LevelNumber

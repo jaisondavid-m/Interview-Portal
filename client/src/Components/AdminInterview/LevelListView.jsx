@@ -95,14 +95,18 @@ export default function LevelListView({
                 </div>
 
                 <div className="flex items-center justify-between md:justify-end gap-4 border-t md:border-t-0 pt-2 md:pt-0">
-                  <div className="flex items-center gap-3 text-[12px] font-mono text-[var(--text-muted)]">
+                  <div className="flex items-center gap-3 text-[12px] font-mono text-[var(--text-muted)] flex-wrap">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {level.duration_minutes || 45} mins
                     </span>
                     <span>•</span>
+                    <span className="px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] font-semibold text-[var(--accent)]" title="Number of questions loaded for candidate per interview">
+                      {level.question_count || (level.mode === 'mcq' ? 10 : 1)} { (level.question_count === 1 || (!level.question_count && level.mode !== 'mcq')) ? 'qn / session' : 'qns / session' }
+                    </span>
+                    <span>•</span>
                     <span className="font-semibold text-[var(--text-primary)]">
-                      {questionsCount} {questionsCount === 1 ? 'Question' : 'Questions'}
+                      {questionsCount} {questionsCount === 1 ? 'in bank' : 'in bank'}
                     </span>
                   </div>
 

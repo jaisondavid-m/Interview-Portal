@@ -36,7 +36,7 @@ export default function LevelModal({
         )}
 
         <form onSubmit={onSave} className="custom-form space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="col-span-1">
               <span>Level #</span>
               <input
@@ -45,21 +45,44 @@ export default function LevelModal({
                 required
                 value={levelForm.level_number}
                 onChange={(e) => setLevelForm({ ...levelForm, level_number: parseInt(e.target.value) || 1 })}
-                className="custom-input"
+                className="custom-input font-mono"
               />
             </label>
 
-            <label className="col-span-2">
+            <label className="col-span-1">
               <span>Duration (Mins)</span>
               <input
                 type="number"
-                min="10"
+                min="5"
                 step="5"
                 value={levelForm.duration_minutes}
                 onChange={(e) => setLevelForm({ ...levelForm, duration_minutes: parseInt(e.target.value) || 45 })}
-                className="custom-input"
+                className="custom-input font-mono"
               />
             </label>
+
+            <label className="col-span-1">
+              <span>Questions / Session</span>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                required
+                value={levelForm.question_count !== undefined ? levelForm.question_count : (levelForm.mode === 'mcq' ? 10 : 1)}
+                onChange={(e) => setLevelForm({ ...levelForm, question_count: Math.max(1, parseInt(e.target.value) || 1) })}
+                className="custom-input font-mono font-semibold"
+                placeholder={levelForm.mode === 'mcq' ? '10' : '1'}
+              />
+            </label>
+          </div>
+
+          <div className="px-3 py-2 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] text-[11px] text-[var(--text-secondary)] flex items-center justify-between">
+            <span>
+              💡 <strong>Questions to Load:</strong> {levelForm.mode === 'mcq' ? 'Typically 10–15 MCQs per candidate test' : 'Typically 1 question for Coding/DSA/System Design'}
+            </span>
+            <span className="font-mono font-bold text-[var(--accent)] ml-2 shrink-0">
+              {levelForm.question_count || (levelForm.mode === 'mcq' ? 10 : 1)} qns
+            </span>
           </div>
 
           <label>
@@ -86,7 +109,15 @@ export default function LevelModal({
                 return (
                   <div
                     key={mode.id}
-                    onClick={() => setLevelForm({ ...levelForm, mode: mode.id })}
+                    onClick={() => {
+                      let nextQCount = levelForm.question_count;
+                      if (mode.id === 'mcq' && (!nextQCount || nextQCount === 1)) {
+                        nextQCount = 10;
+                      } else if (mode.id !== 'mcq' && nextQCount === 10) {
+                        nextQCount = 1;
+                      }
+                      setLevelForm({ ...levelForm, mode: mode.id, question_count: nextQCount });
+                    }}
                     className={`p-3 rounded-[var(--radius-sm)] border cursor-pointer transition-all ${
                       isSelected
                         ? `${mode.bg} border-[var(--accent)] shadow-[0_0_0_1.5px_var(--accent)]`

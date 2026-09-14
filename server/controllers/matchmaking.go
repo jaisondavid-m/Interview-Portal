@@ -237,6 +237,7 @@ func GetStudentTracks(c *gin.Context) {
 		Description     string               `json:"description"`
 		Mode            models.InterviewMode `json:"mode"`
 		DurationMinutes int                  `json:"duration_minutes"`
+		QuestionCount   int                  `json:"question_count"`
 		QuestionsCount  int                  `json:"questions_count"`
 	}
 
@@ -259,6 +260,14 @@ func GetStudentTracks(c *gin.Context) {
 		for j, l := range t.Levels {
 			qCount := len(l.Questions)
 			totalQ += qCount
+			qLoad := l.QuestionCount
+			if qLoad <= 0 {
+				if l.Mode == models.ModeMCQ {
+					qLoad = 10
+				} else {
+					qLoad = 1
+				}
+			}
 			lvlDTOs[j] = LevelDTO{
 				ID:              l.ID,
 				TrackID:         l.TrackID,
@@ -267,6 +276,7 @@ func GetStudentTracks(c *gin.Context) {
 				Description:     l.Description,
 				Mode:            l.Mode,
 				DurationMinutes: l.DurationMin,
+				QuestionCount:   qLoad,
 				QuestionsCount:  qCount,
 			}
 		}
@@ -716,7 +726,19 @@ func GetInterviewSession(c *gin.Context) {
 	// Sanitize Level Questions list for candidate
 	var levelQuestions []gin.H
 	if session.Level != nil {
-		for _, q := range session.Level.Questions {
+		questionsToServe := session.Level.Questions
+		loadCount := session.Level.QuestionCount
+		if loadCount <= 0 {
+			if session.Level.Mode == models.ModeMCQ {
+				loadCount = 10
+			} else {
+				loadCount = 1
+			}
+		}
+		if loadCount > 0 && len(questionsToServe) > loadCount {
+			questionsToServe = questionsToServe[:loadCount]
+		}
+		for _, q := range questionsToServe {
 			if currentUserRole == "interviewer" {
 				levelQuestions = append(levelQuestions, fullQuestionForInterviewer(q))
 			} else {
