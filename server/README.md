@@ -14,14 +14,27 @@ server/
 ├── config/
 │   └── config.go           # Environment variables & configuration loader
 ├── controllers/
-│   ├── health_controller.go# Server & database health checks
-│   └── user_controller.go  # User management and peer profiles
+│   ├── auth.go             # Authentication & session token management
+│   ├── feedback.go         # Peer evaluations, grading rubrics & leaderboard
+│   ├── health.go           # Server & database health checks
+│   ├── interview.go        # Domains, progression tracks & question banks
+│   ├── matchmaking.go      # Real-time peer matchmaking & room pairing
+│   ├── recording.go        # Session audio recordings & playback
+│   ├── security.go         # Credential security scanning & audit logs
+│   ├── signaling.go        # WebRTC signaling & live socket events
+│   ├── user.go             # User management and student profiles
+│   └── code_evaluator.go   # Multi-language code runner & test validator
 ├── database/
 │   └── db.go               # MySQL GORM connection, pool setup & migrations
 ├── middlewares/
+│   ├── auth.go             # JWT & cookie authentication middleware
 │   └── cors.go             # CORS middleware
 ├── models/
-│   └── user.go             # GORM database models
+│   ├── feedback.go         # Peer feedback & rubric schemas
+│   ├── interview.go        # Domains, levels, questions & test cases
+│   ├── recording.go        # Audio recording models
+│   ├── security.go         # Credential security report models
+│   └── user.go             # Student & admin user models
 ├── routes/
 │   └── routes.go           # Router initialization & route group registration
 ├── .env                    # Environment variables (DB credentials, port)
