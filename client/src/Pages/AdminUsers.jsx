@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import SearchableSelect from '../Components/SearchableSelect';
+import { SkeletonTableRows } from '../Components/Skeleton';
 
 const DEPARTMENT_OPTIONS = [
   { value: 'ALL', label: 'All Departments' },
@@ -718,11 +719,7 @@ export default function AdminUsers() {
             </thead>
             <tbody className="divide-y divide-[var(--border)] text-[13px]">
               {loading ? (
-                <tr>
-                  <td colSpan="6" className="py-8 text-center text-[var(--text-muted)] font-mono">
-                    Loading accounts...
-                  </td>
-                </tr>
+                <SkeletonTableRows rows={8} cols={6} />
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="py-8 text-center text-[var(--text-muted)]">

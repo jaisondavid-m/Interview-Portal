@@ -15,6 +15,12 @@ import {
   formatLevelName,
   formatFullLevelTitle,
 } from '../Components/AdminInterview';
+import {
+  SkeletonTrackGrid,
+  SkeletonLevels,
+  SkeletonQuestions,
+  SkeletonQuestionDetail,
+} from '../Components/Skeleton';
 
 export default function AdminInterviewConfig() {
   const { trackId, levelId, questionId } = useParams();
@@ -572,100 +578,116 @@ export default function AdminInterviewConfig() {
 
       {/* VIEW 1: Track List */}
       {!trackId && (
-        <TrackListView
-          tracks={tracks}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          onSelectTrack={(track) => navigate(`/admin/interviews/${track.id}/levels`)}
-          onEditTrack={(track) => {
-            setTrackForm({
-              id: track.id,
-              title: track.title,
-              icon: track.icon,
-              description: track.description,
-            });
-            setFormError('');
-            setShowTrackModal(true);
-          }}
-          onDeleteTrack={(track) => {
-            setDeleteTarget({ type: 'track', data: track });
-            setShowDeleteModal(true);
-          }}
-        />
+        loading ? (
+          <SkeletonTrackGrid count={4} />
+        ) : (
+          <TrackListView
+            tracks={tracks}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onSelectTrack={(track) => navigate(`/admin/interviews/${track.id}/levels`)}
+            onEditTrack={(track) => {
+              setTrackForm({
+                id: track.id,
+                title: track.title,
+                icon: track.icon,
+                description: track.description,
+              });
+              setFormError('');
+              setShowTrackModal(true);
+            }}
+            onDeleteTrack={(track) => {
+              setDeleteTarget({ type: 'track', data: track });
+              setShowDeleteModal(true);
+            }}
+          />
+        )
       )}
 
       {/* VIEW 2: Level List */}
       {trackId && !levelId && (
-        <LevelListView
-          currentTrack={currentTrack}
-          levels={levels}
-          onSelectLevel={(level) => navigate(`/admin/interviews/${trackId}/levels/${level.id}/questions`)}
-          onCreateLevel={() => {
-            setLevelForm({
-              id: null,
-              level_number: (levels?.length || 0) + 1,
-              name: '',
-              description: '',
-              mode: 'coding',
-              duration_minutes: 45,
-              question_count: 1,
-            });
-            setFormError('');
-            setShowLevelModal(true);
-          }}
-          onEditLevel={(level) => {
-            setLevelForm({
-              id: level.id,
-              level_number: level.level_number,
-              name: formatLevelName(level),
-              description: level.description,
-              mode: level.mode,
-              duration_minutes: level.duration_minutes || 45,
-              question_count: level.question_count || (level.mode === 'mcq' ? 10 : 1),
-            });
-            setFormError('');
-            setShowLevelModal(true);
-          }}
-          onDeleteLevel={(level) => {
-            setDeleteTarget({ type: 'level', data: level });
-            setShowDeleteModal(true);
-          }}
-        />
+        loading ? (
+          <SkeletonLevels count={3} />
+        ) : (
+          <LevelListView
+            currentTrack={currentTrack}
+            levels={levels}
+            onSelectLevel={(level) => navigate(`/admin/interviews/${trackId}/levels/${level.id}/questions`)}
+            onCreateLevel={() => {
+              setLevelForm({
+                id: null,
+                level_number: (levels?.length || 0) + 1,
+                name: '',
+                description: '',
+                mode: 'coding',
+                duration_minutes: 45,
+                question_count: 1,
+              });
+              setFormError('');
+              setShowLevelModal(true);
+            }}
+            onEditLevel={(level) => {
+              setLevelForm({
+                id: level.id,
+                level_number: level.level_number,
+                name: formatLevelName(level),
+                description: level.description,
+                mode: level.mode,
+                duration_minutes: level.duration_minutes || 45,
+                question_count: level.question_count || (level.mode === 'mcq' ? 10 : 1),
+              });
+              setFormError('');
+              setShowLevelModal(true);
+            }}
+            onDeleteLevel={(level) => {
+              setDeleteTarget({ type: 'level', data: level });
+              setShowDeleteModal(true);
+            }}
+          />
+        )
       )}
 
       {/* VIEW 3: Question List */}
       {trackId && levelId && !questionId && (
-        <QuestionListView
-          currentLevel={currentLevel}
-          currentTrack={currentTrack}
-          questions={questions}
-          onSelectQuestion={(q) => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${q.id}`)}
-          onAddQuestion={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/new`)}
-          onEditQuestion={(q) => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${q.id}/edit`)}
-          onDeleteQuestion={(q) => {
-            setDeleteTarget({ type: 'question', data: q });
-            setShowDeleteModal(true);
-          }}
-          onOpenBulkModal={() => setShowBulkQuestionModal(true)}
-          onExportQuestions={handleExportQuestions}
-          onBulkDeleteQuestions={handleBulkDeleteQuestions}
-        />
+        loading ? (
+          <SkeletonQuestions count={4} />
+        ) : (
+          <QuestionListView
+            currentLevel={currentLevel}
+            currentTrack={currentTrack}
+            questions={questions}
+            onSelectQuestion={(q) => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${q.id}`)}
+            onAddQuestion={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/new`)}
+            onEditQuestion={(q) => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${q.id}/edit`)}
+            onDeleteQuestion={(q) => {
+              setDeleteTarget({ type: 'question', data: q });
+              setShowDeleteModal(true);
+            }}
+            onOpenBulkModal={() => setShowBulkQuestionModal(true)}
+            onExportQuestions={handleExportQuestions}
+            onBulkDeleteQuestions={handleBulkDeleteQuestions}
+          />
+        )
       )}
 
       {/* VIEW 4: Question Details */}
       {trackId && levelId && questionId && (
-        <QuestionDetailView
-          currentQuestion={currentQuestion}
-          currentLevel={currentLevel}
-          trackId={trackId}
-          levelId={levelId}
-          onBack={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
-          onEdit={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${currentQuestion.id}/edit`)}
-          onDelete={() => {
-            setDeleteTarget({ type: 'question', data: currentQuestion });
-            setShowDeleteModal(true);
-          }}
-        />
+        loading ? (
+          <SkeletonQuestionDetail />
+        ) : (
+          <QuestionDetailView
+            currentQuestion={currentQuestion}
+            currentLevel={currentLevel}
+            trackId={trackId}
+            levelId={levelId}
+            onBack={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
+            onEdit={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${currentQuestion.id}/edit`)}
+            onDelete={() => {
+              setDeleteTarget({ type: 'question', data: currentQuestion });
+              setShowDeleteModal(true);
+            }}
+          />
+        )
       )}
 
       {/* MODALS */}

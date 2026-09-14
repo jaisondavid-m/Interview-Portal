@@ -13,6 +13,7 @@ import {
   Filter
 } from 'lucide-react';
 import api from '../api/axios';
+import { SkeletonTableRows } from '../Components/Skeleton';
 
 export default function AdminInterviewHistory() {
   const navigate = useNavigate();
@@ -153,9 +154,24 @@ export default function AdminInterviewHistory() {
 
       {/* Sessions Table */}
       {loading ? (
-        <div className="panel-card p-14 text-center space-y-3">
-          <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-          <p className="text-[13px] text-[var(--text-muted)]">Loading interview session records...</p>
+        <div className="panel-card overflow-hidden border border-[var(--border)] animate-fadeIn">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
+                  <th className="py-3 px-4">Room #</th>
+                  <th className="py-3 px-4">Domain & Mode</th>
+                  <th className="py-3 px-4">Student A</th>
+                  <th className="py-3 px-4">Student B</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Started / Duration</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)] text-[13px]">
+                <SkeletonTableRows rows={6} cols={6} />
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : filteredSessions.length === 0 ? (
         <div className="panel-card p-12 text-center space-y-2">

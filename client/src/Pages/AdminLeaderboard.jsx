@@ -29,6 +29,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import api from '../api/axios';
+import { SkeletonTableRows, SkeletonStatsGrid } from '../Components/Skeleton';
 
 export default function AdminLeaderboard() {
   const [leaderboard, setLeaderboard] = useState([]);
@@ -471,13 +472,22 @@ export default function AdminLeaderboard() {
       {/* Leaderboard Table (Distinct for each tab) */}
       <div className="panel-card bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs overflow-hidden">
         {loading ? (
-          <div className="py-20 text-center space-y-3">
-            <RefreshCw className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-            <p className="text-xs text-[var(--text-muted)] font-mono">
-              {activeTab === 'total_points'
-                ? 'Calculating total points & ranking students...'
-                : 'Calculating points per interview & ranking students...'}
-            </p>
+          <div className="overflow-x-auto animate-fadeIn">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[var(--text-muted)] font-mono text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4 w-14 text-center">Rank</th>
+                  <th className="py-3 px-4">Student</th>
+                  <th className="py-3 px-4">Dept / Roll No</th>
+                  <th className="py-3 px-4 text-center">Attended</th>
+                  <th className="py-3 px-4 text-right">Points</th>
+                  <th className="py-3 px-4 text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                <SkeletonTableRows rows={8} cols={6} />
+              </tbody>
+            </table>
           </div>
         ) : error ? (
           <div className="p-8 text-center text-[var(--red)] space-y-2">

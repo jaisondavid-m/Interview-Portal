@@ -19,6 +19,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import api from '../api/axios';
+import { Skeleton } from '../Components/Skeleton';
 
 export default function History() {
   const [history, setHistory] = useState([]);
@@ -94,11 +95,30 @@ export default function History() {
         </button>
       </div>
 
-      {/* Content */}
+      {/* Main Content Area */}
       {loading ? (
-        <div className="panel-card p-16 text-center space-y-3">
-          <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-          <p className="text-[13px] text-[var(--text-muted)] font-mono">Loading interview sessions history...</p>
+        <div className="space-y-4 animate-fadeIn">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="panel-card p-5 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs space-y-4"
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-40 rounded-full" />
+                    <Skeleton className="h-5 w-24 rounded-full" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-72" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-8 w-24 rounded-[var(--radius-sm)]" />
+                  <Skeleton className="h-8 w-20 rounded-[var(--radius-sm)]" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : error ? (
         <div className="p-8 text-center text-[var(--red)] space-y-2">

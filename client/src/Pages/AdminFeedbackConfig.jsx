@@ -23,6 +23,7 @@ import {
   Trophy
 } from 'lucide-react';
 import api from '../api/axios';
+import { Skeleton } from '../Components/Skeleton';
 
 const PRESETS = [
   {
@@ -407,9 +408,29 @@ export default function AdminFeedbackConfig() {
         {/* Main Questions List (2 Cols) */}
         <div className="lg:col-span-2 space-y-4">
           {loading ? (
-            <div className="panel-card p-12 text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-              <p className="text-[13px] text-[var(--text-muted)]">Loading peer feedback questions & marks...</p>
+            <div className="space-y-3.5 animate-fadeIn">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div key={idx} className="panel-card p-5 border border-[var(--border)] space-y-3 bg-[var(--bg-card)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                        <Skeleton className="h-5 w-24 rounded-full" />
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                      </div>
+                      <Skeleton className="h-4 w-72" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-7 w-7 rounded" />
+                      <Skeleton className="h-7 w-7 rounded" />
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
+                    <Skeleton className="h-3 w-40" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : questions.length === 0 ? (
             <div className="panel-card p-12 text-center space-y-3 border-dashed">

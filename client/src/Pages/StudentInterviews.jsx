@@ -22,6 +22,7 @@ import {
   Award
 } from 'lucide-react';
 import api from '../api/axios';
+import { SkeletonTrackGrid } from '../Components/Skeleton';
 
 export default function StudentInterviews() {
   const navigate = useNavigate();
@@ -380,10 +381,7 @@ export default function StudentInterviews() {
 
           {/* Domain Cards Grid */}
           {loading ? (
-            <div className="panel-card p-12 text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
-              <p className="text-[13px] text-[var(--text-muted)]">Loading available interview domains...</p>
-            </div>
+            <SkeletonTrackGrid count={4} />
           ) : filteredTracks.length === 0 ? (
             <div className="panel-card p-10 text-center space-y-2">
               <Video className="w-8 h-8 text-[var(--text-muted)] mx-auto" />

@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import api from '../api/axios';
+import { Skeleton, SkeletonStatsGrid, SkeletonTableRows } from '../Components/Skeleton';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -166,42 +167,47 @@ export default function Dashboard() {
       )}
 
       {/* Dynamic Performance Stat Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat, i) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={i}
-              className="panel-card p-4.5 space-y-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] hover:border-[var(--border-strong)] transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] font-semibold text-[var(--text-secondary)] font-ui">
-                  {stat.label}
-                </span>
-                <div className={`p-1.5 rounded-[var(--radius-sm)] ${stat.bg} ${stat.color} border ${stat.border}`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-baseline gap-1.5 flex-wrap">
-                  <span className="text-[26px] font-bold text-[var(--text-primary)] font-mono leading-none">
-                    {loading ? '...' : stat.value}
+      {/* 4 Stat Metric Cards */}
+      {loading ? (
+        <SkeletonStatsGrid count={4} />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((stat, i) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={i}
+                className="panel-card p-4.5 space-y-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] hover:border-[var(--border-strong)] transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-semibold text-[var(--text-secondary)] font-ui">
+                    {stat.label}
                   </span>
-                  {stat.suffix && (
-                    <span className="text-[12px] font-mono text-[var(--text-muted)] font-semibold">
-                      {stat.suffix}
-                    </span>
-                  )}
+                  <div className={`p-1.5 rounded-[var(--radius-sm)] ${stat.bg} ${stat.color} border ${stat.border}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
                 </div>
-                <p className="text-[11px] text-[var(--text-muted)] font-mono mt-1.5">
-                  {stat.subtext}
-                </p>
+
+                <div>
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-[26px] font-bold text-[var(--text-primary)] font-mono leading-none">
+                      {stat.value}
+                    </span>
+                    {stat.suffix && (
+                      <span className="text-[12px] font-mono text-[var(--text-muted)] font-semibold">
+                        {stat.suffix}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] font-mono mt-1.5">
+                    {stat.subtext}
+                  </p>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Recent Interviews Attended Section */}
       <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-4 shadow-xs">
@@ -223,9 +229,19 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <div className="py-12 text-center space-y-2 text-[var(--text-muted)]">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto text-[var(--accent)]" />
-            <p className="text-xs font-mono">Loading interview records...</p>
+          <div className="space-y-3 animate-fadeIn">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="p-4 rounded-[var(--radius-md)] border border-[var(--border)] flex items-center justify-between gap-4">
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-56" />
+                </div>
+                <Skeleton className="h-7 w-20 rounded-[var(--radius-sm)]" />
+              </div>
+            ))}
           </div>
         ) : recentInterviews.length === 0 ? (
           <div className="py-10 text-center space-y-2 border border-dashed border-[var(--border)] rounded-[var(--radius-md)]">
