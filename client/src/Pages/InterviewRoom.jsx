@@ -1319,7 +1319,10 @@ export default function InterviewRoom() {
               whiteboardData={whiteboardData}
               onWhiteboardChange={handleWhiteboardChange}
               isEditable={currentUserRole === 'interviewee'}
-              candidateName="Anonymous Candidate"
+              candidateName={currentUserRole === 'interviewer' ? (peerUser?.username || 'Candidate') : 'You (Candidate)'}
+              question={question}
+              payload={payload}
+              currentUserRole={currentUserRole}
             />
           ) : (
             <>

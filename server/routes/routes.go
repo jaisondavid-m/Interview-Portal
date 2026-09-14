@@ -91,7 +91,6 @@ func SetupRouter() *gin.Engine {
 		{
 			// Admin-Only Audio Recording Streaming Route (Supports HTTP byte-range for players)
 			admin.GET("/recordings/:filename", controllers.StreamInterviewRecording)
-			admin.GET("/interviews/sessions/:id/recording/stream", controllers.StreamInterviewRecording)
 
 			// User Management
 			admin.GET("/users", controllers.AdminGetUsers)

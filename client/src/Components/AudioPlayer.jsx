@@ -17,9 +17,10 @@ import {
   SkipBack,
   SkipForward,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Activity,
+  Wifi
 } from 'lucide-react';
-import api from '../api/axios';
 
 export default function AudioPlayer({
   recording,
@@ -27,14 +28,14 @@ export default function AudioPlayer({
 }) {
   const audioRef = useRef(null);
   const progressBarRef = useRef(null);
-  const blobUrlRef = useRef('');
   const rafRef = useRef(null);
 
-  const [blobUrl, setBlobUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(recording?.duration_seconds || 0);
+  const [bufferedPercent, setBufferedPercent] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -56,25 +57,24 @@ export default function AudioPlayer({
     return 0;
   }, [duration, recording?.duration_seconds]);
 
-  // Keep track of active blob url ref for clean revocation on unmount
-  useEffect(() => {
-    blobUrlRef.current = blobUrl;
-  }, [blobUrl]);
-
-  // Resolve base API URL
-  let audioBase = '/api/v1';
-  const envApiUrl = import.meta.env.VITE_API_URL;
-  if (envApiUrl && envApiUrl.startsWith('http')) {
-    audioBase = envApiUrl.replace(/\/+$/, '');
-  } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '5173') {
-    audioBase = 'http://localhost:8080/api/v1';
-  }
+  // Resolve base API URL for streaming
+  const audioBase = useMemo(() => {
+    const envApiUrl = import.meta.env.VITE_API_URL;
+    if (envApiUrl && envApiUrl.startsWith('http')) {
+      return envApiUrl.replace(/\/+$/, '');
+    }
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '5173') {
+      return 'http://localhost:8080/api/v1';
+    }
+    return '/api/v1';
+  }, []);
 
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') || '' : '';
   const tokenQuery = token ? `token=${encodeURIComponent(token)}` : '';
   const sessionId = recording?.session_id;
 
-  const directStreamUrl = useMemo(() => {
+  // Direct Progressive HTTP Byte-Range Stream URL (Spotify-style chunk streaming)
+  const streamUrl = useMemo(() => {
     if (!audioFileName) return '';
     const base = `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`;
     return tokenQuery ? `${base}?${tokenQuery}` : base;
@@ -87,95 +87,51 @@ export default function AudioPlayer({
     return `${base}${dlParams}`;
   }, [audioBase, audioFileName, tokenQuery]);
 
-  // Load audio file as local Blob URL for 100% reliable in-browser playback
-  const loadAudioBlob = useCallback(async () => {
-    if (!audioFileName) return;
+  // Update progressive buffer ranges from HTML5 audio element (Spotify-style buffer tracking)
+  const updateBufferedRanges = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    setIsLoading(true);
-    setLoadError('');
+    try {
+      const buf = audio.buffered;
+      if (buf && buf.length > 0) {
+        const curr = audio.currentTime;
+        let activeBufferedEnd = 0;
 
-    const candidateUrls = [
-      `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`,
-      `${audioBase}/recordings/${encodeURIComponent(audioFileName)}`,
-      `/api/v1/admin/recordings/${encodeURIComponent(audioFileName)}`,
-      `/api/v1/recordings/${encodeURIComponent(audioFileName)}`,
-      `/admin/recordings/${encodeURIComponent(audioFileName)}`,
-      `/recordings/${encodeURIComponent(audioFileName)}`,
-      ...(sessionId ? [
-        `${audioBase}/admin/interviews/sessions/${sessionId}/recording/stream`,
-        `${audioBase}/interviews/sessions/${sessionId}/recording/stream`,
-      ] : []),
-    ];
-
-    let loadedBlob = null;
-
-    // 1. Try Axios first (uses configured auth cookies & credentials)
-    for (const url of candidateUrls) {
-      try {
-        const res = await api.get(url, { responseType: 'blob' });
-        if (res && res instanceof Blob && res.size > 0) {
-          loadedBlob = res;
-          break;
-        } else if (res?.data && res.data instanceof Blob && res.data.size > 0) {
-          loadedBlob = res.data;
-          break;
-        }
-      } catch (e) {
-        // continue to next candidate
-      }
-    }
-
-    // 2. Fallback: Try native fetch with credentials and bearer auth
-    if (!loadedBlob) {
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      for (const url of candidateUrls) {
-        try {
-          const fetchUrl = token ? (url.includes('?') ? `${url}&token=${encodeURIComponent(token)}` : `${url}?token=${encodeURIComponent(token)}`) : url;
-          const resp = await fetch(fetchUrl, { headers, credentials: 'include' });
-          if (resp.ok) {
-            const b = await resp.blob();
-            if (b && b.size > 0) {
-              loadedBlob = b;
-              break;
-            }
+        // Find the buffer segment covering the current playback position or furthest loaded chunk
+        for (let i = 0; i < buf.length; i++) {
+          const start = buf.start(i);
+          const end = buf.end(i);
+          if (start <= curr && curr <= end) {
+            activeBufferedEnd = end;
+            break;
+          } else if (end > activeBufferedEnd) {
+            activeBufferedEnd = end;
           }
-        } catch (e) {
-          // continue
+        }
+
+        const maxDuration = effectiveDuration > 0 ? effectiveDuration : (audio.duration || 1);
+        if (maxDuration > 0) {
+          const pct = Math.min(100, Math.max(0, (activeBufferedEnd / maxDuration) * 100));
+          setBufferedPercent(pct);
         }
       }
+    } catch (e) {
+      // ignore
     }
+  }, [effectiveDuration]);
 
-    if (loadedBlob) {
-      const mimeType = loadedBlob.type || 'audio/webm';
-      const cleanBlob = new Blob([loadedBlob], { type: mimeType });
-      const objectUrl = URL.createObjectURL(cleanBlob);
-      setBlobUrl((prev) => {
-        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
-        return objectUrl;
-      });
-      setLoadError('');
-    } else {
-      // Fallback directly to direct stream URL
-      setBlobUrl(directStreamUrl);
-    }
-
-    setIsLoading(false);
-  }, [audioFileName, audioBase, sessionId, token, directStreamUrl]);
-
-  // Initial load and unmount teardown
+  // Setup initial state and cleanup on component unmount
   useEffect(() => {
     if (recording?.duration_seconds && recording.duration_seconds > 0) {
       setDuration(recording.duration_seconds);
     }
     setCurrentTime(0);
     setIsPlaying(false);
-    loadAudioBlob();
+    setBufferedPercent(0);
+    setLoadError('');
 
     return () => {
-      // Cleanly stop any playing audio on component unmount (e.g. closing modal)
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -190,11 +146,8 @@ export default function AudioPlayer({
           // ignore
         }
       }
-      if (blobUrlRef.current && blobUrlRef.current.startsWith('blob:')) {
-        URL.revokeObjectURL(blobUrlRef.current);
-      }
     };
-  }, [recording?.id, recording?.file_name, loadAudioBlob]);
+  }, [recording?.id, recording?.file_name]);
 
   // Continuously sync currentTime during active playback using requestAnimationFrame
   useEffect(() => {
@@ -202,6 +155,7 @@ export default function AudioPlayer({
       if (audioRef.current && !isDragging) {
         const curr = audioRef.current.currentTime;
         setCurrentTime(curr);
+        updateBufferedRanges();
 
         // Check if reached end of effective duration
         if (effectiveDuration > 0 && curr >= effectiveDuration) {
@@ -227,9 +181,9 @@ export default function AudioPlayer({
         rafRef.current = null;
       }
     };
-  }, [isPlaying, isDragging, effectiveDuration]);
+  }, [isPlaying, isDragging, effectiveDuration, updateBufferedRanges]);
 
-  // Handle native audio element event listeners
+  // Handle native audio element event listeners for progressive chunk streaming
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -237,61 +191,87 @@ export default function AudioPlayer({
     const handleTimeUpdate = () => {
       if (!isDragging) {
         setCurrentTime(audio.currentTime);
+        updateBufferedRanges();
       }
     };
 
     const handleLoadedMetadata = () => {
       setLoadError('');
+      setIsLoading(false);
+      setIsBuffering(false);
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
         setDuration(audio.duration);
       } else if (recording?.duration_seconds && recording.duration_seconds > 0) {
         setDuration(recording.duration_seconds);
       }
+      updateBufferedRanges();
     };
 
-    const handlePlay = () => {
+    const handleCanPlay = () => {
+      setIsLoading(false);
+      setIsBuffering(false);
+      setLoadError('');
+      updateBufferedRanges();
+    };
+
+    const handleWaiting = () => {
+      setIsBuffering(true);
+    };
+
+    const handlePlaying = () => {
       setIsPlaying(true);
+      setIsBuffering(false);
       setLoadError('');
     };
 
     const handlePause = () => {
       setIsPlaying(false);
+      setIsBuffering(false);
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
+      setIsBuffering(false);
       setCurrentTime(0);
       if (audio) audio.currentTime = 0;
+    };
+
+    const handleProgress = () => {
+      updateBufferedRanges();
     };
 
     const handleError = (e) => {
       // Only set error if audio is not already playing and actually failed
       if (!audio.paused || audio.currentTime > 0) return;
-      console.warn('[AudioPlayer] Playback error event:', e);
-      if (blobUrl && !blobUrl.startsWith('blob:')) {
-        loadAudioBlob();
-      } else {
-        setLoadError('Browser was unable to decode audio format. Use the Download button to listen locally.');
-      }
+      console.warn('[AudioPlayer] Stream playback error:', e);
+      setLoadError('Browser encountered an issue streaming this audio chunk. You can retry or download directly.');
       setIsPlaying(false);
+      setIsLoading(false);
+      setIsBuffering(false);
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('progress', handleProgress);
     audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('waiting', handleWaiting);
+      audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('progress', handleProgress);
       audio.removeEventListener('error', handleError);
     };
-  }, [blobUrl, isDragging, loadAudioBlob, recording?.duration_seconds]);
+  }, [streamUrl, isDragging, updateBufferedRanges, recording?.duration_seconds]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -312,20 +292,22 @@ export default function AudioPlayer({
             setIsPlaying(true);
           })
           .catch((e) => {
-            console.warn('[AudioPlayer] Play request failed:', e);
-            setLoadError('Failed to play audio in browser.');
+            console.warn('[AudioPlayer] Play stream failed:', e);
+            setLoadError('Click play again to start streaming.');
             setIsPlaying(false);
           });
       }
     }
   };
 
+  // Instant byte-range seeking on timeline (Spotify-style)
   const seekToPosition = (clientPercent) => {
     if (!audioRef.current) return;
     const clampedPercent = Math.max(0, Math.min(1, clientPercent));
     const target = effectiveDuration > 0 ? clampedPercent * effectiveDuration : 0;
     setCurrentTime(target);
     audioRef.current.currentTime = target;
+    updateBufferedRanges();
   };
 
   const handleProgressBarClick = (e) => {
@@ -360,6 +342,7 @@ export default function AudioPlayer({
     const target = Math.max(0, Math.min(maxDur, audioRef.current.currentTime + seconds));
     audioRef.current.currentTime = target;
     setCurrentTime(target);
+    updateBufferedRanges();
   };
 
   const handleSpeedChange = (speed) => {
@@ -367,12 +350,6 @@ export default function AudioPlayer({
     if (audioRef.current) {
       audioRef.current.playbackRate = speed;
     }
-  };
-
-  const cycleSpeed = () => {
-    const rates = [0.75, 1, 1.25, 1.5, 2];
-    const nextIdx = (rates.indexOf(playbackRate) + 1) % rates.length;
-    handleSpeedChange(rates[nextIdx]);
   };
 
   const toggleMute = () => {
@@ -406,6 +383,17 @@ export default function AudioPlayer({
     return `${(bytes / 1024).toFixed(1)} KB`;
   };
 
+  const reloadStream = () => {
+    if (!audioRef.current) return;
+    setLoadError('');
+    setIsLoading(true);
+    try {
+      audioRef.current.load();
+    } catch (e) {
+      // ignore
+    }
+  };
+
   if (!recording || !audioFileName) {
     return (
       <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] text-center text-xs text-[var(--text-muted)] space-y-1.5">
@@ -415,67 +403,19 @@ export default function AudioPlayer({
     );
   }
 
-  // Handle direct safe download without triggering 404 or missing headers
-  const handleDownload = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-
-    // 1. If active blob URL already in memory, download instantly
-    if (blobUrl && blobUrl.startsWith('blob:')) {
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = audioFileName || `interview_session_${recording?.session_id || 'recording'}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return;
-    }
-
-    // 2. Otherwise fetch blob with credentials/bearer token
-    setIsLoading(true);
-    try {
-      const candidate = directDownloadUrl || `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}?download=true`;
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      const res = await fetch(candidate, { headers, credentials: 'include' });
-      if (res.ok) {
-        const b = await res.blob();
-        if (b && b.size > 0) {
-          const dlUrl = URL.createObjectURL(b);
-          const a = document.createElement('a');
-          a.href = dlUrl;
-          a.download = audioFileName || `interview_session_${recording?.session_id || 'recording'}.webm`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(dlUrl), 10000);
-          setIsLoading(false);
-          return;
-        }
-      }
-      // Fallback
-      window.open(directDownloadUrl, '_blank');
-    } catch (err) {
-      console.warn('[AudioPlayer] Download fetch error, fallback to URL:', err);
-      window.open(directDownloadUrl, '_blank');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const progressPercent = effectiveDuration > 0
     ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
     : 0;
 
   return (
     <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border-2 border-[var(--border-strong)] space-y-4 shadow-md transition-all">
-      {/* Hidden HTML5 Audio Element with local blob URL */}
-      {blobUrl && (
+      {/* Native HTML5 Audio Element with Direct Progressive HTTP Range Stream */}
+      {streamUrl && (
         <audio
           ref={audioRef}
-          src={blobUrl}
-          preload="auto"
+          src={streamUrl}
+          preload="metadata"
+          crossOrigin="use-credentials"
         />
       )}
 
@@ -487,7 +427,7 @@ export default function AudioPlayer({
               ? 'bg-[var(--accent)] text-white shadow-sm ring-2 ring-[var(--accent)]/30'
               : 'bg-[var(--accent-dim)] text-[var(--accent)]'
           }`}>
-            {isLoading ? (
+            {isBuffering || isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : isPlaying ? (
               <div className="flex items-end gap-0.5 h-4">
@@ -502,16 +442,19 @@ export default function AudioPlayer({
           </div>
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-[13px] font-bold text-[var(--text-primary)] font-ui">
                 {title}
               </h4>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
+
+              {/* Live Streaming Pill */}
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1 ${
                 isPlaying
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                   : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]'
               }`}>
-                {isLoading ? 'Buffering' : isPlaying ? 'Playing' : 'Ready'}
+                <Wifi className="w-2.5 h-2.5 animate-pulse text-emerald-500" />
+                <span>{isBuffering ? 'Buffering Chunks' : isPlaying ? 'Streaming Live' : 'HTTP Stream Ready'}</span>
               </span>
             </div>
             <p className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5">
@@ -520,11 +463,11 @@ export default function AudioPlayer({
           </div>
         </div>
 
-        {/* Action buttons: Reload & Download */}
+        {/* Action buttons: Reload & Direct Download */}
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={loadAudioBlob}
+            onClick={reloadStream}
             disabled={isLoading}
             className="btn btn-secondary text-[11px] py-1.5 px-2.5 flex items-center gap-1.5 font-mono shadow-xs cursor-pointer"
             title="Reload audio stream"
@@ -533,20 +476,19 @@ export default function AudioPlayer({
             <span>Reload</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={isLoading}
-            className="btn btn-primary text-[11px] py-1.5 px-3 flex items-center gap-1.5 font-mono shadow-xs cursor-pointer"
-            title="Download original audio file"
+          <a
+            href={directDownloadUrl}
+            download={audioFileName || `interview_session_${recording?.session_id || 'recording'}.webm`}
+            className="btn btn-primary text-[11px] py-1.5 px-3 flex items-center gap-1.5 font-mono shadow-xs cursor-pointer no-underline text-white"
+            title="Download full audio recording file"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Download</span>
-          </button>
+          </a>
         </div>
       </div>
 
-      {/* YouTube-Style Single Line Progress Scrubber */}
+      {/* Spotify-Style Progressive Chunk Buffered Progress Bar */}
       <div className="space-y-2 py-1 px-1">
         {/* Scrubber Track Container */}
         <div
@@ -557,28 +499,35 @@ export default function AudioPlayer({
           onMouseDown={() => setIsDragging(true)}
           onMouseUp={() => setIsDragging(false)}
           className="relative h-6 w-full flex items-center cursor-pointer select-none group"
-          title="Click or drag to seek"
+          title="Click or drag to seek anywhere (instant byte-range stream)"
         >
           {/* Base Background Track Line */}
-          <div className="relative w-full h-1.5 group-hover:h-2 rounded-full bg-[var(--border-strong)]/60 dark:bg-gray-700/80 transition-all duration-150 overflow-hidden">
-            {/* Hover Preview Bar (YouTube style) */}
+          <div className="relative w-full h-2 group-hover:h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 transition-all duration-150 overflow-hidden shadow-inner">
+            {/* Spotify-Style Buffered Chunks Bar (Progressively fetched chunks) */}
+            <div
+              className="absolute top-0 left-0 h-full bg-[var(--accent)]/25 dark:bg-[var(--accent)]/30 rounded-full transition-all duration-200"
+              style={{ width: `${bufferedPercent}%` }}
+              title={`Buffered ahead: ${Math.round(bufferedPercent)}%`}
+            />
+
+            {/* Hover Preview Bar */}
             {hoverTime !== null && (
               <div
-                className="absolute top-0 left-0 h-full bg-[var(--accent)]/30 transition-none rounded-full pointer-events-none"
+                className="absolute top-0 left-0 h-full bg-[var(--accent)]/20 transition-none rounded-full pointer-events-none"
                 style={{ width: `${hoverPosition}%` }}
               />
             )}
 
             {/* Current Audio Played Progress Fill */}
             <div
-              className="absolute top-0 left-0 h-full bg-[var(--accent)] rounded-full transition-all duration-75"
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover,var(--accent))] rounded-full transition-all duration-75 shadow-sm"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
 
-          {/* YouTube-Style Scrubber Thumb / Playhead Dot */}
+          {/* Scrubber Thumb / Playhead Dot */}
           <div
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-[var(--accent)] shadow-md border-2 border-white dark:border-gray-900 transition-transform duration-100 group-hover:scale-125 pointer-events-none z-10"
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[var(--accent)] shadow-md border-2 border-white dark:border-gray-900 transition-transform duration-100 group-hover:scale-125 pointer-events-none z-10"
             style={{ left: `${progressPercent}%` }}
           />
 
@@ -593,7 +542,7 @@ export default function AudioPlayer({
           )}
         </div>
 
-        {/* Time Labels: Start to End */}
+        {/* Time Labels & Buffer Percentage Indicator */}
         <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] pt-0.5 px-0.5">
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-[var(--text-primary)]">{formatTime(currentTime)}</span>
@@ -601,7 +550,12 @@ export default function AudioPlayer({
             <span>{formatTime(effectiveDuration)}</span>
           </div>
 
-          <div className="text-[11px] font-mono text-[var(--text-muted)]">
+          <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-muted)]">
+            {bufferedPercent > 0 && (
+              <span className="text-[10px] text-[var(--accent)] font-semibold hidden sm:inline">
+                {Math.round(bufferedPercent)}% buffered
+              </span>
+            )}
             {effectiveDuration > currentTime && (
               <span>-{formatTime(effectiveDuration - currentTime)} remaining</span>
             )}
@@ -613,7 +567,7 @@ export default function AudioPlayer({
       <div className="flex items-center justify-between gap-4 flex-wrap pt-1">
         {/* Playback Controls */}
         <div className="flex items-center gap-2">
-          {/* Restart / Back to start */}
+          {/* Jump to start */}
           <button
             type="button"
             onClick={() => skipTime(-effectiveDuration)}
@@ -643,7 +597,7 @@ export default function AudioPlayer({
             className="w-11 h-11 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
             title={isPlaying ? 'Pause' : 'Play audio'}
           >
-            {isLoading ? (
+            {isBuffering ? (
               <Loader2 className="w-5 h-5 animate-spin text-white" />
             ) : isPlaying ? (
               <Pause className="w-5 h-5 fill-current" />
@@ -670,7 +624,7 @@ export default function AudioPlayer({
                 key={rate}
                 type="button"
                 onClick={() => handleSpeedChange(rate)}
-                className={`px-2 py-1 text-[11px] font-mono font-bold rounded transition-all ${
+                className={`px-2 py-1 text-[11px] font-mono font-bold rounded transition-all cursor-pointer ${
                   playbackRate === rate
                     ? 'bg-[var(--accent)] text-white shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -726,20 +680,20 @@ export default function AudioPlayer({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={loadAudioBlob}
+              onClick={reloadStream}
               className="underline font-bold hover:text-amber-600 flex items-center gap-1 cursor-pointer"
             >
               <RefreshCw className="w-3 h-3" />
               <span>Retry</span>
             </button>
             <span>•</span>
-            <button
-              type="button"
-              onClick={handleDownload}
+            <a
+              href={directDownloadUrl}
+              download={audioFileName || 'recording.webm'}
               className="underline font-bold hover:text-amber-600 cursor-pointer"
             >
               Direct Download
-            </button>
+            </a>
           </div>
         </div>
       )}
