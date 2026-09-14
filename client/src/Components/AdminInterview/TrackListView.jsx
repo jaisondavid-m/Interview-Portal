@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Code, Edit2, Trash2 } from 'lucide-react';
+import { Search, Code, Edit2, Trash2, X } from 'lucide-react';
 
 export default function TrackListView({
   tracks,
@@ -20,7 +20,7 @@ export default function TrackListView({
     <div className="space-y-5">
       {/* Search Bar */}
       <div className="panel-card p-4">
-        <div className="relative w-full max-w-md">
+        <div className="relative w-full max-w-md flex items-center">
           <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
@@ -28,8 +28,17 @@ export default function TrackListView({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search interview domains (e.g. DSA, System Design)..."
             className="custom-input search-input text-[12px] py-2"
-            style={{ paddingLeft: '2.4rem' }}
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 

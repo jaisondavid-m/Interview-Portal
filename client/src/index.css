@@ -240,7 +240,7 @@
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 8px 14px;
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-primary);
@@ -255,8 +255,11 @@
 }
 .custom-input::placeholder { color: var(--text-muted); }
 
-.search-input {
-  padding-left: 2.35rem !important;
+.search-input,
+.custom-input.search-input,
+.custom-input.pl-9,
+.custom-input.pl-10 {
+  padding-left: 2.6rem !important;
   padding-right: 2.2rem !important;
 }
 
