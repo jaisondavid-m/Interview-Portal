@@ -213,7 +213,15 @@ export default function InterviewRoom() {
           setRunResults(null);
           setSubmissionResult(null);
 
-          const initialCode = data.session.candidate_code || '';
+          const qStarter =
+            data.session.current_question?.payload?.starter_code ||
+            (Array.isArray(data.session.current_question?.templates) &&
+              data.session.current_question?.templates.find((t) => t.starter_code)?.starter_code) ||
+            '';
+          const initialCode =
+            data.session.candidate_code && data.session.candidate_code.trim()
+              ? data.session.candidate_code
+              : qStarter;
           const initialWhiteboard = data.session.candidate_whiteboard || '';
 
           setCode(initialCode);

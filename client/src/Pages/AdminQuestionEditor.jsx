@@ -161,7 +161,8 @@ export default function AdminQuestionEditor() {
             setScenario(detail.scenario || payload.scenario || '');
             setExplanation(detail.explanation || payload.explanation || '');
             setCorrectOption(detail.correct_option || payload.correct_option || 'A');
-            setStarterCode(payload.starter_code || '');
+            const foundTmpl = Array.isArray(qData.templates) ? qData.templates.find((t) => t.starter_code) : null;
+            setStarterCode(foundTmpl?.starter_code || payload.starter_code || '');
             setSeedData(payload.seed_data || '');
 
             // MCQ Options (from relational table first, then payload)
@@ -350,6 +351,10 @@ export default function AdminQuestionEditor() {
         is_correct: opt.id === correctOption,
       }));
 
+      const templatesList = starterCode.trim()
+        ? [{ language: 'javascript', starter_code: starterCode.trim() }]
+        : [];
+
       const requestBody = {
         level_id: Number(levelId),
         title: title.trim(),
@@ -357,7 +362,7 @@ export default function AdminQuestionEditor() {
         difficulty,
         type,
         detail,
-        templates: [],
+        templates: templatesList,
         test_cases: testCases,
         hints: hintsList,
         mcq_options: mcqOptionsList,

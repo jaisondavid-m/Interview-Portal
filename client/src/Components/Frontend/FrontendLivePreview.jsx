@@ -52,20 +52,7 @@ export default function FrontendLivePreview({
         function App() {
           return (
             <div className="min-h-screen bg-slate-900 text-white p-6 flex flex-col items-center justify-center text-center">
-              <div className="max-w-md w-full bg-slate-800/90 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4">
-                <div className="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto text-xl font-bold">
-                  ⚛
-                </div>
-                <h2 className="text-xl font-bold text-white tracking-tight">React Live Playground</h2>
-                <p className="text-sm text-slate-300">
-                  Type your React component on the left editor. It will compile and render live here in real-time!
-                </p>
-                <div className="text-xs font-mono bg-slate-950/60 p-3 rounded-lg text-cyan-300 text-left">
-                  export default function App() &#123;<br/>
-                  &nbsp;&nbsp;return &lt;div className="p-4"&gt;Hello World&lt;/div&gt;;<br/>
-                  &#125;
-                </div>
-              </div>
+              <h1 className="text-xl font-bold">Waiting for Component...</h1>
             </div>
           );
         }

@@ -21,70 +21,13 @@ import {
 } from 'lucide-react';
 import FrontendLivePreview from './FrontendLivePreview';
 
-const DEFAULT_STARTER_CODE = `import React, { useState } from 'react';
-
-export default function App() {
-  const [count, setCount] = useState(0);
-  const [activeTab, setActiveTab] = useState('overview');
-
+const DEFAULT_STARTER_CODE = `export default function App() {
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4 sm:p-8 flex flex-col items-center justify-start">
-      {/* Header Banner */}
-      <header className="max-w-3xl w-full flex items-center justify-between pb-6 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-lg">
-            ⚛
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Responsive Dashboard</h1>
-            <p className="text-xs text-slate-400">Testing Mobile, Tablet & Desktop Viewports</p>
-          </div>
-        </div>
-        <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-          v1.0.0
-        </span>
-      </header>
-
-      {/* Main Responsive Grid Container */}
-      <main className="max-w-3xl w-full mt-6 space-y-6">
-        {/* Metric Cards - 1 col on mobile, 3 cols on md+ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <div className="bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-lg hover:border-cyan-500/50 transition">
-            <span className="text-xs font-medium text-slate-400">Total Visits</span>
-            <div className="text-2xl font-bold mt-1 text-cyan-400">24,500</div>
-            <span className="text-[11px] text-emerald-400 mt-1 block">↑ 12% this week</span>
-          </div>
-
-          <div className="bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-lg hover:border-cyan-500/50 transition">
-            <span className="text-xs font-medium text-slate-400">Interactive Clicks</span>
-            <div className="text-2xl font-bold mt-1 text-white">{count}</div>
-            <button
-              onClick={() => setCount(c => c + 1)}
-              className="mt-2 text-xs py-1 px-3 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold transition cursor-pointer"
-            >
-              + Click Me
-            </button>
-          </div>
-
-          <div className="bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-lg hover:border-cyan-500/50 transition sm:col-span-2 md:col-span-1">
-            <span className="text-xs font-medium text-slate-400">System Status</span>
-            <div className="text-2xl font-bold mt-1 text-emerald-400">Operational</div>
-            <span className="text-[11px] text-slate-400 mt-1 block">99.9% Uptime</span>
-          </div>
-        </div>
-
-        {/* Responsive Content Card */}
-        <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60 space-y-3">
-          <h2 className="text-base font-bold text-white">Frontend Assessment Instructions</h2>
-          <p className="text-sm text-slate-300 leading-relaxed">
-            Edit this React component live. Use Tailwind CSS utility classes to design a fluid, fully responsive layout. Test different screen widths using the toolbar buttons above!
-          </p>
-        </div>
-      </main>
+    <div className="min-h-screen bg-slate-900 text-white p-6 flex flex-col items-center justify-center">
+      <h1 className="text-2xl font-bold">Hello World</h1>
     </div>
   );
-}
-`;
+}`;
 
 export default function FrontendPlayground({
   code = '',
@@ -100,13 +43,23 @@ export default function FrontendPlayground({
   const [copied, setCopied] = useState(false);
   const [showRequirements, setShowRequirements] = useState(false);
 
-  // If code is empty and editable, provide starter boilerplate
+  // Extract the admin-configured starter code from payload or question templates
+  const adminStarterCode = useMemo(() => {
+    return (
+      payload?.starter_code ||
+      question?.payload?.starter_code ||
+      (Array.isArray(question?.templates) && question?.templates.find((t) => t.starter_code)?.starter_code) ||
+      ''
+    );
+  }, [payload, question]);
+
+  // If code is empty and editable, provide starter boilerplate (prioritizes admin starter code)
   useEffect(() => {
     if ((!code || !code.trim()) && isEditable && onCodeChange) {
-      const initialStarter = payload?.starter_code || DEFAULT_STARTER_CODE;
+      const initialStarter = adminStarterCode || DEFAULT_STARTER_CODE;
       onCodeChange(initialStarter);
     }
-  }, [code, isEditable, onCodeChange, payload?.starter_code]);
+  }, [code, isEditable, onCodeChange, adminStarterCode]);
 
   const displayCode = typeof code === 'string' ? code : '';
 
@@ -119,7 +72,7 @@ export default function FrontendPlayground({
   const handleResetCode = () => {
     if (!isEditable) return;
     if (window.confirm('Reset code to starter boilerplate? All current changes will be overwritten.')) {
-      const starter = payload?.starter_code || DEFAULT_STARTER_CODE;
+      const starter = adminStarterCode || DEFAULT_STARTER_CODE;
       onCodeChange(starter);
     }
   };
