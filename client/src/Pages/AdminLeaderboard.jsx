@@ -42,11 +42,29 @@ export default function AdminLeaderboard() {
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
+  const [selectedDomain, setSelectedDomain] = useState('all');
+  const [tracks, setTracks] = useState([]);
   const [sortField, setSortField] = useState('total_points');
   const [sortOrder, setSortOrder] = useState('desc'); // 'desc' | 'asc'
 
   // Detailed Modal for viewing an individual student's scorecard & interview performance breakdown
   const [selectedStudent, setSelectedStudent] = useState(null);
+
+  // Load Interview Tracks / Domains from DB
+  useEffect(() => {
+    const fetchTracks = async () => {
+      try {
+        const res = await api.get('/admin/interviews/tracks');
+        const data = res?.data?.data || res?.data || [];
+        if (Array.isArray(data)) {
+          setTracks(data);
+        }
+      } catch (err) {
+        console.error('Failed to load interview tracks:', err);
+      }
+    };
+    fetchTracks();
+  }, []);
 
   const fetchLeaderboard = async () => {
     try {
@@ -57,6 +75,9 @@ export default function AdminLeaderboard() {
       params.append('order', sortOrder);
       if (selectedDept !== 'all') {
         params.append('department', selectedDept);
+      }
+      if (selectedDomain !== 'all') {
+        params.append('track_id', selectedDomain);
       }
       if (searchTerm.trim()) {
         params.append('search', searchTerm.trim());
@@ -75,7 +96,7 @@ export default function AdminLeaderboard() {
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [sortField, sortOrder, selectedDept]);
+  }, [sortField, sortOrder, selectedDept, selectedDomain]);
 
   // Handle Search Debounce
   useEffect(() => {
@@ -96,6 +117,7 @@ export default function AdminLeaderboard() {
   const handleResetFilters = () => {
     setSearchTerm('');
     setSelectedDept('all');
+    setSelectedDomain('all');
     setSortField(activeTab);
     setSortOrder('desc');
   };
@@ -118,7 +140,7 @@ export default function AdminLeaderboard() {
       .slice(0, 3);
   }, [leaderboard]);
 
-  const hasActiveFilters = searchTerm.trim() !== '' || selectedDept !== 'all';
+  const hasActiveFilters = searchTerm.trim() !== '' || selectedDept !== 'all' || selectedDomain !== 'all';
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12 max-w-7xl mx-auto">
@@ -393,6 +415,23 @@ export default function AdminLeaderboard() {
                 {departments.map((d) => (
                   <option key={d} value={d}>
                     {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Domain / Interview Track Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">Domain:</span>
+              <select
+                value={selectedDomain}
+                onChange={(e) => setSelectedDomain(e.target.value)}
+                className="custom-input text-xs py-1.5 px-2 font-mono"
+              >
+                <option value="all">All Domains</option>
+                {tracks.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
                   </option>
                 ))}
               </select>

@@ -1119,6 +1119,17 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 	order := strings.ToLower(strings.TrimSpace(c.DefaultQuery("order", "desc")))
 	deptFilter := strings.TrimSpace(c.Query("department"))
 	searchQuery := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	trackFilter := strings.TrimSpace(c.Query("track_id"))
+	if trackFilter == "" {
+		trackFilter = strings.TrimSpace(c.Query("domain"))
+	}
+	var trackID uint = 0
+	if trackFilter != "" && !strings.EqualFold(trackFilter, "all") {
+		var parsedID uint64
+		if _, err := fmt.Sscanf(trackFilter, "%d", &parsedID); err == nil && parsedID > 0 {
+			trackID = uint(parsedID)
+		}
+	}
 	
 	minMatchesStr := strings.TrimSpace(c.Query("min_matches"))
 	if minMatchesStr == "" {
@@ -1155,7 +1166,11 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 
 	// 2. Fetch all completed/active interview sessions to compute actual attendance per student
 	var allSessions []models.InterviewSession
-	database.DB.Where("status != ?", "cancelled").Find(&allSessions)
+	sessionQuery := database.DB.Where("status != ?", "cancelled")
+	if trackID > 0 {
+		sessionQuery = sessionQuery.Where("track_id = ?", trackID)
+	}
+	sessionQuery.Find(&allSessions)
 	studentSessionsMap := make(map[uint]map[uint]bool)
 	for _, sess := range allSessions {
 		if sess.InterviewerID > 0 {
@@ -1174,12 +1189,19 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 
 	// 3. Fetch all feedback records with relational session & user info
 	var allFeedbacks []models.InterviewFeedback
-	if err := database.DB.
+	fbQuery := database.DB.Model(&models.InterviewFeedback{}).
 		Preload("Reviewer").
 		Preload("Reviewee").
 		Preload("Session.Track").
-		Order("created_at desc").
-		Find(&allFeedbacks).Error; err != nil {
+		Order("interview_feedbacks.created_at desc")
+
+	if trackID > 0 {
+		fbQuery = fbQuery.
+			Joins("JOIN interview_sessions ON interview_sessions.id = interview_feedbacks.session_id AND interview_sessions.deleted_at IS NULL").
+			Where("interview_sessions.track_id = ?", trackID)
+	}
+
+	if err := fbQuery.Find(&allFeedbacks).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to fetch feedback records",
