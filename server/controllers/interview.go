@@ -711,3 +711,161 @@ func AdminDeleteQuestion(c *gin.Context) {
 		"message": "Question deleted successfully",
 	})
 }
+
+// BulkCreateQuestionsInput represents payload for creating multiple questions
+type BulkCreateQuestionsInput struct {
+	Questions []QuestionInput `json:"questions" binding:"required"`
+}
+
+// AdminBulkCreateQuestions handles batch insertion of questions and all their relational child records
+func AdminBulkCreateQuestions(c *gin.Context) {
+	levelIDParam := c.Param("id")
+	if levelIDParam == "" {
+		levelIDParam = c.Param("levelId")
+	}
+
+	var levelIDUint uint
+	if _, err := fmt.Sscanf(levelIDParam, "%d", &levelIDUint); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid level ID"})
+		return
+	}
+
+	var level models.InterviewLevel
+	if err := database.DB.First(&level, levelIDUint).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview level not found"})
+		return
+	}
+
+	var input BulkCreateQuestionsInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid questions payload",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if len(input.Questions) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "No question records provided",
+		})
+		return
+	}
+
+	var createdQuestions []models.InterviewQuestion
+	var skippedDetails []string
+
+	for idx, qInput := range input.Questions {
+		title := strings.TrimSpace(qInput.Title)
+		prompt := strings.TrimSpace(qInput.Prompt)
+
+		if title == "" || prompt == "" {
+			skippedDetails = append(skippedDetails, fmt.Sprintf("Item %d: Missing title or prompt", idx+1))
+			continue
+		}
+
+		difficulty := qInput.Difficulty
+		if difficulty == "" {
+			difficulty = "Medium"
+		}
+
+		qType := qInput.Type
+		if qType == "" {
+			qType = level.Mode
+		}
+
+		tx := database.DB.Begin()
+
+		newQ := models.InterviewQuestion{
+			LevelID:    levelIDUint,
+			Title:      title,
+			Prompt:     prompt,
+			Difficulty: difficulty,
+			Type:       qType,
+		}
+
+		if err := tx.Create(&newQ).Error; err != nil {
+			tx.Rollback()
+			skippedDetails = append(skippedDetails, fmt.Sprintf("Item %d (%s): Insert failed - %v", idx+1, title, err))
+			continue
+		}
+
+		if err := saveQuestionRelations(tx, newQ.ID, qInput); err != nil {
+			tx.Rollback()
+			skippedDetails = append(skippedDetails, fmt.Sprintf("Item %d (%s): Relational save failed - %v", idx+1, title, err))
+			continue
+		}
+
+		tx.Commit()
+		createdQuestions = append(createdQuestions, newQ)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":          "success",
+		"message":         fmt.Sprintf("Bulk upload complete: %d questions created, %d skipped", len(createdQuestions), len(skippedDetails)),
+		"created_count":   len(createdQuestions),
+		"skipped_count":   len(skippedDetails),
+		"skipped_details": skippedDetails,
+		"data":            createdQuestions,
+	})
+}
+
+// AdminBulkDeleteQuestions deletes multiple questions by IDs
+func AdminBulkDeleteQuestions(c *gin.Context) {
+	var input struct {
+		QuestionIDs []uint `json:"question_ids" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil || len(input.QuestionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "No question IDs provided",
+		})
+		return
+	}
+
+	res := database.DB.Where("id IN ?", input.QuestionIDs).Delete(&models.InterviewQuestion{})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to bulk delete questions",
+			"error":   res.Error.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":        "success",
+		"message":       fmt.Sprintf("Successfully deleted %d questions", res.RowsAffected),
+		"deleted_count": res.RowsAffected,
+	})
+}
+
+// AdminExportQuestions exports questions for a level
+func AdminExportQuestions(c *gin.Context) {
+	levelID := c.Param("id")
+	if levelID == "" {
+		levelID = c.Param("levelId")
+	}
+
+	var questions []models.InterviewQuestion
+	if err := database.DB.
+		Preload("Detail").
+		Preload("Templates").
+		Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		Where("level_id = ?", levelID).
+		Order("id asc").
+		Find(&questions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch questions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   questions,
+	})
+}

@@ -90,10 +90,6 @@ export default function AdminInterviewHistory() {
       {/* Header */}
       <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
-            <History className="w-3.5 h-3.5 text-[var(--accent)]" />
-            <span>Audit & Monitoring Portal</span>
-          </div>
           <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
             Interview History & Pairing Records
           </h1>

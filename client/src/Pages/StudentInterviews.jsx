@@ -191,10 +191,6 @@ export default function StudentInterviews() {
       {/* Top Banner Header */}
       <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
-            <span className="w-2 h-2 rounded-full bg-[var(--green)]"></span>
-            <span>Live Peer Matchmaking Available</span>
-          </div>
           <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
             Campus Peer Interviews
           </h1>

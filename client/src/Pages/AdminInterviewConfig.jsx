@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronRight, ArrowLeft, Plus } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Plus, Upload, Download, FileCode, FileSpreadsheet } from 'lucide-react';
 import api from '../api/axios';
 import {
   TrackListView,
@@ -10,6 +10,7 @@ import {
   TrackModal,
   LevelModal,
   QuestionFormModal,
+  QuestionBulkModal,
   DeleteConfirmModal,
   formatLevelName,
   formatFullLevelTitle,
@@ -34,8 +35,110 @@ export default function AdminInterviewConfig() {
   const [showTrackModal, setShowTrackModal] = useState(false);
   const [showLevelModal, setShowLevelModal] = useState(false);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const [showBulkQuestionModal, setShowBulkQuestionModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // ============================================================
+  // BULK EXPORT QUESTIONS (JSON or CSV)
+  // ============================================================
+  const handleExportQuestions = (format = 'json', questionsToExport = questions) => {
+    if (!questionsToExport || questionsToExport.length === 0) {
+      alert('No questions available to download.');
+      return;
+    }
+
+    const filenameBase = `mockmate_${currentTrack?.slug || 'track'}_level_${currentLevel?.level_number || '1'}_questions`;
+
+    if (format === 'json') {
+      const exportData = questionsToExport.map((q) => ({
+        title: q.title,
+        prompt: q.prompt,
+        difficulty: q.difficulty,
+        type: q.type,
+        detail: q.detail ? {
+          constraints: q.detail.constraints || '',
+          expected_approach: q.detail.expected_approach || '',
+          expected_complexity: q.detail.expected_complexity || '',
+          ideal_answer: q.detail.ideal_answer || '',
+          scenario: q.detail.scenario || '',
+          correct_option: q.detail.correct_option || '',
+          explanation: q.detail.explanation || '',
+        } : null,
+        templates: (q.templates || []).map((t) => ({
+          language: t.language,
+          starter_code: t.starter_code,
+        })),
+        test_cases: (q.test_cases || []).map((tc) => ({
+          input: tc.input,
+          expected_output: tc.expected_output,
+          is_hidden: tc.is_hidden,
+          explanation: tc.explanation || '',
+        })),
+        hints: (q.hints || []).map((h) => ({
+          type: h.type,
+          content: h.content,
+        })),
+        mcq_options: (q.mcq_options || []).map((m) => ({
+          option_key: m.option_key,
+          option_text: m.option_text,
+          is_correct: m.is_correct,
+        })),
+      }));
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${filenameBase}_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      // CSV Export
+      const headers = ['ID', 'Title', 'Difficulty', 'Type', 'Prompt', 'Constraints', 'Expected Approach', 'Test Cases Count', 'Templates Count', 'Hints Count'];
+      const rows = questionsToExport.map((q) => [
+        `"${q.id || ''}"`,
+        `"${(q.title || '').replace(/"/g, '""')}"`,
+        `"${(q.difficulty || 'Medium').replace(/"/g, '""')}"`,
+        `"${(q.type || 'coding').replace(/"/g, '""')}"`,
+        `"${(q.prompt || '').replace(/"/g, '""')}"`,
+        `"${(q.detail?.constraints || '').replace(/"/g, '""')}"`,
+        `"${(q.detail?.expected_approach || '').replace(/"/g, '""')}"`,
+        `"${(q.test_cases || []).length}"`,
+        `"${(q.templates || []).length}"`,
+        `"${(q.hints || []).length}"`,
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${filenameBase}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleBulkDeleteQuestions = async (questionIds, onSuccess) => {
+    if (!confirm(`Are you sure you want to delete ${questionIds.length} selected questions?`)) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post('/admin/interviews/questions/bulk-delete', { question_ids: questionIds });
+      if (onSuccess) onSuccess();
+      loadLevelQuestions(trackId, levelId);
+    } catch (err) {
+      alert(err.message || 'Failed to bulk delete questions');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Form States
   const [trackForm, setTrackForm] = useState({ id: null, title: '', icon: 'Code', description: '' });
@@ -320,45 +423,47 @@ export default function AdminInterviewConfig() {
       {/* Header with Interactive Breadcrumbs */}
       <div className={`${questionId ? 'pb-2' : 'pb-5 border-b border-[var(--border)]'} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
         <div>
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex-wrap">
-            <button
-              onClick={() => navigate('/admin/interviews')}
-              className={`hover:text-[var(--accent)] transition ${!trackId ? 'font-bold text-[var(--accent)]' : ''}`}
-            >
-              Interview Configuration
-            </button>
-            {trackId && currentTrack && (
-              <>
-                <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
-                <button
-                  onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
-                  className={`hover:text-[var(--accent)] transition ${!levelId ? 'font-bold text-[var(--accent)]' : ''}`}
-                >
-                  {currentTrack.title}
-                </button>
-              </>
-            )}
-            {levelId && currentLevel && (
-              <>
-                <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
-                <button
-                  onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
-                  className={`hover:text-[var(--accent)] transition ${!questionId ? 'font-bold text-[var(--accent)]' : ''}`}
-                >
-                  Level {currentLevel.level_number} ({currentLevel.mode?.toUpperCase()})
-                </button>
-              </>
-            )}
-            {questionId && currentQuestion && (
-              <>
-                <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
-                <span className="font-bold text-[var(--accent)] truncate max-w-[250px]">
-                  {currentQuestion.title}
-                </span>
-              </>
-            )}
-          </div>
+          {/* Breadcrumbs (only when navigated into a track/level/question) */}
+          {trackId && (
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex-wrap">
+              <button
+                onClick={() => navigate('/admin/interviews')}
+                className="hover:text-[var(--accent)] transition"
+              >
+                Interview Configuration
+              </button>
+              {currentTrack && (
+                <>
+                  <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                  <button
+                    onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
+                    className={`hover:text-[var(--accent)] transition ${!levelId ? 'font-bold text-[var(--accent)]' : ''}`}
+                  >
+                    {currentTrack.title}
+                  </button>
+                </>
+              )}
+              {levelId && currentLevel && (
+                <>
+                  <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                  <button
+                    onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions`)}
+                    className={`hover:text-[var(--accent)] transition ${!questionId ? 'font-bold text-[var(--accent)]' : ''}`}
+                  >
+                    Level {currentLevel.level_number} ({currentLevel.mode?.toUpperCase()})
+                  </button>
+                </>
+              )}
+              {questionId && currentQuestion && (
+                <>
+                  <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                  <span className="font-bold text-[var(--accent)] truncate max-w-[250px]">
+                    {currentQuestion.title}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
           {!questionId && (
             <>
@@ -386,15 +491,34 @@ export default function AdminInterviewConfig() {
             {levelId ? (
               <>
                 <button
+                  onClick={() => handleExportQuestions('json')}
+                  className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 shadow-[var(--shadow-xs)] hover:text-[var(--accent)] cursor-pointer"
+                  title="Download Questions JSON"
+                >
+                  <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span>Download Bank</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 bg-[var(--bg-input)] rounded text-[var(--text-muted)]">
+                    {questions?.length || 0}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowBulkQuestionModal(true)}
+                  className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 shadow-[var(--shadow-xs)] text-indigo-600 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10 cursor-pointer font-semibold"
+                  title="Bulk Upload Questions (JSON/CSV)"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Bulk Upload</span>
+                </button>
+                <button
                   onClick={() => navigate(`/admin/interviews/${trackId}/levels`)}
-                  className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+                  className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Levels</span>
                 </button>
                 <button
                   onClick={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/new`)}
-                  className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)]"
+                  className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-[var(--shadow-sm)] cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Question</span>
@@ -510,6 +634,7 @@ export default function AdminInterviewConfig() {
       {trackId && levelId && !questionId && (
         <QuestionListView
           currentLevel={currentLevel}
+          currentTrack={currentTrack}
           questions={questions}
           onSelectQuestion={(q) => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/${q.id}`)}
           onAddQuestion={() => navigate(`/admin/interviews/${trackId}/levels/${levelId}/questions/new`)}
@@ -518,6 +643,9 @@ export default function AdminInterviewConfig() {
             setDeleteTarget({ type: 'question', data: q });
             setShowDeleteModal(true);
           }}
+          onOpenBulkModal={() => setShowBulkQuestionModal(true)}
+          onExportQuestions={handleExportQuestions}
+          onBulkDeleteQuestions={handleBulkDeleteQuestions}
         />
       )}
 
@@ -567,6 +695,14 @@ export default function AdminInterviewConfig() {
         onSave={handleSaveQuestion}
         formError={formError}
         formLoading={formLoading}
+      />
+
+      <QuestionBulkModal
+        isOpen={showBulkQuestionModal}
+        onClose={() => setShowBulkQuestionModal(false)}
+        currentLevel={currentLevel}
+        currentTrack={currentTrack}
+        onSuccess={() => loadLevelQuestions(trackId, levelId)}
       />
 
       <DeleteConfirmModal

@@ -147,10 +147,6 @@ export default function AdminLeaderboard() {
       {/* Header Banner */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
         <div>
-          <div className="flex items-center gap-2 text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--accent)] mb-1">
-            <Trophy className="w-3.5 h-3.5 text-amber-500" />
-            <span>Student Performance Rankings</span>
-          </div>
           <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
             Leaderboard
           </h1>

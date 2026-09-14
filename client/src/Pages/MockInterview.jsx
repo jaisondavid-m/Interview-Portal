@@ -45,8 +45,7 @@ export default function MockInterview() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[var(--border)]">
         <div>
-          <span className="badge-kicker">Live Voice Space</span>
-          <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight mt-1">
+          <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
             Student 1-on-1 Audio Room
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">

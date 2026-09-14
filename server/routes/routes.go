@@ -94,8 +94,11 @@ func SetupRouter() *gin.Engine {
 
 			// User Management
 			admin.GET("/users", controllers.AdminGetUsers)
+			admin.GET("/users/export", controllers.AdminExportUsersCSV)
 			admin.GET("/users/:id", controllers.AdminGetUserByID)
 			admin.POST("/users", controllers.AdminCreateUser)
+			admin.POST("/users/bulk", controllers.AdminBulkCreateUsers)
+			admin.POST("/users/bulk-delete", controllers.AdminBulkDeleteUsers)
 			admin.PUT("/users/:id", controllers.AdminUpdateUser)
 			admin.DELETE("/users/:id", controllers.AdminDeleteUser)
 
@@ -115,7 +118,10 @@ func SetupRouter() *gin.Engine {
 
 			// Interview Configuration: Questions
 			admin.GET("/interviews/levels/:id/questions", controllers.AdminGetQuestions)
+			admin.GET("/interviews/levels/:id/questions/export", controllers.AdminExportQuestions)
 			admin.POST("/interviews/levels/:id/questions", controllers.AdminCreateQuestion)
+			admin.POST("/interviews/levels/:id/questions/bulk", controllers.AdminBulkCreateQuestions)
+			admin.POST("/interviews/questions/bulk-delete", controllers.AdminBulkDeleteQuestions)
 			admin.GET("/interviews/questions/:id", controllers.AdminGetQuestionByID)
 			admin.PUT("/interviews/questions/:id", controllers.AdminUpdateQuestion)
 			admin.DELETE("/interviews/questions/:id", controllers.AdminDeleteQuestion)

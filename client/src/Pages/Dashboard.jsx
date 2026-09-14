@@ -131,8 +131,7 @@ export default function Dashboard() {
       {/* Page Header */}
       <div className="pb-5 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="badge-kicker">Student Portal</span>
-          <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight mt-1">
+          <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
             Dashboard
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
