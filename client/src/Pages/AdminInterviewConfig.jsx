@@ -4,7 +4,7 @@ import {
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
   Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
   HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp, Copy,
-  Lightbulb, Target, Sparkles, BookOpen, Layout
+  Lightbulb, Target, Sparkles, BookOpen, Layout, AppWindow
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -45,6 +45,15 @@ const INTERVIEW_MODES = [
     bg: 'bg-indigo-500/10',
     border: 'border-indigo-500/20',
     desc: 'System architecture whiteboard with draggable components, connections, and live sync preview.',
+  },
+  {
+    id: 'frontend',
+    label: 'Frontend',
+    icon: AppWindow,
+    color: 'text-cyan-600 dark:text-cyan-400',
+    bg: 'bg-cyan-500/10',
+    border: 'border-cyan-500/20',
+    desc: 'Interactive React/HTML/CSS live code editor with real-time responsive preview and viewport testing.',
   },
 ];
 
@@ -306,6 +315,15 @@ export default function AdminInterviewConfig() {
           scenario: questionForm.scenario,
           talking_points: questionForm.talking_points.filter((tp) => tp.trim()),
           tradeoffs: questionForm.tradeoffs.filter((to) => to.trim()),
+          interview_tips: tips,
+        };
+      } else if (currentLevel.mode === 'frontend') {
+        payloadObj = {
+          starter_code: questionForm.starter_code || '',
+          scenario: questionForm.scenario || '',
+          constraints: questionForm.constraints || '',
+          hints: (questionForm.hints || []).filter((h) => h.trim()),
+          expected_approach: questionForm.expected_approach || '',
           interview_tips: tips,
         };
       }
@@ -1528,6 +1546,44 @@ export default function AdminInterviewConfig() {
                     )}
                   </div>
                 )}
+
+                {/* 5. FRONTEND (REACT) SPECIFICATIONS */}
+                {currentLevel?.mode === 'frontend' && (
+                  <div className="space-y-6">
+                    {parsed.scenario && (
+                      <div className="panel-card p-5 space-y-2">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-500 block">
+                          Frontend Design & Layout Criteria:
+                        </span>
+                        <p className="text-[13px] text-[var(--text-primary)] leading-relaxed whitespace-pre-line">
+                          {parsed.scenario}
+                        </p>
+                      </div>
+                    )}
+
+                    {parsed.constraints && (
+                      <div className="panel-card p-5 space-y-2 bg-[var(--bg-raised)]">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                          Responsive Breakpoints & Limits:
+                        </span>
+                        <p className="text-[13px] font-mono text-[var(--text-secondary)] leading-relaxed whitespace-pre-line">
+                          {parsed.constraints}
+                        </p>
+                      </div>
+                    )}
+
+                    {parsed.starter_code && (
+                      <div className="panel-card p-5 space-y-2 bg-[#282c34] border border-[#3e4451] text-gray-200">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-400 block">
+                          Starter React JSX Component:
+                        </span>
+                        <pre className="text-[12px] font-mono p-3 bg-[#21252b] rounded-lg overflow-x-auto text-cyan-300">
+                          {parsed.starter_code}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -2399,6 +2455,48 @@ export default function AdminInterviewConfig() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* 5. FRONTEND (REACT) MODE */}
+              {currentLevel.mode === 'frontend' && (
+                <div className="space-y-4 pt-2 border-t border-[var(--border)]">
+                  <h4 className="text-[13px] font-bold text-cyan-600 dark:text-cyan-400 font-mono uppercase tracking-wider">
+                    Frontend (React) Design Specifications
+                  </h4>
+
+                  <label>
+                    <span>Design & Component Scenario Criteria</span>
+                    <textarea
+                      rows="2"
+                      value={questionForm.scenario}
+                      onChange={(e) => setQuestionForm({ ...questionForm, scenario: e.target.value })}
+                      placeholder="e.g. Build a responsive product card grid with interactive filtering and mobile drawer..."
+                      className="custom-input text-[12px]"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Responsive Breakpoint Requirements & Constraints</span>
+                    <textarea
+                      rows="2"
+                      value={questionForm.constraints}
+                      onChange={(e) => setQuestionForm({ ...questionForm, constraints: e.target.value })}
+                      placeholder="e.g. Mobile (<640px): 1 col stacked; Tablet (640px-1024px): 2 cols; Desktop (>1024px): 3 cols..."
+                      className="custom-input text-[12px] font-mono"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Starter React Component (JSX)</span>
+                    <textarea
+                      rows="5"
+                      value={questionForm.starter_code}
+                      onChange={(e) => setQuestionForm({ ...questionForm, starter_code: e.target.value })}
+                      placeholder={`export default function App() {\n  return (\n    <div className="p-4">\n      <h1 className="text-xl font-bold">Hello React</h1>\n    </div>\n  );\n}`}
+                      className="custom-input text-[12px] font-mono bg-[#282c34] text-cyan-300 border-[#3e4451]"
+                    />
+                  </label>
                 </div>
               )}
 

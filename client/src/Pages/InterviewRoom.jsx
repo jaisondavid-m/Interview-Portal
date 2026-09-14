@@ -28,6 +28,7 @@ import api from '../api/axios';
 import CodeEditor from '../Components/CodeEditor';
 import TestCasesConsole from '../Components/TestCasesConsole';
 import WhiteboardCanvas from '../Components/Whiteboard/WhiteboardCanvas';
+import FrontendPlayground from '../Components/Frontend/FrontendPlayground';
 import ConfirmModal from '../Components/ConfirmModal';
 import PeerFeedbackModal from '../Components/PeerFeedbackModal';
 import CredentialAuditModal from '../Components/CredentialAuditModal';
@@ -698,7 +699,7 @@ export default function InterviewRoom() {
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
 
-  // Detect if current level or question is Whiteboard mode (case-insensitive & supports fallback aliases)
+  // Detect if current level or question is Whiteboard or Frontend mode (case-insensitive & supports fallback aliases)
   const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
   const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
   const isWhiteboardMode =
@@ -706,6 +707,12 @@ export default function InterviewRoom() {
     levelMode === 'discussion' ||
     questionType === 'whiteboard' ||
     questionType === 'discussion';
+
+  const isFrontendMode =
+    levelMode === 'frontend' ||
+    levelMode === 'react' ||
+    questionType === 'frontend' ||
+    questionType === 'react';
 
   // Mutual role switch state calculations
   const switchRequestedBy = sessionData?.switch_requested_by || 0;
@@ -759,7 +766,7 @@ export default function InterviewRoom() {
             {track?.title || 'Mock Interview Domain'}
           </h1>
           <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isWhiteboardMode ? 'Whiteboard' : (level?.mode || 'coding')}</strong>
+            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : (level?.mode || 'coding')}</strong>
           </p>
         </div>
 
@@ -1009,10 +1016,14 @@ export default function InterviewRoom() {
           <span>
             You are currently the <strong>{currentUserRole === 'interviewer' ? 'Interviewer (Assessor)' : 'Candidate (Interviewee)'}</strong> in Round {currentRound}.
             {currentUserRole === 'interviewer'
-              ? (isWhiteboardMode
+              ? (isFrontendMode
+                  ? ' You are observing the candidate\'s React code and testing the live responsive preview in real-time.'
+                  : isWhiteboardMode
                   ? ' You are observing the candidate\'s architecture whiteboard live in real-time with full access to scenario rubrics and tradeoffs.'
                   : ' You have full visibility into the solutions, rubrics, hints, and test cases.')
-              : (isWhiteboardMode
+              : (isFrontendMode
+                  ? ' Build your responsive React component in the live code editor and test different viewport sizes. Your interviewer is viewing live.'
+                  : isWhiteboardMode
                   ? ' Design your system architecture on the interactive whiteboard. Add, move, connect, and edit components. Your interviewer is viewing live.'
                   : ' Write and execute your code in the shared workspace. Your interviewer is observing live.')}
           </span>
@@ -1311,10 +1322,20 @@ export default function InterviewRoom() {
         </div>
 
         {/* ============================================================ */}
-        {/* RIGHT PANEL: System Design Whiteboard OR Code Editor */}
+        {/* RIGHT PANEL: System Design Whiteboard / Frontend / Code Editor */}
         {/* ============================================================ */}
         <div className="lg:col-span-7 flex flex-col space-y-3">
-          {isWhiteboardMode ? (
+          {isFrontendMode ? (
+            <FrontendPlayground
+              code={code}
+              onCodeChange={handleCodeChange}
+              isEditable={currentUserRole === 'interviewee'}
+              candidateName={currentUserRole === 'interviewer' ? (peerUser?.username || 'Candidate') : 'You (Candidate)'}
+              question={question}
+              payload={payload}
+              currentUserRole={currentUserRole}
+            />
+          ) : isWhiteboardMode ? (
             <WhiteboardCanvas
               whiteboardData={whiteboardData}
               onWhiteboardChange={handleWhiteboardChange}

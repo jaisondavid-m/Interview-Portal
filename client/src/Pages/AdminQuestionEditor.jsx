@@ -63,6 +63,7 @@ export default function AdminQuestionEditor() {
   const [scenario, setScenario] = useState('');
   const [talkingPoints, setTalkingPoints] = useState(['']);
   const [tradeoffs, setTradeoffs] = useState(['']);
+  const [starterCode, setStarterCode] = useState('');
 
   // Modal State
   const [modalConfig, setModalConfig] = useState({
@@ -159,6 +160,7 @@ export default function AdminQuestionEditor() {
             setScenario(detail.scenario || payload.scenario || '');
             setExplanation(detail.explanation || payload.explanation || '');
             setCorrectOption(detail.correct_option || payload.correct_option || 'A');
+            setStarterCode(payload.starter_code || '');
 
             // MCQ Options (from relational table first, then payload)
             if (Array.isArray(qData.mcq_options) && qData.mcq_options.length > 0) {
@@ -277,6 +279,15 @@ export default function AdminQuestionEditor() {
           talking_points: talkingPoints.filter((tp) => tp.trim()),
           tradeoffs: tradeoffs.filter((tr) => tr.trim()),
           interview_tips: interviewTips.filter((t) => t.trim()),
+        };
+      } else if (type === 'frontend') {
+        payloadObj = {
+          starter_code: starterCode.trim(),
+          scenario: scenario.trim(),
+          constraints: constraints.trim(),
+          hints: cleanedHints,
+          expected_approach: expectedApproach.trim(),
+          interview_tips: cleanedTips,
         };
       }
 
@@ -502,6 +513,7 @@ export default function AdminQuestionEditor() {
                   <option value="verbal_qa">Verbal Q&A / Conceptual</option>
                   <option value="mcq">Multiple Choice Assessment</option>
                   <option value="whiteboard">System Design & Architecture Whiteboard</option>
+                  <option value="frontend">Frontend (React Live Preview & Responsive)</option>
                 </select>
               </div>
             </div>
@@ -631,6 +643,50 @@ export default function AdminQuestionEditor() {
                   placeholder="Describe scale, bottlenecks, and expected throughput requirements."
                   rows={4}
                   className="custom-input text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {type === 'frontend' && (
+            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+              <h3 className="text-[15px] font-bold text-cyan-600 dark:text-cyan-400">
+                Frontend (React) Design & Breakpoint Specifications
+              </h3>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Layout & Component Requirements
+                </label>
+                <textarea
+                  value={scenario}
+                  onChange={(e) => setScenario(e.target.value)}
+                  placeholder="e.g. Build a responsive card list with real-time search, mobile drawer menu, and interactive counter."
+                  rows={3}
+                  className="custom-input text-[12px]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Responsive Breakpoint Targets
+                </label>
+                <textarea
+                  value={constraints}
+                  onChange={(e) => setConstraints(e.target.value)}
+                  placeholder="e.g. Mobile (<640px): 1 col stacked; Tablet (640px-1024px): 2 cols; Desktop (>1024px): 3 cols with sidebar."
+                  rows={2}
+                  className="custom-input text-[12px] font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Starter React Component (JSX)
+                </label>
+                <textarea
+                  value={starterCode}
+                  onChange={(e) => setStarterCode(e.target.value)}
+                  placeholder={`import React, { useState } from 'react';\n\nexport default function App() {\n  return (\n    <div className="p-4 bg-slate-900 text-white">\n      <h1 className="text-xl font-bold">Hello World</h1>\n    </div>\n  );\n}`}
+                  rows={6}
+                  className="custom-input text-[12px] font-mono bg-[#282c34] text-cyan-300 border-[#3e4451]"
                 />
               </div>
             </div>
