@@ -366,15 +366,15 @@ export default function AdminInterviewConfig() {
                 {!trackId
                   ? 'Interview Domains & Tracks'
                   : !levelId
-                  ? `${currentTrack?.title || 'Loading...'} — Levels`
-                  : formatFullLevelTitle(currentLevel)}
+                    ? `${currentTrack?.title || 'Loading...'} — Levels`
+                    : formatFullLevelTitle(currentLevel)}
               </h1>
               <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
                 {!trackId
                   ? 'Configure campus interview domains, progression tiers, and mode-specific assessments.'
                   : !levelId
-                  ? 'Define progression levels, time limits, and select interview assessment mode.'
-                  : `Manage questions and evaluation rubrics for ${currentLevel?.mode?.toUpperCase()} mode.`}
+                    ? 'Define progression levels, time limits, and select interview assessment mode.'
+                    : `Manage questions and evaluation rubrics for ${currentLevel?.mode?.toUpperCase()} mode.`}
               </p>
             </>
           )}

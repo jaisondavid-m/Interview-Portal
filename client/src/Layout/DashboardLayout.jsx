@@ -12,19 +12,19 @@ export default function DashboardLayout() {
     if (userStr) {
       try {
         setUser(JSON.parse(userStr));
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 
   const isAdmin = user?.role === 'admin';
   const mobileNavItems = isAdmin
     ? [
-        { name: 'Users', path: '/admin/users', icon: Users },
-        { name: 'Interviews', path: '/admin/interviews', icon: SlidersHorizontal },
-      ]
+      { name: 'Users', path: '/admin/users', icon: Users },
+      { name: 'Interviews', path: '/admin/interviews', icon: SlidersHorizontal },
+    ]
     : [
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-      ];
+      { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    ];
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--text-primary)]">
@@ -54,10 +54,9 @@ export default function DashboardLayout() {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-1 px-3 rounded-[var(--radius-sm)] text-[11px] font-medium transition ${
-                  isActive
-                    ? 'text-[var(--accent)] font-semibold'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                `flex flex-col items-center gap-1 py-1 px-3 rounded-[var(--radius-sm)] text-[11px] font-medium transition ${isActive
+                  ? 'text-[var(--accent)] font-semibold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`
               }
             >

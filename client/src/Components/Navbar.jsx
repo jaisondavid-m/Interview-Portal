@@ -9,7 +9,7 @@ export default function Navbar() {
     if (userStr) {
       try {
         setUser(JSON.parse(userStr));
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 
@@ -28,14 +28,14 @@ export default function Navbar() {
       <div className="flex items-center justify-between h-full w-full">
         {/* Left Section: MockMate centered directly above the sidebar */}
         <div className="w-64 h-full md:border-r border-[var(--border)] flex items-center justify-center px-4 shrink-0">
-          <Link 
-            to={targetPath} 
+          <Link
+            to={targetPath}
             className="flex items-center gap-2.5 no-underline group focus:outline-none"
           >
             {/* Brand Icon Logo */}
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#6e56cf] to-[#8c74eb] flex items-center justify-center text-white shadow-[0_2px_8px_rgba(110,86,207,0.28)] group-hover:scale-105 transition-transform duration-200">
-              <svg 
-                viewBox="0 0 24 24" 
+              <svg
+                viewBox="0 0 24 24"
                 className="w-4 h-4 fill-current"
                 xmlns="http://www.w3.org/2000/svg"
               >
