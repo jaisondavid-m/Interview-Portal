@@ -64,6 +64,7 @@ export default function AdminQuestionEditor() {
   const [talkingPoints, setTalkingPoints] = useState(['']);
   const [tradeoffs, setTradeoffs] = useState(['']);
   const [starterCode, setStarterCode] = useState('');
+  const [seedData, setSeedData] = useState('');
 
   // Modal State
   const [modalConfig, setModalConfig] = useState({
@@ -161,6 +162,7 @@ export default function AdminQuestionEditor() {
             setExplanation(detail.explanation || payload.explanation || '');
             setCorrectOption(detail.correct_option || payload.correct_option || 'A');
             setStarterCode(payload.starter_code || '');
+            setSeedData(payload.seed_data || '');
 
             // MCQ Options (from relational table first, then payload)
             if (Array.isArray(qData.mcq_options) && qData.mcq_options.length > 0) {
@@ -242,19 +244,19 @@ export default function AdminQuestionEditor() {
 
     setSaving(true);
     try {
+      const payloadOpenCases = openTestCases.filter((tc) => tc.input.trim() || tc.output.trim());
+      const payloadHiddenCases = hiddenTestCases.filter((tc) => tc.input.trim() || tc.output.trim());
+      const cleanedHints = hints.filter((h) => h.trim());
+      const cleanedTips = interviewTips.filter((t) => t.trim());
+
       let payloadObj = {};
 
-      if (type === 'coding') {
-        const cleanedOpenCases = openTestCases.filter((tc) => tc.input.trim() || tc.output.trim());
-        const cleanedHiddenCases = hiddenTestCases.filter((tc) => tc.input.trim() || tc.output.trim());
-        const cleanedHints = hints.filter((h) => h.trim());
-        const cleanedTips = interviewTips.filter((t) => t.trim());
-
+      if (type === 'coding' || type === 'backend') {
         payloadObj = {
           constraints: constraints.trim(),
-          open_test_cases: cleanedOpenCases,
-          hidden_test_cases: cleanedHiddenCases,
-          test_cases: cleanedOpenCases,
+          open_test_cases: payloadOpenCases,
+          hidden_test_cases: payloadHiddenCases,
+          test_cases: payloadOpenCases,
           hints: cleanedHints,
           expected_approach: expectedApproach.trim(),
           expected_complexity: expectedComplexity.trim(),
@@ -264,25 +266,36 @@ export default function AdminQuestionEditor() {
         payloadObj = {
           ideal_answer: idealAnswer.trim(),
           rubrics: rubrics.filter((r) => r.trim()),
-          interview_tips: interviewTips.filter((t) => t.trim()),
+          interview_tips: cleanedTips,
         };
       } else if (type === 'mcq') {
         payloadObj = {
           options: mcqOptions,
           correct_option: correctOption,
           explanation: explanation.trim(),
-          interview_tips: interviewTips.filter((t) => t.trim()),
+          interview_tips: cleanedTips,
         };
       } else if (type === 'whiteboard' || type === 'discussion') {
         payloadObj = {
           scenario: scenario.trim(),
           talking_points: talkingPoints.filter((tp) => tp.trim()),
           tradeoffs: tradeoffs.filter((tr) => tr.trim()),
-          interview_tips: interviewTips.filter((t) => t.trim()),
+          interview_tips: cleanedTips,
         };
       } else if (type === 'frontend') {
         payloadObj = {
           starter_code: starterCode.trim(),
+          scenario: scenario.trim(),
+          constraints: constraints.trim(),
+          hints: cleanedHints,
+          expected_approach: expectedApproach.trim(),
+          interview_tips: cleanedTips,
+        };
+      } else if (type === 'database') {
+        payloadObj = {
+          starter_code: starterCode.trim(),
+          schema_ddl: starterCode.trim(),
+          seed_data: seedData.trim(),
           scenario: scenario.trim(),
           constraints: constraints.trim(),
           hints: cleanedHints,
@@ -510,6 +523,8 @@ export default function AdminQuestionEditor() {
                   className="custom-input text-[12px] cursor-pointer"
                 >
                   <option value="coding">Live Coding (STDIN/STDOUT Tests)</option>
+                  <option value="backend">Backend Service & APIs (Go, Java, Node.js, Python)</option>
+                  <option value="database">Database (ER Diagram & SQL Query)</option>
                   <option value="verbal_qa">Verbal Q&A / Conceptual</option>
                   <option value="mcq">Multiple Choice Assessment</option>
                   <option value="whiteboard">System Design & Architecture Whiteboard</option>
@@ -534,8 +549,8 @@ export default function AdminQuestionEditor() {
             </div>
           </div>
 
-          {/* CODING MODE: Problem Constraints & Details */}
-          {type === 'coding' && (
+          {/* CODING / BACKEND MODE: Problem Constraints & Details */}
+          {(type === 'coding' || type === 'backend') && (
             <div className="panel-card p-5 border border-[var(--border)] space-y-4">
               <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[var(--accent)]" />
@@ -692,6 +707,50 @@ export default function AdminQuestionEditor() {
             </div>
           )}
 
+          {type === 'database' && (
+            <div className="panel-card p-5 border border-[var(--border)] space-y-4">
+              <h3 className="text-[15px] font-bold text-blue-600 dark:text-blue-400">
+                Database Schema, ER Model & SQL Specifications
+              </h3>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Schema Scenario & Problem Context
+                </label>
+                <textarea
+                  value={scenario}
+                  onChange={(e) => setScenario(e.target.value)}
+                  placeholder="e.g. Design a normalized e-commerce database with users, orders, and products. Write a query to find the top 5 customers by revenue."
+                  rows={3}
+                  className="custom-input text-[12px]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Pre-Seeded Schema DDL (CREATE TABLE statements)
+                </label>
+                <textarea
+                  value={starterCode}
+                  onChange={(e) => setStarterCode(e.target.value)}
+                  placeholder={`CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  username VARCHAR(100) NOT NULL,\n  email VARCHAR(255) NOT NULL\n);`}
+                  rows={5}
+                  className="custom-input text-[12px] font-mono bg-[#282c34] text-cyan-300 border-[#3e4451]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
+                  Initial Seed Records (INSERT INTO statements)
+                </label>
+                <textarea
+                  value={seedData}
+                  onChange={(e) => setSeedData(e.target.value)}
+                  placeholder={`INSERT INTO users (id, username, email) VALUES\n(1, 'jaison_dev', 'jaison@example.com'),\n(2, 'sarah_tech', 'sarah@example.com');`}
+                  rows={4}
+                  className="custom-input text-[12px] font-mono bg-[#282c34] text-emerald-300 border-[#3e4451]"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Assessor Hints & Interview Tips */}
           <div className="panel-card p-5 border border-[var(--border)] space-y-4">
             <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -786,8 +845,8 @@ export default function AdminQuestionEditor() {
         {/* RIGHT COLUMN: STDIN/STDOUT Test Cases & Solution Benchmark */}
         {/* ============================================================ */}
         <div className="lg:col-span-6 space-y-6">
-          {/* CODING MODE: Sample & Hidden Test Cases */}
-          {type === 'coding' && (
+          {/* CODING & BACKEND MODE: Sample & Hidden Test Cases */}
+          {(type === 'coding' || type === 'backend') && (
             <div className="panel-card p-5 border border-[var(--border)] space-y-5">
               {/* 1. Open Sample Test Cases */}
               <div className="space-y-3">

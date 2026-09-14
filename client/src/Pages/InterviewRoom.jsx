@@ -29,6 +29,7 @@ import CodeEditor from '../Components/CodeEditor';
 import TestCasesConsole from '../Components/TestCasesConsole';
 import WhiteboardCanvas from '../Components/Whiteboard/WhiteboardCanvas';
 import FrontendPlayground from '../Components/Frontend/FrontendPlayground';
+import DatabasePlayground from '../Components/Database/DatabasePlayground';
 import ConfirmModal from '../Components/ConfirmModal';
 import PeerFeedbackModal from '../Components/PeerFeedbackModal';
 import CredentialAuditModal from '../Components/CredentialAuditModal';
@@ -699,7 +700,7 @@ export default function InterviewRoom() {
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
 
-  // Detect if current level or question is Whiteboard or Frontend mode (case-insensitive & supports fallback aliases)
+  // Detect if current level or question is Whiteboard, Frontend, or Backend mode (case-insensitive & supports fallback aliases)
   const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
   const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
   const isWhiteboardMode =
@@ -713,6 +714,16 @@ export default function InterviewRoom() {
     levelMode === 'react' ||
     questionType === 'frontend' ||
     questionType === 'react';
+
+  const isBackendMode =
+    levelMode === 'backend' ||
+    questionType === 'backend';
+
+  const isDatabaseMode =
+    levelMode === 'database' ||
+    levelMode === 'sql' ||
+    questionType === 'database' ||
+    questionType === 'sql';
 
   // Mutual role switch state calculations
   const switchRequestedBy = sessionData?.switch_requested_by || 0;
@@ -766,7 +777,7 @@ export default function InterviewRoom() {
             {track?.title || 'Mock Interview Domain'}
           </h1>
           <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : (level?.mode || 'coding')}</strong>
+            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database (SQL & ER)' : isBackendMode ? 'Backend Service' : (level?.mode || 'coding')}</strong>
           </p>
         </div>
 
@@ -1020,11 +1031,19 @@ export default function InterviewRoom() {
                   ? ' You are observing the candidate\'s React code and testing the live responsive preview in real-time.'
                   : isWhiteboardMode
                   ? ' You are observing the candidate\'s architecture whiteboard live in real-time with full access to scenario rubrics and tradeoffs.'
+                  : isDatabaseMode
+                  ? ' You are observing the candidate\'s ER diagram schema and SQL queries in real-time with access to schema benchmarks and expected query solutions.'
+                  : isBackendMode
+                  ? ' You are observing the candidate\'s backend service code (Go, Java, Node.js, Python, C++) and server-side test case executions in real-time.'
                   : ' You have full visibility into the solutions, rubrics, hints, and test cases.')
               : (isFrontendMode
                   ? ' Build your responsive React component in the live code editor and test different viewport sizes. Your interviewer is viewing live.'
                   : isWhiteboardMode
                   ? ' Design your system architecture on the interactive whiteboard. Add, move, connect, and edit components. Your interviewer is viewing live.'
+                  : isDatabaseMode
+                  ? ' Model your ER diagram and execute your SQL queries against the seeded database. Your interviewer is observing live.'
+                  : isBackendMode
+                  ? ' Implement your backend logic in Go, Java, Node.js, Python, or C++ and validate against test cases. Your interviewer is observing live.'
                   : ' Write and execute your code in the shared workspace. Your interviewer is observing live.')}
           </span>
         </div>
@@ -1339,6 +1358,16 @@ export default function InterviewRoom() {
             <WhiteboardCanvas
               whiteboardData={whiteboardData}
               onWhiteboardChange={handleWhiteboardChange}
+              isEditable={currentUserRole === 'interviewee'}
+              candidateName={currentUserRole === 'interviewer' ? (peerUser?.username || 'Candidate') : 'You (Candidate)'}
+              question={question}
+              payload={payload}
+              currentUserRole={currentUserRole}
+            />
+          ) : isDatabaseMode ? (
+            <DatabasePlayground
+              code={code}
+              onCodeChange={handleCodeChange}
               isEditable={currentUserRole === 'interviewee'}
               candidateName={currentUserRole === 'interviewer' ? (peerUser?.username || 'Candidate') : 'You (Candidate)'}
               question={question}

@@ -4,7 +4,7 @@ import {
   Code, Layers, Mic, CheckSquare, MessageSquare, Plus, ChevronRight, 
   Search, Edit2, Trash2, Clock, AlertCircle, Check, X, ArrowLeft,
   HelpCircle, Eye, EyeOff, Lock, Unlock, ChevronDown, ChevronUp, Copy,
-  Lightbulb, Target, Sparkles, BookOpen, Layout, AppWindow
+  Lightbulb, Target, Sparkles, BookOpen, Layout, AppWindow, Server, Database
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -54,6 +54,24 @@ const INTERVIEW_MODES = [
     bg: 'bg-cyan-500/10',
     border: 'border-cyan-500/20',
     desc: 'Interactive React/HTML/CSS live code editor with real-time responsive preview and viewport testing.',
+  },
+  {
+    id: 'backend',
+    label: 'Backend',
+    icon: Server,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500/20',
+    desc: 'Backend service & API logic in Go, Java, Node.js, Python with server-side test case execution and benchmarking.',
+  },
+  {
+    id: 'database',
+    label: 'Database',
+    icon: Database,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-500/10',
+    border: 'border-blue-500/20',
+    desc: 'Visual ER diagram modeling and interactive SQL query execution against seeded relational database tables.',
   },
 ];
 
@@ -281,7 +299,7 @@ export default function AdminInterviewConfig() {
       let payloadObj = {};
       const tips = (questionForm.interview_tips || []).filter((t) => t.trim());
 
-      if (currentLevel.mode === 'coding') {
+      if (currentLevel.mode === 'coding' || currentLevel.mode === 'backend') {
         const openTCs = questionForm.open_test_cases.filter((tc) => tc.input || tc.output);
         const hiddenTCs = questionForm.hidden_test_cases.filter((tc) => tc.input || tc.output);
         const hints = (questionForm.hints || []).filter((h) => h.trim());
@@ -320,6 +338,17 @@ export default function AdminInterviewConfig() {
       } else if (currentLevel.mode === 'frontend') {
         payloadObj = {
           starter_code: questionForm.starter_code || '',
+          scenario: questionForm.scenario || '',
+          constraints: questionForm.constraints || '',
+          hints: (questionForm.hints || []).filter((h) => h.trim()),
+          expected_approach: questionForm.expected_approach || '',
+          interview_tips: tips,
+        };
+      } else if (currentLevel.mode === 'database') {
+        payloadObj = {
+          starter_code: questionForm.starter_code || '',
+          schema_ddl: questionForm.schema_ddl || questionForm.starter_code || '',
+          seed_data: questionForm.seed_data || '',
           scenario: questionForm.scenario || '',
           constraints: questionForm.constraints || '',
           hints: (questionForm.hints || []).filter((h) => h.trim()),
@@ -1149,8 +1178,8 @@ export default function AdminInterviewConfig() {
                   </div>
                 </div>
 
-                {/* 1. CODING MODE SPECIFICATIONS */}
-                {currentLevel?.mode === 'coding' && (
+                {/* 1. CODING & BACKEND SPECIFICATIONS */}
+                {(currentLevel?.mode === 'coding' || currentLevel?.mode === 'backend') && (
                   <div className="space-y-6">
                     {/* Constraints */}
                     {parsed.constraints && (
@@ -1841,8 +1870,8 @@ export default function AdminInterviewConfig() {
 
               {/* DYNAMIC FORM FIELDS BY LEVEL MODE */}
 
-              {/* 1. CODING MODE */}
-              {currentLevel.mode === 'coding' && (
+              {/* 1. CODING & BACKEND MODE */}
+              {(currentLevel.mode === 'coding' || currentLevel.mode === 'backend') && (
                 <div className="space-y-4 pt-2 border-t border-[var(--border)]">
                   <div className="flex items-center justify-between">
                     <h4 className="text-[13px] font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
@@ -2495,6 +2524,59 @@ export default function AdminInterviewConfig() {
                       onChange={(e) => setQuestionForm({ ...questionForm, starter_code: e.target.value })}
                       placeholder={`export default function App() {\n  return (\n    <div className="p-4">\n      <h1 className="text-xl font-bold">Hello React</h1>\n    </div>\n  );\n}`}
                       className="custom-input text-[12px] font-mono bg-[#282c34] text-cyan-300 border-[#3e4451]"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* 6. DATABASE (ER & SQL) MODE */}
+              {currentLevel.mode === 'database' && (
+                <div className="space-y-4 pt-2 border-t border-[var(--border)]">
+                  <h4 className="text-[13px] font-bold text-blue-600 dark:text-blue-400 font-mono uppercase tracking-wider">
+                    Database Schema & SQL Specifications
+                  </h4>
+
+                  <label>
+                    <span>Schema Modeling & ER Scenario</span>
+                    <textarea
+                      rows="2"
+                      value={questionForm.scenario}
+                      onChange={(e) => setQuestionForm({ ...questionForm, scenario: e.target.value })}
+                      placeholder="e.g. Design a normalized e-commerce database with users, orders, and order items. Write a query to find top 5 customers by revenue."
+                      className="custom-input text-[12px]"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Pre-Seeded Schema DDL (CREATE TABLE statements)</span>
+                    <textarea
+                      rows="4"
+                      value={questionForm.starter_code}
+                      onChange={(e) => setQuestionForm({ ...questionForm, starter_code: e.target.value })}
+                      placeholder="CREATE TABLE users (id INTEGER PRIMARY KEY, username VARCHAR(100), email VARCHAR(255));"
+                      className="custom-input text-[12px] font-mono bg-[#282c34] text-cyan-300 border-[#3e4451]"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Initial Seed Records (INSERT INTO statements)</span>
+                    <textarea
+                      rows="3"
+                      value={questionForm.seed_data || ''}
+                      onChange={(e) => setQuestionForm({ ...questionForm, seed_data: e.target.value })}
+                      placeholder="INSERT INTO users (id, username, email) VALUES (1, 'jaison', 'jaison@example.com');"
+                      className="custom-input text-[12px] font-mono bg-[#282c34] text-emerald-300 border-[#3e4451]"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Optimal Solution SQL Query (Benchmark for Interviewer)</span>
+                    <textarea
+                      rows="3"
+                      value={questionForm.expected_approach}
+                      onChange={(e) => setQuestionForm({ ...questionForm, expected_approach: e.target.value })}
+                      placeholder="SELECT u.id, u.username, SUM(o.amount) FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.id;"
+                      className="custom-input text-[12px] font-mono bg-[#282c34] text-amber-300 border-[#3e4451]"
                     />
                   </label>
                 </div>

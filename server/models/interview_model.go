@@ -16,6 +16,8 @@ const (
 	ModeWhiteboard InterviewMode = "whiteboard"
 	ModeDiscussion InterviewMode = "discussion" // legacy alias for whiteboard
 	ModeFrontend   InterviewMode = "frontend"
+	ModeBackend    InterviewMode = "backend"
+	ModeDatabase   InterviewMode = "database"
 )
 
 // InterviewTrack represents an interview domain / topic (e.g., DSA, System Design)

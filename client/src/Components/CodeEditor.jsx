@@ -8,10 +8,11 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { Copy, Check, Lock } from 'lucide-react';
 
 const LANGUAGE_CONFIGS = [
+  { id: 'go', label: 'Go (Golang)', extension: () => cpp() },
   { id: 'javascript', label: 'JavaScript (Node.js)', extension: () => javascript({ jsx: true }) },
+  { id: 'java', label: 'Java (OpenJDK 17)', extension: () => java() },
   { id: 'python', label: 'Python 3', extension: () => python() },
   { id: 'cpp', label: 'C++ (g++ 17)', extension: () => cpp() },
-  { id: 'java', label: 'Java (OpenJDK 17)', extension: () => java() },
 ];
 
 export default function CodeEditor({

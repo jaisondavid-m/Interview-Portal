@@ -60,6 +60,8 @@ func ExecuteTestCases(code string, lang string, testCases []EvalTestCase) ([]Eva
 	normLang := normalizeLanguage(lang)
 
 	switch normLang {
+	case "go":
+		return executeGo(trimmedCode, testCases, false)
 	case "python":
 		return executePython(trimmedCode, testCases, false)
 	case "javascript":
@@ -104,6 +106,8 @@ func ExecuteCustomInput(code string, lang string, customInput string) (EvalResul
 	var err error
 
 	switch normLang {
+	case "go":
+		results, err = executeGo(trimmedCode, tc, true)
 	case "python":
 		results, err = executePython(trimmedCode, tc, true)
 	case "javascript":
@@ -135,6 +139,8 @@ func ExecuteCustomInput(code string, lang string, customInput string) (EvalResul
 func normalizeLanguage(lang string) string {
 	l := strings.ToLower(strings.TrimSpace(lang))
 	switch l {
+	case "go", "golang":
+		return "go"
 	case "py", "python", "python3":
 		return "python"
 	case "js", "javascript", "node", "nodejs":
@@ -146,6 +152,51 @@ func normalizeLanguage(lang string) string {
 	default:
 		return "javascript"
 	}
+}
+
+// ============================================================
+// GOLANG EXECUTOR
+// ============================================================
+func executeGo(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResult, error) {
+	goPath, err := findExecutable("go", "/usr/bin/go", "/usr/local/go/bin/go", "/usr/local/bin/go")
+	if err != nil {
+		return executeViaRemote("go", code, testCases, isCustom)
+	}
+
+	tmpDir, err := os.MkdirTemp("", "mockmate_go_*")
+	if err != nil {
+		return executeViaRemote("go", code, testCases, isCustom)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	srcPath := filepath.Join(tmpDir, "main.go")
+	binName := "main"
+	if runtime.GOOS == "windows" {
+		binName = "main.exe"
+	}
+	binPath := filepath.Join(tmpDir, binName)
+
+	if err := os.WriteFile(srcPath, []byte(code), 0644); err != nil {
+		return executeViaRemote("go", code, testCases, isCustom)
+	}
+
+	// Compile Go binary for fast multi-test case execution
+	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelCompile()
+
+	compileCmd := exec.CommandContext(ctxCompile, goPath, "build", "-o", binPath, srcPath)
+	var compileStderr bytes.Buffer
+	compileCmd.Stderr = &compileStderr
+
+	if err := compileCmd.Run(); err != nil {
+		errStr := strings.TrimSpace(compileStderr.String())
+		if errStr == "" {
+			errStr = err.Error()
+		}
+		return makeErrorResults(testCases, "Go Compilation Error:\n"+errStr), nil
+	}
+
+	return runCommandPerTestCase(binPath, []string{}, testCases, isCustom)
 }
 
 // ============================================================
