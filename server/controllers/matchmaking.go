@@ -67,8 +67,10 @@ func sanitizeQuestionForCandidate(q models.InterviewQuestion) gin.H {
 	var sanitizedOptions []gin.H
 	for _, opt := range q.MCQOptions {
 		sanitizedOptions = append(sanitizedOptions, gin.H{
-			"id":   opt.OptionKey,
-			"text": opt.OptionText,
+			"id":          opt.OptionKey,
+			"option_key":  opt.OptionKey,
+			"text":        opt.OptionText,
+			"option_text": opt.OptionText,
 		})
 	}
 
@@ -85,17 +87,19 @@ func sanitizeQuestionForCandidate(q models.InterviewQuestion) gin.H {
 	}
 
 	return gin.H{
-		"id":         q.ID,
-		"level_id":   q.LevelID,
-		"title":      q.Title,
-		"prompt":     q.Prompt,
-		"difficulty": q.Difficulty,
-		"type":       q.Type,
-		"templates":  q.Templates,
-		"test_cases": openTestCases,
-		"detail":     q.Detail,
-		"payload":    sanitizedPayload,
-		"created_at": q.CreatedAt,
+		"id":          q.ID,
+		"level_id":    q.LevelID,
+		"title":       q.Title,
+		"prompt":      q.Prompt,
+		"difficulty":  q.Difficulty,
+		"type":        q.Type,
+		"templates":   q.Templates,
+		"test_cases":  openTestCases,
+		"detail":      q.Detail,
+		"options":     sanitizedOptions,
+		"mcq_options": sanitizedOptions,
+		"payload":     sanitizedPayload,
+		"created_at":  q.CreatedAt,
 	}
 }
 
@@ -145,21 +149,13 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 	}
 
 	var mcqOptions []gin.H
-	for _, opt := range q.MCQOptions {
-		mcqOptions = append(mcqOptions, gin.H{
-			"id":         opt.OptionKey,
-			"text":       opt.OptionText,
-			"is_correct": opt.IsCorrect,
-		})
-	}
-
+	correctOption := ""
+	explanation := ""
 	constraints := ""
 	expectedApproach := ""
 	expectedComplexity := ""
 	idealAnswer := ""
 	scenario := ""
-	correctOption := ""
-	explanation := ""
 
 	if q.Detail != nil {
 		constraints = q.Detail.Constraints
@@ -169,6 +165,20 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 		scenario = q.Detail.Scenario
 		correctOption = q.Detail.CorrectOption
 		explanation = q.Detail.Explanation
+	}
+
+	for _, opt := range q.MCQOptions {
+		isCorr := opt.IsCorrect
+		if !isCorr && correctOption != "" && (strings.EqualFold(opt.OptionKey, correctOption) || strings.EqualFold(opt.OptionText, correctOption)) {
+			isCorr = true
+		}
+		mcqOptions = append(mcqOptions, gin.H{
+			"id":          opt.OptionKey,
+			"option_key":  opt.OptionKey,
+			"text":        opt.OptionText,
+			"option_text": opt.OptionText,
+			"is_correct":  isCorr,
+		})
 	}
 
 	fullPayload := gin.H{
@@ -194,19 +204,22 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 	}
 
 	return gin.H{
-		"id":          q.ID,
-		"level_id":    q.LevelID,
-		"title":       q.Title,
-		"prompt":      q.Prompt,
-		"difficulty":  q.Difficulty,
-		"type":        q.Type,
-		"detail":      q.Detail,
-		"templates":   q.Templates,
-		"test_cases":  openTestCases,
-		"hints":       q.Hints,
-		"mcq_options": q.MCQOptions,
-		"payload":     fullPayload,
-		"created_at":  q.CreatedAt,
+		"id":             q.ID,
+		"level_id":       q.LevelID,
+		"title":          q.Title,
+		"prompt":         q.Prompt,
+		"difficulty":     q.Difficulty,
+		"type":           q.Type,
+		"detail":         q.Detail,
+		"templates":      q.Templates,
+		"test_cases":     openTestCases,
+		"hints":          q.Hints,
+		"options":        mcqOptions,
+		"mcq_options":    mcqOptions,
+		"correct_option": correctOption,
+		"explanation":    explanation,
+		"payload":        fullPayload,
+		"created_at":     q.CreatedAt,
 	}
 }
 
@@ -726,7 +739,7 @@ func GetInterviewSession(c *gin.Context) {
 	// Sanitize Level Questions list for candidate
 	var levelQuestions []gin.H
 	if session.Level != nil {
-		questionsToServe := session.Level.Questions
+		allQuestions := session.Level.Questions
 		loadCount := session.Level.QuestionCount
 		if loadCount <= 0 {
 			if session.Level.Mode == models.ModeMCQ {
@@ -735,9 +748,40 @@ func GetInterviewSession(c *gin.Context) {
 				loadCount = 1
 			}
 		}
-		if loadCount > 0 && len(questionsToServe) > loadCount {
-			questionsToServe = questionsToServe[:loadCount]
+
+		var questionsToServe []models.InterviewQuestion
+		if session.Round == 2 {
+			// Round 2: serve questions starting after Round 1 set so questions are NOT repeated
+			if len(allQuestions) > loadCount {
+				startIdx := loadCount
+				endIdx := startIdx + loadCount
+				if endIdx > len(allQuestions) {
+					endIdx = len(allQuestions)
+				}
+				questionsToServe = allQuestions[startIdx:endIdx]
+			} else {
+				// If level doesn't have enough extra questions, try fetching other questions from track
+				var extraQuestions []models.InterviewQuestion
+				database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
+					Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
+					Where("interview_levels.track_id = ? AND interview_questions.id != ?", session.TrackID, session.Round1QuestionID).
+					Limit(loadCount).
+					Find(&extraQuestions)
+				if len(extraQuestions) > 0 {
+					questionsToServe = extraQuestions
+				} else {
+					questionsToServe = allQuestions
+				}
+			}
+		} else {
+			// Round 1: first loadCount questions
+			if loadCount > 0 && len(allQuestions) > loadCount {
+				questionsToServe = allQuestions[:loadCount]
+			} else {
+				questionsToServe = allQuestions
+			}
 		}
+
 		for _, q := range questionsToServe {
 			if currentUserRole == "interviewer" {
 				levelQuestions = append(levelQuestions, fullQuestionForInterviewer(q))

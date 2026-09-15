@@ -30,6 +30,7 @@ import TestCasesConsole from '../Components/TestCasesConsole';
 import WhiteboardCanvas from '../Components/Whiteboard/WhiteboardCanvas';
 import FrontendPlayground from '../Components/Frontend/FrontendPlayground';
 import DatabasePlayground from '../Components/Database/DatabasePlayground';
+import MCQPlayground from '../Components/MCQ/MCQPlayground';
 import ConfirmModal from '../Components/ConfirmModal';
 import PeerFeedbackModal from '../Components/PeerFeedbackModal';
 import CredentialAuditModal from '../Components/CredentialAuditModal';
@@ -712,7 +713,7 @@ export default function InterviewRoom() {
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
 
-  // Detect if current level or question is Whiteboard, Frontend, or Backend mode (case-insensitive & supports fallback aliases)
+  // Detect if current level or question is Whiteboard, Frontend, Database, or MCQ mode (case-insensitive & supports fallback aliases)
   const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
   const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
   const isWhiteboardMode =
@@ -736,6 +737,14 @@ export default function InterviewRoom() {
     levelMode === 'sql' ||
     questionType === 'database' ||
     questionType === 'sql';
+
+  const isMCQMode =
+    levelMode === 'mcq' ||
+    levelMode === 'multiple_choice' ||
+    levelMode === 'quiz' ||
+    questionType === 'mcq' ||
+    questionType === 'multiple_choice' ||
+    questionType === 'quiz';
 
   // Mutual role switch state calculations
   const switchRequestedBy = sessionData?.switch_requested_by || 0;
@@ -789,7 +798,7 @@ export default function InterviewRoom() {
             {track?.title || 'Mock Interview Domain'}
           </h1>
           <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database (SQL & ER)' : isBackendMode ? 'Backend Service' : (level?.mode || 'coding')}</strong>
+            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database (SQL & ER)' : isMCQMode ? 'Multiple Choice (MCQ)' : isBackendMode ? 'Backend Service' : (level?.mode || 'coding')}</strong>
           </p>
         </div>
 
@@ -1045,6 +1054,8 @@ export default function InterviewRoom() {
                   ? ' You are observing the candidate\'s architecture whiteboard live in real-time with full access to scenario rubrics and tradeoffs.'
                   : isDatabaseMode
                   ? ' You are observing the candidate\'s ER diagram schema and SQL queries in real-time with access to schema benchmarks and expected query solutions.'
+                  : isMCQMode
+                  ? ' You are observing the candidate\'s MCQ answers live in real-time with complete visibility of benchmark solutions and live scoring.'
                   : isBackendMode
                   ? ' You are observing the candidate\'s backend service code (Go, Java, Node.js, Python, C++) and server-side test case executions in real-time.'
                   : ' You have full visibility into the solutions, rubrics, hints, and test cases.')
@@ -1054,6 +1065,8 @@ export default function InterviewRoom() {
                   ? ' Design your system architecture on the interactive whiteboard. Add, move, connect, and edit components. Your interviewer is viewing live.'
                   : isDatabaseMode
                   ? ' Model your ER diagram and execute your SQL queries against the seeded database. Your interviewer is observing live.'
+                  : isMCQMode
+                  ? ' Answer the multiple-choice assessment questions. Select your options and navigate using the question buttons. Your interviewer is observing live.'
                   : isBackendMode
                   ? ' Implement your backend logic in Go, Java, Node.js, Python, or C++ and validate against test cases. Your interviewer is observing live.'
                   : ' Write and execute your code in the shared workspace. Your interviewer is observing live.')}
@@ -1082,8 +1095,22 @@ export default function InterviewRoom() {
         )}
       </div>
 
-      {/* Main Dual-Panel Workspace Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      {/* Main Dual-Panel Workspace Grid or Full-Width MCQ Assessment */}
+      {isMCQMode ? (
+        <div className="w-full">
+          <MCQPlayground
+            questions={sessionData?.level_questions || (question ? [question] : [])}
+            code={code}
+            onCodeChange={handleCodeChange}
+            isEditable={currentUserRole === 'interviewee'}
+            candidateName={currentUserRole === 'interviewer' ? (peerUser?.username || 'Candidate') : 'You (Candidate)'}
+            currentUserRole={currentUserRole}
+            sessionId={sessionId}
+            round={currentRound}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* ============================================================ */}
         {/* LEFT PANEL: Problem & Assessor Guide */}
         {/* ============================================================ */}
@@ -1420,6 +1447,7 @@ export default function InterviewRoom() {
           )}
         </div>
       </div>
+      )}
 
       {/* Confirmation & Alert Modal */}
       <ConfirmModal {...modalConfig} onClose={closeModal} />
