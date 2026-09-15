@@ -68,6 +68,93 @@ export default function InterviewRoom() {
   const myUserId = currentUserRole === 'interviewer' ? sessionData?.interviewer_id : sessionData?.interviewee_id;
   const isCompleted = sessionData?.status === 'completed' || sessionData?.status === 'finished' || sessionData?.status === 'cancelled';
 
+  const track = sessionData?.track;
+  const level = sessionData?.level;
+  const question = sessionData?.current_question;
+  const payload = question?.payload || {};
+  const currentRound = sessionData?.round || 1;
+  const switchCount = sessionData?.switch_count || 0;
+
+  // Detect if current level or question is Whiteboard, Frontend, Database, MCQ, or Verbal Q&A mode
+  const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
+  const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
+
+  const isVerbalQAMode =
+    levelMode === 'verbal_qa' ||
+    levelMode === 'verbal' ||
+    levelMode === 'conceptual' ||
+    levelMode === 'discussion' ||
+    questionType === 'verbal_qa' ||
+    questionType === 'verbal' ||
+    questionType === 'conceptual' ||
+    questionType === 'discussion';
+
+  const isWhiteboardMode =
+    (levelMode === 'whiteboard' ||
+    questionType === 'whiteboard') &&
+    !isVerbalQAMode;
+
+  const isFrontendMode =
+    levelMode === 'frontend' ||
+    levelMode === 'react' ||
+    questionType === 'frontend' ||
+    questionType === 'react';
+
+  const isBackendMode =
+    levelMode === 'backend' ||
+    questionType === 'backend';
+
+  const isDatabaseMode =
+    levelMode === 'database' ||
+    levelMode === 'sql' ||
+    questionType === 'database' ||
+    questionType === 'sql';
+
+  const isMCQMode =
+    levelMode === 'mcq' ||
+    levelMode === 'multiple_choice' ||
+    levelMode === 'quiz' ||
+    questionType === 'mcq' ||
+    questionType === 'multiple_choice' ||
+    questionType === 'quiz';
+
+  // Mutual role switch state calculations
+  const switchRequestedBy = sessionData?.switch_requested_by || 0;
+  const isSwitchRequestedByMe = switchRequestedBy > 0 && switchRequestedBy === myUserId;
+  const isSwitchRequestedByPeer = switchRequestedBy > 0 && switchRequestedBy !== myUserId;
+
+  // Mutual end interview state calculations
+  const endRequestedBy = sessionData?.end_requested_by || 0;
+  const isEndRequestedByMe = endRequestedBy > 0 && endRequestedBy === myUserId;
+  const isEndRequestedByPeer = endRequestedBy > 0 && endRequestedBy !== myUserId;
+
+  // Extract open test cases (strictly from question payload, no fallback test cases)
+  const openCases = (Array.isArray(payload?.open_test_cases) ? payload.open_test_cases : (Array.isArray(payload?.test_cases) ? payload.test_cases : []));
+
+  // Format seconds -> MM:SS or HH:MM:SS
+  const formatTime = (secs) => {
+    if (!secs || isNaN(secs) || secs < 0) return '00:00';
+    const hours = Math.floor(secs / 3600);
+    const mins = Math.floor((secs % 3600) / 60);
+    const rem = secs % 60;
+    if (hours > 0) {
+      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+    }
+    return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+  };
+
+  const handleOpenFeedback = () => {
+    if (isCompleted) {
+      const isR2Interviewer = initialRoleRef.current === 'interviewee' && (sessionData?.switch_count || 0) >= 1;
+      setFeedbackRound(isR2Interviewer ? 2 : 1);
+    } else if (sessionData?.round === 2 || (sessionData?.switch_count || 0) >= 1) {
+      setFeedbackRound(1);
+    } else {
+      setFeedbackRound(1);
+    }
+    setShowFeedbackModal(true);
+  };
+
   // Live WebRTC Audio Call Hook
   const {
     connectionState,
@@ -677,17 +764,6 @@ export default function InterviewRoom() {
     }
   };
 
-  // Format seconds -> MM:SS or HH:MM:SS
-  const formatTime = (secs) => {
-    if (!secs || isNaN(secs) || secs < 0) return '00:00';
-    const hours = Math.floor(secs / 3600);
-    const mins = Math.floor((secs % 3600) / 60);
-    const rem = secs % 60;
-    if (hours > 0) {
-      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
-    }
-    return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
-  };
 
   if (loading) {
     return (
@@ -739,80 +815,6 @@ export default function InterviewRoom() {
     );
   }
 
-  const track = sessionData?.track;
-  const level = sessionData?.level;
-  const question = sessionData?.current_question;
-  const payload = question?.payload || {};
-  const currentRound = sessionData?.round || 1;
-  const switchCount = sessionData?.switch_count || 0;
-
-  // Detect if current level or question is Whiteboard, Frontend, Database, MCQ, or Verbal Q&A mode (case-insensitive & supports fallback aliases)
-  const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
-  const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
-
-  const isVerbalQAMode =
-    levelMode === 'verbal_qa' ||
-    levelMode === 'verbal' ||
-    levelMode === 'conceptual' ||
-    levelMode === 'discussion' ||
-    questionType === 'verbal_qa' ||
-    questionType === 'verbal' ||
-    questionType === 'conceptual' ||
-    questionType === 'discussion';
-
-  const isWhiteboardMode =
-    (levelMode === 'whiteboard' ||
-    questionType === 'whiteboard') &&
-    !isVerbalQAMode;
-
-  const isFrontendMode =
-    levelMode === 'frontend' ||
-    levelMode === 'react' ||
-    questionType === 'frontend' ||
-    questionType === 'react';
-
-  const isBackendMode =
-    levelMode === 'backend' ||
-    questionType === 'backend';
-
-  const isDatabaseMode =
-    levelMode === 'database' ||
-    levelMode === 'sql' ||
-    questionType === 'database' ||
-    questionType === 'sql';
-
-  const isMCQMode =
-    levelMode === 'mcq' ||
-    levelMode === 'multiple_choice' ||
-    levelMode === 'quiz' ||
-    questionType === 'mcq' ||
-    questionType === 'multiple_choice' ||
-    questionType === 'quiz';
-
-  // Mutual role switch state calculations
-  const switchRequestedBy = sessionData?.switch_requested_by || 0;
-  const isSwitchRequestedByMe = switchRequestedBy > 0 && switchRequestedBy === myUserId;
-  const isSwitchRequestedByPeer = switchRequestedBy > 0 && switchRequestedBy !== myUserId;
-
-  // Mutual end interview state calculations
-  const endRequestedBy = sessionData?.end_requested_by || 0;
-  const isEndRequestedByMe = endRequestedBy > 0 && endRequestedBy === myUserId;
-  const isEndRequestedByPeer = endRequestedBy > 0 && endRequestedBy !== myUserId;
-
-  // Extract open test cases (strictly from question payload, no fallback test cases)
-  const openCases = (Array.isArray(payload?.open_test_cases) ? payload.open_test_cases : (Array.isArray(payload?.test_cases) ? payload.test_cases : []));
-
-  const handleOpenFeedback = () => {
-    if (isCompleted) {
-      const isR2Interviewer = initialRoleRef.current === 'interviewee' && (sessionData?.switch_count || 0) >= 1;
-      setFeedbackRound(isR2Interviewer ? 2 : 1);
-    } else if (sessionData?.round === 2 || (sessionData?.switch_count || 0) >= 1) {
-      setFeedbackRound(1);
-    } else {
-      setFeedbackRound(1);
-    }
-    setShowFeedbackModal(true);
-  };
 
   // Dedicated View for Concluded / Finished Interview Sessions
   if (isCompleted) {
