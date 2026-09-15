@@ -104,6 +104,20 @@ export default function FrontendLivePreview({
   <script src="https://unpkg.com/canvas-confetti@1.9.2/dist/confetti.browser.js"></script>
   <!-- Clsx -->
   <script src="https://unpkg.com/clsx@2.1.0/dist/clsx.min.js"></script>
+  <!-- Dayjs & Plugins -->
+  <script src="https://unpkg.com/dayjs@1.11.10/dayjs.min.js"></script>
+  <script src="https://unpkg.com/dayjs@1.11.10/plugin/relativeTime.js"></script>
+  <script src="https://unpkg.com/dayjs@1.11.10/plugin/duration.js"></script>
+  <!-- Zod Schema Validation -->
+  <script src="https://unpkg.com/zod@3.22.4/lib/index.umd.js"></script>
+  <!-- Chart.js -->
+  <script src="https://unpkg.com/chart.js@4.4.2/dist/chart.umd.js"></script>
+  <!-- SortableJS (Drag and Drop) -->
+  <script src="https://unpkg.com/sortablejs@1.15.2/Sortable.min.js"></script>
+  <!-- Marked Markdown Parser -->
+  <script src="https://unpkg.com/marked@12.0.1/marked.min.js"></script>
+  <!-- DOMPurify HTML Sanitizer -->
+  <script src="https://unpkg.com/dompurify@3.1.0/dist/purify.min.js"></script>
   <style>
     *, ::before, ::after { box-sizing: border-box; }
     html, body {
@@ -186,7 +200,56 @@ export default function FrontendLivePreview({
       // 5. Clsx
       const clsx = window.clsx || ((...args) => args.filter(Boolean).join(' '));
 
-      // 6. Framer Motion
+      // 6. Day.js with Relative Time and Duration Plugins
+      const dayjs = window.dayjs || ((d) => ({ format: () => String(d || ''), fromNow: () => 'just now' }));
+      if (window.dayjs && window.dayjs_plugin_relativeTime) window.dayjs.extend(window.dayjs_plugin_relativeTime);
+      if (window.dayjs && window.dayjs_plugin_duration) window.dayjs.extend(window.dayjs_plugin_duration);
+
+      // 7. Zod Schema Validation Engine
+      const z = window.Zod || window.z || {};
+      const zod = z;
+
+      // 8. Chart.js Engine
+      const Chart = window.Chart || function() {};
+
+      // 9. SortableJS Drag & Drop
+      const Sortable = window.Sortable || {};
+
+      // 10. Marked Markdown Compiler & DOMPurify Sanitizer
+      const marked = window.marked ? (window.marked.marked || window.marked) : { parse: (t) => t };
+      const DOMPurify = window.DOMPurify || { sanitize: (t) => t };
+
+      // 11. NanoID & UUID Generator
+      const nanoid = (size = 8) => Math.random().toString(36).substring(2, 2 + size);
+      const uuidv4 = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
+
+      // 12. Zustand-style Reactive Store Creator
+      const create = (createState) => {
+        let state;
+        const listeners = new Set();
+        const setState = (partial, replace) => {
+          const nextState = typeof partial === 'function' ? partial(state) : partial;
+          if (!Object.is(nextState, state)) {
+            state = replace ?? (typeof nextState !== 'object' || nextState === null)
+              ? nextState
+              : Object.assign({}, state, nextState);
+            listeners.forEach((listener) => listener(state));
+          }
+        };
+        const getState = () => state;
+        const api = { setState, getState, subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); } };
+        state = createState(setState, getState, api);
+        return function useStore(selector = (s) => s) {
+          const [, forceUpdate] = React.useReducer((c) => c + 1, 0);
+          React.useEffect(() => {
+            return api.subscribe(() => forceUpdate());
+          }, []);
+          return selector(state);
+        };
+      };
+      const createStore = create;
+
+      // 13. Framer Motion
       const MotionPackage = window.Motion || window.FramerMotion || {};
       const motion = MotionPackage.motion || new Proxy({}, {
         get: (target, prop) => (props) => React.createElement(prop || 'div', props)

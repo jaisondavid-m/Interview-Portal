@@ -17,8 +17,8 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     name: 'react',
     version: '18.2.0',
     category: 'Core Framework',
-    description: 'Component engine with complete hook suite (useState, useEffect, useMemo, useRef, useCallback, useReducer, useContext, useId).',
-    importExample: "import React, { useState, useEffect, useRef, useMemo } from 'react';",
+    description: 'Component engine with complete hook suite (useState, useEffect, useMemo, useRef, useCallback, useReducer, useContext, createContext, useId, useTransition, useDeferredValue).',
+    importExample: "import React, { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext } from 'react';",
     badgeColor: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/30',
   },
   {
@@ -49,6 +49,42 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     badgeColor: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
   },
   {
+    id: 'chart.js',
+    name: 'chart.js',
+    version: '4.4.2',
+    category: 'Data & Charts',
+    description: 'Interactive HTML5 canvas data charting engine supporting Line, Bar, Pie, Doughnut, Radar, and Scatter charts for dashboards & telemetry.',
+    importExample: "import { Chart } from 'chart.js';\nnew Chart(canvasRef.current, { type: 'line', data: { labels: ['Q1', 'Q2'], datasets: [{ data: [12, 19] }] } });",
+    badgeColor: 'bg-orange-500/10 text-orange-500 border-orange-500/30',
+  },
+  {
+    id: 'zod',
+    name: 'zod',
+    version: '3.22.4',
+    category: 'Validation',
+    description: 'TypeScript-first schema declaration and validation library with nested object validation, custom refine rules, and error formatting.',
+    importExample: "import { z } from 'zod';\nconst UserSchema = z.object({ email: z.string().email(), age: z.number().min(18) });\nconst result = UserSchema.safeParse(formData);",
+    badgeColor: 'bg-violet-500/10 text-violet-500 border-violet-500/30',
+  },
+  {
+    id: 'dayjs',
+    name: 'dayjs',
+    version: '1.11.10',
+    category: 'Date & Time',
+    description: 'Fast 2KB immutable date & time library with relative time formatting (e.g., "3 hours ago"), parsing, countdowns, and duration math.',
+    importExample: "import dayjs from 'dayjs';\nconst formatted = dayjs().format('YYYY-MM-DD HH:mm:ss');\nconst fromNow = dayjs(timestamp).fromNow();",
+    badgeColor: 'bg-teal-500/10 text-teal-500 border-teal-500/30',
+  },
+  {
+    id: 'sortablejs',
+    name: 'sortablejs',
+    version: '1.15.2',
+    category: 'Drag & Drop',
+    description: 'Zero-dependency drag-and-drop library for reorderable Kanban boards, sortable lists, grids, and multi-column workflows.',
+    importExample: "import Sortable from 'sortablejs';\nuseEffect(() => { Sortable.create(listRef.current, { animation: 150, onEnd: (evt) => handleReorder(evt) }); }, []);",
+    badgeColor: 'bg-lime-500/10 text-lime-500 border-lime-500/30',
+  },
+  {
     id: 'framer-motion',
     name: 'framer-motion',
     version: '10.16.4',
@@ -65,6 +101,33 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     description: 'Utility library providing debounce, throttle, cloneDeep, groupBy, sortBy, uniq, range, and shuffle.',
     importExample: "import _ from 'lodash';\n// or: import { debounce, throttle, cloneDeep, groupBy } from 'lodash';",
     badgeColor: 'bg-blue-500/10 text-blue-500 border-blue-500/30',
+  },
+  {
+    id: 'marked',
+    name: 'marked',
+    version: '12.0.1',
+    category: 'Markdown & Security',
+    description: 'High-speed compiler for parsing markdown into HTML for real-time markdown editors and rich note apps.',
+    importExample: "import { marked } from 'marked';\nconst htmlOutput = marked.parse('# Hello World');",
+    badgeColor: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
+  },
+  {
+    id: 'dompurify',
+    name: 'dompurify',
+    version: '3.1.0',
+    category: 'Markdown & Security',
+    description: 'DOM-only, super-fast, ultra-tolerant XSS sanitizer for HTML to safely inject formatted content via dangerouslySetInnerHTML.',
+    importExample: "import DOMPurify from 'dompurify';\nconst cleanHtml = DOMPurify.sanitize(dirtyHtml);\n<div dangerouslySetInnerHTML={{ __html: cleanHtml }} />",
+    badgeColor: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
+  },
+  {
+    id: 'zustand',
+    name: 'zustand (createStore)',
+    version: '4.5.2',
+    category: 'State Management',
+    description: 'Lightweight reactive global state management hook creator without Context provider boilerplate, supporting actions & selectors.',
+    importExample: "import { create } from 'zustand';\nconst useStore = create((set) => ({ count: 0, inc: () => set((s) => ({ count: s.count + 1 })) }));\nconst count = useStore((s) => s.count);",
+    badgeColor: 'bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/30',
   },
   {
     id: 'axios',
@@ -95,7 +158,22 @@ export const INSTALLED_FRONTEND_PACKAGES = [
   },
 ];
 
-const CATEGORIES = ['All', 'Core Framework', 'Styling', 'Icons', 'Animation', 'Utility', 'HTTP & Networking', 'Visual Effects'];
+const CATEGORIES = [
+  'All',
+  'Core Framework',
+  'Styling',
+  'Icons',
+  'Data & Charts',
+  'Validation',
+  'Date & Time',
+  'Drag & Drop',
+  'Animation',
+  'Markdown & Security',
+  'State Management',
+  'Utility',
+  'HTTP & Networking',
+  'Visual Effects',
+];
 
 export default function InstalledPackagesModal({ isOpen, onClose }) {
   const [search, setSearch] = useState('');

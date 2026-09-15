@@ -83,6 +83,7 @@ export default function useWebRTCAudio({
         remoteAudioElRef.current.pause();
         remoteAudioElRef.current.srcObject = null;
         remoteAudioElRef.current.remove();
+        remoteAudioElRef.current = null;
       }
     };
   }, []);
@@ -314,6 +315,85 @@ export default function useWebRTCAudio({
     }
   }, []);
 
+  // Full stop & teardown of all audio hardware, media streams, peer connections, and signaling
+  const stopAudioCall = useCallback(() => {
+    console.log('[WebRTC Audio] Fully stopping audio call, releasing microphone & closing peer connection');
+
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+
+    // Stop local microphone tracks completely
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+          track.enabled = false;
+        } catch (e) {}
+      });
+      localStreamRef.current = null;
+    }
+
+    // Stop remote tracks
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+          track.enabled = false;
+        } catch (e) {}
+      });
+      remoteStreamRef.current = null;
+    }
+
+    // Disconnect and silence audio element
+    if (remoteAudioElRef.current) {
+      try {
+        remoteAudioElRef.current.pause();
+        remoteAudioElRef.current.srcObject = null;
+      } catch (e) {}
+    }
+
+    // Stop recorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+      mediaRecorderRef.current = null;
+    }
+
+    // Close AudioContext
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try {
+        audioContextRef.current.close().catch(() => {});
+      } catch (e) {}
+      audioContextRef.current = null;
+    }
+
+    // Close PeerConnection
+    if (pcRef.current) {
+      try {
+        pcRef.current.close();
+      } catch (e) {}
+      pcRef.current = null;
+    }
+
+    // Close WebSocket signaling
+    if (wsRef.current) {
+      try {
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          sendSignaling('leave');
+        }
+        wsRef.current.close();
+      } catch (e) {}
+      wsRef.current = null;
+    }
+
+    setConnectionState('disconnected');
+    setIsSpeaking(false);
+    setIsPeerSpeaking(false);
+  }, [sendSignaling]);
+
   // Stop recording, flush remaining chunks, and finalize server recording metadata
   const stopAndUploadRecording = useCallback(async () => {
     if (!sessionId) return null;
@@ -339,6 +419,10 @@ export default function useWebRTCAudio({
         } catch (e) {}
 
         await new Promise((resolve) => {
+          if (!mediaRecorderRef.current) {
+            resolve();
+            return;
+          }
           mediaRecorderRef.current.onstop = () => resolve();
           try {
             mediaRecorderRef.current.stop();
@@ -392,19 +476,27 @@ export default function useWebRTCAudio({
       if (onRecordingUploaded) {
         onRecordingUploaded(resData?.recording);
       }
+
+      // Now that recording is finalized, ensure audio call and mic are completely stopped
+      stopAudioCall();
       return resData?.recording;
     } catch (err) {
       console.error('[WebRTC Audio] Failed to finalize recording:', err);
+      stopAudioCall();
       return null;
     } finally {
       isFinalizingRef.current = false;
       setUploadingRecording(false);
     }
-  }, [sessionId, onRecordingUploaded]);
+  }, [sessionId, onRecordingUploaded, stopAudioCall]);
 
-  // Main WebRTC & WebSocket initialization
+  // Main WebRTC & WebSocket initialization & cleanup loop
   useEffect(() => {
-    if (!enabled || !sessionId) return;
+    if (!enabled || !sessionId) {
+      // Immediately stop and release all audio if disabled
+      stopAudioCall();
+      return;
+    }
 
     let isDestroyed = false;
 
@@ -648,8 +740,18 @@ export default function useWebRTCAudio({
                 break;
               }
 
-              case 'peer_left': {
-                setConnectionState('connecting');
+              case 'peer_left':
+              case 'call_ended':
+              case 'session_ended': {
+                if (remoteAudioElRef.current) {
+                  remoteAudioElRef.current.pause();
+                  remoteAudioElRef.current.srcObject = null;
+                }
+                if (remoteStreamRef.current) {
+                  remoteStreamRef.current.getTracks().forEach((t) => t.stop());
+                  remoteStreamRef.current = null;
+                }
+                setConnectionState('disconnected');
                 peerMutedRef.current = false;
                 setPeerMuted(false);
                 setIsPeerSpeaking(false);
@@ -691,23 +793,9 @@ export default function useWebRTCAudio({
 
     return () => {
       isDestroyed = true;
-
-      if (vadIntervalRef.current) clearInterval(vadIntervalRef.current);
-
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-      if (pcRef.current) {
-        pcRef.current.close();
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().catch(() => {});
-      }
+      stopAudioCall();
     };
-  }, [enabled, sessionId, initAudioMixer, connectRemoteToMixer, sendSignaling, startVAD]);
+  }, [enabled, sessionId, initAudioMixer, connectRemoteToMixer, sendSignaling, startVAD, stopAudioCall]);
 
   // Resume AudioContext on any user interaction
   useEffect(() => {
@@ -748,6 +836,7 @@ export default function useWebRTCAudio({
     isSpeaking,
     isPeerSpeaking,
     toggleMute,
+    stopAudioCall,
     stopAndUploadRecording,
     uploadingRecording,
     uploadSuccess,

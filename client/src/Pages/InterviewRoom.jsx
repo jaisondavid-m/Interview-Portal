@@ -167,12 +167,13 @@ export default function InterviewRoom() {
     isSpeaking,
     isPeerSpeaking,
     toggleMute,
+    stopAudioCall,
     stopAndUploadRecording,
     uploadingRecording,
   } = useWebRTCAudio({
     sessionId,
     currentUserId: myUserId,
-    enabled: !micModalOpen,
+    enabled: !micModalOpen && !isCompleted && !ending,
   });
 
   const [elapsedSecs, setElapsedSecs] = useState(() => {
@@ -419,7 +420,8 @@ export default function InterviewRoom() {
 
   // TRIGGER 2: Auto-prompt peer feedback popup & upload recording when Round 2 concludes (session completion)
   useEffect(() => {
-    if (sessionData?.status === 'completed') {
+    if (sessionData?.status === 'completed' || isCompleted) {
+      stopAudioCall();
       if (!recordingUploadedRef.current) {
         recordingUploadedRef.current = true;
         stopAndUploadRecording();
@@ -670,6 +672,7 @@ export default function InterviewRoom() {
         closeModal();
         try {
           setEnding(true);
+          stopAudioCall();
           await stopAndUploadRecording();
           if (isDatabaseMode) {
             await api.post(`/interviews/sessions/${sessionId}/database/teardown`).catch(() => {});
@@ -701,6 +704,7 @@ export default function InterviewRoom() {
           const res = await api.post(`/interviews/sessions/${sessionId}/request-end`);
           const data = res?.data || res;
           if (data?.ended) {
+            stopAudioCall();
             await stopAndUploadRecording();
             await fetchSession();
             setShowFeedbackModal(true);
@@ -728,6 +732,7 @@ export default function InterviewRoom() {
   const handleAcceptEnd = async () => {
     try {
       setEnding(true);
+      stopAudioCall();
       await stopAndUploadRecording();
       await api.post(`/interviews/sessions/${sessionId}/accept-end`);
       await fetchSession();
