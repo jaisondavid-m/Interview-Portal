@@ -581,11 +581,10 @@ export default function QuestionBulkModal({
                     <button
                       type="button"
                       onClick={() => handleFormatSwitch('json')}
-                      className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 text-xs ${
-                        importFormat === 'json'
+                      className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 text-xs ${importFormat === 'json'
                           ? 'bg-[var(--bg-card)] text-[var(--accent)] font-bold shadow-xs'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
+                        }`}
                     >
                       <FileCode className="w-3.5 h-3.5" />
                       <span>JSON (Rich Specs)</span>
@@ -593,11 +592,10 @@ export default function QuestionBulkModal({
                     <button
                       type="button"
                       onClick={() => handleFormatSwitch('csv')}
-                      className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 text-xs ${
-                        importFormat === 'csv'
+                      className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 text-xs ${importFormat === 'csv'
                           ? 'bg-[var(--bg-card)] text-[var(--accent)] font-bold shadow-xs'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
+                        }`}
                     >
                       <FileSpreadsheet className="w-3.5 h-3.5" />
                       <span>CSV (Table)</span>
@@ -610,11 +608,10 @@ export default function QuestionBulkModal({
                   <button
                     type="button"
                     onClick={() => setInputMode('file')}
-                    className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
-                      inputMode === 'file'
+                    className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${inputMode === 'file'
                         ? 'bg-[var(--bg-card)] text-[var(--text-primary)] font-bold shadow-xs'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    }`}
+                      }`}
                   >
                     <Upload className="w-3 h-3" />
                     <span>Upload File</span>
@@ -622,11 +619,10 @@ export default function QuestionBulkModal({
                   <button
                     type="button"
                     onClick={() => setInputMode('text')}
-                    className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
-                      inputMode === 'text'
+                    className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${inputMode === 'text'
                         ? 'bg-[var(--bg-card)] text-[var(--text-primary)] font-bold shadow-xs'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    }`}
+                      }`}
                   >
                     <FileText className="w-3 h-3" />
                     <span>Paste Text</span>
@@ -683,11 +679,10 @@ export default function QuestionBulkModal({
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
-                      className={`block border-2 border-dashed rounded-[var(--radius-lg)] p-8 text-center transition cursor-pointer space-y-2.5 ${
-                        isDragging
+                      className={`block border-2 border-dashed rounded-[var(--radius-lg)] p-8 text-center transition cursor-pointer space-y-2.5 ${isDragging
                           ? 'border-[var(--accent)] bg-[var(--accent-dim)]'
                           : 'border-[var(--border-strong)] hover:border-[var(--accent)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-input)]'
-                      }`}
+                        }`}
                     >
                       <div className="w-12 h-12 mx-auto rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center">
                         <Upload className="w-6 h-6" />
@@ -793,10 +788,9 @@ export default function QuestionBulkModal({
                               {item.title || <span className="text-rose-500 italic">Empty</span>}
                             </td>
                             <td className="py-2 px-3">
-                              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                                item.difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-600' :
-                                item.difficulty === 'Hard' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600'
-                              }`}>
+                              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${item.difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-600' :
+                                  item.difficulty === 'Hard' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600'
+                                }`}>
                                 {item.difficulty}
                               </span>
                             </td>
