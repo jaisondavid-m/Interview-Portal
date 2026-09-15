@@ -31,6 +31,7 @@ import WhiteboardCanvas from '../Components/Whiteboard/WhiteboardCanvas';
 import FrontendPlayground from '../Components/Frontend/FrontendPlayground';
 import DatabasePlayground from '../Components/Database/DatabasePlayground';
 import MCQPlayground from '../Components/MCQ/MCQPlayground';
+import VerbalQAPlayground from '../Components/VerbalQA/VerbalQAPlayground';
 import ConfirmModal from '../Components/ConfirmModal';
 import PeerFeedbackModal from '../Components/PeerFeedbackModal';
 import CredentialAuditModal from '../Components/CredentialAuditModal';
@@ -713,14 +714,24 @@ export default function InterviewRoom() {
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
 
-  // Detect if current level or question is Whiteboard, Frontend, Database, or MCQ mode (case-insensitive & supports fallback aliases)
+  // Detect if current level or question is Whiteboard, Frontend, Database, MCQ, or Verbal Q&A mode (case-insensitive & supports fallback aliases)
   const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
   const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
-  const isWhiteboardMode =
-    levelMode === 'whiteboard' ||
+
+  const isVerbalQAMode =
+    levelMode === 'verbal_qa' ||
+    levelMode === 'verbal' ||
+    levelMode === 'conceptual' ||
     levelMode === 'discussion' ||
-    questionType === 'whiteboard' ||
+    questionType === 'verbal_qa' ||
+    questionType === 'verbal' ||
+    questionType === 'conceptual' ||
     questionType === 'discussion';
+
+  const isWhiteboardMode =
+    (levelMode === 'whiteboard' ||
+    questionType === 'whiteboard') &&
+    !isVerbalQAMode;
 
   const isFrontendMode =
     levelMode === 'frontend' ||
@@ -798,7 +809,7 @@ export default function InterviewRoom() {
             {track?.title || 'Mock Interview Domain'}
           </h1>
           <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database (SQL & ER)' : isMCQMode ? 'Multiple Choice (MCQ)' : isBackendMode ? 'Backend Service' : (level?.mode || 'coding')}</strong>
+            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database (SQL & ER)' : isMCQMode ? 'Multiple Choice (MCQ)' : isVerbalQAMode ? 'Verbal Q&A (Discussion)' : isBackendMode ? 'Backend Service' : (level?.mode || 'coding')}</strong>
           </p>
         </div>
 
@@ -1056,6 +1067,8 @@ export default function InterviewRoom() {
                   ? ' You are observing the candidate\'s ER diagram schema and SQL queries in real-time with access to schema benchmarks and expected query solutions.'
                   : isMCQMode
                   ? ' You are observing the candidate\'s MCQ answers live in real-time with complete visibility of benchmark solutions and live scoring.'
+                  : isVerbalQAMode
+                  ? ' You are leading the technical discussion with full access to the benchmark answer, key talking points, trade-offs, and evaluation rubrics.'
                   : isBackendMode
                   ? ' You are observing the candidate\'s backend service code (Go, Java, Node.js, Python, C++) and server-side test case executions in real-time.'
                   : ' You have full visibility into the solutions, rubrics, hints, and test cases.')
@@ -1067,6 +1080,8 @@ export default function InterviewRoom() {
                   ? ' Model your ER diagram and execute your SQL queries against the seeded database. Your interviewer is observing live.'
                   : isMCQMode
                   ? ' Answer the multiple-choice assessment questions. Select your options and navigate using the question buttons. Your interviewer is observing live.'
+                  : isVerbalQAMode
+                  ? ' Discuss the concept verbally with your interviewer. Use the talking points and structured scratchpad to organize your thoughts.'
                   : isBackendMode
                   ? ' Implement your backend logic in Go, Java, Node.js, Python, or C++ and validate against test cases. Your interviewer is observing live.'
                   : ' Write and execute your code in the shared workspace. Your interviewer is observing live.')}
@@ -1074,7 +1089,7 @@ export default function InterviewRoom() {
         </div>
 
         {/* Live Execution Telemetry Status Pill for Interviewer */}
-        {currentUserRole === 'interviewer' && !isWhiteboardMode && sessionData?.last_execution_verdict && (
+        {currentUserRole === 'interviewer' && !isWhiteboardMode && !isMCQMode && !isVerbalQAMode && sessionData?.last_execution_verdict && (
           <div className={`px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border shrink-0 ${
             sessionData.last_execution_verdict === 'Accepted' || sessionData.last_execution_verdict === 'All Sample Cases Passed'
               ? 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/40'
@@ -1093,13 +1108,34 @@ export default function InterviewRoom() {
             <span>Live Whiteboard Sync Active</span>
           </div>
         )}
+
+        {currentUserRole === 'interviewer' && isVerbalQAMode && (
+          <div className="px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+            <span>Live Verbal Discussion Active</span>
+          </div>
+        )}
       </div>
 
-      {/* Main Dual-Panel Workspace Grid or Full-Width MCQ Assessment */}
+      {/* Main Dual-Panel Workspace Grid or Full-Width Assessment Modes */}
       {isMCQMode ? (
         <div className="w-full">
           <MCQPlayground
             questions={sessionData?.level_questions || (question ? [question] : [])}
+            code={code}
+            onCodeChange={handleCodeChange}
+            isEditable={currentUserRole === 'interviewee'}
+            candidateName={currentUserRole === 'interviewer' ? (peerUser?.username || 'Candidate') : 'You (Candidate)'}
+            currentUserRole={currentUserRole}
+            sessionId={sessionId}
+            round={currentRound}
+          />
+        </div>
+      ) : isVerbalQAMode ? (
+        <div className="w-full">
+          <VerbalQAPlayground
+            question={question}
+            payload={payload}
             code={code}
             onCodeChange={handleCodeChange}
             isEditable={currentUserRole === 'interviewee'}
