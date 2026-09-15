@@ -24,6 +24,7 @@ type FeedbackOptionInput struct {
 // FeedbackQuestionInput represents incoming payload for creating/updating a question
 type FeedbackQuestionInput struct {
 	QuestionText string          `json:"question_text" binding:"required"`
+	ShortLabel   string          `json:"short_label"`
 	QuestionType string          `json:"question_type" binding:"required"` // "mcq", "yes_no", "text"
 	IsRequired   bool            `json:"is_required"`
 	MaxMarks     float64         `json:"max_marks"`
@@ -166,6 +167,7 @@ func AdminCreateFeedbackQuestion(c *gin.Context) {
 
 	question := models.FeedbackQuestion{
 		QuestionText: strings.TrimSpace(input.QuestionText),
+		ShortLabel:   strings.TrimSpace(input.ShortLabel),
 		QuestionType: qType,
 		IsRequired:   input.IsRequired,
 		MaxMarks:     maxMarks,
@@ -261,6 +263,7 @@ func AdminUpdateFeedbackQuestion(c *gin.Context) {
 	}
 
 	question.QuestionText = strings.TrimSpace(input.QuestionText)
+	question.ShortLabel = strings.TrimSpace(input.ShortLabel)
 	question.QuestionType = qType
 	question.IsRequired = input.IsRequired
 	question.MaxMarks = maxMarks
@@ -945,6 +948,18 @@ func GetStudentInterviewHistory(c *gin.Context) {
 	})
 }
 
+// QuestionFeedbackAvg represents question-wise average performance metrics for student dashboard
+type QuestionFeedbackAvg struct {
+	QuestionID      uint    `json:"question_id"`
+	QuestionText    string  `json:"question_text"`
+	ShortLabel      string  `json:"short_label"`
+	QuestionType    string  `json:"question_type"`
+	AverageScore    float64 `json:"average_score"`
+	MaxMarks        float64 `json:"max_marks"`
+	ScorePercentage float64 `json:"score_percentage"`
+	ResponsesCount  int     `json:"responses_count"`
+}
+
 // GetStudentDashboardStats retrieves computed real-time performance KPI metrics for the student dashboard
 func GetStudentDashboardStats(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
@@ -1012,6 +1027,96 @@ func GetStudentDashboardStats(c *gin.Context) {
 		grade = "Unranked"
 	}
 
+	// 4. Question-wise feedback score averages across all peer evaluations received
+	var allQuestions []models.FeedbackQuestion
+	database.DB.
+		Preload("Options").
+		Order("order_index asc, id asc").
+		Find(&allQuestions)
+
+	// Fetch all feedback responses received by this student
+	type qStats struct {
+		totalAwarded float64
+		totalMax     float64
+		count        int
+	}
+	qStatsMap := make(map[uint]*qStats)
+
+	if len(feedbacks) > 0 {
+		var feedbackIDs []uint
+		for _, fb := range feedbacks {
+			feedbackIDs = append(feedbackIDs, fb.ID)
+		}
+		var responses []models.InterviewFeedbackResponse
+		database.DB.Where("feedback_id IN ?", feedbackIDs).Find(&responses)
+		for _, r := range responses {
+			if r.QuestionID > 0 {
+				if qStatsMap[r.QuestionID] == nil {
+					qStatsMap[r.QuestionID] = &qStats{}
+				}
+				qStatsMap[r.QuestionID].totalAwarded += r.AwardedMarks
+				if r.MaxMarks > 0 {
+					qStatsMap[r.QuestionID].totalMax += r.MaxMarks
+				}
+				qStatsMap[r.QuestionID].count++
+			}
+		}
+	}
+
+	feedbackAverages := make([]QuestionFeedbackAvg, 0)
+	for _, q := range allQuestions {
+		// Calculate max marks
+		qMax := q.MaxMarks
+		if qMax <= 0 && len(q.Options) > 0 {
+			for _, o := range q.Options {
+				if o.Marks > qMax {
+					qMax = o.Marks
+				}
+			}
+		}
+		if qMax <= 0 {
+			qMax = 5.0 // fallback default
+		}
+
+		shortLabel := strings.TrimSpace(q.ShortLabel)
+		if shortLabel == "" {
+			words := strings.Fields(q.QuestionText)
+			if len(words) > 3 {
+				shortLabel = strings.Join(words[:3], " ")
+			} else if len(words) > 0 {
+				shortLabel = strings.Join(words, " ")
+			} else {
+				shortLabel = fmt.Sprintf("Q%d", q.ID)
+			}
+		}
+
+		var avgScore float64 = 0
+		var scorePercentage float64 = 0
+		var respCount int = 0
+
+		if qs := qStatsMap[q.ID]; qs != nil && qs.count > 0 {
+			respCount = qs.count
+			avgScore = qs.totalAwarded / float64(qs.count)
+			if qMax > 0 {
+				scorePercentage = (avgScore / qMax) * 100.0
+				if scorePercentage > 100.0 {
+					scorePercentage = 100.0
+				}
+			}
+		}
+
+		feedbackAverages = append(feedbackAverages, QuestionFeedbackAvg{
+			QuestionID:      q.ID,
+			QuestionText:    q.QuestionText,
+			ShortLabel:      shortLabel,
+			QuestionType:    q.QuestionType,
+			AverageScore:    avgScore,
+			MaxMarks:        qMax,
+			ScorePercentage: scorePercentage,
+			ResponsesCount:  respCount,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
@@ -1023,6 +1128,7 @@ func GetStudentDashboardStats(c *gin.Context) {
 			"total_practice_hours":   totalPracticeHours,
 			"total_reviews_received": len(feedbacks),
 			"grade":                  grade,
+			"feedback_averages":      feedbackAverages,
 		},
 	})
 }

@@ -10,6 +10,7 @@ import (
 type FeedbackQuestion struct {
 	ID           uint                     `gorm:"primaryKey" json:"id"`
 	QuestionText string                   `gorm:"type:text;not null" json:"question_text" binding:"required"`
+	ShortLabel   string                   `gorm:"size:100" json:"short_label"`
 	QuestionType string                   `gorm:"size:50;not null" json:"question_type" binding:"required"` // "mcq", "yes_no", "text"
 	IsRequired   bool                     `gorm:"default:true" json:"is_required"`
 	MaxMarks     float64                  `gorm:"default:0" json:"max_marks"` // Maximum marks / weightage for this question

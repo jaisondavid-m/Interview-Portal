@@ -209,46 +209,54 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Recent Interviews Attended Section */}
-      <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-4 shadow-xs">
-        <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-[var(--accent)]" />
-            <h2 className="text-[16px] font-bold text-[var(--text-primary)]">
-              Recent Attended Interviews
-            </h2>
+      {/* Feedback Questions Performance (X-Y Bar Chart) */}
+      <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-6 shadow-xs">
+        {/* Section Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-[var(--radius-xs)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                <BarChart3 className="w-4 h-4" />
+              </div>
+              <h2 className="text-[17px] font-bold text-[var(--text-primary)] tracking-tight">
+                Feedback Questions & Rubric Performance
+              </h2>
+            </div>
+            <p className="text-[12px] text-[var(--text-secondary)]">
+              Average score percentage for each peer evaluation question across all attended mock interviews.
+            </p>
           </div>
 
-          <button
-            onClick={() => navigate('/history')}
-            className="text-xs font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <span>View All History</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => navigate('/history')}
+              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-mono shadow-xs"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Full History</span>
+              <ArrowRight className="w-3 h-3 text-[var(--text-muted)]" />
+            </button>
+          </div>
         </div>
 
+        {/* Bar Chart Body */}
         {loading ? (
-          <div className="space-y-3 animate-fadeIn">
-            {Array.from({ length: 3 }).map((_, idx) => (
-              <div key={idx} className="p-4 rounded-[var(--radius-md)] border border-[var(--border)] flex items-center justify-between gap-4">
-                <div className="space-y-2 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-4 w-16 rounded-full" />
-                  </div>
-                  <Skeleton className="h-3 w-56" />
+          <div className="space-y-4 animate-fadeIn py-6">
+            <div className="flex items-end justify-between gap-4 h-56 px-6">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+                  <Skeleton className="w-full rounded-t-md" style={{ height: `${30 + idx * 15}%` }} />
+                  <Skeleton className="h-3 w-16" />
                 </div>
-                <Skeleton className="h-7 w-20 rounded-[var(--radius-sm)]" />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        ) : recentInterviews.length === 0 ? (
-          <div className="py-10 text-center space-y-2 border border-dashed border-[var(--border)] rounded-[var(--radius-md)]">
-            <Video className="w-8 h-8 mx-auto text-[var(--text-muted)] opacity-50" />
-            <h4 className="text-[14px] font-bold text-[var(--text-primary)]">No interviews attended yet</h4>
+        ) : !stats?.feedback_averages || stats.feedback_averages.length === 0 ? (
+          <div className="py-12 text-center space-y-3 border border-dashed border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-raised)]/50">
+            <BarChart2 className="w-10 h-10 mx-auto text-[var(--text-muted)] opacity-50" />
+            <h4 className="text-[15px] font-bold text-[var(--text-primary)]">No Feedback Questions Configured</h4>
             <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
-              Join the matchmaking queue to be paired with a peer student and start practicing technical interviews.
+              Once peer feedback rubrics are evaluated in mock interviews, your per-question performance bar chart will appear here.
             </p>
             <button
               onClick={() => navigate('/interviews')}
@@ -259,57 +267,184 @@ export default function Dashboard() {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-[var(--border)]">
-            {recentInterviews.map((sess) => (
-              <div
-                key={sess.session_id}
-                className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-[11px] font-bold text-[var(--accent)] bg-[var(--accent-dim)] px-2 py-0.5 rounded border border-[var(--border-accent)]">
-                      Level {sess.level_number}: {sess.level_name || 'Level'}
-                    </span>
-                    <span className="font-mono text-[11px] uppercase text-[var(--text-muted)] bg-[var(--bg-raised)] px-2 py-0.5 rounded border border-[var(--border)]">
-                      {sess.level_mode || 'coding'}
-                    </span>
-                  </div>
-                  <h3 className="text-[14px] font-bold text-[var(--text-primary)]">
-                    {sess.track_title}
-                  </h3>
-                  <p className="text-[11px] text-[var(--text-muted)] font-mono flex items-center gap-2">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-[var(--text-muted)]" />
-                      {formatDateTime(sess.started_at || sess.created_at)}
-                    </span>
-                  </p>
+          <div className="space-y-6">
+            {/* Interactive X-Y Bar Chart */}
+            <div className="relative pt-6 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)]">
+              {/* Y-Axis Grid Lines & Background */}
+              <div className="relative h-64 flex items-end">
+                {/* Horizontal grid guide lines */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8">
+                  {[100, 75, 50, 25, 0].map((pct) => (
+                    <div key={pct} className="flex items-center gap-2 w-full text-[10px] font-mono text-[var(--text-muted)]">
+                      <span className="w-8 text-right shrink-0">{pct}%</span>
+                      <div className="h-[1px] flex-1 bg-[var(--border)]/60 border-t border-dashed border-[var(--border)]" />
+                    </div>
+                  ))}
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
-                  {sess.has_scorecard ? (
-                    <div className="text-right font-mono">
-                      <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400 block">
-                        +{sess.total_score} / {sess.max_score} pts
-                      </span>
-                      <span className="text-[10px] text-[var(--text-muted)]">
-                        {sess.score_percentage?.toFixed(0)}% score
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-raised)] px-2.5 py-1 rounded border border-[var(--border)]">
-                      Pending Scorecard
-                    </span>
-                  )}
+                {/* X-Y Bars Container */}
+                <div className="relative z-10 w-full pl-10 pr-2 h-full flex items-end justify-around gap-2 sm:gap-4 pb-8">
+                  {stats.feedback_averages.map((item, idx) => {
+                    const pct = Math.max(0, Math.min(100, item.score_percentage || 0));
+                    const hasResponses = item.responses_count > 0;
+                    
+                    // Bar color palette based on performance percentage
+                    let barGradient = 'from-emerald-500 to-teal-500';
+                    let barTextColor = 'text-emerald-600 dark:text-emerald-400';
+                    let barBorder = 'border-emerald-500/30';
+                    if (!hasResponses) {
+                      barGradient = 'from-slate-400/40 to-slate-500/40';
+                      barTextColor = 'text-[var(--text-muted)]';
+                      barBorder = 'border-[var(--border)]';
+                    } else if (pct < 50) {
+                      barGradient = 'from-rose-500 to-amber-500';
+                      barTextColor = 'text-rose-600 dark:text-rose-400';
+                      barBorder = 'border-rose-500/30';
+                    } else if (pct < 75) {
+                      barGradient = 'from-amber-500 to-yellow-400';
+                      barTextColor = 'text-amber-600 dark:text-amber-400';
+                      barBorder = 'border-amber-500/30';
+                    } else if (pct < 90) {
+                      barGradient = 'from-cyan-500 to-blue-500';
+                      barTextColor = 'text-cyan-600 dark:text-cyan-400';
+                      barBorder = 'border-cyan-500/30';
+                    }
 
-                  <button
-                    onClick={() => navigate('/history')}
-                    className="btn btn-secondary text-xs py-1 px-2.5 flex items-center gap-1 font-mono"
-                  >
-                    <span>Details</span>
-                  </button>
+                    return (
+                      <div
+                        key={item.question_id || idx}
+                        className="group relative flex-1 h-full flex flex-col justify-end items-center max-w-[90px]"
+                      >
+                        {/* Hover Tooltip Popover */}
+                        <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 transform -translate-y-1 group-hover:translate-y-0 w-48 text-center">
+                          <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-xl text-left space-y-1 text-xs">
+                            <div className="font-bold text-[var(--text-primary)] flex items-center justify-between">
+                              <span className="truncate">{item.short_label || `Question ${idx + 1}`}</span>
+                              <span className={`font-mono ${barTextColor} font-extrabold`}>{pct.toFixed(0)}%</span>
+                            </div>
+                            <p className="text-[10px] text-[var(--text-secondary)] line-clamp-2 leading-tight">
+                              {item.question_text}
+                            </p>
+                            <div className="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)]">
+                              <span>Avg: <strong className="text-[var(--text-primary)]">{item.average_score.toFixed(1)} / {item.max_marks}</strong></span>
+                              <span>{item.responses_count} {item.responses_count === 1 ? 'eval' : 'evals'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Value Label above Bar */}
+                        <div className="mb-1 text-center font-mono">
+                          <span className={`text-[11px] font-bold ${barTextColor} transition-all group-hover:scale-110 block`}>
+                            {hasResponses ? `${pct.toFixed(0)}%` : '0%'}
+                          </span>
+                          <span className="text-[9px] text-[var(--text-muted)] hidden sm:block">
+                            {hasResponses ? `${item.average_score.toFixed(1)} pts` : '—'}
+                          </span>
+                        </div>
+
+                        {/* Bar Pillar */}
+                        <div className="w-full bg-[var(--bg-card)] rounded-t-[var(--radius-xs)] overflow-hidden border-t border-x border-[var(--border)] flex flex-col justify-end h-full max-h-[160px]">
+                          <div
+                            style={{ height: hasResponses ? `${Math.max(pct, 6)}%` : '4%' }}
+                            className={`w-full bg-gradient-to-t ${barGradient} border-t ${barBorder} rounded-t-[var(--radius-xs)] shadow-sm transition-all duration-500 ease-out group-hover:brightness-110 group-hover:shadow-md`}
+                          />
+                        </div>
+
+                        {/* X-Axis Label (Admin Configured Short Label) */}
+                        <div className="w-full mt-2 text-center">
+                          <span
+                            className="text-[11px] font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-ui block truncate max-w-full px-0.5 transition-colors cursor-default"
+                            title={`${item.short_label || item.question_text} (${item.question_text})`}
+                          >
+                            {item.short_label || item.question_text}
+                          </span>
+                          <span className="text-[9px] font-mono text-[var(--text-muted)] block truncate uppercase">
+                            {item.question_type}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
+
+              {/* Chart Footer X-Axis Indicator */}
+              <div className="mt-4 pt-3 border-t border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-[var(--text-muted)] gap-2">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="font-mono text-[10px] uppercase font-bold text-[var(--text-secondary)]">
+                    Score Tiers:
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-emerald-500" />
+                    <span>≥ 90% (Outstanding)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-cyan-500" />
+                    <span>75–89% (Proficient)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-amber-500" />
+                    <span>50–74% (Average)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-rose-500" />
+                    <span>&lt; 50% (Needs Focus)</span>
+                  </div>
+                </div>
+
+                <div className="text-[10px] font-mono text-[var(--text-muted)] sm:text-right">
+                  Labels updated via Admin Rubrics
+                </div>
+              </div>
+            </div>
+
+            {/* Rubric Strength Highlights Cards */}
+            {(() => {
+              const evaluated = stats.feedback_averages.filter((q) => q.responses_count > 0);
+              if (evaluated.length === 0) return null;
+
+              const sorted = [...evaluated].sort((a, b) => (b.score_percentage || 0) - (a.score_percentage || 0));
+              const topSkill = sorted[0];
+              const focusSkill = sorted[sorted.length - 1];
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="p-3.5 rounded-[var(--radius-md)] bg-emerald-500/5 border border-emerald-500/20 flex items-start gap-3">
+                    <div className="p-2 rounded-[var(--radius-xs)] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold uppercase">
+                        Strongest Evaluated Area
+                      </span>
+                      <h4 className="text-[13px] font-bold text-[var(--text-primary)] truncate">
+                        {topSkill.short_label || topSkill.question_text}
+                      </h4>
+                      <p className="text-[11px] text-[var(--text-secondary)] font-mono">
+                        {topSkill.score_percentage?.toFixed(0)}% average ({topSkill.average_score.toFixed(1)} / {topSkill.max_marks} pts across {topSkill.responses_count} reviews)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-[var(--radius-md)] bg-amber-500/5 border border-amber-500/20 flex items-start gap-3">
+                    <div className="p-2 rounded-[var(--radius-xs)] bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-bold uppercase">
+                        Key Growth Opportunity
+                      </span>
+                      <h4 className="text-[13px] font-bold text-[var(--text-primary)] truncate">
+                        {focusSkill.short_label || focusSkill.question_text}
+                      </h4>
+                      <p className="text-[11px] text-[var(--text-secondary)] font-mono">
+                        {focusSkill.score_percentage?.toFixed(0)}% average ({focusSkill.average_score.toFixed(1)} / {focusSkill.max_marks} pts across {focusSkill.responses_count} reviews)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

@@ -81,6 +81,7 @@ export default function AdminFeedbackConfig() {
   // Form state
   const [formData, setFormData] = useState({
     question_text: '',
+    short_label: '',
     question_type: 'mcq', // 'mcq' | 'yes_no' | 'text'
     is_required: true,
     max_marks: 5,
@@ -121,6 +122,7 @@ export default function AdminFeedbackConfig() {
     const nextOrder = questions.length > 0 ? Math.max(...questions.map((q) => q.order_index || 0)) + 1 : 1;
     setFormData({
       question_text: '',
+      short_label: '',
       question_type: 'mcq',
       is_required: true,
       max_marks: 5,
@@ -167,6 +169,7 @@ export default function AdminFeedbackConfig() {
 
     setFormData({
       question_text: q.question_text || '',
+      short_label: q.short_label || '',
       question_type: q.question_type || 'mcq',
       is_required: q.is_required ?? true,
       max_marks: q.max_marks ?? 5,
@@ -281,6 +284,7 @@ export default function AdminFeedbackConfig() {
 
       const payload = {
         question_text: formData.question_text.trim(),
+        short_label: formData.short_label?.trim() || '',
         question_type: formData.question_type,
         is_required: formData.is_required,
         max_marks: computedMax,
@@ -331,6 +335,7 @@ export default function AdminFeedbackConfig() {
       }));
       await api.put(`/admin/feedback/questions/${q.id}`, {
         question_text: q.question_text,
+        short_label: q.short_label || '',
         question_type: q.question_type,
         is_required: q.is_required,
         max_marks: q.max_marks ?? 0,
@@ -465,6 +470,11 @@ export default function AdminFeedbackConfig() {
                         <span className="px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] font-bold text-[var(--text-secondary)]">
                           #{q.order_index || idx + 1}
                         </span>
+                        {q.short_label && (
+                          <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20 flex items-center gap-1">
+                            <span className="opacity-70">Chart Label:</span> {q.short_label}
+                          </span>
+                        )}
                         <span className="px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-bold uppercase border border-[var(--border-accent)]">
                           {q.question_type}
                         </span>
@@ -697,6 +707,28 @@ export default function AdminFeedbackConfig() {
                   className="custom-input text-xs w-full py-2 resize-none"
                   required
                 />
+              </div>
+
+              {/* Short Label for Dashboard Graph X-Axis */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
+                    Short Label (Student Dashboard Bar Chart X-Axis)
+                  </label>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                    Recommended: 1–3 words
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={formData.short_label}
+                  onChange={(e) => setFormData({ ...formData, short_label: e.target.value })}
+                  placeholder="e.g. Problem Solving, Code Quality, System Design, Communication"
+                  className="custom-input text-xs w-full py-2 font-mono"
+                />
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  This short label appears on the student dashboard feedback X/Y bar chart to visualize student strengths.
+                </p>
               </div>
 
               {/* Question Type */}
