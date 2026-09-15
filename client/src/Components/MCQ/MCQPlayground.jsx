@@ -17,7 +17,9 @@ import {
   CheckSquare,
   Square,
   Flame,
-  Info
+  Info,
+  UserCheck,
+  Target
 } from 'lucide-react';
 
 export default function MCQPlayground({
@@ -158,6 +160,22 @@ export default function MCQPlayground({
     emitChange(answers, currentIndex, true);
   };
 
+  // Helper to extract clean text from any option format
+  const getOptionText = (opt) => {
+    if (typeof opt === 'string') return opt;
+    if (opt && typeof opt === 'object') {
+      return opt.text || opt.option_text || opt.option || opt.label || opt.value || opt.title || opt.content || '';
+    }
+    return '';
+  };
+
+  const getOptionKey = (opt, optIdx) => {
+    if (opt && typeof opt === 'object') {
+      return (opt.id || opt.option_key || opt.key || String.fromCharCode(65 + optIdx)).toUpperCase();
+    }
+    return String.fromCharCode(65 + optIdx);
+  };
+
   // Keyboard Navigation: A, B, C, D to select; Arrow keys to navigate
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -176,10 +194,10 @@ export default function MCQPlayground({
         if (['A', 'B', 'C', 'D', 'E', 'F'].includes(keyUpper)) {
           const currentQ = safeQuestions[currentIndex];
           const opts = currentQ?.options || currentQ?.mcq_options || currentQ?.payload?.options || [];
-          const matched = opts.find((o) => (o.id || o.option_key || '').toUpperCase() === keyUpper);
+          const matched = opts.find((o, idx) => getOptionKey(o, idx) === keyUpper);
           if (matched) {
             e.preventDefault();
-            handleSelectOption(matched.id || matched.option_key);
+            handleSelectOption(getOptionKey(matched, 0));
           }
         }
       }
@@ -206,6 +224,12 @@ export default function MCQPlayground({
     if (Array.isArray(currentQuestion.payload?.options) && currentQuestion.payload.options.length > 0) {
       return currentQuestion.payload.options;
     }
+    if (Array.isArray(currentQuestion.payload?.mcq_options) && currentQuestion.payload.mcq_options.length > 0) {
+      return currentQuestion.payload.mcq_options;
+    }
+    if (Array.isArray(currentQuestion.detail?.options) && currentQuestion.detail.options.length > 0) {
+      return currentQuestion.detail.options;
+    }
     return [];
   }, [currentQuestion]);
 
@@ -223,7 +247,7 @@ export default function MCQPlayground({
         const correctOpt = q.correct_option || q.detail?.correct_option || q.payload?.correct_option || '';
         const correctFromList = opts.find((o) => o.is_correct)?.id || opts.find((o) => o.is_correct)?.option_key || '';
         const targetCorrect = correctOpt || correctFromList;
-        if (targetCorrect && (chosen.toUpperCase() === targetCorrect.toUpperCase())) {
+        if (targetCorrect && (chosen.toUpperCase() === String(targetCorrect).toUpperCase())) {
           correct++;
         }
       }
@@ -236,7 +260,7 @@ export default function MCQPlayground({
   // Get selected option for current question
   const currentSelectedKey = currentQuestion ? answers[String(currentQuestion.id || currentIndex)] : null;
 
-  // Find correct option for current question (Interviewer view only)
+  // Find correct option key for current question (Interviewer view only)
   const currentCorrectKey = useMemo(() => {
     if (!currentQuestion) return null;
     const explicit = currentQuestion.correct_option || currentQuestion.detail?.correct_option || currentQuestion.payload?.correct_option;
@@ -244,10 +268,26 @@ export default function MCQPlayground({
 
     const fromOpts = currentOptions.find((o) => o.is_correct);
     if (fromOpts) {
-      return String(fromOpts.id || fromOpts.option_key).toUpperCase();
+      return String(fromOpts.id || fromOpts.option_key || fromOpts.key).toUpperCase();
     }
     return null;
   }, [currentQuestion, currentOptions]);
+
+  // Find full selected option object & text
+  const selectedOptObj = useMemo(() => {
+    if (!currentSelectedKey || !currentOptions.length) return null;
+    return currentOptions.find((o, idx) => getOptionKey(o, idx) === currentSelectedKey.toUpperCase());
+  }, [currentSelectedKey, currentOptions]);
+
+  const selectedOptText = selectedOptObj ? getOptionText(selectedOptObj) : '';
+
+  // Find full correct option object & text
+  const correctOptObj = useMemo(() => {
+    if (!currentCorrectKey || !currentOptions.length) return null;
+    return currentOptions.find((o, idx) => getOptionKey(o, idx) === currentCorrectKey.toUpperCase());
+  }, [currentCorrectKey, currentOptions]);
+
+  const correctOptText = correctOptObj ? getOptionText(correctOptObj) : '';
 
   const explanationText = currentQuestion?.explanation || currentQuestion?.detail?.explanation || currentQuestion?.payload?.explanation || '';
 
@@ -401,7 +441,7 @@ export default function MCQPlayground({
           </h2>
 
           {/* Question Prompt */}
-          <div className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-line font-normal">
+          <div className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line font-normal">
             {currentQuestion.prompt}
           </div>
         </div>
@@ -412,13 +452,13 @@ export default function MCQPlayground({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono font-bold uppercase text-[var(--text-muted)] tracking-wider">
-              Select One Option:
+              {isEditable ? 'Select One Option:' : 'Assessment Options & Candidate Response:'}
             </span>
             {isEditable && currentSelectedKey && !submitted && (
               <button
                 type="button"
                 onClick={handleClearOption}
-                className="text-xs text-red-500 hover:underline cursor-pointer"
+                className="text-xs text-rose-500 hover:underline cursor-pointer font-semibold"
               >
                 Clear Selection
               </button>
@@ -427,31 +467,43 @@ export default function MCQPlayground({
 
           <div className="grid grid-cols-1 gap-3">
             {currentOptions.map((opt, optIdx) => {
-              const optKey = (opt.id || opt.option_key || String.fromCharCode(65 + optIdx)).toUpperCase();
-              const optText = opt.text || opt.option_text || '';
+              const optKey = getOptionKey(opt, optIdx);
+              const optText = getOptionText(opt);
               const isSelected = currentSelectedKey && currentSelectedKey.toUpperCase() === optKey;
 
               // Interviewer Analysis
               const isCorrectOption = currentCorrectKey && currentCorrectKey === optKey;
               const isCandidateChoice = isSelected;
 
-              // Styling computation
-              let cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] hover:border-blue-400 hover:bg-[var(--bg-raised)]/60 text-[var(--text-primary)]';
-              let badgeStyle = 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border-[var(--border)]';
+              // High-contrast, theme-safe styling computation
+              let cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] hover:border-blue-400 hover:bg-[var(--bg-raised)]/70 text-[var(--text-primary)]';
+              let badgeStyle = 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border-[var(--border)] font-bold';
+              let textStyle = 'text-[var(--text-primary)] font-medium';
 
               if (isEditable) {
                 if (isSelected) {
-                  cardStyle = 'border-blue-600 bg-blue-500/10 text-blue-900 dark:text-blue-100 ring-2 ring-blue-500/30 shadow-md';
+                  cardStyle = 'border-blue-600 bg-blue-500/15 ring-2 ring-blue-500/40 shadow-md';
                   badgeStyle = 'bg-blue-600 text-white border-blue-600 font-black';
+                  textStyle = 'text-[var(--text-primary)] font-bold';
                 }
               } else {
                 // Interviewer Mode Styles
-                if (isCorrectOption) {
-                  cardStyle = 'border-emerald-500 bg-emerald-500/15 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/40 shadow-sm';
+                if (isCorrectOption && isCandidateChoice) {
+                  cardStyle = 'border-emerald-500 bg-emerald-500/20 ring-2 ring-emerald-500/50 shadow-md';
                   badgeStyle = 'bg-emerald-600 text-white border-emerald-600 font-black';
+                  textStyle = 'text-[var(--text-primary)] font-bold';
+                } else if (isCorrectOption) {
+                  cardStyle = 'border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/40 shadow-sm';
+                  badgeStyle = 'bg-emerald-600 text-white border-emerald-600 font-black';
+                  textStyle = 'text-[var(--text-primary)] font-bold';
                 } else if (isCandidateChoice && !isCorrectOption) {
-                  cardStyle = 'border-rose-500 bg-rose-500/15 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/40 shadow-sm';
+                  cardStyle = 'border-rose-500 bg-rose-500/15 ring-2 ring-rose-500/40 shadow-sm';
                   badgeStyle = 'bg-rose-600 text-white border-rose-600 font-black';
+                  textStyle = 'text-[var(--text-primary)] font-bold';
+                } else {
+                  cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] opacity-90';
+                  badgeStyle = 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border-[var(--border)] font-bold';
+                  textStyle = 'text-[var(--text-secondary)] font-normal';
                 }
               }
 
@@ -460,52 +512,52 @@ export default function MCQPlayground({
                   key={optKey}
                   onClick={() => handleSelectOption(optKey)}
                   className={`group relative p-4 rounded-xl border-2 transition-all flex items-start gap-3.5 select-none ${
-                    isEditable && !submitted ? 'cursor-pointer hover:scale-[1.008]' : 'cursor-default'
+                    isEditable && !submitted ? 'cursor-pointer hover:scale-[1.006]' : 'cursor-default'
                   } ${cardStyle}`}
                 >
                   {/* Option Key Badge (A, B, C, D) */}
                   <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-mono font-bold border shrink-0 transition-transform ${badgeStyle}`}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-mono border shrink-0 transition-transform shadow-xs ${badgeStyle}`}
                   >
                     {optKey}
                   </div>
 
-                  {/* Option Text */}
+                  {/* Option Text (Guaranteed Visible and High Contrast) */}
                   <div className="flex-1 min-w-0 pt-0.5">
-                    <p className="text-sm font-medium leading-relaxed">
-                      {optText}
+                    <p className={`text-sm leading-relaxed ${textStyle}`}>
+                      {optText || <span className="italic text-[var(--text-muted)] font-normal">Option {optKey}</span>}
                     </p>
                   </div>
 
                   {/* Right Status Indicators */}
                   <div className="shrink-0 flex items-center gap-2 pt-0.5">
-                    {/* Candidate Choice Ring */}
+                    {/* Candidate View Selected Badge */}
                     {isEditable && isSelected && (
-                      <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
-                        <CheckCircle2 className="w-5 h-5 fill-current text-blue-600" />
-                        <span className="hidden sm:inline">Selected</span>
+                      <div className="flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-blue-600 text-white shadow-xs">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Selected</span>
                       </div>
                     )}
 
                     {/* Interviewer Assessor Tags */}
                     {!isEditable && (
                       <div className="flex flex-col items-end gap-1 font-mono text-xs">
-                        {isCorrectOption && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold flex items-center gap-1 shadow-xs">
+                        {isCorrectOption && isCandidateChoice && (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-bold flex items-center gap-1.5 shadow-xs">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Correct Benchmark & Candidate Selected</span>
+                          </span>
+                        )}
+                        {isCorrectOption && !isCandidateChoice && (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-bold flex items-center gap-1.5 shadow-xs">
                             <Check className="w-3.5 h-3.5" />
                             <span>Correct Benchmark</span>
                           </span>
                         )}
-                        {isCandidateChoice && (
-                          <span
-                            className={`px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                              isCorrectOption
-                                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
-                                : 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40'
-                            }`}
-                          >
-                            {isCorrectOption ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                            <span>Candidate Choice</span>
+                        {isCandidateChoice && !isCorrectOption && (
+                          <span className="px-2.5 py-1 rounded-full bg-rose-600 text-white font-bold flex items-center gap-1.5 shadow-xs">
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Candidate Selected (Incorrect)</span>
                           </span>
                         )}
                       </div>
@@ -518,27 +570,97 @@ export default function MCQPlayground({
         </div>
 
         {/* ============================================================ */}
-        {/* INTERVIEWER ONLY: Rationale & Explanations */}
+        {/* INTERVIEWER ONLY: Selected Answer & Correct Benchmark Summary */}
         {/* ============================================================ */}
         {!isEditable && (
-          <div className="mt-4 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 font-mono">
-              <Sparkles className="w-4 h-4" />
-              <span>Assessor Benchmark & Explanation:</span>
+          <div className="mt-6 p-4 md:p-5 rounded-xl bg-blue-500/10 border border-blue-500/25 space-y-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-blue-500/20">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 font-mono uppercase tracking-wider">
+                <Sparkles className="w-4 h-4" />
+                <span>Interviewer Solution & Scoring Guide</span>
+              </div>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                Live sync active with candidate responses
+              </span>
             </div>
-            {currentCorrectKey ? (
-              <div className="text-xs font-mono text-[var(--text-primary)]">
-                Correct Option: <strong className="text-emerald-600 dark:text-emerald-400 font-bold">Option {currentCorrectKey}</strong>
+
+            {/* Side-by-side Candidate Choice vs Correct Benchmark */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Candidate Selected Option Card */}
+              <div className="p-3.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Candidate Selected:</span>
+                  </span>
+                  {currentSelectedKey ? (
+                    currentCorrectKey && currentSelectedKey === currentCorrectKey ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                        ✓ Correct (+1 Mark)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                        ✕ Incorrect (0 Marks)
+                      </span>
+                    )
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)]">
+                      Not answered yet
+                    </span>
+                  )}
+                </div>
+
+                {currentSelectedKey ? (
+                  <div className="text-xs text-[var(--text-primary)] font-medium leading-relaxed">
+                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400 mr-1.5">
+                      Option {currentSelectedKey}:
+                    </span>
+                    <span>{selectedOptText || `Option ${currentSelectedKey}`}</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)] italic">
+                    Waiting for {candidateName} to select an option...
+                  </p>
+                )}
               </div>
-            ) : (
-              <div className="text-xs text-[var(--text-muted)] italic">
-                Correct option specified in problem criteria.
+
+              {/* Correct Benchmark Option Card */}
+              <div className="p-3.5 rounded-lg bg-[var(--bg-card)] border border-emerald-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5" />
+                    <span>Correct Benchmark:</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-600 text-white shadow-xs">
+                    Target Answer
+                  </span>
+                </div>
+
+                {currentCorrectKey ? (
+                  <div className="text-xs text-[var(--text-primary)] font-medium leading-relaxed">
+                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1.5">
+                      Option {currentCorrectKey}:
+                    </span>
+                    <span className="font-semibold">{correctOptText || `Option ${currentCorrectKey}`}</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)] italic">
+                    Correct option specified in problem criteria.
+                  </p>
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Explanation text */}
             {explanationText && (
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-3 rounded-lg border border-[var(--border)]">
-                {explanationText}
-              </p>
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-mono font-bold uppercase text-[var(--text-secondary)] block">
+                  Solution Rationale & Concept Explanation:
+                </span>
+                <p className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-3.5 rounded-lg border border-[var(--border)] font-normal">
+                  {explanationText}
+                </p>
+              </div>
             )}
           </div>
         )}
