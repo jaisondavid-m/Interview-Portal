@@ -21,9 +21,10 @@ import StudentInterviews from '../Pages/StudentInterviews';
 import InterviewRoom from '../Pages/InterviewRoom';
 import NotFound from '../Pages/NotFound';
 
-// Route Guards
+// Route Guards & Error Boundary
 import ProtectedRoute from '../Components/ProtectedRoute';
 import AdminRoute from '../Components/AdminRoute';
+import { RouteErrorBoundary } from '../Components/ErrorBoundary';
 
 // Helper component for root redirect
 function RootRedirect() {
@@ -50,11 +51,13 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <RootRedirect />,
+    errorElement: <RouteErrorBoundary />,
   },
 
   // Auth Routes (Login Only)
   {
     element: <AuthLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: 'login',
@@ -66,9 +69,11 @@ export const router = createBrowserRouter([
   // Protected Admin Routes
   {
     element: <AdminRoute />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <DashboardLayout />,
+        errorElement: <RouteErrorBoundary />,
         children: [
           {
             path: 'admin/users',
@@ -126,9 +131,11 @@ export const router = createBrowserRouter([
   // Protected Student & Campus Workspace Routes
   {
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <DashboardLayout />,
+        errorElement: <RouteErrorBoundary />,
         children: [
           {
             path: 'dashboard',
@@ -140,6 +147,10 @@ export const router = createBrowserRouter([
           },
           {
             path: 'interviews/room/:sessionId',
+            element: <InterviewRoom />,
+          },
+          {
+            path: 'interview/room/:sessionId',
             element: <InterviewRoom />,
           },
           {
@@ -159,5 +170,6 @@ export const router = createBrowserRouter([
   {
     path: '*',
     element: <NotFound />,
+    errorElement: <RouteErrorBoundary />,
   },
 ]);
