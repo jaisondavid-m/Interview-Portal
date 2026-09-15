@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Upload,
   Download,
@@ -34,6 +34,30 @@ export default function QuestionBulkModal({
   const [importResult, setImportResult] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
+
+  const resetAll = () => {
+    setImportResult(null);
+    setUploadedFile(null);
+    setRawText('');
+    setParsedPreview([]);
+    setParseError('');
+    setLoading(false);
+    setIsDragging(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      resetAll();
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    resetAll();
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -453,7 +477,7 @@ export default function QuestionBulkModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] transition cursor-pointer"
             title="Close"
           >
@@ -509,7 +533,7 @@ export default function QuestionBulkModal({
                 </button>
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="btn btn-primary text-xs py-2 px-4 cursor-pointer"
                 >
                   Done & Close
@@ -813,7 +837,7 @@ export default function QuestionBulkModal({
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
               >
                 Cancel
