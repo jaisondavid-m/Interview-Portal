@@ -14,7 +14,9 @@ import {
   ArrowRight,
   Loader2,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  BarChart2,
+  BarChart3
 } from 'lucide-react';
 import api from '../api/axios';
 import { Skeleton, SkeletonStatsGrid, SkeletonTableRows } from '../Components/Skeleton';
