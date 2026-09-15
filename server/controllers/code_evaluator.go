@@ -60,6 +60,8 @@ func ExecuteTestCases(code string, lang string, testCases []EvalTestCase) ([]Eva
 	normLang := normalizeLanguage(lang)
 
 	switch normLang {
+	case "c":
+		return executeC(trimmedCode, testCases, false)
 	case "go":
 		return executeGo(trimmedCode, testCases, false)
 	case "python":
@@ -106,6 +108,8 @@ func ExecuteCustomInput(code string, lang string, customInput string) (EvalResul
 	var err error
 
 	switch normLang {
+	case "c":
+		results, err = executeC(trimmedCode, tc, true)
 	case "go":
 		results, err = executeGo(trimmedCode, tc, true)
 	case "python":
@@ -139,19 +143,66 @@ func ExecuteCustomInput(code string, lang string, customInput string) (EvalResul
 func normalizeLanguage(lang string) string {
 	l := strings.ToLower(strings.TrimSpace(lang))
 	switch l {
+	case "c", "gcc", "clang":
+		return "c"
 	case "go", "golang":
 		return "go"
 	case "py", "python", "python3":
 		return "python"
 	case "js", "javascript", "node", "nodejs":
 		return "javascript"
-	case "cpp", "c++", "g++", "c", "clang++":
+	case "cpp", "c++", "g++", "clang++":
 		return "cpp"
 	case "java", "openjdk", "jvm":
 		return "java"
 	default:
 		return "javascript"
 	}
+}
+
+// ============================================================
+// C EXECUTOR (gcc / clang)
+// ============================================================
+func executeC(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResult, error) {
+	cCompiler, err := findExecutable("gcc", "clang", "/usr/bin/gcc", "/usr/local/bin/gcc", "/usr/bin/clang")
+	if err != nil {
+		return executeViaRemote("c", code, testCases, isCustom)
+	}
+
+	tmpDir, err := os.MkdirTemp("", "mockmate_c_*")
+	if err != nil {
+		return executeViaRemote("c", code, testCases, isCustom)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	srcPath := filepath.Join(tmpDir, "solution.c")
+	binName := "solution"
+	if runtime.GOOS == "windows" {
+		binName = "solution.exe"
+	}
+	binPath := filepath.Join(tmpDir, binName)
+
+	if err := os.WriteFile(srcPath, []byte(code), 0644); err != nil {
+		return executeViaRemote("c", code, testCases, isCustom)
+	}
+
+	// Compile C code with C11 standard and math library (-lm)
+	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancelCompile()
+
+	compileCmd := exec.CommandContext(ctxCompile, cCompiler, "-O2", "-std=c11", srcPath, "-o", binPath, "-lm")
+	var compileStderr bytes.Buffer
+	compileCmd.Stderr = &compileStderr
+
+	if err := compileCmd.Run(); err != nil {
+		errStr := strings.TrimSpace(compileStderr.String())
+		if errStr == "" {
+			errStr = err.Error()
+		}
+		return makeErrorResults(testCases, "C Compilation Error:\n"+errStr), nil
+	}
+
+	return runCommandPerTestCase(binPath, []string{}, testCases, isCustom)
 }
 
 // ============================================================
@@ -456,8 +507,12 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 func executeViaRemote(lang string, code string, testCases []EvalTestCase, isCustom bool) ([]EvalResult, error) {
 	var langID int
 	switch lang {
+	case "c", "gcc", "clang":
+		langID = 50 // C (GCC 9.2.0)
 	case "cpp", "c++":
 		langID = 54 // C++ (GCC 9.2.0)
+	case "go", "golang":
+		langID = 60 // Go (1.13.5)
 	case "python", "python3", "py":
 		langID = 71 // Python 3.8.1
 	case "javascript", "js", "node":
@@ -465,7 +520,7 @@ func executeViaRemote(lang string, code string, testCases []EvalTestCase, isCust
 	case "java":
 		langID = 62 // Java (OpenJDK 13.0.1)
 	default:
-		langID = 63
+		langID = 50
 	}
 
 	results := make([]EvalResult, len(testCases))
@@ -487,6 +542,12 @@ func executeViaRemote(lang string, code string, testCases []EvalTestCase, isCust
 		}
 
 		if err != nil {
+			// Fallback to Piston API
+			pistonRes, pErr := executeViaPiston(lang, code, tc, isCustom)
+			if pErr == nil {
+				results[i] = pistonRes
+				continue
+			}
 			results[i] = EvalResult{
 				Index:       tc.Index,
 				IsHidden:    tc.IsHidden,
@@ -676,4 +737,158 @@ func makeErrorResults(testCases []EvalTestCase, errMsg string) []EvalResult {
 		}
 	}
 	return results
+}
+
+func executeViaPiston(lang string, code string, tc EvalTestCase, isCustom bool) (EvalResult, error) {
+	pistonLang := lang
+	switch lang {
+	case "c", "gcc", "clang":
+		pistonLang = "c"
+	case "cpp", "c++":
+		pistonLang = "cpp"
+	case "go", "golang":
+		pistonLang = "go"
+	case "python", "python3", "py":
+		pistonLang = "python"
+	case "javascript", "js", "node":
+		pistonLang = "javascript"
+	case "java":
+		pistonLang = "java"
+	default:
+		pistonLang = "c"
+	}
+
+	payload := map[string]interface{}{
+		"language": pistonLang,
+		"version":  "*",
+		"files": []map[string]string{
+			{"content": code},
+		},
+		"stdin": tc.Input,
+	}
+
+	jsonBytes, _ := json.Marshal(payload)
+	client := &http.Client{Timeout: 10 * time.Second}
+	startTime := time.Now()
+	resp, err := client.Post("https://emkc.org/api/v2/piston/execute", "application/json", bytes.NewBuffer(jsonBytes))
+	elapsedMs := int(time.Since(startTime).Milliseconds())
+	if elapsedMs < 1 {
+		elapsedMs = 1
+	}
+
+	if err != nil {
+		return EvalResult{
+			Index:       tc.Index,
+			IsHidden:    tc.IsHidden,
+			Name:        tc.Name,
+			Input:       tc.Input,
+			Expected:    tc.ExpectedOutput,
+			Actual:      "Execution Engine Unavailable: " + err.Error(),
+			Passed:      false,
+			ExecutionMs: elapsedMs,
+		}, err
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	var pistonResp struct {
+		Compile struct {
+			Stdout string `json:"stdout"`
+			Stderr string `json:"stderr"`
+			Code   int    `json:"code"`
+			Output string `json:"output"`
+		} `json:"compile"`
+		Run struct {
+			Stdout string `json:"stdout"`
+			Stderr string `json:"stderr"`
+			Code   int    `json:"code"`
+			Output string `json:"output"`
+		} `json:"run"`
+		Message string `json:"message"`
+	}
+
+	if err := json.Unmarshal(body, &pistonResp); err != nil {
+		return EvalResult{
+			Index:       tc.Index,
+			IsHidden:    tc.IsHidden,
+			Name:        tc.Name,
+			Input:       tc.Input,
+			Expected:    tc.ExpectedOutput,
+			Actual:      "Response parse error: " + string(body),
+			Passed:      false,
+			ExecutionMs: elapsedMs,
+		}, err
+	}
+
+	if pistonResp.Compile.Code != 0 && pistonResp.Compile.Output != "" {
+		return EvalResult{
+			Index:       tc.Index,
+			IsHidden:    tc.IsHidden,
+			Name:        tc.Name,
+			Input:       tc.Input,
+			Expected:    tc.ExpectedOutput,
+			Actual:      "Compilation Error:\n" + strings.TrimSpace(pistonResp.Compile.Output),
+			Passed:      false,
+			ExecutionMs: elapsedMs,
+		}, nil
+	}
+
+	if pistonResp.Run.Code != 0 {
+		errText := pistonResp.Run.Stderr
+		if errText == "" {
+			errText = pistonResp.Run.Output
+		}
+		if errText == "" {
+			errText = pistonResp.Message
+		}
+		return EvalResult{
+			Index:       tc.Index,
+			IsHidden:    tc.IsHidden,
+			Name:        tc.Name,
+			Input:       tc.Input,
+			Expected:    tc.ExpectedOutput,
+			Actual:      "Runtime Error:\n" + strings.TrimSpace(errText),
+			Passed:      false,
+			ExecutionMs: elapsedMs,
+		}, nil
+	}
+
+	actualStdout := pistonResp.Run.Stdout
+	if isCustom {
+		cleanActual := strings.TrimRight(actualStdout, "\r\n")
+		if cleanActual == "" {
+			cleanActual = "(Process finished with code 0 - No output printed)"
+		}
+		return EvalResult{
+			Index:       tc.Index,
+			IsHidden:    tc.IsHidden,
+			Name:        tc.Name,
+			Input:       tc.Input,
+			Expected:    "(Standard Output)",
+			Actual:      cleanActual,
+			Passed:      true,
+			ExecutionMs: elapsedMs,
+		}, nil
+	}
+
+	normActual := normalizeOutput(actualStdout)
+	normExpected := normalizeOutput(tc.ExpectedOutput)
+	passed := (normActual == normExpected)
+
+	displayActual := strings.TrimRight(actualStdout, "\r\n")
+	if displayActual == "" {
+		displayActual = "(No output printed to stdout)"
+	}
+
+	return EvalResult{
+		Index:       tc.Index,
+		IsHidden:    tc.IsHidden,
+		Name:        tc.Name,
+		Input:       tc.Input,
+		Expected:    tc.ExpectedOutput,
+		Actual:      displayActual,
+		Passed:      passed,
+		ExecutionMs: elapsedMs,
+	}, nil
 }

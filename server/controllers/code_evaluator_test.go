@@ -156,3 +156,44 @@ public class Solution {
 	}
 }
 
+func TestExecuteTestCasesStandardIO_C(t *testing.T) {
+	testCases := []EvalTestCase{
+		{
+			Index:          1,
+			IsHidden:       false,
+			Name:           "Sample Case 1",
+			Input:          "5 7\n",
+			ExpectedOutput: "12",
+		},
+		{
+			Index:          2,
+			IsHidden:       false,
+			Name:           "Sample Case 2",
+			Input:          "-3 10\n",
+			ExpectedOutput: "7",
+		},
+	}
+
+	correctC := `
+#include <stdio.h>
+
+int main() {
+    int a, b;
+    if (scanf("%d %d", &a, &b) == 2) {
+        printf("%d\n", a + b);
+    }
+    return 0;
+}
+`
+	results, err := ExecuteTestCases(correctC, "c", testCases)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 results, got %d", len(results))
+	}
+	if !results[0].Passed || !results[1].Passed {
+		t.Errorf("Expected C code to PASS test cases, but got: case1=%v (%s), case2=%v (%s)", results[0].Passed, results[0].Actual, results[1].Passed, results[1].Actual)
+	}
+}
+

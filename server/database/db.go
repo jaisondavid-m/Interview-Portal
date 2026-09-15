@@ -138,7 +138,7 @@ func migrateAndDropLegacyPayloadJSONColumn(db *gorm.DB) {
 				var tmplCount int64
 				db.Model(&models.InterviewQuestionCodeTemplate{}).Where("question_id = ?", rq.ID).Count(&tmplCount)
 				if tmplCount == 0 && rq.Type == models.ModeCoding {
-					for _, l := range []string{"javascript", "python", "cpp", "java"} {
+					for _, l := range []string{"c", "cpp", "javascript", "python", "java", "go"} {
 						k := "starter_code_" + l
 						if l == "javascript" { k = "starter_code" }
 						sc := ""
