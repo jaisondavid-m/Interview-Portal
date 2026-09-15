@@ -404,7 +404,7 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 	results := make([]EvalResult, len(testCases))
 
 	for i, tc := range testCases {
-		ctx, cancel := context.WithTimeout(context.Background(), 3500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 		cmd := exec.CommandContext(ctx, execPath, baseArgs...)
 
 		// Pipe test case input to Standard Input (stdin)
@@ -433,7 +433,7 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 				Name:        tc.Name,
 				Input:       tc.Input,
 				Expected:    tc.ExpectedOutput,
-				Actual:      "Time Limit Exceeded (> 3.5s)",
+				Actual:      "Time Limit Exceeded (> 5.0s)",
 				Passed:      false,
 				ExecutionMs: elapsedMs,
 			}
