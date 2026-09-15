@@ -1,23 +1,20 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Layers,
   Database,
-  Columns,
   Maximize2,
   Minimize2,
   BookOpen,
-  Info,
-  Sparkles,
   Eye,
-  CheckCircle2,
-  HelpCircle,
-  FileText,
+  Sparkles,
   X,
-  Code2,
-  Key
+  Loader2,
+  CheckCircle2,
+  Server
 } from 'lucide-react';
 import ERDiagramCanvas from './ERDiagramCanvas';
 import SQLEditorConsole from './SQLEditorConsole';
+import api from '../../api/axios';
 
 export default function DatabasePlayground({
   code = '',
@@ -27,16 +24,19 @@ export default function DatabasePlayground({
   question = null,
   payload = {},
   currentUserRole = 'interviewee',
+  sessionId = null,
 }) {
-  const [activeView, setActiveView] = useState('split'); // 'er' | 'sql' | 'split'
+  const [activeTab, setActiveTab] = useState('sql'); // 'sql' | 'er'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGuideDrawer, setShowGuideDrawer] = useState(false);
+  const [isProvisioning, setIsProvisioning] = useState(true);
+  const [provisionError, setProvisionError] = useState(null);
 
-  // Parse combined state from code string (holds JSON of { diagram, sql })
+  // Parse combined state if code holds JSON of { diagram, sql }
   const parsedState = useMemo(() => {
     if (!code || typeof code !== 'string') return { diagram: null, sql: '' };
     try {
-      if (code.startsWith('{') && code.includes('"diagram"')) {
+      if (code.startsWith('{') && (code.includes('"diagram"') || code.includes('"sql"'))) {
         const parsed = JSON.parse(code);
         return {
           diagram: parsed.diagram || null,
@@ -44,20 +44,20 @@ export default function DatabasePlayground({
         };
       }
     } catch (e) {
-      // Fallback: entire string is sql
+      // Fallback
     }
     return { diagram: null, sql: code };
   }, [code]);
 
-  const [diagramState, setDiagramState] = useState(parsedState.diagram);
-  const [sqlState, setSqlState] = useState(parsedState.sql);
+  const [diagramState, setDiagramState] = useState(parsedState.diagram || { tables: [], relationships: [] });
+  const [sqlState, setSqlState] = useState(parsedState.sql || payload?.starter_code || payload?.schema_ddl || '');
 
-  // Sync external changes (e.g. interviewer receiving stream updates)
+  // Sync external changes
   useEffect(() => {
     if (parsedState.diagram) {
       setDiagramState(parsedState.diagram);
     }
-    if (parsedState.sql !== undefined) {
+    if (parsedState.sql !== undefined && parsedState.sql !== null) {
       setSqlState(parsedState.sql);
     }
   }, [parsedState]);
@@ -73,9 +73,11 @@ export default function DatabasePlayground({
     }
   };
 
-  const handleDiagramChange = (newDiagram) => {
-    setDiagramState(newDiagram);
-    emitCombinedChange(newDiagram, sqlState);
+  // Handler for real-time schema update returned from SQL execution
+  const handleSchemaUpdate = (newSchema) => {
+    if (!newSchema) return;
+    setDiagramState(newSchema);
+    emitCombinedChange(newSchema, sqlState);
   };
 
   const handleSqlChange = (newSql) => {
@@ -83,12 +85,52 @@ export default function DatabasePlayground({
     emitCombinedChange(diagramState, newSql);
   };
 
-  const handleApplyDDLToSQL = (ddl) => {
-    const updatedSQL = `${ddl}\n\n${sqlState}`;
-    setSqlState(updatedSQL);
-    emitCombinedChange(diagramState, updatedSQL);
-    setActiveView('sql');
-  };
+  // Provision sandbox database on session load
+  useEffect(() => {
+    let isMounted = true;
+    async function initSandbox() {
+      if (!sessionId) {
+        setIsProvisioning(false);
+        return;
+      }
+
+      try {
+        setIsProvisioning(true);
+        setProvisionError(null);
+
+        // First check if schema already exists, otherwise provision
+        const schemaRes = await api.get(`/interviews/sessions/${sessionId}/database/schema`).catch(() => null);
+        if (schemaRes?.data?.schema && schemaRes.data.schema.tables?.length > 0) {
+          if (isMounted) {
+            setDiagramState(schemaRes.data.schema);
+            setIsProvisioning(false);
+          }
+          return;
+        }
+
+        // Provision fresh sandbox database
+        const provRes = await api.post(`/interviews/sessions/${sessionId}/database/provision`);
+        const data = provRes?.data || provRes;
+        if (isMounted) {
+          if (data?.schema) {
+            setDiagramState(data.schema);
+          }
+          setIsProvisioning(false);
+        }
+      } catch (err) {
+        console.warn('Sandbox provision notice:', err);
+        if (isMounted) {
+          setProvisionError(err?.response?.data?.error || err?.message || 'Provisioning error');
+          setIsProvisioning(false);
+        }
+      }
+    }
+
+    initSandbox();
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionId]);
 
   // Fullscreen keyboard handler
   useEffect(() => {
@@ -105,7 +147,6 @@ export default function DatabasePlayground({
   }, [isFullscreen]);
 
   const schemaDDL = payload?.schema_ddl || payload?.starter_code || '';
-  const seedData = payload?.seed_data || '';
 
   return (
     <div
@@ -117,46 +158,33 @@ export default function DatabasePlayground({
     >
       {/* Top Main Navigation Header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-3 flex-wrap">
-        {/* Left: View Mode Tabs */}
-        <div className="flex items-center gap-1.5">
+        {/* Left: View Mode Tabs (SQL Editor | ER Diagram) */}
+        <div className="flex items-center gap-2">
           <div className="flex items-center p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-xs">
             <button
               type="button"
-              onClick={() => setActiveView('split')}
-              className={`px-3 py-1 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                activeView === 'split'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Columns className="w-3.5 h-3.5" />
-              <span>Split View</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('er')}
-              className={`px-3 py-1 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                activeView === 'er'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>ER Diagram</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('sql')}
-              className={`px-3 py-1 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                activeView === 'sql'
+              onClick={() => setActiveTab('sql')}
+              className={`px-3.5 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'sql'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               <Database className="w-3.5 h-3.5" />
               <span>SQL Query Editor</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('er')}
+              className={`px-3.5 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'er'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>ER Diagram {diagramState?.tables?.length > 0 ? `(${diagramState.tables.length})` : ''}</span>
             </button>
           </div>
 
@@ -175,7 +203,7 @@ export default function DatabasePlayground({
             type="button"
             onClick={() => setShowGuideDrawer(true)}
             className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold cursor-pointer"
-            title="View Database Requirements, Scenario, and Schema specs"
+            title="View Database Requirements, Scenario, and Specs"
           >
             <BookOpen className="w-3.5 h-3.5 text-blue-500" />
             <span>Specifications & Context</span>
@@ -192,58 +220,51 @@ export default function DatabasePlayground({
         </div>
       </div>
 
-      {/* Main Workspace Layout */}
+      {/* Main Workspace Area with Provisioning Guard */}
       <div className="flex-1 overflow-hidden relative">
-        {activeView === 'er' && (
-          <div className="h-full">
-            <ERDiagramCanvas
-              diagramData={diagramState}
-              onChange={handleDiagramChange}
-              isEditable={isEditable}
-              candidateName={candidateName}
-              onApplyDDL={handleApplyDDLToSQL}
-            />
-          </div>
-        )}
-
-        {activeView === 'sql' && (
-          <div className="h-full">
-            <SQLEditorConsole
-              code={sqlState}
-              onCodeChange={handleSqlChange}
-              isEditable={isEditable}
-              candidateName={candidateName}
-              schemaDDL={schemaDDL}
-              seedData={seedData}
-            />
-          </div>
-        )}
-
-        {activeView === 'split' && (
-          <div className="h-full grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[var(--border)] overflow-hidden">
-            {/* Left Col: ER Diagram Canvas */}
-            <div className="lg:col-span-6 h-full overflow-hidden">
-              <ERDiagramCanvas
-                diagramData={diagramState}
-                onChange={handleDiagramChange}
-                isEditable={isEditable}
-                candidateName={candidateName}
-                onApplyDDL={handleApplyDDLToSQL}
-              />
+        {isProvisioning ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-[var(--bg-card)] space-y-4 text-center z-20">
+            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500 shadow-xl relative animate-pulse">
+              <Server className="w-8 h-8" />
+              <Loader2 className="w-4 h-4 animate-spin absolute -bottom-1 -right-1 text-cyan-400" />
             </div>
-
-            {/* Right Col: SQL Query Runner */}
-            <div className="lg:col-span-6 h-full overflow-hidden">
-              <SQLEditorConsole
-                code={sqlState}
-                onCodeChange={handleSqlChange}
-                isEditable={isEditable}
-                candidateName={candidateName}
-                schemaDDL={schemaDDL}
-                seedData={seedData}
-              />
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-[var(--text-primary)]">
+                Provisioning Isolated MySQL Sandbox
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] max-w-sm leading-relaxed">
+                Starting your private, ephemeral MySQL database sandbox container for this interview session...
+              </p>
             </div>
           </div>
+        ) : (
+          <>
+            {activeTab === 'sql' && (
+              <div className="h-full">
+                <SQLEditorConsole
+                  code={sqlState}
+                  onCodeChange={handleSqlChange}
+                  isEditable={isEditable}
+                  candidateName={candidateName}
+                  sessionId={sessionId}
+                  schemaDDL={schemaDDL}
+                  schemaTree={diagramState?.tables || []}
+                  onSchemaUpdate={handleSchemaUpdate}
+                />
+              </div>
+            )}
+
+            {activeTab === 'er' && (
+              <div className="h-full">
+                <ERDiagramCanvas
+                  diagramData={diagramState}
+                  isEditable={isEditable}
+                  candidateName={candidateName}
+                  onSwitchToSQL={() => setActiveTab('sql')}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 

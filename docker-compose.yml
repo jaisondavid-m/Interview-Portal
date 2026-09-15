@@ -25,6 +25,27 @@ services:
       start_period: 15s
 
   # ==========================================
+  # Isolated Sandbox MySQL (Interview Database Playground)
+  # ==========================================
+  sandbox-db:
+    image: mysql:8.0
+    container_name: mockmate-sandbox-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SANDBOX_DB_PASSWORD:-sandbox_root_pass_2026}
+      MYSQL_DATABASE: sandbox_default
+    ports:
+      - "${SANDBOX_DB_EXTERNAL_PORT:-3307}:3306"
+    networks:
+      - mockmate-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${SANDBOX_DB_PASSWORD:-sandbox_root_pass_2026}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ==========================================
   # Go Backend API Service
   # ==========================================
   server:
@@ -41,6 +62,10 @@ services:
       DB_USER: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
       DB_NAME: ${MYSQL_DATABASE:-mock_mate}
+      SANDBOX_DB_HOST: ${SANDBOX_DB_HOST:-sandbox-db}
+      SANDBOX_DB_PORT: ${SANDBOX_DB_PORT:-3306}
+      SANDBOX_DB_USER: ${SANDBOX_DB_USER:-root}
+      SANDBOX_DB_PASSWORD: ${SANDBOX_DB_PASSWORD:-sandbox_root_pass_2026}
       JWT_SECRET: ${JWT_SECRET:-mock_mate_secure_jwt_secret_2026}
     ports:
       - "${SERVER_PORT:-8080}:8080"

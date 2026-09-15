@@ -570,6 +570,9 @@ export default function InterviewRoom() {
         try {
           setEnding(true);
           await stopAndUploadRecording();
+          if (isDatabaseMode) {
+            await api.post(`/interviews/sessions/${sessionId}/database/teardown`).catch(() => {});
+          }
           await api.post(`/interviews/sessions/${sessionId}/end`);
           navigate('/interviews');
         } catch (err) {
@@ -1381,6 +1384,7 @@ export default function InterviewRoom() {
               question={question}
               payload={payload}
               currentUserRole={currentUserRole}
+              sessionId={sessionId}
             />
           ) : (
             <>
