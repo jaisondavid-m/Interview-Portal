@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, SlidersHorizontal, Video, History, MessageSquareCheck, Trophy } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, SlidersHorizontal, Video, History, MessageSquareCheck, Trophy, Terminal } from 'lucide-react';
 import api from '../api/axios';
 
 export default function Sidebar() {
@@ -22,15 +22,22 @@ export default function Sidebar() {
     navigate('/login');
   };
 
-  const isAdmin = user?.role === 'admin';
+  const userRole = user?.role?.toLowerCase();
+  const isAdmin = userRole === 'admin';
+  const isDeveloper = userRole === 'developer';
 
-  const menuItems = isAdmin
+  const menuItems = isDeveloper
+    ? [
+        { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
+      ]
+    : isAdmin
     ? [
         { name: 'User Management', path: '/admin/users', icon: Users },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
         { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
         { name: 'Leaderboard', path: '/admin/leaderboard', icon: Trophy },
         { name: 'Interview History', path: '/admin/history', icon: History },
+        { name: 'Audit Logs', path: '/admin/audit-logs', icon: Terminal },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },

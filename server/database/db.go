@@ -97,11 +97,34 @@ func runMigrations(db *gorm.DB) error {
 		&models.InterviewFeedbackResponse{},
 		&models.InterviewRecording{},
 		&models.SessionSecurityReport{},
+		&models.AuditLog{},
 	)
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)
+		seedDefaultDeveloperUser(db)
 	}
 	return err
+}
+
+// seedDefaultDeveloperUser seeds a developer account if none exists
+func seedDefaultDeveloperUser(db *gorm.DB) {
+	var count int64
+	db.Model(&models.User{}).Where("email = ? OR role = ?", "developer@bitsathy.ac.in", "developer").Count(&count)
+	if count == 0 {
+		hashedPass, err := models.HashPassword("password")
+		if err == nil {
+			devUser := models.User{
+				Name:       "Lead Developer",
+				Email:      "developer@bitsathy.ac.in",
+				RollNo:     "DEV01",
+				Department: "CSE",
+				Password:   hashedPass,
+				Role:       "developer",
+			}
+			db.Create(&devUser)
+			log.Println("[INFO] Default developer user seeded: developer@bitsathy.ac.in / password (role: developer)")
+		}
+	}
 }
 
 // migrateAndDropLegacyPayloadJSONColumn migrates any unmigrated JSON records then permanently drops payload_json column

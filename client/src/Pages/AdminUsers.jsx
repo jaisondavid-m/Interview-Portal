@@ -23,6 +23,7 @@ const ROLE_OPTIONS = [
   { value: 'ALL', label: 'All Roles' },
   { value: 'student', label: 'Student' },
   { value: 'admin', label: 'Administrator' },
+  { value: 'developer', label: 'Developer' },
 ];
 
 export default function AdminUsers() {
@@ -1015,6 +1016,7 @@ export default function AdminUsers() {
                       >
                         <option value="student">Student</option>
                         <option value="admin">Administrator</option>
+                        <option value="developer">Developer</option>
                       </select>
                     </div>
                   </div>
@@ -1322,6 +1324,7 @@ export default function AdminUsers() {
                   >
                     <option value="student">Student</option>
                     <option value="admin">Administrator</option>
+                    <option value="developer">Developer</option>
                   </select>
                 </label>
               </div>
@@ -1458,6 +1461,7 @@ export default function AdminUsers() {
                   >
                     <option value="student">Student</option>
                     <option value="admin">Administrator</option>
+                    <option value="developer">Developer</option>
                   </select>
                 </label>
               </div>

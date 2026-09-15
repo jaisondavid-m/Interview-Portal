@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Lock, User, AlertCircle, ShieldCheck, GraduationCap, Eye, EyeOff, Zap, Check } from 'lucide-react';
+import { ArrowRight, Lock, User, AlertCircle, ShieldCheck, GraduationCap, Eye, EyeOff, Zap, Check, Terminal } from 'lucide-react';
 import api from '../api/axios';
 
 const QUICK_ACCOUNTS = [
@@ -11,6 +11,14 @@ const QUICK_ACCOUNTS = [
     icon: ShieldCheck,
     badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]',
     role: 'admin',
+  },
+  {
+    title: 'Developer',
+    email: 'developer@bitsathy.ac.in',
+    password: 'password',
+    icon: Terminal,
+    badgeStyle: 'text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+    role: 'developer',
   },
   {
     title: 'Student 1',
@@ -64,6 +72,8 @@ export default function Login() {
 
         if (res.user.role === 'admin') {
           navigate('/admin/users');
+        } else if (res.user.role === 'developer') {
+          navigate('/developer/audit-logs');
         } else {
           navigate('/dashboard');
         }
@@ -71,14 +81,14 @@ export default function Login() {
     } catch (err) {
       // Fallback for offline demo or backend delay
       const quickMatch = QUICK_ACCOUNTS.find(
-        (a) => (a.email === identifier.trim() || identifier.trim() === 'ADMIN01') && password === 'password'
+        (a) => (a.email === identifier.trim() || identifier.trim() === 'ADMIN01' || identifier.trim() === 'DEV01') && password === 'password'
       );
       if (quickMatch) {
         const dummyUser = {
-          id: quickMatch.role === 'admin' ? 1 : (quickMatch.title === 'Student 1' ? 2 : 3),
-          name: quickMatch.role === 'admin' ? 'System Administrator' : (quickMatch.title === 'Student 1' ? 'Jaison David M' : 'Mani M R S'),
+          id: quickMatch.role === 'admin' ? 1 : quickMatch.role === 'developer' ? 99 : (quickMatch.title === 'Student 1' ? 2 : 3),
+          name: quickMatch.role === 'admin' ? 'System Administrator' : quickMatch.role === 'developer' ? 'Lead Developer' : (quickMatch.title === 'Student 1' ? 'Jaison David M' : 'Mani M R S'),
           email: quickMatch.email,
-          roll_no: quickMatch.role === 'admin' ? 'ADMIN01' : (quickMatch.title === 'Student 1' ? '7376251CS221' : '7376252AD230'),
+          roll_no: quickMatch.role === 'admin' ? 'ADMIN01' : quickMatch.role === 'developer' ? 'DEV01' : (quickMatch.title === 'Student 1' ? '7376251CS221' : '7376252AD230'),
           department: quickMatch.role === 'admin' ? 'Administration' : (quickMatch.title === 'Student 1' ? 'CSE' : 'AI&DS'),
           role: quickMatch.role,
         };
@@ -86,6 +96,8 @@ export default function Login() {
         localStorage.setItem('user', JSON.stringify(dummyUser));
         if (quickMatch.role === 'admin') {
           navigate('/admin/users');
+        } else if (quickMatch.role === 'developer') {
+          navigate('/developer/audit-logs');
         } else {
           navigate('/dashboard');
         }

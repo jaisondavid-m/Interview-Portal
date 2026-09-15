@@ -19,11 +19,13 @@ import AdminLeaderboard from '../Pages/AdminLeaderboard';
 import AdminQuestionEditor from '../Pages/AdminQuestionEditor';
 import StudentInterviews from '../Pages/StudentInterviews';
 import InterviewRoom from '../Pages/InterviewRoom';
+import DeveloperAuditLogs from '../Pages/DeveloperAuditLogs';
 import NotFound from '../Pages/NotFound';
 
 // Route Guards & Error Boundary
 import ProtectedRoute from '../Components/ProtectedRoute';
 import AdminRoute from '../Components/AdminRoute';
+import DeveloperRoute from '../Components/DeveloperRoute';
 import { RouteErrorBoundary } from '../Components/ErrorBoundary';
 
 // Helper component for root redirect
@@ -36,6 +38,9 @@ function RootRedirect() {
       const user = JSON.parse(userStr);
       if (user.role === 'admin') {
         return <Navigate to="/admin/users" replace />;
+      }
+      if (user.role === 'developer') {
+        return <Navigate to="/developer/audit-logs" replace />;
       }
       return <Navigate to="/dashboard" replace />;
     } catch (e) {
@@ -122,6 +127,32 @@ export const router = createBrowserRouter([
           {
             path: 'admin/interviews/:trackId/levels/:levelId/questions/:questionId',
             element: <AdminInterviewConfig />,
+          },
+          {
+            path: 'admin/audit-logs',
+            element: <DeveloperAuditLogs />,
+          },
+        ],
+      },
+    ],
+  },
+
+  // Protected Developer Routes (Dedicated Audit Logs Portal)
+  {
+    element: <DeveloperRoute />,
+    errorElement: <RouteErrorBoundary />,
+    children: [
+      {
+        element: <DashboardLayout />,
+        errorElement: <RouteErrorBoundary />,
+        children: [
+          {
+            path: 'developer/audit-logs',
+            element: <DeveloperAuditLogs />,
+          },
+          {
+            path: 'developer',
+            element: <Navigate to="/developer/audit-logs" replace />,
           },
         ],
       },

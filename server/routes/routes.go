@@ -13,13 +13,14 @@ func SetupRouter() *gin.Engine {
 
 	// Apply Middlewares
 	router.Use(middlewares.CORSMiddleware())
+	router.Use(middlewares.AuditLoggerMiddleware())
 	router.Use(gin.Recovery())
 
 	// Public Health Check
 	router.GET("/", controllers.HealthCheck)
 	router.GET("/health", controllers.HealthCheck)
 
-	// Helper function to register auth & admin routes on any router group
+	// Helper function to register auth, student, developer & admin routes on any router group
 	registerRoutes := func(g *gin.RouterGroup) {
 		// Auth Routes
 		auth := g.Group("/auth")
@@ -27,6 +28,16 @@ func SetupRouter() *gin.Engine {
 			auth.POST("/login", controllers.Login)
 			auth.POST("/logout", controllers.Logout)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.GetMe)
+		}
+
+		// Developer Protected Routes (Require JWT + Developer or Admin Role)
+		developer := g.Group("/developer")
+		developer.Use(middlewares.AuthMiddleware(), middlewares.RequireRole("developer", "admin"))
+		{
+			developer.GET("/audit-logs", controllers.GetAuditLogs)
+			developer.GET("/audit-logs/stats", controllers.GetAuditStats)
+			developer.GET("/audit-logs/:id", controllers.GetAuditLogByID)
+			developer.DELETE("/audit-logs/clear", controllers.ClearAuditLogs)
 		}
 
 		// Student Protected Routes (Require JWT)
