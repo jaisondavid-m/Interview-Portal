@@ -18,6 +18,8 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Undo2,
+  Redo2,
   Link2,
   Check,
   X,
@@ -47,7 +49,7 @@ export const COMPONENT_CATALOG = [
     label: 'Web Client',
     category: 'Client',
     icon: Globe,
-    color: '#3b82f6',
+    color: '#2563eb',
     bg: '#eff6ff',
     border: '#93c5fd',
     defaultTech: 'React / Next.js',
@@ -58,7 +60,7 @@ export const COMPONENT_CATALOG = [
     label: 'Mobile App',
     category: 'Client',
     icon: Smartphone,
-    color: '#6366f1',
+    color: '#4f46e5',
     bg: '#eef2ff',
     border: '#a5b4fc',
     defaultTech: 'iOS / Android App',
@@ -69,7 +71,7 @@ export const COMPONENT_CATALOG = [
     label: 'Load Balancer',
     category: 'Gateway',
     icon: Radio,
-    color: '#0ea5e9',
+    color: '#0284c7',
     bg: '#f0f9ff',
     border: '#7dd3fc',
     defaultTech: 'AWS ALB / Nginx',
@@ -80,7 +82,7 @@ export const COMPONENT_CATALOG = [
     label: 'API Gateway',
     category: 'Gateway',
     icon: Shield,
-    color: '#8b5cf6',
+    color: '#7c3aed',
     bg: '#f5f3ff',
     border: '#c4b5fd',
     defaultTech: 'Kong / Envoy / Express',
@@ -91,7 +93,7 @@ export const COMPONENT_CATALOG = [
     label: 'Backend Service',
     category: 'Compute',
     icon: Server,
-    color: '#10b981',
+    color: '#059669',
     bg: '#ecfdf5',
     border: '#6ee7b7',
     defaultTech: 'Go / Node.js / Java',
@@ -102,7 +104,7 @@ export const COMPONENT_CATALOG = [
     label: 'Async Worker',
     category: 'Compute',
     icon: Cpu,
-    color: '#14b8a6',
+    color: '#0d9488',
     bg: '#f0fdfa',
     border: '#5eead4',
     defaultTech: 'Celery / BullMQ',
@@ -113,7 +115,7 @@ export const COMPONENT_CATALOG = [
     label: 'Relational DB',
     category: 'Database',
     icon: Database,
-    color: '#f59e0b',
+    color: '#d97706',
     bg: '#fffbeb',
     border: '#fcd34d',
     defaultTech: 'PostgreSQL / MySQL',
@@ -124,7 +126,7 @@ export const COMPONENT_CATALOG = [
     label: 'NoSQL DB',
     category: 'Database',
     icon: Layers,
-    color: '#f97316',
+    color: '#ea580c',
     bg: '#fff7ed',
     border: '#fdba74',
     defaultTech: 'MongoDB / DynamoDB',
@@ -135,7 +137,7 @@ export const COMPONENT_CATALOG = [
     label: 'Cache Store',
     category: 'Database',
     icon: Zap,
-    color: '#ef4444',
+    color: '#dc2626',
     bg: '#fef2f2',
     border: '#fca5a5',
     defaultTech: 'Redis / Memcached',
@@ -146,7 +148,7 @@ export const COMPONENT_CATALOG = [
     label: 'Message Queue',
     category: 'Queue',
     icon: MessageSquare,
-    color: '#ec4899',
+    color: '#db2777',
     bg: '#fdf2f8',
     border: '#f472b6',
     defaultTech: 'Apache Kafka / RabbitMQ',
@@ -157,7 +159,7 @@ export const COMPONENT_CATALOG = [
     label: 'Object Storage',
     category: 'Storage',
     icon: Cloud,
-    color: '#06b6d4',
+    color: '#0891b2',
     bg: '#ecfeff',
     border: '#67e8f9',
     defaultTech: 'AWS S3 / Cloudflare R2',
@@ -168,7 +170,7 @@ export const COMPONENT_CATALOG = [
     label: 'System Note / Block',
     category: 'Custom',
     icon: FileText,
-    color: '#64748b',
+    color: '#475569',
     bg: '#f8fafc',
     border: '#cbd5e1',
     defaultTech: 'Custom / Note',
@@ -209,7 +211,7 @@ export default function WhiteboardCanvas({
   // Parsed canvas state: { nodes: [], connections: [] }
   const [nodes, setNodes] = useState([]);
   const [connections, setConnections] = useState([]);
-  
+
   // Selection & interaction modes
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState(null);
@@ -219,6 +221,12 @@ export default function WhiteboardCanvas({
   const [showCatalogModal, setShowCatalogModal] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState('All');
   const [showRequirements, setShowRequirements] = useState(false);
+
+  // Undo & Redo state management
+  const historyRef = useRef([]);
+  const historyIndexRef = useRef(-1);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // Canvas viewport navigation & Fullscreen
   const [zoom, setZoom] = useState(1);
@@ -232,13 +240,86 @@ export default function WhiteboardCanvas({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const canvasRef = useRef(null);
-  const isInternalChangeRef = useRef(false);
+  const lastEmittedJsonRef = useRef('');
 
-  // Listen to keyboard shortcuts (F for fullscreen, Escape to exit / cancel)
+  // Dispatch state change to parent in real-time
+  const emitChange = useCallback((updatedNodes, updatedConnections, pushToHist = true) => {
+    const payloadStr = JSON.stringify({
+      nodes: updatedNodes,
+      connections: updatedConnections,
+      updatedAt: new Date().toISOString(),
+    });
+    lastEmittedJsonRef.current = payloadStr;
+
+    if (pushToHist && isEditable) {
+      const newSnapshot = {
+        nodes: JSON.parse(JSON.stringify(updatedNodes)),
+        connections: JSON.parse(JSON.stringify(updatedConnections)),
+      };
+      const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
+      trimmed.push(newSnapshot);
+      if (trimmed.length > 50) trimmed.shift();
+      historyRef.current = trimmed;
+      historyIndexRef.current = trimmed.length - 1;
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(false);
+    }
+
+    if (onWhiteboardChange) {
+      onWhiteboardChange(payloadStr);
+    }
+  }, [onWhiteboardChange, isEditable]);
+
+  // Undo Action
+  const handleUndo = useCallback(() => {
+    if (!isEditable || historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    const target = historyRef.current[historyIndexRef.current];
+    if (target) {
+      setNodes(target.nodes);
+      setConnections(target.connections);
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+      emitChange(target.nodes, target.connections, false);
+    }
+  }, [isEditable, emitChange]);
+
+  // Redo Action
+  const handleRedo = useCallback(() => {
+    if (!isEditable || historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    const target = historyRef.current[historyIndexRef.current];
+    if (target) {
+      setNodes(target.nodes);
+      setConnections(target.connections);
+      setCanUndo(true);
+      setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+      emitChange(target.nodes, target.connections, false);
+    }
+  }, [isEditable, emitChange]);
+
+  // Keyboard shortcuts (Undo/Redo, Fullscreen, Escape, Delete)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't trigger shortcuts if user is typing in form fields
+      // Ignore if typing in text inputs or textareas
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+        return;
+      }
+
+      // Undo: Ctrl+Z / Cmd+Z (without Shift)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Ctrl+Shift+Z / Cmd+Shift+Z
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
+      ) {
+        e.preventDefault();
+        handleRedo();
         return;
       }
 
@@ -273,18 +354,29 @@ export default function WhiteboardCanvas({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen, showCatalogModal, editingNode, showRequirements, connectSourceId, activeTool, selectedNodeId, selectedConnectionId, nodes, connections]);
+  }, [
+    isFullscreen,
+    showCatalogModal,
+    editingNode,
+    showRequirements,
+    connectSourceId,
+    activeTool,
+    selectedNodeId,
+    selectedConnectionId,
+    handleUndo,
+    handleRedo,
+  ]);
 
-  // Parse external whiteboard JSON or initial state
+  // Parse incoming whiteboardData (real-time stream update)
   useEffect(() => {
-    if (isInternalChangeRef.current) {
-      isInternalChangeRef.current = false;
+    // If incoming data matches what we just sent out, skip re-render to avoid loop
+    if (typeof whiteboardData === 'string' && whiteboardData === lastEmittedJsonRef.current) {
       return;
     }
 
     if (!whiteboardData) {
-      // Set default starter template if empty and in editable mode
-      if (isEditable && nodes.length === 0) {
+      // Set default starter template if empty and in candidate editable mode
+      if (isEditable && nodes.length === 0 && historyRef.current.length === 0) {
         const defaultNodes = [
           {
             id: 'node-client-1',
@@ -294,7 +386,7 @@ export default function WhiteboardCanvas({
             description: 'User requests via browser',
             x: 80,
             y: 180,
-            color: '#3b82f6',
+            color: '#2563eb',
             bg: '#eff6ff',
             border: '#93c5fd',
           },
@@ -306,7 +398,7 @@ export default function WhiteboardCanvas({
             description: 'Rate limiting & Auth verification',
             x: 340,
             y: 180,
-            color: '#8b5cf6',
+            color: '#7c3aed',
             bg: '#f5f3ff',
             border: '#c4b5fd',
           },
@@ -318,7 +410,7 @@ export default function WhiteboardCanvas({
             description: 'Handles business transactions',
             x: 600,
             y: 180,
-            color: '#10b981',
+            color: '#059669',
             bg: '#ecfdf5',
             border: '#6ee7b7',
           },
@@ -330,7 +422,7 @@ export default function WhiteboardCanvas({
             description: 'Persistent transactional records',
             x: 860,
             y: 180,
-            color: '#f59e0b',
+            color: '#d97706',
             bg: '#fffbeb',
             border: '#fcd34d',
           },
@@ -359,9 +451,14 @@ export default function WhiteboardCanvas({
 
         setNodes(defaultNodes);
         setConnections(defaultConnections);
-        if (onWhiteboardChange) {
-          onWhiteboardChange(JSON.stringify({ nodes: defaultNodes, connections: defaultConnections }));
-        }
+
+        // Seed initial history entry
+        historyRef.current = [{ nodes: defaultNodes, connections: defaultConnections }];
+        historyIndexRef.current = 0;
+        setCanUndo(false);
+        setCanRedo(false);
+
+        emitChange(defaultNodes, defaultConnections, false);
       }
       return;
     }
@@ -369,26 +466,25 @@ export default function WhiteboardCanvas({
     try {
       const parsed = typeof whiteboardData === 'string' ? JSON.parse(whiteboardData) : whiteboardData;
       if (parsed && Array.isArray(parsed.nodes)) {
-        setNodes(parsed.nodes);
-        setConnections(Array.isArray(parsed.connections) ? parsed.connections : []);
+        // Do not overwrite position while actively dragging
+        if (!draggingNodeId) {
+          setNodes(parsed.nodes);
+          setConnections(Array.isArray(parsed.connections) ? parsed.connections : []);
+
+          // If history was empty (e.g. initial load from peer), seed history
+          if (historyRef.current.length === 0) {
+            historyRef.current = [{
+              nodes: parsed.nodes,
+              connections: Array.isArray(parsed.connections) ? parsed.connections : [],
+            }];
+            historyIndexRef.current = 0;
+          }
+        }
       }
     } catch (e) {
-      // Ignore parse errors on partial keystrokes
+      // Ignore parse errors on partial streams
     }
-  }, [whiteboardData, isEditable]);
-
-  // Dispatch state change to parent
-  const emitChange = useCallback((updatedNodes, updatedConnections) => {
-    isInternalChangeRef.current = true;
-    if (onWhiteboardChange) {
-      const payload = JSON.stringify({
-        nodes: updatedNodes,
-        connections: updatedConnections,
-        updatedAt: new Date().toISOString(),
-      });
-      onWhiteboardChange(payload);
-    }
-  }, [onWhiteboardChange]);
+  }, [whiteboardData, isEditable, draggingNodeId, nodes.length, emitChange]);
 
   // Add Component to Canvas
   const handleAddComponent = (catalogItem) => {
@@ -415,7 +511,7 @@ export default function WhiteboardCanvas({
     setNodes(nextNodes);
     setSelectedNodeId(newNode.id);
     setShowCatalogModal(false);
-    emitChange(nextNodes, connections);
+    emitChange(nextNodes, connections, true);
   };
 
   // Node Dragging Handlers
@@ -445,7 +541,7 @@ export default function WhiteboardCanvas({
           };
           const nextConns = [...connections, newConn];
           setConnections(nextConns);
-          emitChange(nodes, nextConns);
+          emitChange(nodes, nextConns, true);
         }
         setConnectSourceId(null);
         setActiveTool('select');
@@ -488,7 +584,7 @@ export default function WhiteboardCanvas({
   const handleCanvasMouseUp = () => {
     if (draggingNodeId && isEditable) {
       setDraggingNodeId(null);
-      emitChange(nodes, connections);
+      emitChange(nodes, connections, true);
     }
     if (isPanning) {
       setIsPanning(false);
@@ -520,12 +616,12 @@ export default function WhiteboardCanvas({
       setNodes(nextNodes);
       setConnections(nextConns);
       setSelectedNodeId(null);
-      emitChange(nextNodes, nextConns);
+      emitChange(nextNodes, nextConns, true);
     } else if (selectedConnectionId) {
       const nextConns = connections.filter((c) => c.id !== selectedConnectionId);
       setConnections(nextConns);
       setSelectedConnectionId(null);
-      emitChange(nodes, nextConns);
+      emitChange(nodes, nextConns, true);
     }
   };
 
@@ -535,7 +631,7 @@ export default function WhiteboardCanvas({
     const nextNodes = nodes.map((n) => (n.id === editingNode.id ? { ...n, ...updatedProps } : n));
     setNodes(nextNodes);
     setEditingNode(null);
-    emitChange(nextNodes, connections);
+    emitChange(nextNodes, connections, true);
   };
 
   // Update Connection Label
@@ -543,7 +639,7 @@ export default function WhiteboardCanvas({
     if (!isEditable) return;
     const nextConns = connections.map((c) => (c.id === connId ? { ...c, label: newLabel } : c));
     setConnections(nextConns);
-    emitChange(nodes, nextConns);
+    emitChange(nodes, nextConns, true);
   };
 
   // Reset Canvas View
@@ -597,7 +693,7 @@ export default function WhiteboardCanvas({
       setConnections([]);
       setSelectedNodeId(null);
       setSelectedConnectionId(null);
-      emitChange([], []);
+      emitChange([], [], true);
     }
   };
 
@@ -634,21 +730,21 @@ export default function WhiteboardCanvas({
         <div className="flex items-center gap-2 flex-wrap">
           {/* Role Status Badge */}
           {isEditable ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] text-xs font-mono font-bold shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-mono font-bold shadow-xs">
+              <Sparkles className="w-3.5 h-3.5 animate-pulse text-blue-500" />
               <span>Whiteboard Editor</span>
               {isFullscreen && (
-                <span className="text-[10px] bg-[var(--accent)] text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
+                <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
                   Fullscreen
                 </span>
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30 text-xs font-mono font-bold shadow-xs">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold shadow-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Live Observer • {candidateName}</span>
               {isFullscreen && (
-                <span className="text-[10px] bg-[var(--green)] text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
+                <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
                   Fullscreen
                 </span>
               )}
@@ -662,7 +758,7 @@ export default function WhiteboardCanvas({
               onClick={() => setShowRequirements((prev) => !prev)}
               className={`btn text-xs py-1 px-2.5 flex items-center gap-1.5 font-medium transition cursor-pointer ${
                 showRequirements
-                  ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                   : 'btn-secondary text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
               title="View Challenge Scenario & Scale Requirements"
@@ -681,7 +777,7 @@ export default function WhiteboardCanvas({
               <button
                 type="button"
                 onClick={() => setShowCatalogModal(true)}
-                className="btn btn-primary text-xs py-1 px-2.5 flex items-center gap-1 font-bold shadow-sm cursor-pointer"
+                className="btn btn-primary text-xs py-1 px-2.5 flex items-center gap-1 font-bold shadow-sm cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
                 title="Open Component Library"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -705,11 +801,33 @@ export default function WhiteboardCanvas({
                 <span className="hidden md:inline">{activeTool === 'connect' ? 'Connecting...' : 'Connect'}</span>
               </button>
 
+              {/* Undo and Redo Action Buttons */}
+              <div className="flex items-center gap-0.5 ml-0.5">
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:hover:text-[var(--text-muted)] disabled:cursor-not-allowed transition cursor-pointer"
+                  title="Undo (Ctrl+Z)"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:hover:text-[var(--text-muted)] disabled:cursor-not-allowed transition cursor-pointer"
+                  title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+                >
+                  <Redo2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               {(selectedNodeId || selectedConnectionId) && (
                 <button
                   type="button"
                   onClick={handleDeleteSelected}
-                  className="btn btn-danger text-xs py-1 px-2 flex items-center gap-1 font-medium cursor-pointer animate-in fade-in"
+                  className="btn btn-danger text-xs py-1 px-2 flex items-center gap-1 font-medium cursor-pointer"
                   title="Delete selected item (Delete/Backspace)"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -789,16 +907,14 @@ export default function WhiteboardCanvas({
             </button>
           )}
 
-          {/* ============================================================ */}
           {/* PRIMARY FULLSCREEN / MINIMIZE TOGGLE BUTTON */}
-          {/* ============================================================ */}
           <button
             type="button"
             onClick={() => setIsFullscreen((prev) => !prev)}
             className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ml-1 border font-bold text-xs cursor-pointer shadow-xs ${
               isFullscreen
-                ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-md hover:opacity-90'
-                : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md hover:opacity-90'
+                : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-primary)] hover:border-blue-500 hover:text-blue-500'
             }`}
             title={isFullscreen ? 'Exit Fullscreen Mode (Press F or Esc)' : 'Expand to Fullscreen Mode (Press F)'}
           >
@@ -865,31 +981,34 @@ export default function WhiteboardCanvas({
               left: 0,
             }}
           >
-            {/* SVG Connection Layer */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+            {/* SVG Connection Layer with High-Contrast Crisp Lines */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible">
               <defs>
                 <marker
                   id="arrowhead-default"
                   viewBox="0 0 10 10"
                   refX="8"
                   refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
+                  markerWidth="7"
+                  markerHeight="7"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#3b82f6" />
                 </marker>
                 <marker
                   id="arrowhead-selected"
                   viewBox="0 0 10 10"
                   refX="8"
                   refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
+                  markerWidth="8"
+                  markerHeight="8"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent, #6366f1)" />
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#6366f1" />
                 </marker>
+                <filter id="line-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#1e3a8a" floodOpacity="0.3" />
+                </filter>
               </defs>
 
               {connections.map((conn) => {
@@ -911,11 +1030,11 @@ export default function WhiteboardCanvas({
 
                 return (
                   <g key={conn.id} className="pointer-events-auto cursor-pointer">
-                    {/* Invisible wide hover path */}
+                    {/* Wide transparent hover/click target */}
                     <path
                       d={pathData}
                       stroke="transparent"
-                      strokeWidth="20"
+                      strokeWidth="24"
                       fill="none"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -923,17 +1042,18 @@ export default function WhiteboardCanvas({
                         setSelectedNodeId(null);
                       }}
                     />
-                    {/* Visible directional line */}
+                    {/* Crisp, high-contrast, visible connecting line */}
                     <path
                       d={pathData}
-                      stroke={isConnSelected ? 'var(--accent, #6366f1)' : '#94a3b8'}
-                      strokeWidth={isConnSelected ? '3' : '2'}
-                      strokeDasharray={conn.label?.toLowerCase().includes('async') ? '6 4' : 'none'}
+                      stroke={isConnSelected ? '#6366f1' : '#3b82f6'}
+                      strokeWidth={isConnSelected ? '3.5' : '2.5'}
+                      strokeDasharray={conn.label?.toLowerCase().includes('async') || conn.label?.toLowerCase().includes('event') ? '6 4' : 'none'}
                       fill="none"
+                      filter="url(#line-shadow)"
                       markerEnd={isConnSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead-default)'}
                       className="transition-all"
                     />
-                    {/* Connection Label Pill */}
+                    {/* High-visibility protocol pill */}
                     <foreignObject
                       x={midX - 75}
                       y={midY - 14}
@@ -947,10 +1067,10 @@ export default function WhiteboardCanvas({
                           setSelectedConnectionId(conn.id);
                           setSelectedNodeId(null);
                         }}
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-center truncate border shadow-xs transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold text-center truncate border shadow-md transition-all cursor-pointer ${
                           isConnSelected
-                            ? 'bg-[var(--accent)] text-white border-[var(--accent)] scale-105 shadow-md ring-2 ring-[var(--accent)]/30'
-                            : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] hover:scale-105'
+                            ? 'bg-indigo-600 text-white border-indigo-400 scale-105 ring-2 ring-indigo-400/40'
+                            : 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-500/50 hover:border-blue-600 hover:scale-105'
                         }`}
                       >
                         {conn.label || 'Link'}
@@ -978,10 +1098,10 @@ export default function WhiteboardCanvas({
                   }}
                   className={`absolute w-[190px] rounded-xl border-2 shadow-sm transition-shadow z-10 cursor-move ${
                     isSelected
-                      ? 'border-[var(--accent)] ring-4 ring-[var(--accent)]/20 shadow-lg'
+                      ? 'border-blue-500 ring-4 ring-blue-500/20 shadow-lg'
                       : isConnectSource
                       ? 'border-amber-500 ring-4 ring-amber-500/30 animate-pulse'
-                      : 'border-[var(--border)] hover:border-[var(--text-muted)]'
+                      : 'border-[var(--border)] hover:border-blue-400'
                   }`}
                   style={{
                     left: `${node.x}px`,
@@ -993,8 +1113,8 @@ export default function WhiteboardCanvas({
                   <div
                     className="px-3 py-2 rounded-t-[10px] flex items-center justify-between gap-1.5 border-b border-[var(--border)]"
                     style={{
-                      backgroundColor: node.bg || '#f8fafc',
-                      color: node.color || '#334155',
+                      backgroundColor: node.bg || '#eff6ff',
+                      color: node.color || '#1e40af',
                     }}
                   >
                     <div className="flex items-center gap-1.5 truncate">
@@ -1019,7 +1139,7 @@ export default function WhiteboardCanvas({
 
                   {/* Node Body Details */}
                   <div className="p-2.5 space-y-1 bg-[var(--bg-card)] rounded-b-[10px]">
-                    <div className="text-[11px] font-mono font-semibold text-[var(--accent)] truncate">
+                    <div className="text-[11px] font-mono font-semibold text-blue-600 dark:text-blue-400 truncate">
                       {node.tech || 'Generic Component'}
                     </div>
                     {node.description && (
@@ -1033,7 +1153,7 @@ export default function WhiteboardCanvas({
                   {isEditable && (
                     <>
                       <div
-                        className="absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-[var(--accent)] hover:scale-125 transition cursor-crosshair shadow-sm"
+                        className="absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-blue-500 hover:scale-125 transition cursor-crosshair shadow-sm"
                         title="Click to connect"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1046,7 +1166,7 @@ export default function WhiteboardCanvas({
                         }}
                       />
                       <div
-                        className="absolute -right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-[var(--accent)] hover:scale-125 transition cursor-crosshair shadow-sm"
+                        className="absolute -right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-blue-500 hover:scale-125 transition cursor-crosshair shadow-sm"
                         title="Click to connect"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1065,9 +1185,7 @@ export default function WhiteboardCanvas({
             })}
           </div>
 
-          {/* ============================================================ */}
           {/* FLOATING QUICK COMPONENT PALETTE (Candidate Workspace) */}
-          {/* ============================================================ */}
           {isEditable && (
             <div className="absolute top-4 left-4 z-30 flex flex-col gap-1.5 p-1.5 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border)] shadow-xl transition-all">
               <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] px-2 py-0.5 border-b border-[var(--border)]">
@@ -1098,7 +1216,7 @@ export default function WhiteboardCanvas({
                 <button
                   type="button"
                   onClick={() => setShowCatalogModal(true)}
-                  className="p-1.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition flex items-center gap-2 text-xs font-bold cursor-pointer mt-1"
+                  className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition flex items-center gap-2 text-xs font-bold cursor-pointer mt-1"
                   title="Browse All Components"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -1108,31 +1226,27 @@ export default function WhiteboardCanvas({
             </div>
           )}
 
-          {/* ============================================================ */}
           {/* FLOATING QUICK FULLSCREEN ACTION BUTTON ON CANVAS */}
-          {/* ============================================================ */}
           <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
             <button
               type="button"
               onClick={() => setIsFullscreen((prev) => !prev)}
-              className="px-3 py-2 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] shadow-xl transition flex items-center gap-2 font-mono text-xs font-bold cursor-pointer hover:scale-105 active:scale-95"
+              className="px-3 py-2 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--text-primary)] hover:border-blue-500 hover:text-blue-500 shadow-xl transition flex items-center gap-2 font-mono text-xs font-bold cursor-pointer hover:scale-105 active:scale-95"
               title={isFullscreen ? 'Exit Fullscreen (Esc or F)' : 'Enter Fullscreen (F)'}
             >
-              {isFullscreen ? <Minimize2 className="w-4 h-4 text-[var(--accent)]" /> : <Maximize2 className="w-4 h-4 text-[var(--accent)]" />}
+              {isFullscreen ? <Minimize2 className="w-4 h-4 text-blue-500" /> : <Maximize2 className="w-4 h-4 text-blue-500" />}
               <span>{isFullscreen ? 'Exit Fullscreen' : 'Expand Fullscreen'}</span>
             </button>
           </div>
         </div>
 
-        {/* ============================================================ */}
         {/* SLIDE-OVER / SIDE DRAWER FOR PROBLEM REQUIREMENTS */}
-        {/* ============================================================ */}
         {showRequirements && question && (
           <div className="w-80 md:w-96 bg-[var(--bg-card)] border-l border-[var(--border)] flex flex-col h-full shadow-2xl z-40 animate-in slide-in-from-right duration-200">
             {/* Drawer Header */}
             <div className="p-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-[var(--accent)]" />
+                <BookOpen className="w-4 h-4 text-blue-500" />
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   Architecture Challenge
                 </h3>
@@ -1151,7 +1265,7 @@ export default function WhiteboardCanvas({
             <div className="p-4 space-y-4 overflow-y-auto flex-1 text-xs">
               <div className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)]">
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
                     {question.difficulty || 'Medium'}
                   </span>
                   <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
@@ -1194,8 +1308,8 @@ export default function WhiteboardCanvas({
 
               {/* Evaluation Rubrics for Interviewer */}
               {currentUserRole === 'interviewer' && payload?.rubrics && (
-                <div className="p-3 bg-[var(--accent-dim)] rounded-[var(--radius-sm)] border border-[var(--border-accent)] space-y-1">
-                  <span className="font-bold text-[var(--accent)] block text-xs">
+                <div className="p-3 bg-blue-500/10 rounded-[var(--radius-sm)] border border-blue-500/30 space-y-1">
+                  <span className="font-bold text-blue-600 dark:text-blue-400 block text-xs">
                     Evaluation Rubrics:
                   </span>
                   <ul className="list-disc pl-4 space-y-1 text-[11px] text-[var(--text-secondary)]">
@@ -1208,8 +1322,8 @@ export default function WhiteboardCanvas({
 
               {/* Expected Architecture for Interviewer */}
               {currentUserRole === 'interviewer' && payload?.expected_approach && (
-                <div className="p-3 bg-[var(--green-bg)] rounded-[var(--radius-sm)] border border-[var(--green)]/30 space-y-1">
-                  <span className="font-bold text-[var(--green)] block text-xs">
+                <div className="p-3 bg-emerald-500/10 rounded-[var(--radius-sm)] border border-emerald-500/30 space-y-1">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 block text-xs">
                     Expected Approach:
                   </span>
                   <div className="text-[11px] text-[var(--text-secondary)] whitespace-pre-line">
@@ -1222,19 +1336,17 @@ export default function WhiteboardCanvas({
         )}
       </div>
 
-      {/* ============================================================ */}
       {/* CONNECTION PROPERTY DRAWER (When connection selected) */}
-      {/* ============================================================ */}
       {selectedConnection && isEditable && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-3 shadow-2xl flex items-center gap-3 z-30 animate-in fade-in slide-in-from-bottom-2">
-          <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-[var(--accent)]">
+          <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
             <Link2 className="w-4 h-4" />
             <span>Link Protocol:</span>
           </div>
           <select
             value={selectedConnection.label || 'HTTPS / REST'}
             onChange={(e) => handleUpdateConnectionLabel(selectedConnection.id, e.target.value)}
-            className="input text-xs py-1 px-2.5 bg-[var(--bg-raised)] font-mono"
+            className="input text-xs py-1 px-2.5 bg-[var(--bg-raised)] font-mono cursor-pointer"
           >
             {CONNECTION_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -1267,16 +1379,14 @@ export default function WhiteboardCanvas({
         </div>
       )}
 
-      {/* ============================================================ */}
       {/* COMPONENT CATALOG MODAL */}
-      {/* ============================================================ */}
       {showCatalogModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in">
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="p-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Box className="w-5 h-5 text-[var(--accent)]" />
+                <Box className="w-5 h-5 text-blue-500" />
                 <h3 className="text-base font-bold text-[var(--text-primary)]">
                   Add Architecture Component
                 </h3>
@@ -1299,7 +1409,7 @@ export default function WhiteboardCanvas({
                   onClick={() => setCatalogFilter(cat)}
                   className={`px-3 py-1 rounded-[var(--radius-sm)] font-medium transition whitespace-nowrap cursor-pointer ${
                     catalogFilter === cat
-                      ? 'bg-[var(--accent)] text-white shadow-xs'
+                      ? 'bg-blue-600 text-white shadow-xs'
                       : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -1317,7 +1427,7 @@ export default function WhiteboardCanvas({
                     key={item.type}
                     type="button"
                     onClick={() => handleAddComponent(item)}
-                    className="p-3.5 rounded-xl border border-[var(--border)] hover:border-[var(--accent)] hover:shadow-md bg-[var(--bg-card)] hover:bg-[var(--bg-raised)] transition text-left flex items-start gap-3 cursor-pointer group"
+                    className="p-3.5 rounded-xl border border-[var(--border)] hover:border-blue-500 hover:shadow-md bg-[var(--bg-card)] hover:bg-[var(--bg-raised)] transition text-left flex items-start gap-3 cursor-pointer group"
                   >
                     <div
                       className="p-2.5 rounded-lg shrink-0 group-hover:scale-110 transition"
@@ -1334,7 +1444,7 @@ export default function WhiteboardCanvas({
                           {item.category}
                         </span>
                       </div>
-                      <div className="text-[11px] font-mono text-[var(--accent)] mt-0.5 truncate">
+                      <div className="text-[11px] font-mono text-blue-600 dark:text-blue-400 mt-0.5 truncate">
                         {item.defaultTech}
                       </div>
                       <div className="text-[11px] text-[var(--text-secondary)] mt-1 line-clamp-2">
@@ -1349,15 +1459,13 @@ export default function WhiteboardCanvas({
         </div>
       )}
 
-      {/* ============================================================ */}
       {/* EDIT COMPONENT MODAL / PROPERTIES */}
-      {/* ============================================================ */}
       {editingNode && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in">
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-md w-full p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-[var(--accent)]" />
+                <Edit3 className="w-5 h-5 text-blue-500" />
                 <h3 className="text-base font-bold text-[var(--text-primary)]">
                   Edit Component Properties
                 </h3>
@@ -1432,7 +1540,7 @@ export default function WhiteboardCanvas({
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary text-xs py-2 px-4 font-bold cursor-pointer"
+                  className="btn btn-primary text-xs py-2 px-4 font-bold cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   Save Changes
                 </button>

@@ -273,15 +273,16 @@ export default function InterviewRoom() {
   useEffect(() => {
     fetchSession();
 
-    // Poll session state every 2 seconds to synchronize candidate code, role switch, and status
+    // Poll session state (1s in whiteboard mode for sub-second interviewer updates, 2s otherwise)
+    const pollInterval = isWhiteboardMode ? 1000 : 2000;
     pollRef.current = setInterval(() => {
       fetchSession();
-    }, 2000);
+    }, pollInterval);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchSession]);
+  }, [fetchSession, isWhiteboardMode]);
 
   // Session elapsed timer (Synchronized with session.started_at from server for both students)
   useEffect(() => {
@@ -382,7 +383,7 @@ export default function InterviewRoom() {
     }, 800);
   };
 
-  // Sync candidate whiteboard to server (debounced)
+  // Sync candidate whiteboard to server (near-instant 120ms debounce for real-time sync)
   const handleWhiteboardChange = (newWhiteboard) => {
     setWhiteboardData(newWhiteboard);
     if (currentUserRole !== 'interviewee') return;
@@ -399,7 +400,7 @@ export default function InterviewRoom() {
           // ignore transient sync error
         }
       }
-    }, 500);
+    }, 120);
   };
 
   const handleLanguageChange = async (newLang) => {
