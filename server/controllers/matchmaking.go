@@ -1937,6 +1937,23 @@ func AdminGetInterviewSessionByID(c *gin.Context) {
 	var recording *models.InterviewRecording
 	var rec models.InterviewRecording
 	if err := database.DB.Preload("Uploader").Where("session_id = ?", session.ID).First(&rec).Error; err == nil {
+		if (rec.DurationSeconds <= 0 || rec.DurationSeconds <= 5) {
+			startTime := session.StartedAt
+			if startTime.IsZero() {
+				startTime = session.CreatedAt
+			}
+			endTime := time.Now()
+			if session.EndedAt != nil && !session.EndedAt.IsZero() {
+				endTime = *session.EndedAt
+			}
+			if !startTime.IsZero() {
+				diff := int(endTime.Sub(startTime).Seconds())
+				if diff > rec.DurationSeconds {
+					rec.DurationSeconds = diff
+					_ = database.DB.Model(&rec).Update("duration_seconds", diff)
+				}
+			}
+		}
 		recording = &rec
 	}
 

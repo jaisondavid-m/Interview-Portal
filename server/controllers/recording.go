@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"server/database"
 	"server/models"
@@ -529,6 +530,27 @@ func GetSessionRecording(c *gin.Context) {
 			"message": "No audio recording found for this session",
 		})
 		return
+	}
+
+	if (recording.DurationSeconds <= 0 || recording.DurationSeconds <= 5) && recording.SessionID > 0 {
+		var sess models.InterviewSession
+		if sErr := database.DB.First(&sess, recording.SessionID).Error; sErr == nil {
+			startTime := sess.StartedAt
+			if startTime.IsZero() {
+				startTime = sess.CreatedAt
+			}
+			endTime := time.Now()
+			if sess.EndedAt != nil && !sess.EndedAt.IsZero() {
+				endTime = *sess.EndedAt
+			}
+			if !startTime.IsZero() {
+				diff := int(endTime.Sub(startTime).Seconds())
+				if diff > recording.DurationSeconds {
+					recording.DurationSeconds = diff
+					_ = database.DB.Model(&recording).Update("duration_seconds", diff)
+				}
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

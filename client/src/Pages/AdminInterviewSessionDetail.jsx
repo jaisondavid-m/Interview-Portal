@@ -494,6 +494,7 @@ export default function AdminInterviewSessionDetail() {
 
         <AudioPlayer
           recording={session.recording}
+          session={session}
           title={`Session #${session.id} Dialogue Recording`}
         />
       </div>

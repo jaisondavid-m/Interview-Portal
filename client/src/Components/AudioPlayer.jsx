@@ -24,6 +24,7 @@ import {
 
 export default function AudioPlayer({
   recording,
+  session = null,
   title = 'Interview Audio Recording',
 }) {
   const audioRef = useRef(null);
@@ -34,7 +35,6 @@ export default function AudioPlayer({
   const [isBuffering, setIsBuffering] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(recording?.duration_seconds || 0);
   const [bufferedPercent, setBufferedPercent] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [volume, setVolume] = useState(1);
@@ -46,16 +46,42 @@ export default function AudioPlayer({
 
   const audioFileName = recording?.file_name || '';
 
-  // Calculate effective duration reliably (fallback to database duration_seconds if audio metadata is Infinity or 0)
-  const effectiveDuration = useMemo(() => {
-    if (duration && isFinite(duration) && duration > 0) {
-      return duration;
-    }
+  // Determine the authoritative recording or session duration
+  const dbDuration = useMemo(() => {
     if (recording?.duration_seconds && isFinite(recording.duration_seconds) && recording.duration_seconds > 0) {
-      return recording.duration_seconds;
+      return Number(recording.duration_seconds);
+    }
+    if (session?.start_time) {
+      const start = new Date(session.start_time).getTime();
+      const end = session.end_time ? new Date(session.end_time).getTime() : Date.now();
+      const diffSecs = Math.max(0, Math.floor((end - start) / 1000));
+      if (diffSecs > 0) return diffSecs;
+    }
+    // Fallback: estimate from file size for Opus audio (~4.5KB/s @ ~36kbps) if file is substantial
+    if (recording?.file_size && recording.file_size > 50000) {
+      return Math.max(10, Math.round(recording.file_size / 4500));
     }
     return 0;
-  }, [duration, recording?.duration_seconds]);
+  }, [recording?.duration_seconds, recording?.file_size, session?.start_time, session?.end_time]);
+
+  const [duration, setDuration] = useState(dbDuration);
+
+  // Sync state whenever recording or session changes
+  useEffect(() => {
+    if (dbDuration > 0) {
+      setDuration((prev) => Math.max(prev, dbDuration));
+    }
+  }, [dbDuration, recording?.id, recording?.file_name]);
+
+  // Calculate effective duration reliably (never downgraded by WebM initial chunk headers)
+  const effectiveDuration = useMemo(() => {
+    const candidates = [
+      duration,
+      dbDuration,
+      currentTime,
+    ].filter((v) => v && isFinite(v) && v > 0);
+    return candidates.length > 0 ? Math.max(...candidates) : 0;
+  }, [duration, dbDuration, currentTime]);
 
   // Resolve base API URL for streaming
   const audioBase = useMemo(() => {
@@ -71,7 +97,7 @@ export default function AudioPlayer({
 
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') || '' : '';
   const tokenQuery = token ? `token=${encodeURIComponent(token)}` : '';
-  const sessionId = recording?.session_id;
+  const sessionId = recording?.session_id || session?.id;
 
   // Direct Progressive HTTP Byte-Range Stream URL (Spotify-style chunk streaming)
   const streamUrl = useMemo(() => {
@@ -123,8 +149,8 @@ export default function AudioPlayer({
 
   // Setup initial state and cleanup on component unmount
   useEffect(() => {
-    if (recording?.duration_seconds && recording.duration_seconds > 0) {
-      setDuration(recording.duration_seconds);
+    if (dbDuration > 0) {
+      setDuration(dbDuration);
     }
     setCurrentTime(0);
     setIsPlaying(false);
@@ -147,7 +173,7 @@ export default function AudioPlayer({
         }
       }
     };
-  }, [recording?.id, recording?.file_name]);
+  }, [recording?.id, recording?.file_name, dbDuration]);
 
   // Continuously sync currentTime during active playback using requestAnimationFrame
   useEffect(() => {
@@ -155,13 +181,8 @@ export default function AudioPlayer({
       if (audioRef.current && !isDragging) {
         const curr = audioRef.current.currentTime;
         setCurrentTime(curr);
+        setDuration((prev) => Math.max(prev, curr, dbDuration));
         updateBufferedRanges();
-
-        // Check if reached end of effective duration
-        if (effectiveDuration > 0 && curr >= effectiveDuration) {
-          setIsPlaying(false);
-          setCurrentTime(effectiveDuration);
-        }
       }
       if (isPlaying) {
         rafRef.current = requestAnimationFrame(updateProgress);
@@ -181,7 +202,7 @@ export default function AudioPlayer({
         rafRef.current = null;
       }
     };
-  }, [isPlaying, isDragging, effectiveDuration, updateBufferedRanges]);
+  }, [isPlaying, isDragging, dbDuration, updateBufferedRanges]);
 
   // Handle native audio element event listeners for progressive chunk streaming
   useEffect(() => {
@@ -190,7 +211,15 @@ export default function AudioPlayer({
 
     const handleTimeUpdate = () => {
       if (!isDragging) {
-        setCurrentTime(audio.currentTime);
+        const curr = audio.currentTime;
+        setCurrentTime(curr);
+        setDuration((prev) => {
+          let maxVal = Math.max(prev, curr, dbDuration);
+          if (audio.duration && isFinite(audio.duration) && audio.duration > maxVal) {
+            maxVal = audio.duration;
+          }
+          return maxVal;
+        });
         updateBufferedRanges();
       }
     };
@@ -200,9 +229,15 @@ export default function AudioPlayer({
       setIsLoading(false);
       setIsBuffering(false);
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
-        setDuration(audio.duration);
-      } else if (recording?.duration_seconds && recording.duration_seconds > 0) {
-        setDuration(recording.duration_seconds);
+        if (audio.duration > dbDuration) {
+          setDuration(audio.duration);
+        } else if (dbDuration > 0) {
+          setDuration(dbDuration);
+        } else {
+          setDuration(audio.duration);
+        }
+      } else if (dbDuration > 0) {
+        setDuration(dbDuration);
       }
       updateBufferedRanges();
     };
@@ -271,7 +306,7 @@ export default function AudioPlayer({
       audio.removeEventListener('progress', handleProgress);
       audio.removeEventListener('error', handleError);
     };
-  }, [streamUrl, isDragging, updateBufferedRanges, recording?.duration_seconds]);
+  }, [streamUrl, isDragging, updateBufferedRanges, dbDuration]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -371,8 +406,13 @@ export default function AudioPlayer({
 
   const formatTime = (seconds) => {
     if (!seconds || isNaN(seconds) || seconds < 0) return '00:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
+    const totalSecs = Math.floor(seconds);
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    if (hrs > 0) {
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
