@@ -19,9 +19,19 @@ import (
 // Global mutex to avoid race conditions during queue pairings
 var queueMutex sync.Mutex
 
-// Helper to extract starter code from question templates (empty by default)
+// Helper to extract starter code from question templates
 func extractStarterCode(q models.InterviewQuestion, defaultCode string) string {
-	return ""
+	for _, t := range q.Templates {
+		if strings.EqualFold(t.Language, "javascript") && t.StarterCode != "" {
+			return t.StarterCode
+		}
+	}
+	for _, t := range q.Templates {
+		if t.StarterCode != "" {
+			return t.StarterCode
+		}
+	}
+	return defaultCode
 }
 
 func getDefaultStarterTemplate(lang string) string {
@@ -319,22 +329,11 @@ func GetStudentTracks(c *gin.Context) {
 
 // Cleanup helper to auto-expire abandoned sessions (> 2 hours) and stale queues (> 15 mins)
 func cleanupStaleMatchmakingAndSessions() {
-	twoHoursAgo := time.Now().Add(-2 * time.Hour)
-	now := time.Now()
-
-	// 1. Stale in-progress sessions -> mark completed
-	database.DB.Model(&models.InterviewSession{}).
-		Where("status = 'in_progress' AND (created_at < ? OR (started_at < ? AND started_at != '0001-01-01 00:00:00'))", twoHoursAgo, twoHoursAgo).
-		Updates(map[string]interface{}{
-			"status":   "completed",
-			"ended_at": &now,
-		})
+	// 1. Stale in-progress sessions older than 2 hours -> mark completed
+	database.DB.Exec("UPDATE interview_sessions SET status = 'completed', ended_at = NOW() WHERE status = 'in_progress' AND created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)")
 
 	// 2. Old waiting entries (> 15 mins) -> mark cancelled
-	fifteenMinsAgo := time.Now().Add(-15 * time.Minute)
-	database.DB.Model(&models.MatchmakingQueueEntry{}).
-		Where("status = 'waiting' AND created_at < ?", fifteenMinsAgo).
-		Update("status", "cancelled")
+	database.DB.Exec("UPDATE matchmaking_queue_entries SET status = 'cancelled' WHERE status = 'waiting' AND created_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE)")
 }
 
 // JoinMatchmaking places the student in the queue and pairs with an available peer
@@ -359,58 +358,70 @@ func JoinMatchmaking(c *gin.Context) {
 	queueMutex.Lock()
 	defer queueMutex.Unlock()
 
-	// 1. Run periodic background cleanup
+	// 1. Run periodic background cleanup using DB native time arithmetic
 	cleanupStaleMatchmakingAndSessions()
 
 	// 2. Check if track exists
 	var track models.InterviewTrack
-	if err := database.DB.Preload("Levels.Questions.Templates").First(&track, req.TrackID).Error; err != nil {
+	if err := database.DB.Preload("Levels").First(&track, req.TrackID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview track not found"})
 		return
 	}
 
 	levelID := req.LevelID
-	var selectedLevel *models.InterviewLevel
 	for i := range track.Levels {
 		if track.Levels[i].ID == levelID || (levelID == 0 && i == 0) {
-			selectedLevel = &track.Levels[i]
-			levelID = selectedLevel.ID
+			levelID = track.Levels[i].ID
 			break
 		}
 	}
 
-	// 3. Clear all old queue entries for this user
+	// 3. Clear all old waiting/matched queue entries for this user
 	database.DB.Model(&models.MatchmakingQueueEntry{}).
 		Where("user_id = ? AND status IN ('waiting', 'matched')", currentUserID).
 		Update("status", "cancelled")
 
 	// 4. Invalidate any lingering/abandoned in_progress sessions for this user so they don't get trapped
-	now := time.Now()
-	var oldSessions []models.InterviewSession
-	database.DB.Where("(interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress'", currentUserID, currentUserID).
-		Find(&oldSessions)
-	for _, os := range oldSessions {
-		database.DB.Model(&models.InterviewSession{}).Where("id = ?", os.ID).Updates(map[string]interface{}{
-			"status":   "completed",
-			"ended_at": &now,
-		})
-		database.DB.Model(&models.MatchmakingQueueEntry{}).Where("matched_session_id = ?", os.ID).Update("status", "completed")
-	}
+	database.DB.Exec("UPDATE interview_sessions SET status = 'completed', ended_at = NOW() WHERE (interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress'", currentUserID, currentUserID)
 
-	// 5. Search for an active waiting student in the SAME track (created recently within 15 minutes)
+	// 5. Search for an active waiting student in the SAME track
 	var peerEntry models.MatchmakingQueueEntry
-	err := database.DB.Where("track_id = ? AND user_id != ? AND status = 'waiting' AND created_at >= ?", req.TrackID, currentUserID, time.Now().Add(-15*time.Minute)).
-		Order("created_at asc").
+	err := database.DB.Where("track_id = ? AND user_id != ? AND status = 'waiting'", req.TrackID, currentUserID).
+		Order("id asc").
 		First(&peerEntry).Error
 
 	if err == nil {
-		// PEER FOUND! Create fresh InterviewSession
+		// PEER FOUND! Determine level
+		if levelID == 0 && peerEntry.LevelID > 0 {
+			levelID = peerEntry.LevelID
+		}
+
+		// Also close any lingering old sessions for peer
+		database.DB.Exec("UPDATE interview_sessions SET status = 'completed', ended_at = NOW() WHERE (interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress'", peerEntry.UserID, peerEntry.UserID)
+
+		// Preload questions for this level or track
+		var questions []models.InterviewQuestion
+		if levelID > 0 {
+			database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
+				Where("level_id = ?", levelID).
+				Find(&questions)
+		}
+		if len(questions) == 0 {
+			database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
+				Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
+				Where("interview_levels.track_id = ?", req.TrackID).
+				Find(&questions)
+		}
+
 		var initialQID uint = 0
 		var starterCode string = "// Write your solution here\n"
-		if selectedLevel != nil && len(selectedLevel.Questions) > 0 {
+		if len(questions) > 0 {
 			rand.Seed(time.Now().UnixNano())
-			initialQ := selectedLevel.Questions[rand.Intn(len(selectedLevel.Questions))]
+			initialQ := questions[rand.Intn(len(questions))]
 			initialQID = initialQ.ID
+			if levelID == 0 {
+				levelID = initialQ.LevelID
+			}
 			starterCode = extractStarterCode(initialQ, starterCode)
 		}
 
@@ -435,7 +446,7 @@ func JoinMatchmaking(c *gin.Context) {
 		}
 
 		// Update peer entry status to matched
-		database.DB.Model(&peerEntry).Updates(map[string]interface{}{
+		database.DB.Model(&models.MatchmakingQueueEntry{}).Where("id = ?", peerEntry.ID).Updates(map[string]interface{}{
 			"status":             "matched",
 			"matched_session_id": session.ID,
 		})
@@ -509,9 +520,9 @@ func GetMatchmakingStatus(c *gin.Context) {
 		}
 	}
 
-	// 2. Otherwise find the most recent queue entry created in the last 15 minutes
+	// 2. Otherwise find the most recent active queue entry for this user
 	if !found {
-		query := database.DB.Where("user_id = ? AND status IN ('waiting', 'matched') AND created_at >= ?", currentUserID, time.Now().Add(-15*time.Minute))
+		query := database.DB.Where("user_id = ? AND status IN ('waiting', 'matched')", currentUserID)
 		if trackIDStr != "" {
 			var tID uint
 			if _, err := fmt.Sscanf(trackIDStr, "%d", &tID); err == nil && tID > 0 {
@@ -554,6 +565,30 @@ func GetMatchmakingStatus(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	// 3. Fallback: check if there is an active in_progress session for this user
+	var activeSession models.InterviewSession
+	sQuery := database.DB.Where("(interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress'", currentUserID, currentUserID)
+	if trackIDStr != "" {
+		var tID uint
+		if _, err := fmt.Sscanf(trackIDStr, "%d", &tID); err == nil && tID > 0 {
+			sQuery = sQuery.Where("track_id = ?", tID)
+		}
+	}
+	if sErr := sQuery.Order("id desc").First(&activeSession).Error; sErr == nil {
+		role := "interviewee"
+		if activeSession.InterviewerID == currentUserID {
+			role = "interviewer"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "matched",
+			"matched":    true,
+			"session_id": activeSession.ID,
+			"track_id":   activeSession.TrackID,
+			"role":       role,
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
