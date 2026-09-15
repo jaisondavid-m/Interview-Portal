@@ -14,8 +14,8 @@ export default function LevelModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-lg shadow-[var(--shadow-lg)] space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 animate-fadeIn">
+      <div className="relative w-full max-w-lg max-h-[90vh] bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 shadow-[var(--shadow-lg)] space-y-4 my-auto overflow-y-auto custom-scrollbar animate-scaleUp">
         <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
           <div>
             <span className="badge-kicker">Progression Setup</span>

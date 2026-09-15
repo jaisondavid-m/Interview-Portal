@@ -11,7 +11,9 @@ import {
   X,
   RefreshCw,
   Plus,
-  HelpCircle
+  HelpCircle,
+  Trash2,
+  FileUp
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -30,6 +32,7 @@ export default function QuestionBulkModal({
   const [parseError, setParseError] = useState('');
   const [loading, setLoading] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
   if (!isOpen) return null;
@@ -331,12 +334,11 @@ export default function QuestionBulkModal({
     }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
+  const processFile = (file) => {
     if (!file) return;
     setUploadedFile(file);
 
-    const isJson = file.name.endsWith('.json') || file.type.includes('json');
+    const isJson = file.name.toLowerCase().endsWith('.json') || file.type.includes('json');
     const fmt = isJson ? 'json' : 'csv';
     setImportFormat(fmt);
 
@@ -348,6 +350,35 @@ export default function QuestionBulkModal({
     reader.readAsText(file);
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
   const handleTextChange = (text) => {
     setRawText(text);
     parseContent(text, importFormat);
@@ -357,6 +388,15 @@ export default function QuestionBulkModal({
     setImportFormat(fmt);
     if (rawText) {
       parseContent(rawText, fmt);
+    }
+  };
+
+  const handleResetUpload = () => {
+    setUploadedFile(null);
+    setParsedPreview([]);
+    setParseError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -394,16 +434,16 @@ export default function QuestionBulkModal({
   const errorCount = parsedPreview.filter((p) => p.status === 'error').length;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-      <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 sm:p-8 w-full max-w-4xl shadow-[var(--shadow-lg)] animate-scaleUp max-h-[92vh] flex flex-col space-y-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 animate-fadeIn">
+      <div className="relative w-full max-w-4xl max-h-[90vh] bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)] flex flex-col my-auto overflow-hidden animate-scaleUp">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0 bg-[var(--bg-card)]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
               <Upload className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-[18px] font-bold text-[var(--text-primary)]">
+              <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
                 Bulk Upload Questions
               </h3>
               <p className="text-[12px] text-[var(--text-secondary)]">
@@ -413,14 +453,15 @@ export default function QuestionBulkModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] cursor-pointer"
+            className="p-2 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] transition cursor-pointer"
+            title="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="overflow-y-auto space-y-4 pr-1 flex-1 custom-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4 custom-scrollbar">
           {importResult ? (
             <div className="space-y-4 py-2">
               <div className="p-4 bg-[var(--green-bg)] border border-[var(--green)]/30 rounded-[var(--radius-md)] flex items-start gap-3">
@@ -507,94 +548,153 @@ export default function QuestionBulkModal({
               </div>
 
               {/* Format & Input Mode Selectors */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border)] pb-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
                 {/* Format selection */}
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <span className="text-[11px] text-[var(--text-muted)] font-mono uppercase">Format:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleFormatSwitch('json')}
-                    className={`py-1 px-2.5 rounded transition cursor-pointer flex items-center gap-1.5 ${
-                      importFormat === 'json'
-                        ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)]'
-                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <FileCode className="w-3.5 h-3.5" />
-                    <span>JSON (Rich Specs)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleFormatSwitch('csv')}
-                    className={`py-1 px-2.5 rounded transition cursor-pointer flex items-center gap-1.5 ${
-                      importFormat === 'csv'
-                        ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)]'
-                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>CSV (Table/Spreadsheet)</span>
-                  </button>
+                  <div className="flex items-center p-0.5 bg-[var(--bg-input)] rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => handleFormatSwitch('json')}
+                      className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 text-xs ${
+                        importFormat === 'json'
+                          ? 'bg-[var(--bg-card)] text-[var(--accent)] font-bold shadow-xs'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <FileCode className="w-3.5 h-3.5" />
+                      <span>JSON (Rich Specs)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFormatSwitch('csv')}
+                      className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 text-xs ${
+                        importFormat === 'csv'
+                          ? 'bg-[var(--bg-card)] text-[var(--accent)] font-bold shadow-xs'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>CSV (Table)</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Input mode selection */}
-                <div className="flex items-center gap-1.5 text-xs">
+                <div className="flex items-center p-0.5 bg-[var(--bg-input)] rounded-lg text-xs">
                   <button
                     type="button"
                     onClick={() => setInputMode('file')}
-                    className={`py-1 px-2.5 rounded transition cursor-pointer ${
+                    className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
                       inputMode === 'file'
-                        ? 'bg-[var(--bg-input)] text-[var(--text-primary)] font-bold'
+                        ? 'bg-[var(--bg-card)] text-[var(--text-primary)] font-bold shadow-xs'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     }`}
                   >
-                    Upload File
+                    <Upload className="w-3 h-3" />
+                    <span>Upload File</span>
                   </button>
-                  <span>|</span>
                   <button
                     type="button"
                     onClick={() => setInputMode('text')}
-                    className={`py-1 px-2.5 rounded transition cursor-pointer ${
+                    className={`py-1.5 px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
                       inputMode === 'text'
-                        ? 'bg-[var(--bg-input)] text-[var(--text-primary)] font-bold'
+                        ? 'bg-[var(--bg-card)] text-[var(--text-primary)] font-bold shadow-xs'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     }`}
                   >
-                    Paste Text
+                    <FileText className="w-3 h-3" />
+                    <span>Paste Text</span>
                   </button>
                 </div>
               </div>
 
               {/* Upload Input Area */}
               {inputMode === 'file' ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-[var(--border-strong)] hover:border-[var(--accent)] rounded-[var(--radius-lg)] p-8 text-center bg-[var(--bg-input)]/40 hover:bg-[var(--bg-input)] transition cursor-pointer space-y-2.5"
-                >
+                <div>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".json,.csv,text/csv,application/json,text/plain"
                     onChange={handleFileChange}
+                    onClick={(e) => { e.target.value = ''; }}
                     className="hidden"
                   />
-                  <div className="w-12 h-12 mx-auto rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center">
-                    <Upload className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-[var(--text-primary)]">
-                      {uploadedFile ? uploadedFile.name : `Click to browse or drop your ${importFormat.toUpperCase()} file`}
-                    </p>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                      Supports JSON array of questions or CSV formatted rows
-                    </p>
-                  </div>
+                  {uploadedFile ? (
+                    <div className="p-4 bg-[var(--bg-raised)] border border-[var(--border-accent)] rounded-[var(--radius-lg)] flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center shrink-0">
+                          {importFormat === 'json' ? <FileCode className="w-5 h-5" /> : <FileSpreadsheet className="w-5 h-5" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-bold text-[var(--text-primary)] truncate">
+                            {uploadedFile.name}
+                          </p>
+                          <p className="text-[11px] text-[var(--text-muted)] font-mono">
+                            {(uploadedFile.size / 1024).toFixed(1)} KB • {importFormat.toUpperCase()} format
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="btn btn-secondary text-xs py-1.5 px-3 cursor-pointer"
+                        >
+                          Change File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResetUpload}
+                          className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 rounded transition cursor-pointer"
+                          title="Remove file"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`border-2 border-dashed rounded-[var(--radius-lg)] p-8 text-center transition cursor-pointer space-y-2.5 ${
+                        isDragging
+                          ? 'border-[var(--accent)] bg-[var(--accent-dim)]'
+                          : 'border-[var(--border-strong)] hover:border-[var(--accent)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-input)]'
+                      }`}
+                    >
+                      <div className="w-12 h-12 mx-auto rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-[13px] font-bold text-[var(--text-primary)]">
+                          Click to browse or drop your {importFormat.toUpperCase()} file
+                        </p>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                          Supports JSON array of questions or CSV formatted rows
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
-                    Paste {importFormat.toUpperCase()} Content:
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
+                      Paste {importFormat.toUpperCase()} Content:
+                    </label>
+                    {rawText && (
+                      <button
+                        type="button"
+                        onClick={() => handleTextChange('')}
+                        className="text-[11px] text-[var(--text-muted)] hover:text-rose-500 cursor-pointer"
+                      >
+                        Clear Text
+                      </button>
+                    )}
+                  </div>
                   <textarea
                     rows={6}
                     value={rawText}
@@ -702,7 +802,7 @@ export default function QuestionBulkModal({
 
         {/* Modal Footer */}
         {!importResult && (
-          <div className="flex items-center justify-between pt-3 border-t border-[var(--border)] shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] shrink-0 bg-[var(--bg-raised)]/70">
             <div className="text-[12px] text-[var(--text-muted)]">
               {validCount > 0 ? (
                 <span><strong>{validCount}</strong> questions ready for Level {currentLevel?.level_number}</span>
