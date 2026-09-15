@@ -15,8 +15,10 @@ import {
   Sparkles,
   Layers,
   X,
-  Trash2
+  Trash2,
+  Package
 } from 'lucide-react';
+import InstalledPackagesModal, { INSTALLED_FRONTEND_PACKAGES } from './InstalledPackagesModal';
 
 const DEVICE_PRESETS = [
   { id: 'mobile', label: 'Mobile', width: 375, height: 667, icon: Smartphone, tag: '375px' },
@@ -31,6 +33,7 @@ export default function FrontendLivePreview({
   title = 'Responsive Preview',
   candidateName = 'Candidate',
   isCandidate = false,
+  onOpenPackages = null,
 }) {
   const [activeDevice, setActiveDevice] = useState('responsive');
   const [customWidth, setCustomWidth] = useState(null); // number or null
@@ -39,6 +42,7 @@ export default function FrontendLivePreview({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [showConsole, setShowConsole] = useState(false);
+  const [showPackagesModal, setShowPackagesModal] = useState(false);
   const [syntaxError, setSyntaxError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -60,7 +64,8 @@ export default function FrontendLivePreview({
     }
 
     let cleaned = code;
-    // Strip import statements (e.g., import React, { useState } from 'react';)
+    // Strip import statements (e.g. import React, { useState } from 'react';)
+    cleaned = cleaned.replace(/import\s+(?:(?:\*\s+as\s+\w+)|(?:\{[\s\S]*?\})|(?:\w+))\s+from\s+['"][^'"]+['"];?/gm, '');
     cleaned = cleaned.replace(/^import\s+[\s\S]*?from\s+['"][^'"]+['"];?/gm, '');
     cleaned = cleaned.replace(/^import\s+['"][^'"]+['"];?/gm, '');
 
@@ -73,17 +78,32 @@ export default function FrontendLivePreview({
     return cleaned;
   }, [code]);
 
-  // Construct iframe srcDoc HTML
+  // Construct iframe srcDoc HTML with pre-installed ecosystem packages
   const srcDoc = useMemo(() => {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Core Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 & ReactDOM 18 -->
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <!-- Babel Standalone JSX Compiler -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Lucide Vector Icons Engine -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <!-- Framer Motion -->
+  <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+  <!-- Lodash -->
+  <script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
+  <!-- Axios -->
+  <script src="https://unpkg.com/axios@1.6.8/dist/axios.min.js"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://unpkg.com/canvas-confetti@1.9.2/dist/confetti.browser.js"></script>
+  <!-- Clsx -->
+  <script src="https://unpkg.com/clsx@2.1.0/dist/clsx.min.js"></script>
   <style>
     *, ::before, ::after { box-sizing: border-box; }
     html, body {
@@ -144,7 +164,90 @@ export default function FrontendLivePreview({
 
   <script type="text/babel">
     try {
-      const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext } = React;
+      // 1. React & Hooks
+      const {
+        useState, useEffect, useRef, useMemo, useCallback,
+        useReducer, useContext, createContext, useId, useTransition, useDeferredValue
+      } = React;
+
+      // 2. Lodash
+      const _ = window._ || {};
+      const {
+        debounce, throttle, cloneDeep, groupBy, sortBy,
+        uniq, uniqBy, range, shuffle, isEmpty, chunk, sum, min, max, clamp
+      } = _ || {};
+
+      // 3. Axios
+      const axios = window.axios;
+
+      // 4. Canvas Confetti
+      const confetti = window.confetti || (() => {});
+
+      // 5. Clsx
+      const clsx = window.clsx || ((...args) => args.filter(Boolean).join(' '));
+
+      // 6. Framer Motion
+      const MotionPackage = window.Motion || window.FramerMotion || {};
+      const motion = MotionPackage.motion || new Proxy({}, {
+        get: (target, prop) => (props) => React.createElement(prop || 'div', props)
+      });
+      const AnimatePresence = MotionPackage.AnimatePresence || (({ children }) => children);
+
+      // 7. Dynamic Lucide Icons Component Engine
+      const LucideIcons = {};
+      if (window.lucide && window.lucide.icons) {
+        Object.keys(window.lucide.icons).forEach(iconKey => {
+          const iconDef = window.lucide.icons[iconKey];
+          const pascalName = iconKey.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+
+          const IconComponent = ({ size = 20, color = 'currentColor', strokeWidth = 2, className = '', ...props }) => {
+            return React.createElement(
+              'svg',
+              {
+                xmlns: 'http://www.w3.org/2000/svg',
+                width: size,
+                height: size,
+                viewBox: '0 0 24 24',
+                fill: 'none',
+                stroke: color,
+                strokeWidth: strokeWidth,
+                strokeLinecap: 'round',
+                strokeLinejoin: 'round',
+                className: className,
+                ...props
+              },
+              Array.isArray(iconDef) ? iconDef.map(([tag, attrs], idx) => React.createElement(tag, { key: idx, ...attrs })) : null
+            );
+          };
+          LucideIcons[pascalName] = IconComponent;
+          LucideIcons[iconKey] = IconComponent;
+        });
+      }
+
+      const SafeLucideIcons = new Proxy(LucideIcons, {
+        get: (target, prop) => {
+          if (typeof prop === 'string' && prop in target) return target[prop];
+          return ({ size = 20, className = '', ...props }) => (
+            React.createElement('span', { className: 'inline-flex items-center justify-center font-bold text-xs ' + className, ...props }, '✦')
+          );
+        }
+      });
+
+      // Destructure 60+ popular Lucide icons directly into global Babel scope
+      const {
+        Sparkles, Heart, Search, Check, Plus, Minus, Trash, Trash2, Star,
+        User, Users, Settings, Mail, Lock, Unlock, Eye, EyeOff,
+        ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+        ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ExternalLink,
+        Upload, Download, Image, Play, Pause, RotateCcw, RefreshCw,
+        Sliders, Filter, Calendar, Clock, Shield, Zap, Award, Flame,
+        AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Info, HelpCircle,
+        X, Menu, Bell, Moon, Sun, Folder, FileText, FileCode,
+        Database, Code, Code2, Terminal, Layers, Layout, Globe, Activity,
+        Cpu, Laptop, Smartphone, Tablet, Monitor, Send, MessageSquare,
+        ThumbsUp, ThumbsDown, Bookmark, Share2, Copy, Edit, Edit2, Edit3,
+        Package: PackageIcon, ShoppingCart, CreditCard, DollarSign
+      } = SafeLucideIcons;
 
       ${processedCode}
 
@@ -288,8 +391,28 @@ export default function FrontendLivePreview({
           )}
         </div>
 
-        {/* Right Tools: Dimension Pill, Reload, Console & Fullscreen */}
+        {/* Right Tools: Packages, Dimension Pill, Reload, Console & Fullscreen */}
         <div className="flex items-center gap-1.5 ml-auto text-xs">
+          {/* Packages Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenPackages) {
+                onOpenPackages();
+              } else {
+                setShowPackagesModal(true);
+              }
+            }}
+            className="px-2 py-1 rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-cyan-600 dark:text-cyan-400 hover:border-cyan-500/40 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            title="View pre-installed npm packages"
+          >
+            <Package className="w-3.5 h-3.5 text-cyan-500" />
+            <span className="hidden sm:inline">Packages</span>
+            <span className="text-[10px] px-1 rounded-full bg-cyan-500/10 text-cyan-500">
+              {INSTALLED_FRONTEND_PACKAGES.length}
+            </span>
+          </button>
+
           {/* Active Viewport Dimension Pill */}
           <div className="px-2 py-0.5 rounded font-mono text-[11px] font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border)] hidden md:inline-block">
             {activeDevice === 'custom'
@@ -453,6 +576,12 @@ export default function FrontendLivePreview({
           </div>
         </div>
       )}
+
+      {/* Installed Packages Modal */}
+      <InstalledPackagesModal
+        isOpen={showPackagesModal}
+        onClose={() => setShowPackagesModal(false)}
+      />
     </div>
   );
 }

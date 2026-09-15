@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Layers,
   Database,
@@ -31,22 +31,25 @@ export default function DatabasePlayground({
   const [showGuideDrawer, setShowGuideDrawer] = useState(false);
   const [isProvisioning, setIsProvisioning] = useState(true);
   const [provisionError, setProvisionError] = useState(null);
+  const [databases, setDatabases] = useState([]);
+  const [selectedDatabase, setSelectedDatabase] = useState('');
 
-  // Parse combined state if code holds JSON of { diagram, sql }
+  // Parse combined state if code holds JSON of { diagram, sql, database }
   const parsedState = useMemo(() => {
-    if (!code || typeof code !== 'string') return { diagram: null, sql: '' };
+    if (!code || typeof code !== 'string') return { diagram: null, sql: '', database: '' };
     try {
       if (code.startsWith('{') && (code.includes('"diagram"') || code.includes('"sql"'))) {
         const parsed = JSON.parse(code);
         return {
           diagram: parsed.diagram || null,
           sql: parsed.sql || '',
+          database: parsed.database || '',
         };
       }
     } catch (e) {
       // Fallback
     }
-    return { diagram: null, sql: code };
+    return { diagram: null, sql: code, database: '' };
   }, [code]);
 
   const [diagramState, setDiagramState] = useState(parsedState.diagram || { tables: [], relationships: [] });
@@ -60,29 +63,57 @@ export default function DatabasePlayground({
     if (parsedState.sql !== undefined && parsedState.sql !== null) {
       setSqlState(parsedState.sql);
     }
+    if (parsedState.database) {
+      setSelectedDatabase(parsedState.database);
+    }
   }, [parsedState]);
 
   // Combined change emitter
-  const emitCombinedChange = (newDiagram, newSql) => {
+  const emitCombinedChange = useCallback((newDiagram, newSql, newDb) => {
     if (onCodeChange && isEditable) {
       const combined = JSON.stringify({
         diagram: newDiagram,
         sql: newSql,
+        database: newDb || selectedDatabase,
       });
       onCodeChange(combined);
     }
-  };
+  }, [onCodeChange, isEditable, selectedDatabase]);
 
-  // Handler for real-time schema update returned from SQL execution
-  const handleSchemaUpdate = (newSchema) => {
+  // Handler for real-time schema update returned from SQL execution or DB switch
+  const handleSchemaUpdate = (newSchema, updatedDB, updatedDatabases) => {
     if (!newSchema) return;
     setDiagramState(newSchema);
-    emitCombinedChange(newSchema, sqlState);
+    const dbToSet = updatedDB || newSchema.database || selectedDatabase;
+    if (dbToSet) setSelectedDatabase(dbToSet);
+    if (Array.isArray(updatedDatabases) && updatedDatabases.length > 0) {
+      setDatabases(updatedDatabases);
+    } else if (Array.isArray(newSchema.databases) && newSchema.databases.length > 0) {
+      setDatabases(newSchema.databases);
+    }
+    emitCombinedChange(newSchema, sqlState, dbToSet);
   };
 
   const handleSqlChange = (newSql) => {
     setSqlState(newSql);
-    emitCombinedChange(diagramState, newSql);
+    emitCombinedChange(diagramState, newSql, selectedDatabase);
+  };
+
+  // Switch selected database and fetch its schema
+  const handleSelectDatabase = async (newDb) => {
+    if (!newDb || !sessionId) return;
+    try {
+      setSelectedDatabase(newDb);
+      const res = await api.get(`/interviews/sessions/${sessionId}/database/schema?db=${encodeURIComponent(newDb)}`);
+      const data = res?.data || res;
+      if (data?.schema) {
+        setDiagramState(data.schema);
+        if (Array.isArray(data.databases)) setDatabases(data.databases);
+        emitCombinedChange(data.schema, sqlState, newDb);
+      }
+    } catch (err) {
+      console.warn('Switch database error:', err);
+    }
   };
 
   // Provision sandbox database on session load
@@ -100,9 +131,12 @@ export default function DatabasePlayground({
 
         // First check if schema already exists, otherwise provision
         const schemaRes = await api.get(`/interviews/sessions/${sessionId}/database/schema`).catch(() => null);
-        if (schemaRes?.data?.schema && schemaRes.data.schema.tables?.length > 0) {
+        const schemaData = schemaRes?.data || schemaRes;
+        if (schemaData?.schema) {
           if (isMounted) {
-            setDiagramState(schemaRes.data.schema);
+            setDiagramState(schemaData.schema);
+            if (schemaData.database) setSelectedDatabase(schemaData.database);
+            if (Array.isArray(schemaData.databases)) setDatabases(schemaData.databases);
             setIsProvisioning(false);
           }
           return;
@@ -115,6 +149,8 @@ export default function DatabasePlayground({
           if (data?.schema) {
             setDiagramState(data.schema);
           }
+          if (data?.database) setSelectedDatabase(data.database);
+          if (Array.isArray(data?.databases)) setDatabases(data.databases);
           setIsProvisioning(false);
         }
       } catch (err) {
@@ -249,6 +285,9 @@ export default function DatabasePlayground({
                   sessionId={sessionId}
                   schemaDDL={schemaDDL}
                   schemaTree={diagramState?.tables || []}
+                  databases={databases}
+                  selectedDatabase={selectedDatabase}
+                  onSelectDatabase={handleSelectDatabase}
                   onSchemaUpdate={handleSchemaUpdate}
                 />
               </div>
@@ -260,6 +299,9 @@ export default function DatabasePlayground({
                   diagramData={diagramState}
                   isEditable={isEditable}
                   candidateName={candidateName}
+                  databases={databases}
+                  selectedDatabase={selectedDatabase}
+                  onSelectDatabase={handleSelectDatabase}
                   onSwitchToSQL={() => setActiveTab('sql')}
                 />
               </div>

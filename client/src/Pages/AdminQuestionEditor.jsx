@@ -22,6 +22,7 @@ import {
 
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
+import HttpTestCaseEditor from '../Components/AdminInterview/HttpTestCaseEditor';
 
 export default function AdminQuestionEditor() {
   const { trackId, levelId, questionId } = useParams();
@@ -574,6 +575,24 @@ export default function AdminQuestionEditor() {
                   className="custom-input text-[12px] font-mono resize-y"
                 />
               </div>
+
+              {type === 'backend' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)]">
+                      Backend Starter Code Template (Optional)
+                    </label>
+                    <span className="text-[10px] text-[var(--text-muted)]">Default Node.js/Go router provided if empty</span>
+                  </div>
+                  <textarea
+                    value={starterCode}
+                    onChange={(e) => setStarterCode(e.target.value)}
+                    placeholder="// Optional custom handler template for candidate code editor..."
+                    rows={6}
+                    className="custom-input text-[12px] font-mono bg-[#282c34] text-cyan-300 border-[#3e4451]"
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -850,8 +869,26 @@ export default function AdminQuestionEditor() {
         {/* RIGHT COLUMN: STDIN/STDOUT Test Cases & Solution Benchmark */}
         {/* ============================================================ */}
         <div className="lg:col-span-6 space-y-6">
-          {/* CODING & BACKEND MODE: Sample & Hidden Test Cases */}
-          {(type === 'coding' || type === 'backend') && (
+          {/* BACKEND MODE: Structured HTTP API Test Case Editors */}
+          {type === 'backend' && (
+            <div className="space-y-6">
+              <HttpTestCaseEditor
+                title="Sample / Open Endpoints"
+                testCases={openTestCases}
+                onChange={setOpenTestCases}
+                isHidden={false}
+              />
+              <HttpTestCaseEditor
+                title="Hidden Grading Endpoints"
+                testCases={hiddenTestCases}
+                onChange={setHiddenTestCases}
+                isHidden={true}
+              />
+            </div>
+          )}
+
+          {/* CODING MODE: Standard STDIN / STDOUT Test Cases */}
+          {type === 'coding' && (
             <div className="panel-card p-5 border border-[var(--border)] space-y-5">
               {/* 1. Open Sample Test Cases */}
               <div className="space-y-3">

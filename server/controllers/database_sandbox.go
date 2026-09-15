@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -51,12 +52,13 @@ type SandboxColumn struct {
 
 // SandboxTable represents a database table for the visual ER diagram
 type SandboxTable struct {
-	ID      string          `json:"id"`
-	Name    string          `json:"name"`
-	X       int             `json:"x"`
-	Y       int             `json:"y"`
-	Color   string          `json:"color"`
-	Columns []SandboxColumn `json:"columns"`
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	X        int             `json:"x"`
+	Y        int             `json:"y"`
+	Color    string          `json:"color"`
+	RowCount int64           `json:"rowCount"`
+	Columns  []SandboxColumn `json:"columns"`
 }
 
 // SandboxRelationship represents a foreign key connection between tables
@@ -72,6 +74,8 @@ type SandboxRelationship struct {
 
 // SandboxSchemaPayload represents the complete live schema payload
 type SandboxSchemaPayload struct {
+	Database      string                `json:"database"`
+	Databases     []string              `json:"databases"`
 	Tables        []SandboxTable        `json:"tables"`
 	Relationships []SandboxRelationship `json:"relationships"`
 }
@@ -123,6 +127,144 @@ func getSandboxDSN(dbName string) string {
 	return dsn
 }
 
+// splitSQLStatements splits a multi-statement SQL script while respecting quotes, backticks, and comments
+func splitSQLStatements(sqlText string) []string {
+	var statements []string
+	var current strings.Builder
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBacktick := false
+	inLineComment := false
+	inBlockComment := false
+
+	runes := []rune(sqlText)
+	n := len(runes)
+
+	for i := 0; i < n; i++ {
+		r := runes[i]
+		next := rune(0)
+		if i+1 < n {
+			next = runes[i+1]
+		}
+
+		if inLineComment {
+			if r == '\n' {
+				inLineComment = false
+			}
+			current.WriteRune(r)
+			continue
+		}
+		if inBlockComment {
+			if r == '*' && next == '/' {
+				inBlockComment = false
+				current.WriteRune(r)
+				current.WriteRune(next)
+				i++
+				continue
+			}
+			current.WriteRune(r)
+			continue
+		}
+
+		if !inSingleQuote && !inDoubleQuote && !inBacktick {
+			if r == '-' && next == '-' {
+				inLineComment = true
+				current.WriteRune(r)
+				current.WriteRune(next)
+				i++
+				continue
+			}
+			if r == '#' {
+				inLineComment = true
+				current.WriteRune(r)
+				continue
+			}
+			if r == '/' && next == '*' {
+				inBlockComment = true
+				current.WriteRune(r)
+				current.WriteRune(next)
+				i++
+				continue
+			}
+		}
+
+		if r == '\'' && !inDoubleQuote && !inBacktick {
+			if i > 0 && runes[i-1] == '\\' {
+				// escaped quote
+			} else {
+				inSingleQuote = !inSingleQuote
+			}
+		} else if r == '"' && !inSingleQuote && !inBacktick {
+			if i > 0 && runes[i-1] == '\\' {
+				// escaped quote
+			} else {
+				inDoubleQuote = !inDoubleQuote
+			}
+		} else if r == '`' && !inSingleQuote && !inDoubleQuote {
+			inBacktick = !inBacktick
+		}
+
+		if r == ';' && !inSingleQuote && !inDoubleQuote && !inBacktick {
+			stmt := strings.TrimSpace(current.String())
+			if stmt != "" {
+				statements = append(statements, stmt)
+			}
+			current.Reset()
+			continue
+		}
+
+		current.WriteRune(r)
+	}
+
+	remaining := strings.TrimSpace(current.String())
+	if remaining != "" {
+		statements = append(statements, remaining)
+	}
+
+	return statements
+}
+
+// getAvailableDatabases finds all databases accessible for this sandbox session
+func getAvailableDatabases(db *sql.DB, defaultDBName string) []string {
+	databases := []string{defaultDBName}
+
+	rows, err := db.Query("SHOW DATABASES;")
+	if err != nil {
+		return databases
+	}
+	defer rows.Close()
+
+	systemDBs := map[string]bool{
+		"information_schema": true,
+		"mysql":              true,
+		"performance_schema": true,
+		"sys":                true,
+	}
+	mainDB := os.Getenv("DB_NAME")
+	if mainDB != "" {
+		systemDBs[strings.ToLower(mainDB)] = true
+	}
+
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil {
+			lower := strings.ToLower(name)
+			if systemDBs[lower] {
+				continue
+			}
+			// Don't show other sessions' sandbox databases
+			if strings.HasPrefix(lower, "mockmate_sandbox_") && lower != strings.ToLower(defaultDBName) {
+				continue
+			}
+			if strings.EqualFold(name, defaultDBName) {
+				continue
+			}
+			databases = append(databases, name)
+		}
+	}
+	return databases
+}
+
 // ProvisionSandboxDatabase creates an isolated database for the interview session
 func ProvisionSandboxDatabase(c *gin.Context) {
 	sessionID := c.Param("id")
@@ -141,7 +283,7 @@ func ProvisionSandboxDatabase(c *gin.Context) {
 		return
 	}
 
-	dbName := sanitizeSessionDBName(sessionID)
+	defaultDBName := sanitizeSessionDBName(sessionID)
 	rootDSN := getSandboxDSN("")
 
 	db, err := sql.Open("mysql", rootDSN)
@@ -151,8 +293,8 @@ func ProvisionSandboxDatabase(c *gin.Context) {
 	}
 	defer db.Close()
 
-	// 1. Create isolated session database
-	query := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", dbName)
+	// 1. Create default session sandbox database
+	query := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", defaultDBName)
 	if _, err := db.Exec(query); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create sandbox database: " + err.Error()})
 		return
@@ -161,24 +303,38 @@ func ProvisionSandboxDatabase(c *gin.Context) {
 	// 2. Execute any optional initial DDL if provided
 	var reqBody struct {
 		InitialDDL string `json:"initial_ddl"`
+		Database   string `json:"database"`
 	}
-	if err := c.ShouldBindJSON(&reqBody); err == nil && strings.TrimSpace(reqBody.InitialDDL) != "" {
-		sessionDBDSN := getSandboxDSN(dbName)
-		sessionDB, err := sql.Open("mysql", sessionDBDSN)
-		if err == nil {
-			defer sessionDB.Close()
-			_, _ = sessionDB.Exec(reqBody.InitialDDL)
+	activeDB := defaultDBName
+	if err := c.ShouldBindJSON(&reqBody); err == nil {
+		if reqBody.Database != "" {
+			activeDB = reqBody.Database
+		}
+		if strings.TrimSpace(reqBody.InitialDDL) != "" {
+			sessionDBDSN := getSandboxDSN(activeDB)
+			sessionDB, err := sql.Open("mysql", sessionDBDSN)
+			if err == nil {
+				defer sessionDB.Close()
+				stmts := splitSQLStatements(reqBody.InitialDDL)
+				for _, stmt := range stmts {
+					_, _ = sessionDB.Exec(stmt)
+				}
+			}
 		}
 	}
 
-	// 3. Introspect schema
-	schema, _ := introspectSandboxSchema(dbName)
+	// 3. Introspect schema & discover databases
+	allDBs := getAvailableDatabases(db, defaultDBName)
+	schema, _ := introspectSandboxSchema(activeDB)
+	schema.Database = activeDB
+	schema.Databases = allDBs
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
-		"database": dbName,
-		"message":  "Isolated database sandbox ready",
-		"schema":   schema,
+		"success":   true,
+		"database":  activeDB,
+		"databases": allDBs,
+		"message":   "Isolated database sandbox ready",
+		"schema":    schema,
 	})
 }
 
@@ -201,7 +357,8 @@ func ExecuteSandboxQuery(c *gin.Context) {
 	}
 
 	var reqBody struct {
-		Query string `json:"query" binding:"required"`
+		Query    string `json:"query" binding:"required"`
+		Database string `json:"database"`
 	}
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "SQL query required"})
@@ -214,84 +371,161 @@ func ExecuteSandboxQuery(c *gin.Context) {
 		return
 	}
 
-	dbName := sanitizeSessionDBName(sessionID)
-	sessionDBDSN := getSandboxDSN(dbName)
+	defaultDBName := sanitizeSessionDBName(sessionID)
+	activeDB := defaultDBName
+	if reqBody.Database != "" {
+		activeDB = reqBody.Database
+	}
 
-	db, err := sql.Open("mysql", sessionDBDSN)
+	rootDSN := getSandboxDSN("")
+	db, err := sql.Open("mysql", rootDSN)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to connect to session database: " + err.Error()})
 		return
 	}
 	defer db.Close()
 
+	// Ensure default sandbox database exists
+	_, _ = db.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", defaultDBName))
+
+	// Acquire single connection for stateful statement execution (e.g. USE db)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to acquire database connection: " + err.Error()})
+		return
+	}
+	defer conn.Close()
+
+	// Switch to target database
+	_, _ = conn.ExecContext(ctx, fmt.Sprintf("USE `%s`;", activeDB))
+
 	startTime := time.Now()
 
-	// Execute queries
-	var columns []string
-	var rowsData []map[string]interface{}
-	var isSelect bool
-	var affectedRows int64
+	statements := splitSQLStatements(trimmedSQL)
+	if len(statements) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No executable SQL statements found"})
+		return
+	}
 
-	// Split statements for safety/execution or run with multiStatements enabled
-	isSelect = strings.HasPrefix(strings.ToUpper(trimmedSQL), "SELECT") ||
-		strings.HasPrefix(strings.ToUpper(trimmedSQL), "SHOW") ||
-		strings.HasPrefix(strings.ToUpper(trimmedSQL), "DESCRIBE") ||
-		strings.HasPrefix(strings.ToUpper(trimmedSQL), "EXPLAIN")
+	var lastColumns []string
+	var lastRowsData []map[string]interface{}
+	var lastRowsValues [][]interface{}
+	var hasQueryResults bool
+	var totalAffectedRows int64
 
-	if isSelect && !strings.Contains(trimmedSQL, ";") {
-		// Single query execution
-		rows, qErr := db.Query(trimmedSQL)
-		if qErr != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success":      false,
-				"error":        qErr.Error(),
-				"execution_ms": time.Since(startTime).Milliseconds(),
-			})
-			return
+	for _, stmt := range statements {
+		cleanStmt := strings.TrimSpace(stmt)
+		if cleanStmt == "" {
+			continue
 		}
-		defer rows.Close()
 
-		colNames, _ := rows.Columns()
-		columns = colNames
+		upper := strings.ToUpper(cleanStmt)
 
-		for rows.Next() {
-			values := make([]interface{}, len(columns))
-			valuePtrs := make([]interface{}, len(columns))
-			for i := range columns {
-				valuePtrs[i] = &values[i]
-			}
-
-			if err := rows.Scan(valuePtrs...); err != nil {
+		// Handle database change statements: USE <dbname>
+		if strings.HasPrefix(upper, "USE ") {
+			dbTarget := strings.TrimSpace(cleanStmt[4:])
+			dbTarget = strings.Trim(dbTarget, ";`'\" ")
+			if dbTarget != "" {
+				if _, err := conn.ExecContext(ctx, fmt.Sprintf("USE `%s`;", dbTarget)); err != nil {
+					c.JSON(http.StatusOK, gin.H{
+						"success":      false,
+						"error":        fmt.Sprintf("USE error [%s]: %s", cleanStmt, err.Error()),
+						"execution_ms": time.Since(startTime).Milliseconds(),
+					})
+					return
+				}
+				activeDB = dbTarget
 				continue
 			}
+		}
 
-			rowMap := make(map[string]interface{})
-			for i, col := range columns {
-				var val interface{}
-				rawVal := values[i]
-				b, ok := rawVal.([]byte)
-				if ok {
-					val = string(b)
-				} else {
-					val = rawVal
-				}
-				rowMap[col] = val
+		// Handle CREATE DATABASE statements
+		if strings.HasPrefix(upper, "CREATE DATABASE") || strings.HasPrefix(upper, "CREATE SCHEMA") {
+			if _, execErr := conn.ExecContext(ctx, cleanStmt); execErr != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success":      false,
+					"error":        fmt.Sprintf("Error in [%s]: %s", cleanStmt, execErr.Error()),
+					"execution_ms": time.Since(startTime).Milliseconds(),
+				})
+				return
 			}
-			rowsData = append(rowsData, rowMap)
+			continue
 		}
-	} else {
-		// DDL / DML or multiple statements execution
-		res, execErr := db.Exec(trimmedSQL)
-		if execErr != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success":      false,
-				"error":        execErr.Error(),
-				"execution_ms": time.Since(startTime).Milliseconds(),
-			})
-			return
-		}
-		if res != nil {
-			affectedRows, _ = res.RowsAffected()
+
+		isQuery := strings.HasPrefix(upper, "SELECT") ||
+			strings.HasPrefix(upper, "SHOW") ||
+			strings.HasPrefix(upper, "DESCRIBE") ||
+			strings.HasPrefix(upper, "DESC ") ||
+			strings.HasPrefix(upper, "EXPLAIN") ||
+			strings.HasPrefix(upper, "WITH")
+
+		if isQuery {
+			rows, qErr := conn.QueryContext(ctx, cleanStmt)
+			if qErr != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success":      false,
+					"error":        fmt.Sprintf("Query error in [%s]: %s", cleanStmt, qErr.Error()),
+					"execution_ms": time.Since(startTime).Milliseconds(),
+				})
+				return
+			}
+
+			colNames, _ := rows.Columns()
+			lastColumns = colNames
+			var curRowsData []map[string]interface{}
+			var curRowsValues [][]interface{}
+
+			for rows.Next() {
+				values := make([]interface{}, len(colNames))
+				valuePtrs := make([]interface{}, len(colNames))
+				for i := range colNames {
+					valuePtrs[i] = &values[i]
+				}
+
+				if err := rows.Scan(valuePtrs...); err != nil {
+					continue
+				}
+
+				rowMap := make(map[string]interface{})
+				rowVals := make([]interface{}, len(colNames))
+				for i, col := range colNames {
+					var val interface{}
+					rawVal := values[i]
+					b, ok := rawVal.([]byte)
+					if ok {
+						val = string(b)
+					} else {
+						val = rawVal
+					}
+					rowMap[col] = val
+					rowVals[i] = val
+				}
+				curRowsData = append(curRowsData, rowMap)
+				curRowsValues = append(curRowsValues, rowVals)
+			}
+			rows.Close()
+
+			lastRowsData = curRowsData
+			lastRowsValues = curRowsValues
+			hasQueryResults = true
+		} else {
+			// DDL / DML execution
+			res, execErr := conn.ExecContext(ctx, cleanStmt)
+			if execErr != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success":      false,
+					"error":        fmt.Sprintf("Execution error in [%s]: %s", cleanStmt, execErr.Error()),
+					"execution_ms": time.Since(startTime).Milliseconds(),
+				})
+				return
+			}
+			if res != nil {
+				aff, _ := res.RowsAffected()
+				totalAffectedRows += aff
+			}
 		}
 	}
 
@@ -300,21 +534,51 @@ func ExecuteSandboxQuery(c *gin.Context) {
 		elapsedMs = 1
 	}
 
-	// Always introspect live schema after query execution to update ER Diagram
-	liveSchema, _ := introspectSandboxSchema(dbName)
+	// Introspect live schema & available databases
+	allDBs := getAvailableDatabases(db, defaultDBName)
+	liveSchema, _ := introspectSandboxSchema(activeDB)
+	liveSchema.Database = activeDB
+	liveSchema.Databases = allDBs
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"results": gin.H{
-			"is_query":      isSelect,
-			"columns":       columns,
-			"rows":          rowsData,
-			"row_count":     len(rowsData),
-			"affected_rows": affectedRows,
-		},
-		"schema":       liveSchema,
-		"execution_ms": elapsedMs,
-	})
+	if hasQueryResults {
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"database":  activeDB,
+			"databases": allDBs,
+			"results": gin.H{
+				"is_query":      true,
+				"columns":       lastColumns,
+				"rows":          lastRowsData,
+				"values":        lastRowsValues,
+				"row_count":     len(lastRowsData),
+				"affected_rows": totalAffectedRows,
+				"message":       fmt.Sprintf("%d rows returned", len(lastRowsData)),
+			},
+			"schema":       liveSchema,
+			"execution_ms": elapsedMs,
+		})
+	} else {
+		msg := "Query executed successfully."
+		if totalAffectedRows > 0 {
+			msg = fmt.Sprintf("Query executed successfully. %d rows affected.", totalAffectedRows)
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"database":  activeDB,
+			"databases": allDBs,
+			"results": gin.H{
+				"is_query":      false,
+				"columns":       []string{"Status"},
+				"rows":          []map[string]interface{}{{"Status": msg}},
+				"values":        [][]interface{}{{msg}},
+				"row_count":     0,
+				"affected_rows": totalAffectedRows,
+				"message":       msg,
+			},
+			"schema":       liveSchema,
+			"execution_ms": elapsedMs,
+		})
+	}
 }
 
 // GetSandboxSchema returns the current visual schema of the session's sandbox database
@@ -330,16 +594,34 @@ func GetSandboxSchema(c *gin.Context) {
 		return
 	}
 
-	dbName := sanitizeSessionDBName(sessionID)
-	schema, err := introspectSandboxSchema(dbName)
+	defaultDBName := sanitizeSessionDBName(sessionID)
+	targetDB := c.Query("db")
+	if targetDB == "" {
+		targetDB = defaultDBName
+	}
+
+	rootDSN := getSandboxDSN("")
+	db, err := sql.Open("mysql", rootDSN)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	defer db.Close()
+
+	allDBs := getAvailableDatabases(db, defaultDBName)
+	schema, err := introspectSandboxSchema(targetDB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	schema.Database = targetDB
+	schema.Databases = allDBs
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"schema":  schema,
+		"success":   true,
+		"database":  targetDB,
+		"databases": allDBs,
+		"schema":    schema,
 	})
 }
 
@@ -356,7 +638,7 @@ func TeardownSandboxDatabase(c *gin.Context) {
 		return
 	}
 
-	dbName := sanitizeSessionDBName(sessionID)
+	defaultDBName := sanitizeSessionDBName(sessionID)
 	rootDSN := getSandboxDSN("")
 
 	db, err := sql.Open("mysql", rootDSN)
@@ -366,8 +648,11 @@ func TeardownSandboxDatabase(c *gin.Context) {
 	}
 	defer db.Close()
 
-	query := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", dbName)
-	_, _ = db.Exec(query)
+	allDBs := getAvailableDatabases(db, defaultDBName)
+	for _, dbName := range allDBs {
+		query := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", dbName)
+		_, _ = db.Exec(query)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -405,7 +690,7 @@ func introspectSandboxSchema(dbName string) (SandboxSchemaPayload, error) {
 		}
 	}
 
-	// Colors for table headers
+	// Palette for table headers in ER diagram
 	palette := []string{"#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#06b6d4", "#ec4899", "#6366f1"}
 
 	tables := make([]SandboxTable, 0, len(tableNames))
@@ -440,7 +725,7 @@ func introspectSandboxSchema(dbName string) (SandboxSchemaPayload, error) {
 					Name:       colName,
 					Type:       strings.ToUpper(colType),
 					IsPk:       isPk,
-					IsFk:       false, // Will be resolved below
+					IsFk:       false, // Resolved below from foreign keys
 					IsNullable: isNullable,
 					IsUnique:   isUnique,
 				})
@@ -449,7 +734,12 @@ func introspectSandboxSchema(dbName string) (SandboxSchemaPayload, error) {
 		}
 		cRows.Close()
 
-		// Calculate initial staggered grid coordinates
+		// Count rows in the table
+		var rowCount int64
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM `%s`.`%s`", dbName, tName)
+		_ = db.QueryRow(countQuery).Scan(&rowCount)
+
+		// Calculate staggered grid coordinates
 		colPos := idx % 3
 		rowPos := idx / 3
 		xPos := 60 + (colPos * 360)
@@ -458,19 +748,20 @@ func introspectSandboxSchema(dbName string) (SandboxSchemaPayload, error) {
 		color := palette[idx%len(palette)]
 
 		tables = append(tables, SandboxTable{
-			ID:      "tbl_" + tName,
-			Name:    tName,
-			X:       xPos,
-			Y:       yPos,
-			Color:   color,
-			Columns: columns,
+			ID:       "tbl_" + tName,
+			Name:     tName,
+			X:        xPos,
+			Y:        yPos,
+			Color:    color,
+			RowCount: rowCount,
+			Columns:  columns,
 		})
 	}
 
 	// 2. Get Foreign Key Relationships
 	fkQuery := `
 		SELECT 
-			CONSTRAINT_NAME,
+			CONSTRAINT_NAME, 
 			TABLE_NAME, 
 			COLUMN_NAME, 
 			REFERENCED_TABLE_NAME, 

@@ -16,6 +16,9 @@ export default function ERDiagramCanvas({
   diagramData = null,
   isEditable = true,
   candidateName = 'Candidate',
+  databases = [],
+  selectedDatabase = '',
+  onSelectDatabase = null,
   onSwitchToSQL = null,
 }) {
   const [tables, setTables] = useState(() => {
@@ -53,9 +56,13 @@ export default function ERDiagramCanvas({
             };
           });
         });
+      } else {
+        setTables([]);
       }
       if (Array.isArray(diagramData.relationships)) {
         setRelationships(diagramData.relationships);
+      } else {
+        setRelationships([]);
       }
     }
   }, [diagramData]);
@@ -141,12 +148,31 @@ export default function ERDiagramCanvas({
     <div className="flex flex-col h-full bg-[var(--bg-card)] rounded-[var(--radius-md)] overflow-hidden">
       {/* Top Toolbar */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-2 flex-wrap text-xs">
-        {/* Left Toolbar: Schema Info */}
-        <div className="flex items-center gap-2">
+        {/* Left Toolbar: Schema Info & DB Selector */}
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20 font-mono text-[11px]">
             <Layers className="w-3.5 h-3.5" />
             <span>Interactive ER Diagram</span>
           </div>
+
+          {/* Database Selector Dropdown */}
+          {databases && databases.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
+              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
+              <select
+                value={selectedDatabase}
+                onChange={(e) => onSelectDatabase && onSelectDatabase(e.target.value)}
+                className="bg-transparent text-[var(--text-primary)] font-bold cursor-pointer focus:outline-none text-[11px]"
+                title="Select database for ER Diagram"
+              >
+                {databases.map((dbName) => (
+                  <option key={dbName} value={dbName} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
+                    {dbName.startsWith('mockmate_sandbox_') ? `${dbName} (Default)` : dbName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <span className="text-[11px] font-mono text-[var(--text-muted)] hidden sm:inline">
             {tables.length} {tables.length === 1 ? 'table' : 'tables'} • {relationships.length} relationships
@@ -363,7 +389,7 @@ export default function ERDiagramCanvas({
                   </div>
 
                   <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-[var(--bg-card)]/80 text-[var(--text-muted)] border border-[var(--border)]">
-                    {table.rowCount || 0} rows
+                    {table.rowCount !== undefined ? table.rowCount : 0} rows
                   </span>
                 </div>
 

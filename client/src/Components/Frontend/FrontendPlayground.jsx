@@ -17,9 +17,12 @@ import {
   FileCode,
   X,
   Eye,
-  Info
+  Info,
+  Package,
+  CheckCircle2
 } from 'lucide-react';
 import FrontendLivePreview from './FrontendLivePreview';
+import InstalledPackagesModal, { INSTALLED_FRONTEND_PACKAGES } from './InstalledPackagesModal';
 
 const DEFAULT_STARTER_CODE = `export default function App() {
   return (
@@ -42,6 +45,7 @@ export default function FrontendPlayground({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showRequirements, setShowRequirements] = useState(false);
+  const [showPackagesModal, setShowPackagesModal] = useState(false);
 
   // Extract the admin-configured starter code from payload or question templates
   const adminStarterCode = useMemo(() => {
@@ -89,7 +93,9 @@ export default function FrontendPlayground({
           setIsFullscreen((prev) => !prev);
         }
       } else if (e.key === 'Escape') {
-        if (showRequirements) {
+        if (showPackagesModal) {
+          setShowPackagesModal(false);
+        } else if (showRequirements) {
           setShowRequirements(false);
         } else if (isFullscreen) {
           setIsFullscreen(false);
@@ -98,7 +104,7 @@ export default function FrontendPlayground({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen, showRequirements]);
+  }, [isFullscreen, showRequirements, showPackagesModal]);
 
   return (
     <div
@@ -112,7 +118,7 @@ export default function FrontendPlayground({
       {/* MAIN PLAYGROUND HEADER TOOLBAR */}
       {/* ============================================================ */}
       <div className="h-14 px-3 sm:px-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-2.5 shrink-0 z-20 flex-wrap">
-        {/* Left: Role & Mode Indicator + Tab Switcher */}
+        {/* Left: Role & Mode Indicator + Tab Switcher + Packages Pill */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Role Status Badge */}
           {isEditable ? (
@@ -173,6 +179,20 @@ export default function FrontendPlayground({
               Live Preview
             </button>
           </div>
+
+          {/* Installed Packages Button */}
+          <button
+            type="button"
+            onClick={() => setShowPackagesModal(true)}
+            className="px-2.5 py-1 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-raised)] text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            title="View all installed packages (Tailwind, Lucide, Framer Motion, Lodash, Axios, etc.)"
+          >
+            <Package className="w-3.5 h-3.5 text-cyan-500" />
+            <span>Packages</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/10 text-cyan-500 font-bold border border-cyan-500/30">
+              {INSTALLED_FRONTEND_PACKAGES.length}
+            </span>
+          </button>
 
           {/* Requirements & Challenge Drawer Toggle */}
           {question && (
@@ -255,8 +275,9 @@ export default function FrontendPlayground({
                     <FileCode className="w-3.5 h-3.5" />
                     <span>App.jsx</span>
                   </div>
-                  <span className="text-gray-500 text-[10px] hidden sm:inline">
-                    React 18 + Tailwind CSS
+                  <span className="text-gray-400 text-[10px] hidden sm:inline flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-cyan-400" />
+                    React 18 • Tailwind • Lucide • Framer Motion • Lodash • Axios
                   </span>
                 </div>
                 {!isEditable && (
@@ -302,6 +323,7 @@ export default function FrontendPlayground({
                 code={displayCode}
                 candidateName={candidateName}
                 isCandidate={isEditable}
+                onOpenPackages={() => setShowPackagesModal(true)}
               />
             </div>
           )}
@@ -342,6 +364,33 @@ export default function FrontendPlayground({
                 <h4 className="text-sm font-bold text-[var(--text-primary)]">
                   {question.title || 'Responsive Component Design'}
                 </h4>
+              </div>
+
+              {/* Pre-installed Packages Quick Banner */}
+              <div className="p-3 bg-[var(--bg-raised)] rounded-[var(--radius-sm)] border border-[var(--border)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[var(--text-primary)] text-xs flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-cyan-500" />
+                    <span>Pre-Installed Packages ({INSTALLED_FRONTEND_PACKAGES.length}):</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPackagesModal(true)}
+                    className="text-[10px] text-cyan-500 font-bold hover:underline cursor-pointer"
+                  >
+                    View All →
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {INSTALLED_FRONTEND_PACKAGES.map((pkg) => (
+                    <span
+                      key={pkg.id}
+                      className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[10px] font-mono text-[var(--text-secondary)]"
+                    >
+                      {pkg.name}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {question.prompt && (
@@ -387,6 +436,12 @@ export default function FrontendPlayground({
           </div>
         )}
       </div>
+
+      {/* Installed Packages Modal */}
+      <InstalledPackagesModal
+        isOpen={showPackagesModal}
+        onClose={() => setShowPackagesModal(false)}
+      />
     </div>
   );
 }

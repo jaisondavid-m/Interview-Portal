@@ -79,20 +79,24 @@ export default function InterviewRoom() {
   const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
   const questionType = String(question?.type || question?.mode || '').toLowerCase().trim();
 
+  const isWhiteboardMode =
+    levelMode === 'whiteboard' ||
+    levelMode === 'discussion' ||
+    levelMode === 'system_design' ||
+    levelMode === 'architecture' ||
+    questionType === 'whiteboard' ||
+    questionType === 'discussion' ||
+    questionType === 'system_design' ||
+    questionType === 'architecture';
+
   const isVerbalQAMode =
-    levelMode === 'verbal_qa' ||
+    (levelMode === 'verbal_qa' ||
     levelMode === 'verbal' ||
     levelMode === 'conceptual' ||
-    levelMode === 'discussion' ||
     questionType === 'verbal_qa' ||
     questionType === 'verbal' ||
-    questionType === 'conceptual' ||
-    questionType === 'discussion';
-
-  const isWhiteboardMode =
-    (levelMode === 'whiteboard' ||
-    questionType === 'whiteboard') &&
-    !isVerbalQAMode;
+    questionType === 'conceptual') &&
+    !isWhiteboardMode;
 
   const isFrontendMode =
     levelMode === 'frontend' ||
@@ -853,7 +857,7 @@ export default function InterviewRoom() {
             <div>
               <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold block mb-0.5">Level & Assessment:</span>
               <span className="font-bold text-[var(--text-primary)]">
-                Level {level?.level_number || 1}: {level?.name || 'Assessment'} ({isFrontendMode ? 'Frontend' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database' : isMCQMode ? 'MCQ' : isVerbalQAMode ? 'Verbal Discussion' : isBackendMode ? 'Backend' : (levelMode || 'Coding')})
+                Level {level?.level_number || 1}: {level?.name || 'Assessment'} ({isFrontendMode ? 'Frontend' : isWhiteboardMode ? 'Whiteboard (System Design)' : isDatabaseMode ? 'Database' : isMCQMode ? 'MCQ' : isVerbalQAMode ? 'Verbal Q&A' : isBackendMode ? 'Backend' : (levelMode || 'Coding')})
               </span>
             </div>
             <div>
@@ -972,7 +976,7 @@ export default function InterviewRoom() {
             {track?.title || 'Mock Interview Domain'}
           </h1>
           <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database (SQL & ER)' : isMCQMode ? 'Multiple Choice (MCQ)' : isVerbalQAMode ? 'Verbal Q&A (Discussion)' : isBackendMode ? 'Backend Service' : (level?.mode || 'coding')}</strong>
+            Level {level?.level_number || 1}: {level?.name || 'Assessment'} • Mode: <strong className="uppercase">{isFrontendMode ? 'Frontend (React)' : isWhiteboardMode ? 'Whiteboard (System Design)' : isDatabaseMode ? 'Database (SQL & ER)' : isMCQMode ? 'Multiple Choice (MCQ)' : isVerbalQAMode ? 'Verbal Q&A' : isBackendMode ? 'Backend Service' : (level?.mode || 'coding')}</strong>
           </p>
         </div>
 

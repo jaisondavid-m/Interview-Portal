@@ -18,7 +18,9 @@ import {
   Layers,
   Sparkles,
   Info,
-  Loader2
+  Loader2,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -34,6 +36,9 @@ export default function SQLEditorConsole({
   sessionId = null,
   schemaDDL = '',
   schemaTree = [],
+  databases = [],
+  selectedDatabase = '',
+  onSelectDatabase = null,
   onSchemaUpdate = null,
   onExecutionSync = null,
   lastExecution = null,
@@ -48,6 +53,7 @@ export default function SQLEditorConsole({
   const [copiedQuery, setCopiedQuery] = useState(false);
   const [expandedTables, setExpandedTables] = useState({});
   const [statusMessage, setStatusMessage] = useState(null);
+  const [tableSearch, setTableSearch] = useState('');
 
   // Sync external code changes when interviewer is observing
   useEffect(() => {
@@ -95,19 +101,22 @@ export default function SQLEditorConsole({
     try {
       const res = await api.post(`/interviews/sessions/${sessionId}/database/execute`, {
         query: trimmed,
+        database: selectedDatabase || undefined,
       });
       const data = res?.data || res;
-      const duration = data?.executionMs || Math.round(performance.now() - startTime);
+      const duration = data?.execution_ms || data?.executionMs || Math.max(1, Math.round(performance.now() - startTime));
       setExecutionTimeMs(duration);
 
-      // Notify parent of updated schema for the ER Diagram
+      // Notify parent of updated schema for the ER Diagram & database state
       if (data?.schema && onSchemaUpdate) {
-        onSchemaUpdate(data.schema);
+        onSchemaUpdate(data.schema, data.database, data.databases);
       }
 
-      if (data?.error) {
-        setErrorMsg(data.error);
+      if (data?.error || data?.success === false) {
+        const errText = data?.error || 'Execution failed';
+        setErrorMsg(errText);
         setQueryResults(null);
+        setActiveTab('results');
         setQueryHistory((prev) => [
           {
             id: Date.now(),
@@ -116,72 +125,88 @@ export default function SQLEditorConsole({
             rowCount: 0,
             duration,
             status: 'error',
-            error: data.error,
+            error: errText,
           },
           ...prev.slice(0, 19),
         ]);
         if (onExecutionSync && isEditable) {
-          onExecutionSync({ results: null, error: data.error, executionMs: duration });
-        }
-      } else if (data?.columns && data.columns.length > 0) {
-        const formatted = {
-          columns: data.columns,
-          values: data.values || [],
-          rowCount: data.rowCount || (data.values ? data.values.length : 0),
-        };
-        setQueryResults(formatted);
-        setErrorMsg(null);
-        setStatusMessage(null);
-
-        setQueryHistory((prev) => [
-          {
-            id: Date.now(),
-            query: trimmed,
-            time: new Date().toLocaleTimeString(),
-            rowCount: formatted.rowCount,
-            duration,
-            status: 'success',
-          },
-          ...prev.slice(0, 19),
-        ]);
-
-        if (onExecutionSync && isEditable) {
-          onExecutionSync({ results: formatted, error: null, executionMs: duration });
+          onExecutionSync({ results: null, error: errText, executionMs: duration });
         }
       } else {
-        // Successful DDL / DML with 0 return rows (e.g. CREATE TABLE, INSERT, UPDATE)
-        const msg = data?.message || 'Query executed successfully.';
-        setStatusMessage(msg);
-        const formatted = {
-          columns: ['Status'],
-          values: [[msg]],
-          rowCount: 0,
-        };
-        setQueryResults(formatted);
-        setErrorMsg(null);
+        const resResults = data?.results;
+        const cols = resResults?.columns || data?.columns || [];
+        const rows = resResults?.rows || data?.rows || [];
+        const vals = resResults?.values || data?.values || (
+          Array.isArray(rows) ? rows.map((r) => (Array.isArray(r) ? r : cols.map((c) => r[c]))) : []
+        );
+        const isQuery = resResults?.is_query || (cols.length > 0 && cols[0] !== 'Status');
 
-        setQueryHistory((prev) => [
-          {
-            id: Date.now(),
-            query: trimmed,
-            time: new Date().toLocaleTimeString(),
+        if (isQuery && cols.length > 0) {
+          const rowCount = resResults?.row_count !== undefined ? resResults.row_count : vals.length;
+          const formatted = {
+            columns: cols,
+            values: vals,
+            rowCount,
+          };
+          setQueryResults(formatted);
+          setErrorMsg(null);
+          setStatusMessage(null);
+          setActiveTab('results');
+
+          setQueryHistory((prev) => [
+            {
+              id: Date.now(),
+              query: trimmed,
+              time: new Date().toLocaleTimeString(),
+              rowCount,
+              duration,
+              status: 'success',
+            },
+            ...prev.slice(0, 19),
+          ]);
+
+          if (onExecutionSync && isEditable) {
+            onExecutionSync({ results: formatted, error: null, executionMs: duration });
+          }
+        } else {
+          // DDL / DML execution with affected rows
+          const msg = resResults?.message || data?.message || 'Query executed successfully.';
+          setStatusMessage(msg);
+          const formatted = {
+            columns: ['Status'],
+            values: [[msg]],
             rowCount: 0,
-            duration,
-            status: 'success',
-          },
-          ...prev.slice(0, 19),
-        ]);
+            affectedRows: resResults?.affected_rows || 0,
+          };
+          setQueryResults(formatted);
+          setErrorMsg(null);
+          setActiveTab('results');
 
-        if (onExecutionSync && isEditable) {
-          onExecutionSync({ results: formatted, error: null, executionMs: duration });
+          setQueryHistory((prev) => [
+            {
+              id: Date.now(),
+              query: trimmed,
+              time: new Date().toLocaleTimeString(),
+              rowCount: 0,
+              affectedRows: resResults?.affected_rows || 0,
+              duration,
+              status: 'success',
+            },
+            ...prev.slice(0, 19),
+          ]);
+
+          if (onExecutionSync && isEditable) {
+            onExecutionSync({ results: formatted, error: null, executionMs: duration });
+          }
         }
       }
     } catch (err) {
-      const duration = Math.round(performance.now() - startTime);
+      const duration = Math.max(1, Math.round(performance.now() - startTime));
       setExecutionTimeMs(duration);
       const errText = err?.response?.data?.error || err?.message || 'Execution failed';
       setErrorMsg(errText);
       setQueryResults(null);
+      setActiveTab('results');
 
       setQueryHistory((prev) => [
         {
@@ -202,7 +227,7 @@ export default function SQLEditorConsole({
     } finally {
       setIsRunning(false);
     }
-  }, [queryCode, sessionId, onSchemaUpdate, onExecutionSync, isEditable]);
+  }, [queryCode, sessionId, selectedDatabase, onSchemaUpdate, onExecutionSync, isEditable]);
 
   // Reset database sandbox by re-provisioning fresh schema
   const handleResetDatabase = async () => {
@@ -212,7 +237,7 @@ export default function SQLEditorConsole({
       const res = await api.post(`/interviews/sessions/${sessionId}/database/provision`);
       const data = res?.data || res;
       if (data?.schema && onSchemaUpdate) {
-        onSchemaUpdate(data.schema);
+        onSchemaUpdate(data.schema, data.database, data.databases);
       }
       setQueryResults(null);
       setErrorMsg(null);
@@ -244,15 +269,38 @@ export default function SQLEditorConsole({
     setExpandedTables((prev) => ({ ...prev, [tableName]: !prev[tableName] }));
   };
 
+  const filteredTables = schemaTree.filter((t) =>
+    t.name?.toLowerCase().includes(tableSearch.toLowerCase())
+  );
+
   return (
     <div onKeyDown={handleKeyDown} className="flex flex-col h-full bg-[var(--bg-card)] rounded-[var(--radius-md)] overflow-hidden">
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-2 flex-wrap text-xs">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-bold border border-cyan-500/20 font-mono text-[11px]">
             <Database className="w-3.5 h-3.5" />
             <span>MySQL 8.0 Sandbox</span>
           </div>
+
+          {/* Database Selector Dropdown */}
+          {databases && databases.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
+              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
+              <select
+                value={selectedDatabase}
+                onChange={(e) => onSelectDatabase && onSelectDatabase(e.target.value)}
+                className="bg-transparent text-[var(--text-primary)] font-bold cursor-pointer focus:outline-none text-[11px]"
+                title="Select active database"
+              >
+                {databases.map((dbName) => (
+                  <option key={dbName} value={dbName} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
+                    {dbName.startsWith('mockmate_sandbox_') ? `${dbName} (Default)` : dbName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {!isEditable && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-mono font-bold border border-amber-500/20">
@@ -312,7 +360,14 @@ export default function SQLEditorConsole({
         {/* SQL CODE EDITOR */}
         <div className="flex-1 flex flex-col border-b lg:border-b-0 lg:border-r border-[var(--border)] min-h-[260px]">
           <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-card)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)]">
-            <span>Query Editor (MySQL 8.0)</span>
+            <span className="flex items-center gap-2">
+              <span>Query Editor (MySQL 8.0)</span>
+              {selectedDatabase && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-primary)] font-bold">
+                  {selectedDatabase.startsWith('mockmate_sandbox_') ? 'default db' : selectedDatabase}
+                </span>
+              )}
+            </span>
             <span>{queryCode.split('\n').length} lines</span>
           </div>
 
@@ -343,7 +398,9 @@ export default function SQLEditorConsole({
                 }`}
               >
                 <TableIcon className="w-3.5 h-3.5" />
-                <span>Results {queryResults ? `(${queryResults.rowCount})` : ''}</span>
+                <span>
+                  Results {queryResults && queryResults.columns?.[0] !== 'Status' ? `(${queryResults.rowCount})` : ''}
+                </span>
               </button>
 
               <button
@@ -395,51 +452,64 @@ export default function SQLEditorConsole({
                 </div>
               ) : queryResults ? (
                 <div className="space-y-2 flex-1 flex flex-col">
-                  <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1 text-green-600 dark:text-green-400 font-bold">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{queryResults.rowCount} rows returned</span>
-                    </span>
-                    <span>Execution: {executionTimeMs} ms</span>
-                  </div>
+                  {queryResults.columns?.[0] === 'Status' ? (
+                    <div className="p-4 rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-mono space-y-1">
+                      <div className="flex items-center gap-2 font-bold">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Execution Complete</span>
+                      </div>
+                      <p className="text-[12px] pl-6">{statusMessage || queryResults.values?.[0]?.[0] || 'Statements executed successfully.'}</p>
+                      <div className="pl-6 pt-1 text-[11px] text-[var(--text-muted)]">Execution time: {executionTimeMs} ms</div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
+                        <span className="flex items-center gap-1 text-green-600 dark:text-green-400 font-bold">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{queryResults.rowCount} rows returned</span>
+                        </span>
+                        <span>Execution: {executionTimeMs} ms</span>
+                      </div>
 
-                  {/* Rendered Data Grid */}
-                  <div className="flex-1 overflow-auto border border-[var(--border)] rounded-[var(--radius-sm)] shadow-xs max-h-[380px]">
-                    <table className="w-full text-left text-xs font-mono border-collapse">
-                      <thead className="bg-[var(--bg-raised)] sticky top-0 border-b border-[var(--border)]">
-                        <tr>
-                          <th className="py-2 px-3 text-[10px] text-[var(--text-muted)] border-r border-[var(--border)] w-10 text-center">
-                            #
-                          </th>
-                          {queryResults.columns.map((col, i) => (
-                            <th key={i} className="py-2 px-3 text-[11px] font-bold text-[var(--text-primary)] border-r border-[var(--border)] last:border-r-0">
-                              {col}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--border)] bg-[var(--bg-card)]">
-                        {queryResults.values.map((row, rowIdx) => (
-                          <tr key={rowIdx} className="hover:bg-[var(--bg-raised)]/50 transition">
-                            <td className="py-1.5 px-3 text-[10px] text-[var(--text-muted)] border-r border-[var(--border)] text-center">
-                              {rowIdx + 1}
-                            </td>
-                            {row.map((cell, colIdx) => (
-                              <td key={colIdx} className="py-1.5 px-3 text-[11px] text-[var(--text-secondary)] border-r border-[var(--border)] last:border-r-0 whitespace-nowrap">
-                                {cell === null ? (
-                                  <span className="text-[var(--text-muted)] italic">NULL</span>
-                                ) : typeof cell === 'boolean' ? (
-                                  <span className={cell ? 'text-green-500 font-bold' : 'text-red-500 font-bold'}>{cell ? 'TRUE' : 'FALSE'}</span>
-                                ) : (
-                                  String(cell)
-                                )}
-                              </td>
+                      {/* Rendered Data Grid */}
+                      <div className="flex-1 overflow-auto border border-[var(--border)] rounded-[var(--radius-sm)] shadow-xs max-h-[380px]">
+                        <table className="w-full text-left text-xs font-mono border-collapse">
+                          <thead className="bg-[var(--bg-raised)] sticky top-0 border-b border-[var(--border)]">
+                            <tr>
+                              <th className="py-2 px-3 text-[10px] text-[var(--text-muted)] border-r border-[var(--border)] w-10 text-center">
+                                #
+                              </th>
+                              {queryResults.columns.map((col, i) => (
+                                <th key={i} className="py-2 px-3 text-[11px] font-bold text-[var(--text-primary)] border-r border-[var(--border)] last:border-r-0">
+                                  {col}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[var(--border)] bg-[var(--bg-card)]">
+                            {queryResults.values.map((row, rowIdx) => (
+                              <tr key={rowIdx} className="hover:bg-[var(--bg-raised)]/50 transition">
+                                <td className="py-1.5 px-3 text-[10px] text-[var(--text-muted)] border-r border-[var(--border)] text-center">
+                                  {rowIdx + 1}
+                                </td>
+                                {row.map((cell, colIdx) => (
+                                  <td key={colIdx} className="py-1.5 px-3 text-[11px] text-[var(--text-secondary)] border-r border-[var(--border)] last:border-r-0 whitespace-nowrap">
+                                    {cell === null ? (
+                                      <span className="text-[var(--text-muted)] italic">NULL</span>
+                                    ) : typeof cell === 'boolean' ? (
+                                      <span className={cell ? 'text-green-500 font-bold' : 'text-red-500 font-bold'}>{cell ? 'TRUE' : 'FALSE'}</span>
+                                    ) : (
+                                      String(cell)
+                                    )}
+                                  </td>
+                                ))}
+                              </tr>
                             ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-3 text-[var(--text-muted)]">
@@ -458,14 +528,47 @@ export default function SQLEditorConsole({
           {/* Tab 2: SCHEMA & TABLES EXPLORER */}
           {activeTab === 'schema' && (
             <div className="flex-1 p-3 overflow-auto space-y-3">
-              {schemaTree.length === 0 ? (
+              {/* Database Context Filter & Search */}
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--border)] text-xs font-mono">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Database:</span>
+                  {databases && databases.length > 0 ? (
+                    <select
+                      value={selectedDatabase}
+                      onChange={(e) => onSelectDatabase && onSelectDatabase(e.target.value)}
+                      className="bg-[var(--bg-raised)] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-primary)] font-bold text-[11px]"
+                    >
+                      {databases.map((db) => (
+                        <option key={db} value={db}>
+                          {db.startsWith('mockmate_sandbox_') ? `${db} (Default)` : db}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="font-bold text-[var(--text-primary)]">{selectedDatabase || 'default'}</span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className="w-3 h-3 absolute left-2 top-2 text-[var(--text-muted)]" />
+                  <input
+                    type="text"
+                    value={tableSearch}
+                    onChange={(e) => setTableSearch(e.target.value)}
+                    placeholder="Search tables..."
+                    className="pl-6 pr-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] text-[var(--text-primary)] w-32 focus:w-44 transition-all focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {filteredTables.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center py-10 space-y-2 text-[var(--text-muted)]">
                   <TableIcon className="w-8 h-8 text-cyan-500/30" />
-                  <p className="text-xs">No tables created yet.</p>
-                  <p className="text-[11px]">Run a <code>CREATE TABLE</code> query to see tables and columns listed here.</p>
+                  <p className="text-xs">No tables found in this database.</p>
+                  <p className="text-[11px]">Run a <code>CREATE TABLE</code> query to define tables and see them listed here.</p>
                 </div>
               ) : (
-                schemaTree.map((table) => {
+                filteredTables.map((table) => {
                   const isExpanded = expandedTables[table.name];
                   return (
                     <div key={table.name || table.id} className="border border-[var(--border)] rounded-[var(--radius-sm)] overflow-hidden bg-[var(--bg-raised)]/40">
@@ -478,7 +581,7 @@ export default function SQLEditorConsole({
                           <TableIcon className="w-4 h-4 text-cyan-500" />
                           <span className="font-bold text-xs text-[var(--text-primary)]">{table.name}</span>
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-500 border border-cyan-500/20">
-                            {table.rowCount || 0} rows
+                            {table.rowCount !== undefined ? table.rowCount : 0} rows
                           </span>
                         </div>
 
@@ -500,7 +603,7 @@ export default function SQLEditorConsole({
 
                       {isExpanded && (
                         <div className="p-2 divide-y divide-[var(--border)] text-[11px] font-mono">
-                          {table.columns.map((col, idx) => (
+                          {table.columns?.map((col, idx) => (
                             <div key={idx} className="flex items-center justify-between py-1 px-2 hover:bg-[var(--bg-card)]">
                               <div className="flex items-center gap-1.5">
                                 {col.isPk && (
@@ -529,32 +632,51 @@ export default function SQLEditorConsole({
 
           {/* Tab 3: QUERY HISTORY */}
           {activeTab === 'history' && (
-            <div className="flex-1 p-3 overflow-auto space-y-2">
+            <div className="flex-1 p-3 overflow-auto space-y-2.5">
               {queryHistory.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)] italic text-center py-8">
-                  No previous queries executed in this session.
-                </p>
+                <div className="flex flex-col items-center justify-center text-center py-10 space-y-2 text-[var(--text-muted)]">
+                  <History className="w-8 h-8 text-cyan-500/30" />
+                  <p className="text-xs">No queries executed yet.</p>
+                </div>
               ) : (
                 queryHistory.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      if (isEditable) {
-                        setQueryCode(item.query);
-                        if (onCodeChange) onCodeChange(item.query);
-                      }
-                    }}
-                    className="p-2.5 rounded border border-[var(--border)] bg-[var(--bg-raised)]/40 hover:bg-[var(--bg-raised)] cursor-pointer transition font-mono text-xs space-y-1"
-                  >
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className={`font-bold ${item.status === 'success' ? 'text-green-500' : 'text-red-500'}`}>
-                        {item.status === 'success' ? `✓ ${item.rowCount} rows (${item.duration}ms)` : '✗ Execution Error'}
+                  <div key={item.id} className="p-2.5 bg-[var(--bg-raised)] rounded border border-[var(--border)] font-mono text-xs space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1.5">
+                        {item.status === 'success' ? (
+                          <span className="px-1.5 py-0.2 rounded bg-green-500/10 text-green-500 text-[10px] font-bold">
+                            SUCCESS
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.2 rounded bg-red-500/10 text-red-500 text-[10px] font-bold">
+                            ERROR
+                          </span>
+                        )}
+                        <span className="text-[var(--text-muted)]">{item.time}</span>
                       </span>
-                      <span className="text-[var(--text-muted)]">{item.time}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{item.duration}ms</span>
                     </div>
-                    <pre className="text-[11px] text-[var(--text-secondary)] truncate bg-[var(--bg-card)] p-1.5 rounded border border-[var(--border)]">
+
+                    <pre className="text-[11px] text-[var(--text-secondary)] bg-[var(--bg-card)] p-2 rounded border border-[var(--border)] overflow-x-auto whitespace-pre-wrap max-h-20">
                       {item.query}
                     </pre>
+
+                    {item.error && (
+                      <p className="text-[11px] text-red-500">{item.error}</p>
+                    )}
+
+                    {isEditable && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQueryCode(item.query);
+                          if (onCodeChange) onCodeChange(item.query);
+                        }}
+                        className="text-[10px] text-cyan-500 hover:underline font-bold cursor-pointer"
+                      >
+                        Restore Query
+                      </button>
+                    )}
                   </div>
                 ))
               )}

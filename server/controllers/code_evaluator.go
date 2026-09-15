@@ -476,9 +476,7 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 				ExecutionMs: elapsedMs,
 			}
 		} else {
-			normActual := normalizeOutput(actualStdout)
-			normExpected := normalizeOutput(tc.ExpectedOutput)
-			passed := (normActual == normExpected)
+			passed := compareOutputs(actualStdout, tc.ExpectedOutput)
 
 			displayActual := strings.TrimRight(actualStdout, "\r\n")
 			if displayActual == "" {
@@ -672,9 +670,7 @@ func executeViaRemote(lang string, code string, testCases []EvalTestCase, isCust
 				ExecutionMs: elapsedMs,
 			}
 		} else {
-			normActual := normalizeOutput(actualStdout)
-			normExpected := normalizeOutput(tc.ExpectedOutput)
-			passed := (normActual == normExpected)
+			passed := compareOutputs(actualStdout, tc.ExpectedOutput)
 
 			displayActual := strings.TrimRight(actualStdout, "\r\n")
 			if displayActual == "" {
@@ -708,6 +704,59 @@ func findExecutable(candidates ...string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("executable not found for candidates: %v", candidates)
+}
+
+// compareOutputs performs exact or smart semantic comparison for text, JSON, and HTTP status+JSON responses
+func compareOutputs(actual, expected string) bool {
+	normActual := normalizeOutput(actual)
+	normExpected := normalizeOutput(expected)
+
+	if normActual == normExpected {
+		return true
+	}
+
+	// 1. Try direct JSON equivalence (key order insensitive)
+	if (strings.HasPrefix(normActual, "{") && strings.HasPrefix(normExpected, "{")) ||
+		(strings.HasPrefix(normActual, "[") && strings.HasPrefix(normExpected, "[")) {
+		var aObj, eObj interface{}
+		if errA := json.Unmarshal([]byte(normActual), &aObj); errA == nil {
+			if errE := json.Unmarshal([]byte(normExpected), &eObj); errE == nil {
+				aBytes, _ := json.Marshal(aObj)
+				eBytes, _ := json.Marshal(eObj)
+				if string(aBytes) == string(eBytes) {
+					return true
+				}
+			}
+		}
+	}
+
+	// 2. Try HTTP Status Code + JSON Response equivalence (e.g. "201 {"id":2,...}")
+	if len(normActual) >= 3 && len(normExpected) >= 3 {
+		statusActual := normActual[:3]
+		statusExpected := normExpected[:3]
+
+		if statusActual == statusExpected {
+			bodyActual := strings.TrimSpace(normActual[3:])
+			bodyExpected := strings.TrimSpace(normExpected[3:])
+
+			if bodyActual == bodyExpected {
+				return true
+			}
+
+			var aObj, eObj interface{}
+			if errA := json.Unmarshal([]byte(bodyActual), &aObj); errA == nil {
+				if errE := json.Unmarshal([]byte(bodyExpected), &eObj); errE == nil {
+					aBytes, _ := json.Marshal(aObj)
+					eBytes, _ := json.Marshal(eObj)
+					if string(aBytes) == string(eBytes) {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // normalizeOutput trims whitespace, line-by-line trailing spaces, and standardizes newlines
@@ -872,9 +921,7 @@ func executeViaPiston(lang string, code string, tc EvalTestCase, isCustom bool) 
 		}, nil
 	}
 
-	normActual := normalizeOutput(actualStdout)
-	normExpected := normalizeOutput(tc.ExpectedOutput)
-	passed := (normActual == normExpected)
+	passed := compareOutputs(actualStdout, tc.ExpectedOutput)
 
 	displayActual := strings.TrimRight(actualStdout, "\r\n")
 	if displayActual == "" {
