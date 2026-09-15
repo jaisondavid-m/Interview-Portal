@@ -341,6 +341,7 @@ export default function TestCasesConsole({
                   <div className="space-y-1.5">
                     {activeResults.map((res, i) => {
                       const passed = !!res.passed;
+                      const isHidden = !!res.is_hidden || !!res.isHidden;
 
                       return (
                         <div
@@ -360,11 +361,11 @@ export default function TestCasesConsole({
                               )}
 
                               <span className="font-bold text-[var(--text-primary)] shrink-0 text-[11px]">
-                                Sample Case {res.index || i + 1}:
+                                {isHidden ? `Hidden Case ${res.index || i + 1}` : `Sample Case ${res.index || i + 1}`}:
                               </span>
 
                               {/* Only show input string for open sample cases */}
-                              {res.input && (
+                              {res.input && !isHidden && (
                                 <span className="text-[var(--text-muted)] text-[11px] truncate max-w-[260px] sm:max-w-md font-mono">
                                   {res.input}
                                 </span>
