@@ -77,10 +77,10 @@ export default function StudentInterviews() {
     };
   }, [matchStatus]);
 
-  // Polling for match status
+  // Polling for match status (fast 1s poll with immediate invocation)
   useEffect(() => {
     if (matchStatus === 'searching') {
-      pollIntervalRef.current = setInterval(async () => {
+      const checkMatch = async () => {
         try {
           const params = new URLSearchParams();
           if (activeQueue?.queueId) params.append('queue_id', activeQueue.queueId);
@@ -97,12 +97,15 @@ export default function StudentInterviews() {
             // Smooth redirect after visual confirmation
             setTimeout(() => {
               navigate(`/interviews/room/${data.session_id}`);
-            }, 1200);
+            }, 800);
           }
         } catch (e) {
           // ignore transient errors
         }
-      }, 1500);
+      };
+
+      checkMatch();
+      pollIntervalRef.current = setInterval(checkMatch, 1000);
     } else {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     }
@@ -110,7 +113,7 @@ export default function StudentInterviews() {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [matchStatus, activeQueue, navigate]);
+  }, [matchStatus, activeQueue?.queueId, activeQueue?.trackId, navigate]);
 
   // Start matchmaking on a selected track and level
   const handleTakeInterview = async (track, level) => {

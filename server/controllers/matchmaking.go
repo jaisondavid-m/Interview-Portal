@@ -361,7 +361,26 @@ func JoinMatchmaking(c *gin.Context) {
 	// 1. Run periodic background cleanup using DB native time arithmetic
 	cleanupStaleMatchmakingAndSessions()
 
-	// 2. Check if track exists
+	// 2. Check if user was ALREADY matched in an active session in the last 5 minutes (prevent accidental double matching)
+	var activeSession models.InterviewSession
+	if err := database.DB.Where("(interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress' AND track_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)", currentUserID, currentUserID, req.TrackID).
+		Order("id desc").First(&activeSession).Error; err == nil {
+		role := "interviewee"
+		if activeSession.InterviewerID == currentUserID {
+			role = "interviewer"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "matched",
+			"matched":    true,
+			"session_id": activeSession.ID,
+			"track_id":   activeSession.TrackID,
+			"role":       role,
+			"message":    "Connecting to active peer interview...",
+		})
+		return
+	}
+
+	// 3. Check if track exists
 	var track models.InterviewTrack
 	if err := database.DB.Preload("Levels").First(&track, req.TrackID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview track not found"})
@@ -376,15 +395,12 @@ func JoinMatchmaking(c *gin.Context) {
 		}
 	}
 
-	// 3. Clear all old waiting/matched queue entries for this user
+	// 4. Cancel old waiting queue entries for this user
 	database.DB.Model(&models.MatchmakingQueueEntry{}).
-		Where("user_id = ? AND status IN ('waiting', 'matched')", currentUserID).
+		Where("user_id = ? AND status = 'waiting'", currentUserID).
 		Update("status", "cancelled")
 
-	// 4. Invalidate any lingering/abandoned in_progress sessions for this user so they don't get trapped
-	database.DB.Exec("UPDATE interview_sessions SET status = 'completed', ended_at = NOW() WHERE (interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress'", currentUserID, currentUserID)
-
-	// 5. Search for an active waiting student in the SAME track
+	// 5. Search for an active waiting student in the SAME track (different user)
 	var peerEntry models.MatchmakingQueueEntry
 	err := database.DB.Where("track_id = ? AND user_id != ? AND status = 'waiting'", req.TrackID, currentUserID).
 		Order("id asc").
@@ -395,9 +411,6 @@ func JoinMatchmaking(c *gin.Context) {
 		if levelID == 0 && peerEntry.LevelID > 0 {
 			levelID = peerEntry.LevelID
 		}
-
-		// Also close any lingering old sessions for peer
-		database.DB.Exec("UPDATE interview_sessions SET status = 'completed', ended_at = NOW() WHERE (interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress'", peerEntry.UserID, peerEntry.UserID)
 
 		// Preload questions for this level or track
 		var questions []models.InterviewQuestion
@@ -451,7 +464,7 @@ func JoinMatchmaking(c *gin.Context) {
 			"matched_session_id": session.ID,
 		})
 
-		// Create matched queue entry for current user too
+		// Create matched queue entry for current user
 		userEntry := models.MatchmakingQueueEntry{
 			UserID:           currentUserID,
 			TrackID:          req.TrackID,
@@ -473,7 +486,7 @@ func JoinMatchmaking(c *gin.Context) {
 		return
 	}
 
-	// 6. No peer yet -> Add student to waiting queue
+	// 6. No peer waiting yet -> Add student to waiting queue
 	newEntry := models.MatchmakingQueueEntry{
 		UserID:  currentUserID,
 		TrackID: req.TrackID,
@@ -507,74 +520,16 @@ func GetMatchmakingStatus(c *gin.Context) {
 	queueIDStr := c.Query("queue_id")
 	trackIDStr := c.Query("track_id")
 
-	var entry models.MatchmakingQueueEntry
-	var found bool
-
-	// 1. If queue_id is explicitly provided, check that exact queue entry
-	if queueIDStr != "" {
-		var qID uint
-		if _, err := fmt.Sscanf(queueIDStr, "%d", &qID); err == nil && qID > 0 {
-			if sErr := database.DB.Where("id = ? AND user_id = ?", qID, currentUserID).First(&entry).Error; sErr == nil {
-				found = true
-			}
-		}
-	}
-
-	// 2. Otherwise find the most recent active queue entry for this user
-	if !found {
-		query := database.DB.Where("user_id = ? AND status IN ('waiting', 'matched')", currentUserID)
-		if trackIDStr != "" {
-			var tID uint
-			if _, err := fmt.Sscanf(trackIDStr, "%d", &tID); err == nil && tID > 0 {
-				query = query.Where("track_id = ?", tID)
-			}
-		}
-		if sErr := query.Order("id desc").First(&entry).Error; sErr == nil {
-			found = true
-		}
-	}
-
-	if found {
-		if entry.Status == "matched" && entry.MatchedSessionID > 0 {
-			var session models.InterviewSession
-			if sErr := database.DB.First(&session, entry.MatchedSessionID).Error; sErr == nil {
-				if session.Status == "in_progress" {
-					role := "interviewee"
-					if session.InterviewerID == currentUserID {
-						role = "interviewer"
-					}
-					c.JSON(http.StatusOK, gin.H{
-						"status":     "matched",
-						"matched":    true,
-						"session_id": session.ID,
-						"queue_id":   entry.ID,
-						"track_id":   entry.TrackID,
-						"role":       role,
-					})
-					return
-				} else {
-					database.DB.Model(&entry).Update("status", "completed")
-				}
-			}
-		} else if entry.Status == "waiting" {
-			c.JSON(http.StatusOK, gin.H{
-				"status":   "waiting",
-				"matched":  false,
-				"queue_id": entry.ID,
-				"track_id": entry.TrackID,
-			})
-			return
-		}
-	}
-
-	// 3. Fallback: check if there is an active in_progress session for this user
-	var activeSession models.InterviewSession
-	sQuery := database.DB.Where("(interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress'", currentUserID, currentUserID)
+	var trackID uint
 	if trackIDStr != "" {
-		var tID uint
-		if _, err := fmt.Sscanf(trackIDStr, "%d", &tID); err == nil && tID > 0 {
-			sQuery = sQuery.Where("track_id = ?", tID)
-		}
+		fmt.Sscanf(trackIDStr, "%d", &trackID)
+	}
+
+	// 1. Direct active session check: If user is part of an active session created within last 2 hours, return it!
+	var activeSession models.InterviewSession
+	sQuery := database.DB.Where("(interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress' AND created_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)", currentUserID, currentUserID)
+	if trackID > 0 {
+		sQuery = sQuery.Where("track_id = ?", trackID)
 	}
 	if sErr := sQuery.Order("id desc").First(&activeSession).Error; sErr == nil {
 		role := "interviewee"
@@ -589,6 +544,58 @@ func GetMatchmakingStatus(c *gin.Context) {
 			"role":       role,
 		})
 		return
+	}
+
+	// 2. Check queue entry status
+	var entry models.MatchmakingQueueEntry
+	var found bool
+
+	if queueIDStr != "" {
+		var qID uint
+		if _, err := fmt.Sscanf(queueIDStr, "%d", &qID); err == nil && qID > 0 {
+			if sErr := database.DB.Where("id = ? AND user_id = ?", qID, currentUserID).First(&entry).Error; sErr == nil {
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		query := database.DB.Where("user_id = ? AND status IN ('waiting', 'matched')", currentUserID)
+		if trackID > 0 {
+			query = query.Where("track_id = ?", trackID)
+		}
+		if sErr := query.Order("id desc").First(&entry).Error; sErr == nil {
+			found = true
+		}
+	}
+
+	if found {
+		if entry.Status == "matched" && entry.MatchedSessionID > 0 {
+			var session models.InterviewSession
+			if sErr := database.DB.First(&session, entry.MatchedSessionID).Error; sErr == nil && session.Status == "in_progress" {
+				role := "interviewee"
+				if session.InterviewerID == currentUserID {
+					role = "interviewer"
+				}
+				c.JSON(http.StatusOK, gin.H{
+					"status":     "matched",
+					"matched":    true,
+					"session_id": session.ID,
+					"queue_id":   entry.ID,
+					"track_id":   entry.TrackID,
+					"role":       role,
+				})
+				return
+			}
+		} else if entry.Status == "waiting" {
+			c.JSON(http.StatusOK, gin.H{
+				"status":   "waiting",
+				"matched":  false,
+				"queue_id": entry.ID,
+				"track_id": entry.TrackID,
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
