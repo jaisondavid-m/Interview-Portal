@@ -324,6 +324,79 @@ func executeC(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResul
 // ============================================================
 // GOLANG EXECUTOR
 // ============================================================
+func prepareGoBackendCode(code string) string {
+	if !strings.Contains(code, "http.ListenAndServe") && !strings.Contains(code, "http.ListenAndServeTLS") {
+		return code
+	}
+
+	dispatcherCode := `
+func mockmateRunHTTP() {
+	raw, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return
+	}
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return
+	}
+	lines := strings.Split(text, "\n")
+	firstLine := strings.TrimSpace(lines[0])
+	parts := strings.Fields(firstLine)
+	method := "GET"
+	path := "/"
+	bodyStr := ""
+	if len(parts) > 0 {
+		u := strings.ToUpper(parts[0])
+		if u == "GET" || u == "POST" || u == "PUT" || u == "PATCH" || u == "DELETE" || u == "OPTIONS" || u == "HEAD" {
+			method = u
+			if len(parts) > 1 {
+				path = parts[1]
+			}
+			if len(parts) > 2 {
+				idx := strings.Index(firstLine, path)
+				bodyStr = strings.TrimSpace(firstLine[idx+len(path):])
+				if len(lines) > 1 {
+					bodyStr += "\n" + strings.TrimSpace(strings.Join(lines[1:], "\n"))
+				}
+			} else if len(lines) > 1 {
+				bodyStr += "\n" + strings.TrimSpace(strings.Join(lines[1:], "\n"))
+			}
+		} else {
+			bodyStr = text
+		}
+	} else {
+		bodyStr = text
+	}
+
+	req := httptest.NewRequest(method, path, strings.NewReader(bodyStr))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rec, req)
+	fmt.Println(rec.Code)
+	bodyOutput := strings.TrimSpace(rec.Body.String())
+	if bodyOutput != "" {
+		fmt.Println(bodyOutput)
+	}
+	os.Exit(0)
+}
+`
+	modCode := strings.Replace(code, "http.ListenAndServeTLS(", "func(a ...interface{}) { mockmateRunHTTP() }(", -1)
+	modCode = strings.Replace(modCode, "http.ListenAndServe(", "func(a ...interface{}) { mockmateRunHTTP() }(", -1)
+
+	reqImports := []string{"\"io\"", "\"strings\"", "\"net/http/httptest\"", "\"os\"", "\"fmt\""}
+	for _, imp := range reqImports {
+		if !strings.Contains(modCode, imp) {
+			if strings.Contains(modCode, "import (") {
+				modCode = strings.Replace(modCode, "import (", "import (\n\t"+imp, 1)
+			} else if strings.Contains(modCode, "package main") {
+				modCode = strings.Replace(modCode, "package main", "package main\nimport "+imp+"\n", 1)
+			}
+		}
+	}
+
+	return modCode + "\n" + dispatcherCode
+}
+
 func executeGo(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResult, error) {
 	goPath, err := findExecutable("go", "/usr/bin/go", "/usr/local/go/bin/go", "/usr/local/bin/go")
 	if err != nil {
@@ -343,7 +416,8 @@ func executeGo(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResu
 	}
 	binPath := filepath.Join(tmpDir, binName)
 
-	if err := os.WriteFile(srcPath, []byte(code), 0644); err != nil {
+	preparedCode := prepareGoBackendCode(code)
+	if err := os.WriteFile(srcPath, []byte(preparedCode), 0644); err != nil {
 		return executeViaRemote("go", code, testCases, isCustom)
 	}
 
@@ -385,8 +459,9 @@ func executePython(code string, testCases []EvalTestCase, isCustom bool) ([]Eval
 
 	setupPythonEnvironment(tmpDir)
 
+	prepCode := "import sys, os\nsys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))\n" + code
 	scriptPath := filepath.Join(tmpDir, "solution.py")
-	if err := os.WriteFile(scriptPath, []byte(code), 0644); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(prepCode), 0644); err != nil {
 		return executeViaRemote("python", code, testCases, isCustom)
 	}
 
@@ -691,8 +766,9 @@ module.exports = express;`
 }
 
 func setupPythonEnvironment(tmpDir string) {
+	// 1. Flask mock module
 	flaskPath := filepath.Join(tmpDir, "flask.py")
-	flaskCode := `import sys, json
+	flaskCode := `import sys, json, atexit, re
 
 class _Request:
     def __init__(self):
@@ -740,10 +816,14 @@ request = _Request()
 def jsonify(data):
     return data
 
+_flask_apps = []
+
 class Flask:
     def __init__(self, name):
         self.name = name
         self.routes = []
+        self._dispatched = False
+        _flask_apps.append(self)
 
     def route(self, rule, methods=['GET']):
         def decorator(f):
@@ -752,6 +832,12 @@ class Flask:
         return decorator
 
     def run(self, *args, **kwargs):
+        self.__dispatch()
+
+    def __dispatch(self):
+        if self._dispatched:
+            return
+        self._dispatched = True
         request._parse()
         handler = None
         for rule, methods, f in self.routes:
@@ -762,25 +848,38 @@ class Flask:
             handler = self.routes[0][2]
 
         if handler:
-            res = handler()
-            status_code = 200
-            data = res
-            if isinstance(res, tuple):
-                data = res[0]
-                status_code = res[1] if len(res) > 1 else 200
-            print(status_code)
-            if isinstance(data, (dict, list)):
-                print(json.dumps(data))
-            else:
-                print(data)
-            sys.exit(0)
+            try:
+                res = handler()
+                status_code = 200
+                data = res
+                if isinstance(res, tuple):
+                    data = res[0]
+                    status_code = res[1] if len(res) > 1 else 200
+                print(status_code)
+                if isinstance(data, (dict, list)):
+                    print(json.dumps(data))
+                else:
+                    print(data)
+                sys.stdout.flush()
+            except Exception as e:
+                print(500)
+                print(json.dumps({"error": str(e)}))
+                sys.stdout.flush()
+
+def _auto_flask():
+    for app in _flask_apps:
+        if not app._dispatched:
+            app.__dispatch()
+            break
+
+atexit.register(_auto_flask)
 `
 	_ = os.WriteFile(flaskPath, []byte(flaskCode), 0644)
 
-	// Create fastapi mock package
+	// 2. FastAPI mock package
 	fastapiDir := filepath.Join(tmpDir, "fastapi")
 	_ = os.MkdirAll(fastapiDir, 0755)
-	fastapiInit := `import sys, json
+	fastapiInit := `import sys, json, re, inspect, atexit
 
 class _Request:
     def __init__(self):
@@ -789,6 +888,7 @@ class _Request:
         self.headers = {}
         self._parsed = False
         self._body = {}
+        self._raw_body = ''
 
     def _parse(self):
         if not self._parsed:
@@ -813,6 +913,7 @@ class _Request:
             else:
                 body_str = raw
 
+            self._raw_body = body_str
             if body_str:
                 try:
                     self._body = json.loads(body_str)
@@ -824,72 +925,305 @@ class _Request:
         return self._body if isinstance(self._body, dict) else {}
 
 request = _Request()
+Request = _Request
 
-def FastAPI():
-    app = _FastAPI()
-    return app
+class HTTPException(Exception):
+    def __init__(self, status_code=400, detail="Error", headers=None):
+        self.status_code = status_code
+        self.detail = detail
+        self.headers = headers
+        super().__init__(str(detail))
 
-class _FastAPI:
-    def __init__(self):
+class _Status:
+    HTTP_200_OK = 200
+    HTTP_201_CREATED = 201
+    HTTP_204_NO_CONTENT = 204
+    HTTP_400_BAD_REQUEST = 400
+    HTTP_401_UNAUTHORIZED = 401
+    HTTP_403_FORBIDDEN = 403
+    HTTP_404_NOT_FOUND = 404
+    HTTP_422_UNPROCESSABLE_ENTITY = 422
+    HTTP_500_INTERNAL_SERVER_ERROR = 500
+
+status = _Status()
+
+def Depends(dependency=None):
+    return dependency
+
+def Query(default=None, **kwargs):
+    return default
+
+def Path(default=None, **kwargs):
+    return default
+
+def Body(default=None, **kwargs):
+    return default
+
+def Header(default=None, **kwargs):
+    return default
+
+class APIRouter:
+    def __init__(self, *args, **kwargs):
         self.routes = []
 
-    def get(self, path):
-        def decorator(func):
-            self.routes.append((path, ['GET'], func))
-            return func
-        return decorator
+    def _add_route(self, path, methods, func, status_code=200):
+        self.routes.append((path, methods, func, status_code))
 
-    def post(self, path):
-        def decorator(func):
-            self.routes.append((path, ['POST'], func))
-            return func
-        return decorator
+    def get(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['GET'], f, status_code)
+            return f
+        return dec
 
-    def put(self, path):
-        def decorator(func):
-            self.routes.append((path, ['PUT'], func))
-            return func
-        return decorator
+    def post(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['POST'], f, status_code)
+            return f
+        return dec
 
-    def delete(self, path):
-        def decorator(func):
-            self.routes.append((path, ['DELETE'], func))
-            return func
-        return decorator
+    def put(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['PUT'], f, status_code)
+            return f
+        return dec
 
-    def patch(self, path):
-        def decorator(func):
-            self.routes.append((path, ['PATCH'], func))
-            return func
-        return decorator
+    def patch(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['PATCH'], f, status_code)
+            return f
+        return dec
+
+    def delete(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['DELETE'], f, status_code)
+            return f
+        return dec
+
+_active_apps = []
+
+class FastAPI:
+    def __init__(self, *args, **kwargs):
+        self.routes = []
+        self._dispatched = False
+        _active_apps.append(self)
+
+    def _add_route(self, path, methods, func, status_code=200):
+        self.routes.append((path, methods, func, status_code))
+
+    def get(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['GET'], f, status_code)
+            return f
+        return dec
+
+    def post(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['POST'], f, status_code)
+            return f
+        return dec
+
+    def put(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['PUT'], f, status_code)
+            return f
+        return dec
+
+    def patch(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['PATCH'], f, status_code)
+            return f
+        return dec
+
+    def delete(self, path, status_code=200, **kwargs):
+        def dec(f):
+            self._add_route(path, ['DELETE'], f, status_code)
+            return f
+        return dec
+
+    def include_router(self, router, **kwargs):
+        prefix = kwargs.get('prefix', '')
+        for path, methods, func, code in router.routes:
+            self._add_route(prefix + path, methods, func, code)
+
+    def _match_route(self, route_pattern, actual_path):
+        pattern = re.sub(r'\{([a-zA-Z0-9_]+)\}|:([a-zA-Z0-9_]+)|<([a-zA-Z0-9_]+)>', lambda m: '(?P<' + (m.group(1) or m.group(2) or m.group(3)) + '>[^/]+)', route_pattern)
+        regex = '^' + pattern + '$'
+        m = re.match(regex, actual_path)
+        if m:
+            return True, m.groupdict()
+        return False, {}
 
     def run(self, *args, **kwargs):
+        self._dispatch()
+
+    def _dispatch(self):
+        if self._dispatched:
+            return
+        self._dispatched = True
+
         request._parse()
-        handler = None
-        for route, methods, func in self.routes:
-            if request.method in methods and route == request.path:
-                handler = func
-                break
-        if not handler and self.routes:
-            handler = self.routes[0][2]
-        if handler:
-            res = handler(request)
-            status_code = 200
+        matched_handler = None
+        matched_params = {}
+        default_status_code = 200
+
+        for r_path, methods, func, code in self.routes:
+            if request.method in methods or 'ALL' in methods:
+                ok, params = self._match_route(r_path, request.path)
+                if ok:
+                    matched_handler = func
+                    matched_params = params
+                    default_status_code = code
+                    break
+
+        if not matched_handler and self.routes:
+            for r_path, methods, func, code in self.routes:
+                if request.method in methods:
+                    matched_handler = func
+                    default_status_code = code
+                    break
+            if not matched_handler:
+                matched_handler = self.routes[0][2]
+                default_status_code = self.routes[0][3]
+
+        if not matched_handler:
+            print(404)
+            print(json.dumps({"detail": "Not Found"}))
+            sys.stdout.flush()
+            return
+
+        sig = inspect.signature(matched_handler)
+        call_args = {}
+        body = request.json()
+
+        for name, param in sig.parameters.items():
+            if name in matched_params:
+                val = matched_params[name]
+                if param.annotation == int or (isinstance(val, str) and val.isdigit()):
+                    try:
+                        val = int(val)
+                    except Exception:
+                        pass
+                call_args[name] = val
+            elif param.annotation != inspect.Parameter.empty and hasattr(param.annotation, '__name__') and param.annotation.__name__ not in ('Request', '_Request', 'dict', 'Any'):
+                try:
+                    if isinstance(body, dict):
+                        call_args[name] = param.annotation(**body)
+                    else:
+                        call_args[name] = param.annotation(body)
+                except Exception:
+                    call_args[name] = body
+            elif name in ('data', 'payload', 'body', 'item', 'task'):
+                if hasattr(param.annotation, '__name__') and param.annotation.__name__ not in ('Request', '_Request', 'dict', 'Any'):
+                    try:
+                        call_args[name] = param.annotation(**body) if isinstance(body, dict) else body
+                    except Exception:
+                        call_args[name] = body
+                else:
+                    call_args[name] = body
+            elif name in ('request', 'req'):
+                call_args[name] = request
+            elif isinstance(body, dict) and name in body:
+                call_args[name] = body[name]
+
+        try:
+            if len(sig.parameters) == 0:
+                res = matched_handler()
+            elif len(call_args) == len(sig.parameters):
+                res = matched_handler(**call_args)
+            else:
+                try:
+                    res = matched_handler(**call_args)
+                except Exception:
+                    try:
+                        res = matched_handler(body)
+                    except Exception:
+                        res = matched_handler(request)
+
+            status_code = default_status_code
             data = res
             if isinstance(res, tuple):
                 data = res[0]
                 if len(res) > 1:
                     status_code = res[1]
+
             print(status_code)
-            if isinstance(data, (dict, list)):
+            if hasattr(data, 'model_dump'):
+                print(json.dumps(data.model_dump()))
+            elif hasattr(data, 'dict') and callable(getattr(data, 'dict')):
+                print(json.dumps(data.dict()))
+            elif isinstance(data, (dict, list)):
                 print(json.dumps(data))
-            else:
+            elif data is not None:
                 print(data)
-        else:
-            print(404)
-            print('{"detail": "Not Found"}')
+            sys.stdout.flush()
+        except HTTPException as e:
+            print(e.status_code)
+            print(json.dumps({"detail": e.detail}))
+            sys.stdout.flush()
+        except SystemExit:
+            sys.stdout.flush()
+        except Exception as e:
+            print(500)
+            print(json.dumps({"detail": str(e)}))
+            sys.stdout.flush()
+
+def _auto_dispatch():
+    for app in _active_apps:
+        if not app._dispatched:
+            app._dispatch()
+            break
+
+atexit.register(_auto_dispatch)
 `
 	_ = os.WriteFile(filepath.Join(fastapiDir, "__init__.py"), []byte(fastapiInit), 0644)
+
+	// 3. Pydantic mock package
+	pydanticDir := filepath.Join(tmpDir, "pydantic")
+	_ = os.MkdirAll(pydanticDir, 0755)
+	pydanticInit := `class BaseModel:
+    def __init__(self, **kwargs):
+        for k, v in self.__class__.__dict__.items():
+            if not k.startswith('_') and not callable(v):
+                setattr(self, k, v)
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def dict(self):
+        return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+
+    def model_dump(self):
+        return self.dict()
+
+    def json(self):
+        import json
+        return json.dumps(self.dict())
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.dict()})"
+
+def Field(default=None, default_factory=None, **kwargs):
+    if default_factory is not None:
+        return default_factory()
+    return default
+
+def validator(*fields, **kwargs):
+    def dec(fn):
+        return fn
+    return dec
+
+def root_validator(*args, **kwargs):
+    def dec(fn):
+        return fn
+    return dec
+
+def field_validator(*args, **kwargs):
+    def dec(fn):
+        return fn
+    return dec
+
+EmailStr = str
+`
+	_ = os.WriteFile(filepath.Join(pydanticDir, "__init__.py"), []byte(pydanticInit), 0644)
 }
 
 // ============================================================
@@ -940,6 +1274,105 @@ func executeCpp(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRes
 // ============================================================
 // JAVA EXECUTOR (OpenJDK)
 // ============================================================
+func prepareJavaBackendCode(code string) string {
+	if !strings.Contains(code, "HttpServer") {
+		return code
+	}
+
+	rePort := regexp.MustCompile(`InetSocketAddress\s*\(\s*(?:\d+|"localhost"\s*,\s*\d+|"[^"]+"\s*,\s*\d+)\s*\)`)
+	modCode := rePort.ReplaceAllString(code, "InetSocketAddress(0)")
+
+	dispatcherCode := `
+		// MockMate backend dispatcher
+		try {
+			java.io.BufferedReader mockmateReader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in, java.nio.charset.StandardCharsets.UTF_8));
+			StringBuilder mockmateInput = new StringBuilder();
+			String mockmateLine;
+			while ((mockmateLine = mockmateReader.readLine()) != null) {
+				mockmateInput.append(mockmateLine).append("\n");
+			}
+			String mockmateRaw = mockmateInput.toString().trim();
+			if (!mockmateRaw.isEmpty()) {
+				String[] mockmateLines = mockmateRaw.split("\\r?\\n");
+				String mockmateFirst = mockmateLines[0].trim();
+				String[] mockmateParts = mockmateFirst.split("\\s+");
+				String mockmateMethod = "GET";
+				String mockmatePath = "/";
+				String mockmateBody = "";
+				if (mockmateParts.length > 0) {
+					String u = mockmateParts[0].toUpperCase();
+					if (u.equals("GET") || u.equals("POST") || u.equals("PUT") || u.equals("PATCH") || u.equals("DELETE") || u.equals("OPTIONS") || u.equals("HEAD")) {
+						mockmateMethod = u;
+						mockmatePath = mockmateParts.length > 1 ? mockmateParts[1] : "/";
+						if (mockmateParts.length > 2) {
+							int pIdx = mockmateFirst.indexOf(mockmatePath);
+							mockmateBody = mockmateFirst.substring(pIdx + mockmatePath.length()).trim();
+							if (mockmateLines.length > 1) {
+								StringBuilder sb = new StringBuilder(mockmateBody);
+								for (int i = 1; i < mockmateLines.length; i++) {
+									if (sb.length() > 0) sb.append("\n");
+									sb.append(mockmateLines[i]);
+								}
+								mockmateBody = sb.toString();
+							}
+						} else if (mockmateLines.length > 1) {
+							StringBuilder sb = new StringBuilder();
+							for (int i = 1; i < mockmateLines.length; i++) {
+								if (sb.length() > 0) sb.append("\n");
+								sb.append(mockmateLines[i]);
+							}
+							mockmateBody = sb.toString();
+						}
+					} else {
+						mockmateBody = mockmateRaw;
+					}
+				} else {
+					mockmateBody = mockmateRaw;
+				}
+
+				int mockmatePort = server.getAddress().getPort();
+				java.net.URI mockmateUri = java.net.URI.create("http://127.0.0.1:" + mockmatePort + mockmatePath);
+				java.net.http.HttpClient mockmateClient = java.net.http.HttpClient.newHttpClient();
+				java.net.http.HttpRequest.Builder mockmateReqBuilder = java.net.http.HttpRequest.newBuilder(mockmateUri)
+					.header("Content-Type", "application/json");
+
+				if (mockmateMethod.equals("POST")) {
+					mockmateReqBuilder.POST(java.net.http.HttpRequest.BodyPublishers.ofString(mockmateBody));
+				} else if (mockmateMethod.equals("PUT")) {
+					mockmateReqBuilder.PUT(java.net.http.HttpRequest.BodyPublishers.ofString(mockmateBody));
+				} else if (mockmateMethod.equals("DELETE")) {
+					mockmateReqBuilder.DELETE();
+				} else if (mockmateMethod.equals("PATCH")) {
+					mockmateReqBuilder.method("PATCH", java.net.http.HttpRequest.BodyPublishers.ofString(mockmateBody));
+				} else {
+					mockmateReqBuilder.GET();
+				}
+
+				java.net.http.HttpResponse<String> mockmateResp = mockmateClient.send(mockmateReqBuilder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+				System.out.println(mockmateResp.statusCode());
+				String mockmateRespBody = mockmateResp.body();
+				if (mockmateRespBody != null && !mockmateRespBody.trim().isEmpty()) {
+					System.out.println(mockmateRespBody.trim());
+				}
+				System.out.flush();
+				server.stop(0);
+				System.exit(0);
+			}
+		} catch (Exception mockmateEx) {
+			mockmateEx.printStackTrace();
+			System.exit(1);
+		}
+`
+
+	if strings.Contains(modCode, "server.start();") {
+		modCode = strings.Replace(modCode, "server.start();", "server.start();\n"+dispatcherCode, 1)
+	} else if strings.Contains(modCode, ".start();") {
+		modCode = strings.Replace(modCode, ".start();", ".start();\n"+dispatcherCode, 1)
+	}
+
+	return modCode
+}
+
 func executeJava(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResult, error) {
 	javaPath, err := findExecutable("java", "/usr/bin/java", "/usr/local/bin/java")
 	if err != nil {
@@ -952,16 +1385,18 @@ func executeJava(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRe
 	}
 	defer os.RemoveAll(tmpDir)
 
+	preparedCode := prepareJavaBackendCode(code)
+
 	// Detect class name from Java code (default to Solution or Main)
 	className := "Solution"
 	re := regexp.MustCompile(`(?:public\s+)?class\s+([A-Za-z0-9_]+)`)
-	matches := re.FindStringSubmatch(code)
+	matches := re.FindStringSubmatch(preparedCode)
 	if len(matches) > 1 && matches[1] != "" {
 		className = matches[1]
 	}
 
 	srcPath := filepath.Join(tmpDir, className+".java")
-	if err := os.WriteFile(srcPath, []byte(code), 0644); err != nil {
+	if err := os.WriteFile(srcPath, []byte(preparedCode), 0644); err != nil {
 		return executeViaRemote("java", code, testCases, isCustom)
 	}
 
@@ -971,10 +1406,9 @@ func executeJava(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRe
 		ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancelCompile()
 
-		compileCmd := exec.CommandContext(ctxCompile, javacPath, srcPath)
+		compileCmd := exec.CommandContext(ctxCompile, javacPath, "-cp", tmpDir, srcPath)
 		var compileStderr bytes.Buffer
 		compileCmd.Stderr = &compileStderr
-
 
 		if err := compileCmd.Run(); err != nil {
 			errStr := strings.TrimSpace(compileStderr.String())
@@ -991,6 +1425,7 @@ func executeJava(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRe
 	return runCommandPerTestCase(javaPath, []string{srcPath}, testCases, isCustom)
 }
 
+
 // ============================================================
 // COMMON TEST CASE RUNNER VIA OS SUBPROCESS
 // ============================================================
@@ -1001,11 +1436,19 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 		ctx, cancel := context.WithTimeout(context.Background(), 15000*time.Millisecond)
 		cmd := exec.CommandContext(ctx, execPath, baseArgs...)
 
-		// If executing Python, set PYTHONPATH to the directory of the script (first argument) so local mocks are importable
-		if strings.HasSuffix(execPath, "python") || strings.HasSuffix(execPath, "python3") {
-			if len(baseArgs) > 0 {
-				scriptDir := filepath.Dir(baseArgs[0])
-				cmd.Env = append(os.Environ(), "PYTHONPATH="+scriptDir)
+		// Set working directory if script path is provided
+		if len(baseArgs) > 0 {
+			for _, arg := range baseArgs {
+				if strings.Contains(arg, "solution") || strings.Contains(arg, "main") || strings.HasSuffix(arg, ".js") || strings.HasSuffix(arg, ".py") || strings.HasSuffix(arg, ".java") {
+					scriptDir := filepath.Dir(arg)
+					if scriptDir != "" && scriptDir != "." {
+						cmd.Dir = scriptDir
+						if strings.Contains(strings.ToLower(execPath), "python") || strings.Contains(strings.ToLower(execPath), "py") {
+							cmd.Env = append(os.Environ(), "PYTHONPATH="+scriptDir)
+						}
+					}
+					break
+				}
 			}
 		}
 
@@ -1082,7 +1525,11 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 
 			displayActual := strings.TrimRight(actualStdout, "\r\n")
 			if displayActual == "" {
-				displayActual = "(No output printed to stdout)"
+				if strings.TrimSpace(errOutput) != "" {
+					displayActual = "Runtime Error:\n" + strings.TrimSpace(errOutput)
+				} else {
+					displayActual = "(No output printed to stdout)"
+				}
 			}
 
 			results[i] = EvalResult{
