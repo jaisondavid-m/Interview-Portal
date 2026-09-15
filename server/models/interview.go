@@ -166,6 +166,7 @@ type InterviewSession struct {
 	CandidateCode        string             `gorm:"type:longtext" json:"candidate_code"`
 	CandidateLang        string             `gorm:"size:50;default:'javascript'" json:"candidate_lang"`
 	CandidateWhiteboard  string             `gorm:"type:longtext" json:"candidate_whiteboard"`
+	InterviewerRubrics   string             `gorm:"type:longtext" json:"interviewer_rubrics"`
 	LastExecutionJSON    string             `gorm:"type:longtext" json:"last_execution_json"`
 	LastExecutionType    string             `gorm:"size:50" json:"last_execution_type"`       // "run" | "submit"
 	LastExecutionVerdict string             `gorm:"size:100" json:"last_execution_verdict"`   // "Accepted", "Wrong Answer", "All Sample Cases Passed"

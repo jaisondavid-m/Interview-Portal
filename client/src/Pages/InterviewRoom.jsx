@@ -1306,6 +1306,7 @@ export default function InterviewRoom() {
             currentUserRole={currentUserRole}
             sessionId={sessionId}
             round={currentRound}
+            initialRubrics={sessionData?.interviewer_rubrics}
           />
         </div>
       ) : (

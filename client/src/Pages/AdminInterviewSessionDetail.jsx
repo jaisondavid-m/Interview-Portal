@@ -21,7 +21,12 @@ import {
   Layers,
   Sparkles,
   UserCheck,
-  RefreshCw
+  RefreshCw,
+  CheckSquare,
+  Square,
+  FileText,
+  Mic,
+  Star
 } from 'lucide-react';
 import api from '../api/axios';
 import AudioPlayer from '../Components/AudioPlayer';
@@ -492,6 +497,135 @@ export default function AdminInterviewSessionDetail() {
           title={`Session #${session.id} Dialogue Recording`}
         />
       </div>
+
+      {/* ============================================================ */}
+      {/* 4.5. INTERVIEWER EVALUATION RUBRICS & ASSESSOR SCORECARD */}
+      {/* ============================================================ */}
+      {(() => {
+        let rubricsData = null;
+        if (session.interviewer_rubrics) {
+          try {
+            rubricsData = typeof session.interviewer_rubrics === 'string'
+              ? JSON.parse(session.interviewer_rubrics)
+              : session.interviewer_rubrics;
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        const scores = rubricsData?.scores || {};
+        const overallRemarks = rubricsData?.overallRemarks || '';
+        const hasScores = Object.keys(scores).length > 0 || !!overallRemarks;
+        const evaluatedAt = rubricsData?.updatedAt;
+
+        return (
+          <div className="panel-card p-6 border border-[var(--border)] space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] flex-wrap gap-2">
+              <div>
+                <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <Award className="w-4 h-4 text-purple-500" />
+                  <span>Interviewer Evaluation Rubrics & Assessor Scorecard</span>
+                </h3>
+                <p className="text-[12px] text-[var(--text-muted)] mt-0.5">
+                  Detailed criteria scoring, observational notes, and evaluation recorded by the interviewer.
+                </p>
+              </div>
+
+              {hasScores ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2.5 py-0.5 rounded border border-purple-500/20">
+                    Rubrics Evaluated
+                  </span>
+                  {evaluatedAt && (
+                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                      {formatDateTime(evaluatedAt)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-raised)] px-2.5 py-0.5 rounded border border-[var(--border)]">
+                  No rubric evaluation recorded
+                </span>
+              )}
+            </div>
+
+            {!hasScores ? (
+              <div className="p-8 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] text-center text-xs text-[var(--text-muted)] space-y-1">
+                <FileText className="w-6 h-6 mx-auto opacity-40 text-[var(--text-muted)]" />
+                <p className="font-medium text-[13px] text-[var(--text-primary)]">No rubric assessment data submitted for this session</p>
+                <p>Rubric ratings will appear here when the interviewer scores the evaluation criteria during verbal/coding assessments.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Evaluated Criteria Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {Object.entries(scores).map(([key, val], idx) => {
+                    const isChecked = val?.checked;
+                    const rating = val?.rating || 'met';
+                    const note = val?.note;
+
+                    const ratingConfig = {
+                      exceeded: { label: 'Strong / Exceeded', color: 'bg-purple-500/15 text-purple-600 border-purple-500/30' },
+                      met: { label: 'Competent / Met', color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' },
+                      needs_work: { label: 'Needs Improvement', color: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
+                    }[rating] || { label: rating, color: 'bg-gray-500/15 text-gray-600 border-gray-500/30' };
+
+                    return (
+                      <div
+                        key={key}
+                        className={`p-4 rounded-xl border space-y-2.5 ${
+                          isChecked
+                            ? 'bg-[var(--bg-raised)]/60 border-purple-500/30'
+                            : 'bg-[var(--bg-card)] border-[var(--border)] opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2">
+                            {isChecked ? (
+                              <CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <Square className="w-4 h-4 text-[var(--text-muted)] shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs font-mono font-bold text-[var(--text-primary)]">
+                              Criterion #{idx + 1}
+                            </span>
+                          </div>
+
+                          {isChecked && (
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${ratingConfig.color}`}>
+                              {ratingConfig.label}
+                            </span>
+                          )}
+                        </div>
+
+                        {note ? (
+                          <div className="p-2.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-secondary)] font-mono">
+                            <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold mb-0.5">Assessor Observation:</span>
+                            "{note}"
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Overall Summary Remarks */}
+                {overallRemarks && (
+                  <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-1.5">
+                    <span className="text-[11px] font-mono font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1.5 uppercase">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Overall Assessor Remarks & Summary:</span>
+                    </span>
+                    <p className="text-xs font-mono text-[var(--text-primary)] whitespace-pre-line leading-relaxed pl-5">
+                      "{overallRemarks}"
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ============================================================ */}
       {/* 5. MUTUAL PEER FEEDBACK & SCORECARDS */}

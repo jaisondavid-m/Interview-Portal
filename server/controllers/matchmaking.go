@@ -819,6 +819,7 @@ func GetInterviewSession(c *gin.Context) {
 				"candidate_code":         session.CandidateCode,
 				"candidate_lang":         session.CandidateLang,
 				"candidate_whiteboard":   session.CandidateWhiteboard,
+				"interviewer_rubrics":   session.InterviewerRubrics,
 				"last_execution_type":    session.LastExecutionType,
 				"last_execution_verdict": session.LastExecutionVerdict,
 				"last_execution_passed":  session.LastExecutionPassed,
@@ -930,6 +931,44 @@ func UpdateSessionWhiteboard(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":               "success",
 		"candidate_whiteboard": input.Whiteboard,
+	})
+}
+
+// UpdateSessionRubrics synchronizes the evaluation rubrics scored/updated by the interviewer
+func UpdateSessionRubrics(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var input struct {
+		Rubrics string `json:"rubrics"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid rubrics payload"})
+		return
+	}
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	// Only active participants (specifically interviewer) can update evaluation rubrics
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "You are not a participant in this interview session"})
+		return
+	}
+
+	database.DB.Model(&session).Update("interviewer_rubrics", input.Rubrics)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":              "success",
+		"interviewer_rubrics": input.Rubrics,
 	})
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Mic,
   MessageSquare,
@@ -19,8 +19,12 @@ import {
   Maximize2,
   Minimize2,
   Copy,
-  Check
+  Check,
+  Save,
+  Loader2,
+  Star
 } from 'lucide-react';
+import api from '../../api/axios';
 
 export default function VerbalQAPlayground({
   question = null,
@@ -32,12 +36,19 @@ export default function VerbalQAPlayground({
   currentUserRole = 'interviewee',
   sessionId = null,
   round = 1,
+  initialRubrics = '',
 }) {
   const [notes, setNotes] = useState(code || '');
   const [interviewerTab, setInterviewerTab] = useState('benchmark'); // 'benchmark' | 'rubrics' | 'probing'
-  const [checklist, setChecklist] = useState({});
   const [copiedBenchmark, setCopiedBenchmark] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Interviewer Evaluation Rubrics State
+  const [rubricScores, setRubricScores] = useState({}); // { [rubricId]: { checked: bool, rating: 'exceeded'|'met'|'needs_work', note: string } }
+  const [overallRemarks, setOverallRemarks] = useState('');
+  const [isSavingRubrics, setIsSavingRubrics] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState(null);
+  const saveTimeoutRef = useRef(null);
 
   // Sync external notes updates (e.g. interviewer watching candidate notes live)
   useEffect(() => {
@@ -45,6 +56,20 @@ export default function VerbalQAPlayground({
       setNotes(code);
     }
   }, [code]);
+
+  // Parse initial rubrics if provided from session
+  useEffect(() => {
+    if (initialRubrics) {
+      try {
+        const parsed = typeof initialRubrics === 'string' ? JSON.parse(initialRubrics) : initialRubrics;
+        if (parsed?.scores) setRubricScores(parsed.scores);
+        if (parsed?.overallRemarks) setOverallRemarks(parsed.overallRemarks);
+        if (parsed?.updatedAt) setLastSavedTime(new Date(parsed.updatedAt));
+      } catch (e) {
+        // ignore parse error if plain text
+      }
+    }
+  }, [initialRubrics]);
 
   const handleNotesChange = (val) => {
     setNotes(val);
@@ -59,8 +84,98 @@ export default function VerbalQAPlayground({
     handleNotesChange(updated);
   };
 
-  const toggleChecklistItem = (key) => {
-    setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
+  // Debounced auto-save for interviewer rubrics
+  const triggerAutoSaveRubrics = (newScores, newRemarks) => {
+    if (currentUserRole !== 'interviewer' || !sessionId) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      setIsSavingRubrics(true);
+      try {
+        const payloadData = {
+          scores: newScores,
+          overallRemarks: newRemarks,
+          evaluatedByRole: currentUserRole,
+          round,
+          updatedAt: new Date().toISOString(),
+        };
+        await api.post(`/interviews/sessions/${sessionId}/rubrics`, {
+          rubrics: JSON.stringify(payloadData),
+        });
+        setLastSavedTime(new Date());
+      } catch (e) {
+        console.error('Failed to auto-save rubrics evaluation:', e);
+      } finally {
+        setIsSavingRubrics(false);
+      }
+    }, 600);
+  };
+
+  const toggleRubricCheck = (key) => {
+    const current = rubricScores[key] || { checked: false, rating: 'met', note: '' };
+    const updated = {
+      ...rubricScores,
+      [key]: {
+        ...current,
+        checked: !current.checked,
+      },
+    };
+    setRubricScores(updated);
+    triggerAutoSaveRubrics(updated, overallRemarks);
+  };
+
+  const setRubricRating = (key, rating) => {
+    const current = rubricScores[key] || { checked: true, rating: 'met', note: '' };
+    const updated = {
+      ...rubricScores,
+      [key]: {
+        ...current,
+        checked: true,
+        rating,
+      },
+    };
+    setRubricScores(updated);
+    triggerAutoSaveRubrics(updated, overallRemarks);
+  };
+
+  const setRubricNote = (key, note) => {
+    const current = rubricScores[key] || { checked: true, rating: 'met', note: '' };
+    const updated = {
+      ...rubricScores,
+      [key]: {
+        ...current,
+        note,
+      },
+    };
+    setRubricScores(updated);
+    triggerAutoSaveRubrics(updated, overallRemarks);
+  };
+
+  const handleOverallRemarksChange = (val) => {
+    setOverallRemarks(val);
+    triggerAutoSaveRubrics(rubricScores, val);
+  };
+
+  const handleManualSave = async () => {
+    if (currentUserRole !== 'interviewer' || !sessionId) return;
+    setIsSavingRubrics(true);
+    try {
+      const payloadData = {
+        scores: rubricScores,
+        overallRemarks,
+        evaluatedByRole: currentUserRole,
+        round,
+        updatedAt: new Date().toISOString(),
+      };
+      await api.post(`/interviews/sessions/${sessionId}/rubrics`, {
+        rubrics: JSON.stringify(payloadData),
+      });
+      setLastSavedTime(new Date());
+    } catch (e) {
+      console.error('Failed to save rubrics evaluation:', e);
+    } finally {
+      setIsSavingRubrics(false);
+    }
   };
 
   // Fullscreen keyboard handler (F / Esc)
@@ -91,7 +206,14 @@ export default function VerbalQAPlayground({
   const idealAnswer = payload?.ideal_answer || question?.ideal_answer || question?.detail?.ideal_answer || '';
   const talkingPoints = payload?.talking_points || question?.talking_points || [];
   const tradeoffs = payload?.tradeoffs || question?.tradeoffs || [];
-  const rubrics = payload?.rubrics || question?.rubrics || [];
+  const rawRubrics = payload?.rubrics || question?.rubrics || [];
+  const standardRubrics = [
+    'Technical Accuracy: Clear explanation of core definitions and mechanics',
+    'Architectural Soundness: Evaluated scaling, reliability, and edge-cases',
+    'Communication Clarity: Well-structured verbal articulation with minimal hesitation',
+    'Tradeoff Analysis: Identified pros/cons of chosen approach vs alternatives',
+  ];
+  const rubricsList = rawRubrics.length > 0 ? rawRubrics : standardRubrics;
   const interviewTips = payload?.interview_tips || question?.interview_tips || [];
 
   const handleCopyBenchmark = () => {
@@ -100,6 +222,8 @@ export default function VerbalQAPlayground({
     setCopiedBenchmark(true);
     setTimeout(() => setCopiedBenchmark(false), 2000);
   };
+
+  const isInterviewer = currentUserRole === 'interviewer';
 
   return (
     <div
@@ -119,17 +243,38 @@ export default function VerbalQAPlayground({
             <span>Verbal Q&A Discussion • Round {round}</span>
           </div>
 
-          {!isEditable && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-bold border border-emerald-500/20">
+          {isInterviewer ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-mono font-bold border border-purple-500/20">
               <Eye className="w-3.5 h-3.5" />
-              <span>Assessor Live Observer • {candidateName}</span>
+              <span>Assessor Perspective • Observing {candidateName}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-bold border border-emerald-500/20">
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Candidate Discussion Workspace</span>
             </div>
           )}
         </div>
 
         {/* Right Controls */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono text-[var(--text-muted)]">
+          {isInterviewer && (
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] mr-2">
+              {isSavingRubrics ? (
+                <span className="flex items-center gap-1 text-amber-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Saving rubrics...</span>
+                </span>
+              ) : lastSavedTime ? (
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Check className="w-3 h-3" />
+                  <span>Rubrics Saved</span>
+                </span>
+              ) : null}
+            </div>
+          )}
+
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono text-[var(--text-muted)]">
             <MessageSquare className="w-3.5 h-3.5 text-purple-500" />
             <span>Interactive Dialogue Mode</span>
           </div>
@@ -251,198 +396,256 @@ export default function VerbalQAPlayground({
           </div>
         </div>
 
-        {/* RIGHT COLUMN (Assessor Guide / Interviewer Evaluation Hub) */}
-        <div className="lg:w-[420px] xl:w-[460px] flex flex-col bg-[var(--bg-raised)]/30 overflow-hidden">
-          {/* Interviewer Assessor Tabs */}
-          <div className="flex items-center p-2 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-1 text-xs font-mono font-bold overflow-x-auto">
-            <button
-              type="button"
-              onClick={() => setInterviewerTab('benchmark')}
-              className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                interviewerTab === 'benchmark'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Model Answer</span>
-            </button>
+        {/* ============================================================ */}
+        {/* RIGHT COLUMN: Assessor Evaluation Hub (ONLY for Interviewer) */}
+        {/* Candidate does NOT see rubrics, probing questions, or model answer */}
+        {/* ============================================================ */}
+        {isInterviewer && (
+          <div className="lg:w-[440px] xl:w-[480px] flex flex-col bg-[var(--bg-raised)]/30 overflow-hidden">
+            {/* Interviewer Assessor Tabs */}
+            <div className="flex items-center p-2 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-1 text-xs font-mono font-bold overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setInterviewerTab('benchmark')}
+                className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  interviewerTab === 'benchmark'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Model Answer</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setInterviewerTab('rubrics')}
-              className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                interviewerTab === 'rubrics'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5" />
-              <span>Rubrics ({rubrics.length})</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setInterviewerTab('rubrics')}
+                className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  interviewerTab === 'rubrics'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5" />
+                <span>Rubrics & Evaluation ({rubricsList.length})</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setInterviewerTab('probing')}
-              className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                interviewerTab === 'probing'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Lightbulb className="w-3.5 h-3.5" />
-              <span>Probing Qs</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setInterviewerTab('probing')}
+                className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  interviewerTab === 'probing'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Lightbulb className="w-3.5 h-3.5" />
+                <span>Probing Qs</span>
+              </button>
+            </div>
 
-          {/* TAB 1: MODEL / EXEMPLARY ANSWER (Interviewer Assessor Benchmark) */}
-          {interviewerTab === 'benchmark' && (
-            <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Exemplary Model Response</span>
-                </span>
+            {/* TAB 1: MODEL / EXEMPLARY ANSWER */}
+            {interviewerTab === 'benchmark' && (
+              <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Exemplary Model Response</span>
+                  </span>
 
-                {idealAnswer && (
-                  <button
-                    type="button"
-                    onClick={handleCopyBenchmark}
-                    className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 text-[11px] font-mono cursor-pointer"
-                  >
-                    {copiedBenchmark ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedBenchmark ? 'Copied' : 'Copy'}</span>
-                  </button>
+                  {idealAnswer && (
+                    <button
+                      type="button"
+                      onClick={handleCopyBenchmark}
+                      className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 text-[11px] font-mono cursor-pointer"
+                    >
+                      {copiedBenchmark ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedBenchmark ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {idealAnswer ? (
+                  <div className="p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed shadow-xs">
+                    {idealAnswer}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-xl border border-[var(--border)]">
+                    Exemplary model answer not specified. Evaluate candidate based on core architectural principles.
+                  </div>
+                )}
+
+                {/* Tradeoffs Card */}
+                {tradeoffs.length > 0 && (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                    <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 font-mono text-xs">
+                      <Flame className="w-3.5 h-3.5" />
+                      <span>Key Tradeoffs to Expect</span>
+                    </span>
+                    <ul className="list-disc pl-4 space-y-1 text-[11px] text-[var(--text-secondary)]">
+                      {tradeoffs.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
+            )}
 
-              {idealAnswer ? (
-                <div className="p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed shadow-xs">
-                  {idealAnswer}
+            {/* TAB 2: EVALUATION RUBRICS & PERSISTENT CHECKLIST */}
+            {interviewerTab === 'rubrics' && (
+              <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
+                <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-[var(--border)]">
+                  <div>
+                    <span className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400 block">
+                      Assessor Rubrics Evaluation
+                    </span>
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      Mark criteria performance. Saves automatically for student and admin review.
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleManualSave}
+                    disabled={isSavingRubrics}
+                    className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 cursor-pointer font-mono"
+                  >
+                    {isSavingRubrics ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    <span>Save Evaluation</span>
+                  </button>
                 </div>
-              ) : (
-                <div className="p-6 text-center text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-xl border border-[var(--border)]">
-                  Exemplary model answer not specified. Evaluate candidate based on core architectural principles.
-                </div>
-              )}
 
-              {/* Tradeoffs Card */}
-              {tradeoffs.length > 0 && (
-                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
-                  <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 font-mono text-xs">
-                    <Flame className="w-3.5 h-3.5" />
-                    <span>Key Tradeoffs to Expect</span>
-                  </span>
-                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-[var(--text-secondary)]">
-                    {tradeoffs.map((item, idx) => (
-                      <li key={idx}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+                {/* Rubrics Criteria List */}
+                <div className="space-y-3">
+                  {rubricsList.map((rubricText, idx) => {
+                    const key = `rubric_${idx}`;
+                    const scoreObj = rubricScores[key] || { checked: false, rating: 'met', note: '' };
+                    const isChecked = !!scoreObj.checked;
+                    const rating = scoreObj.rating || 'met';
 
-          {/* TAB 2: EVALUATION RUBRICS & CHECKLIST */}
-          {interviewerTab === 'rubrics' && (
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
-              <div className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400">
-                Evaluation Criteria & Talking Rubrics
-              </div>
-
-              {rubrics.length > 0 ? (
-                rubrics.map((rubric, idx) => {
-                  const isChecked = !!checklist[`r_${idx}`];
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => toggleChecklistItem(`r_${idx}`)}
-                      className={`p-3 rounded-xl border transition flex items-start gap-2.5 cursor-pointer ${
-                        isChecked
-                          ? 'bg-emerald-500/10 border-emerald-500/40 text-[var(--text-primary)]'
-                          : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:border-purple-400'
-                      }`}
-                    >
-                      {isChecked ? (
-                        <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                      ) : (
-                        <Square className="w-4 h-4 text-[var(--text-muted)] shrink-0 mt-0.5" />
-                      )}
-                      <span className="text-xs leading-relaxed">{rubric}</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="space-y-2">
-                  {[
-                    'Technical Accuracy: Clear explanation of core definitions and mechanics',
-                    'Architectural Soundness: Evaluated scaling, reliability, and edge-cases',
-                    'Communication Clarity: Well-structured verbal articulation with minimal hesitation',
-                    'Tradeoff Analysis: Identified pros/cons of chosen approach vs alternatives'
-                  ].map((stdRubric, idx) => {
-                    const isChecked = !!checklist[`std_${idx}`];
                     return (
                       <div
                         key={idx}
-                        onClick={() => toggleChecklistItem(`std_${idx}`)}
-                        className={`p-3 rounded-xl border transition flex items-start gap-2.5 cursor-pointer ${
+                        className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
                           isChecked
-                            ? 'bg-emerald-500/10 border-emerald-500/40 text-[var(--text-primary)]'
-                            : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:border-purple-400'
+                            ? 'bg-purple-500/5 border-purple-500/40 shadow-xs'
+                            : 'bg-[var(--bg-card)] border-[var(--border)]'
                         }`}
                       >
-                        {isChecked ? (
-                          <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        ) : (
-                          <Square className="w-4 h-4 text-[var(--text-muted)] shrink-0 mt-0.5" />
+                        <div className="flex items-start justify-between gap-2">
+                          <div
+                            onClick={() => toggleRubricCheck(key)}
+                            className="flex items-start gap-2.5 cursor-pointer flex-1 select-none"
+                          >
+                            {isChecked ? (
+                              <CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <Square className="w-4 h-4 text-[var(--text-muted)] shrink-0 mt-0.5" />
+                            )}
+                            <span className={`text-xs leading-relaxed ${isChecked ? 'font-medium text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                              {rubricText}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Rating Pill Buttons & Assessor Note */}
+                        {isChecked && (
+                          <div className="pl-6 space-y-2 pt-1 border-t border-[var(--border)]/60">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-bold mr-1">
+                                Rating:
+                              </span>
+                              {[
+                                { id: 'needs_work', label: 'Needs Improvement', color: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
+                                { id: 'met', label: 'Competent / Met', color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' },
+                                { id: 'exceeded', label: 'Strong / Exceeded', color: 'bg-purple-500/15 text-purple-600 border-purple-500/30' },
+                              ].map((pill) => (
+                                <button
+                                  key={pill.id}
+                                  type="button"
+                                  onClick={() => setRubricRating(key, pill.id)}
+                                  className={`text-[10px] font-mono px-2 py-0.5 rounded border transition cursor-pointer font-bold ${
+                                    rating === pill.id
+                                      ? pill.color + ' ring-1 ring-purple-500'
+                                      : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'
+                                  }`}
+                                >
+                                  {pill.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            <input
+                              type="text"
+                              value={scoreObj.note || ''}
+                              onChange={(e) => setRubricNote(key, e.target.value)}
+                              placeholder="Add observation note for this rubric criterion..."
+                              className="w-full text-[11px] p-2 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-purple-500"
+                            />
+                          </div>
                         )}
-                        <span className="text-xs leading-relaxed">{stdRubric}</span>
                       </div>
                     );
                   })}
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* TAB 3: PROBING QUESTIONS & INTERVIEW TIPS */}
-          {interviewerTab === 'probing' && (
-            <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
-              <div className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400">
-                Follow-up Probing Questions & Assessor Tips
+                {/* Overall Assessor Remarks for Candidate & Admin */}
+                <div className="p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] space-y-2">
+                  <span className="font-bold text-xs font-mono text-[var(--text-primary)] flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-purple-500" />
+                    <span>Overall Verbal Evaluation Summary & Notes:</span>
+                  </span>
+                  <textarea
+                    value={overallRemarks}
+                    onChange={(e) => handleOverallRemarksChange(e.target.value)}
+                    placeholder="Write summary evaluation notes on candidate's technical clarity, architecture depth, communication, and key strengths..."
+                    rows={3}
+                    className="w-full text-xs font-mono p-3 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-purple-500 resize-y"
+                  />
+                </div>
               </div>
+            )}
 
-              {talkingPoints.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-[var(--text-primary)] block">
-                    Suggested Follow-up Prompts:
-                  </span>
-                  {talkingPoints.map((tp, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] text-xs text-[var(--text-secondary)] leading-relaxed"
-                    >
-                      🗣️ "{tp}"
-                    </div>
-                  ))}
+            {/* TAB 3: PROBING QUESTIONS & INTERVIEW TIPS */}
+            {interviewerTab === 'probing' && (
+              <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
+                <div className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400">
+                  Follow-up Probing Questions & Assessor Tips
                 </div>
-              )}
 
-              {interviewTips.length > 0 && (
-                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl space-y-1.5">
-                  <span className="font-bold text-blue-700 dark:text-blue-300 font-mono text-xs block">
-                    Assessor Best Practices:
-                  </span>
-                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-[var(--text-secondary)]">
-                    {interviewTips.map((tip, idx) => (
-                      <li key={idx}>{tip}</li>
+                {talkingPoints.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-[var(--text-primary)] block">
+                      Suggested Follow-up Prompts:
+                    </span>
+                    {talkingPoints.map((tp, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] text-xs text-[var(--text-secondary)] leading-relaxed"
+                      >
+                        🗣️ "{tp}"
+                      </div>
                     ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                  </div>
+                )}
+
+                {interviewTips.length > 0 && (
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl space-y-1.5">
+                    <span className="font-bold text-blue-700 dark:text-blue-300 font-mono text-xs block">
+                      Assessor Best Practices:
+                    </span>
+                    <ul className="list-disc pl-4 space-y-1 text-[11px] text-[var(--text-secondary)]">
+                      {interviewTips.map((tip, idx) => (
+                        <li key={idx}>{tip}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
