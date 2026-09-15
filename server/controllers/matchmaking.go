@@ -730,67 +730,70 @@ func GetInterviewSession(c *gin.Context) {
 		peerSummary = interviewerSummary
 	}
 
-	// Prepare Question Payload based on role
+	// Prepare Question Payload based on role (Only if session is active)
 	var activeQuestion gin.H
-	if session.CurrentQuestion != nil {
-		if currentUserRole == "interviewer" {
-			activeQuestion = fullQuestionForInterviewer(*session.CurrentQuestion)
-		} else {
-			activeQuestion = sanitizeQuestionForCandidate(*session.CurrentQuestion)
-		}
-	}
-
-	// Sanitize Level Questions list for candidate
 	var levelQuestions []gin.H
-	if session.Level != nil {
-		allQuestions := session.Level.Questions
-		loadCount := session.Level.QuestionCount
-		if loadCount <= 0 {
-			if session.Level.Mode == models.ModeMCQ {
-				loadCount = 10
+
+	if session.Status != "completed" && session.Status != "cancelled" {
+		if session.CurrentQuestion != nil {
+			if currentUserRole == "interviewer" {
+				activeQuestion = fullQuestionForInterviewer(*session.CurrentQuestion)
 			} else {
-				loadCount = 1
+				activeQuestion = sanitizeQuestionForCandidate(*session.CurrentQuestion)
 			}
 		}
 
-		var questionsToServe []models.InterviewQuestion
-		if session.Round == 2 {
-			// Round 2: serve questions starting after Round 1 set so questions are NOT repeated
-			if len(allQuestions) > loadCount {
-				startIdx := loadCount
-				endIdx := startIdx + loadCount
-				if endIdx > len(allQuestions) {
-					endIdx = len(allQuestions)
+		// Sanitize Level Questions list for candidate
+		if session.Level != nil {
+			allQuestions := session.Level.Questions
+			loadCount := session.Level.QuestionCount
+			if loadCount <= 0 {
+				if session.Level.Mode == models.ModeMCQ {
+					loadCount = 10
+				} else {
+					loadCount = 1
 				}
-				questionsToServe = allQuestions[startIdx:endIdx]
+			}
+
+			var questionsToServe []models.InterviewQuestion
+			if session.Round == 2 {
+				// Round 2: serve questions starting after Round 1 set so questions are NOT repeated
+				if len(allQuestions) > loadCount {
+					startIdx := loadCount
+					endIdx := startIdx + loadCount
+					if endIdx > len(allQuestions) {
+						endIdx = len(allQuestions)
+					}
+					questionsToServe = allQuestions[startIdx:endIdx]
+				} else {
+					// If level doesn't have enough extra questions, try fetching other questions from track
+					var extraQuestions []models.InterviewQuestion
+					database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
+						Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
+						Where("interview_levels.track_id = ? AND interview_questions.id != ?", session.TrackID, session.Round1QuestionID).
+						Limit(loadCount).
+						Find(&extraQuestions)
+					if len(extraQuestions) > 0 {
+						questionsToServe = extraQuestions
+					} else {
+						questionsToServe = allQuestions
+					}
+				}
 			} else {
-				// If level doesn't have enough extra questions, try fetching other questions from track
-				var extraQuestions []models.InterviewQuestion
-				database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
-					Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
-					Where("interview_levels.track_id = ? AND interview_questions.id != ?", session.TrackID, session.Round1QuestionID).
-					Limit(loadCount).
-					Find(&extraQuestions)
-				if len(extraQuestions) > 0 {
-					questionsToServe = extraQuestions
+				// Round 1: first loadCount questions
+				if loadCount > 0 && len(allQuestions) > loadCount {
+					questionsToServe = allQuestions[:loadCount]
 				} else {
 					questionsToServe = allQuestions
 				}
 			}
-		} else {
-			// Round 1: first loadCount questions
-			if loadCount > 0 && len(allQuestions) > loadCount {
-				questionsToServe = allQuestions[:loadCount]
-			} else {
-				questionsToServe = allQuestions
-			}
-		}
 
-		for _, q := range questionsToServe {
-			if currentUserRole == "interviewer" {
-				levelQuestions = append(levelQuestions, fullQuestionForInterviewer(q))
-			} else {
-				levelQuestions = append(levelQuestions, sanitizeQuestionForCandidate(q))
+			for _, q := range questionsToServe {
+				if currentUserRole == "interviewer" {
+					levelQuestions = append(levelQuestions, fullQuestionForInterviewer(q))
+				} else {
+					levelQuestions = append(levelQuestions, sanitizeQuestionForCandidate(q))
+				}
 			}
 		}
 	}
@@ -866,6 +869,11 @@ func UpdateSessionCode(c *gin.Context) {
 		return
 	}
 
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Interview session is already concluded"})
+		return
+	}
+
 	updates := map[string]interface{}{
 		"candidate_code": input.Code,
 	}
@@ -912,6 +920,11 @@ func UpdateSessionWhiteboard(c *gin.Context) {
 		return
 	}
 
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Interview session is already concluded"})
+		return
+	}
+
 	database.DB.Model(&session).Update("candidate_whiteboard", input.Whiteboard)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -949,6 +962,11 @@ func RunSessionCode(c *gin.Context) {
 
 	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Interview session is already concluded"})
 		return
 	}
 
@@ -1079,6 +1097,11 @@ func SubmitSessionCode(c *gin.Context) {
 
 	if session.IntervieweeID != currentUserID {
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Only candidate can submit solution"})
+		return
+	}
+
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Interview session is already concluded"})
 		return
 	}
 

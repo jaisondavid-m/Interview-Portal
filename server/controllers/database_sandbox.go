@@ -9,9 +9,34 @@ import (
 	"strings"
 	"time"
 
+	"server/database"
+	"server/models"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
+
+func checkSandboxAccess(c *gin.Context, sessionID string) (*models.InterviewSession, bool) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return nil, false
+	}
+	currentUserID := rawUserID.(uint)
+
+	var session models.InterviewSession
+	if err := database.DB.First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Interview session not found"})
+		return nil, false
+	}
+
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You are not a participant in this interview session."})
+		return nil, false
+	}
+
+	return &session, true
+}
 
 // SandboxColumn represents a table column extracted for the ER diagram
 type SandboxColumn struct {
@@ -106,6 +131,16 @@ func ProvisionSandboxDatabase(c *gin.Context) {
 		return
 	}
 
+	session, ok := checkSandboxAccess(c, sessionID)
+	if !ok {
+		return
+	}
+
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Interview session is already completed"})
+		return
+	}
+
 	dbName := sanitizeSessionDBName(sessionID)
 	rootDSN := getSandboxDSN("")
 
@@ -152,6 +187,16 @@ func ExecuteSandboxQuery(c *gin.Context) {
 	sessionID := c.Param("id")
 	if sessionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Session ID required"})
+		return
+	}
+
+	session, ok := checkSandboxAccess(c, sessionID)
+	if !ok {
+		return
+	}
+
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Interview session is already completed"})
 		return
 	}
 
@@ -280,6 +325,11 @@ func GetSandboxSchema(c *gin.Context) {
 		return
 	}
 
+	_, ok := checkSandboxAccess(c, sessionID)
+	if !ok {
+		return
+	}
+
 	dbName := sanitizeSessionDBName(sessionID)
 	schema, err := introspectSandboxSchema(dbName)
 	if err != nil {
@@ -298,6 +348,11 @@ func TeardownSandboxDatabase(c *gin.Context) {
 	sessionID := c.Param("id")
 	if sessionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Session ID required"})
+		return
+	}
+
+	_, ok := checkSandboxAccess(c, sessionID)
+	if !ok {
 		return
 	}
 

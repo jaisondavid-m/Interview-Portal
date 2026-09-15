@@ -14,6 +14,7 @@ import {
   Loader2,
   ArrowRight,
   Shield,
+  ShieldAlert,
   HelpCircle,
   Code2,
   Lightbulb,
@@ -65,7 +66,7 @@ export default function InterviewRoom() {
   const recordingUploadedRef = useRef(false);
 
   const myUserId = currentUserRole === 'interviewer' ? sessionData?.interviewer_id : sessionData?.interviewee_id;
-  const isCompleted = sessionData?.status === 'completed';
+  const isCompleted = sessionData?.status === 'completed' || sessionData?.status === 'finished' || sessionData?.status === 'cancelled';
 
   // Live WebRTC Audio Call Hook
   const {
@@ -266,7 +267,9 @@ export default function InterviewRoom() {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to load interview session.');
+      const msg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to load interview session.';
+      const statusCode = err.response?.status;
+      setError({ message: msg, status: statusCode });
     } finally {
       setLoading(false);
     }
@@ -274,6 +277,10 @@ export default function InterviewRoom() {
 
   useEffect(() => {
     fetchSession();
+
+    if (sessionData?.status === 'completed' || sessionData?.status === 'finished' || sessionData?.status === 'cancelled') {
+      return;
+    }
 
     // Poll session state (1s in whiteboard mode for sub-second interviewer updates, 2s otherwise)
     const pollInterval = isWhiteboardMode ? 1000 : 2000;
@@ -284,7 +291,7 @@ export default function InterviewRoom() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchSession, isWhiteboardMode]);
+  }, [fetchSession, isWhiteboardMode, sessionData?.status]);
 
   // Session elapsed timer (Synchronized with session.started_at from server for both students)
   useEffect(() => {
@@ -692,17 +699,42 @@ export default function InterviewRoom() {
   }
 
   if (error && !sessionData) {
+    const isForbidden =
+      error?.status === 403 ||
+      error?.status === 401 ||
+      (typeof error?.message === 'string' && (error.message.toLowerCase().includes('access denied') || error.message.toLowerCase().includes('not a participant') || error.message.toLowerCase().includes('unauthorized'))) ||
+      (typeof error === 'string' && (error.toLowerCase().includes('access denied') || error.toLowerCase().includes('not a participant') || error.toLowerCase().includes('unauthorized')));
+
     return (
-      <div className="panel-card p-10 text-center space-y-4">
-        <AlertCircle className="w-10 h-10 text-[var(--red)] mx-auto" />
-        <h2 className="text-[18px] font-bold text-[var(--text-primary)]">Session Error</h2>
-        <p className="text-[13px] text-[var(--text-secondary)]">{error}</p>
-        <button
-          onClick={() => navigate('/interviews')}
-          className="btn btn-primary text-xs py-2 px-4"
-        >
-          Return to Interviews
-        </button>
+      <div className="max-w-lg mx-auto panel-card p-8 text-center space-y-5 border-2 border-[var(--border)] shadow-xl mt-12 animate-fadeIn">
+        <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto border ${
+          isForbidden ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+        }`}>
+          {isForbidden ? <ShieldAlert className="w-7 h-7" /> : <AlertCircle className="w-7 h-7" />}
+        </div>
+        <div className="space-y-2">
+          <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded uppercase font-bold border ${
+            isForbidden ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+          }`}>
+            {isForbidden ? '403 Forbidden' : 'Session Notice'}
+          </span>
+          <h2 className="text-[20px] font-bold text-[var(--text-primary)]">
+            {isForbidden ? 'Unauthorized Access' : 'Interview Room Unavailable'}
+          </h2>
+          <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
+            {isForbidden
+              ? 'You do not have authorization to view or join this interview session. You can only access interview rooms that you participated in.'
+              : (error?.message || (typeof error === 'string' ? error : 'Failed to load interview session.'))}
+          </p>
+        </div>
+        <div className="pt-2">
+          <button
+            onClick={() => navigate('/interviews')}
+            className="btn btn-primary text-xs py-2 px-5 font-bold shadow-md cursor-pointer"
+          >
+            Return to Interviews Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -781,6 +813,135 @@ export default function InterviewRoom() {
     }
     setShowFeedbackModal(true);
   };
+
+  // Dedicated View for Concluded / Finished Interview Sessions
+  if (isCompleted) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6 mt-6 animate-fadeIn pb-12">
+        {/* Concluded Card */}
+        <div className="panel-card p-6 sm:p-8 border-2 border-[var(--border-accent)] bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-xl space-y-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shrink-0 shadow-md">
+              <Award className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded bg-[var(--accent)] text-white uppercase font-bold">
+                  Session Concluded
+                </span>
+                <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                  Room #{sessionId}
+                </span>
+              </div>
+              <h2 className="text-[20px] font-bold text-[var(--text-primary)]">
+                Interview Session Already Finished
+              </h2>
+              <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                This peer interview session has concluded. The live coding workspace, question prompts, and audio channels are closed. You can review your scorecard, submit feedback, or return to your dashboard.
+              </p>
+            </div>
+          </div>
+
+          {/* Session Overview Recap Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] font-mono text-xs">
+            <div>
+              <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold block mb-0.5">Track & Domain:</span>
+              <span className="font-bold text-[var(--text-primary)]">{track?.title || 'Mock Interview Domain'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold block mb-0.5">Level & Assessment:</span>
+              <span className="font-bold text-[var(--text-primary)]">
+                Level {level?.level_number || 1}: {level?.name || 'Assessment'} ({isFrontendMode ? 'Frontend' : isWhiteboardMode ? 'Whiteboard' : isDatabaseMode ? 'Database' : isMCQMode ? 'MCQ' : isVerbalQAMode ? 'Verbal Discussion' : isBackendMode ? 'Backend' : (levelMode || 'Coding')})
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold block mb-0.5">Your Role:</span>
+              <span className="font-bold text-[var(--accent)] capitalize">
+                {currentUserRole === 'interviewer' ? 'Interviewer (Assessor)' : 'Candidate (Interviewee)'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold block mb-0.5">Peer Participant:</span>
+              <span className="font-bold text-[var(--text-primary)]">
+                {peerUser?.name || peerUser?.username || 'Peer Participant'}
+              </span>
+            </div>
+            {elapsedSecs > 0 && (
+              <div>
+                <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold block mb-0.5">Total Duration:</span>
+                <span className="font-bold text-[var(--green)]">{formatTime(elapsedSecs)}</span>
+              </div>
+            )}
+            {sessionData?.ended_at && (
+              <div>
+                <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold block mb-0.5">Finished At:</span>
+                <span className="text-[var(--text-secondary)]">
+                  {new Date(sessionData.ended_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between gap-3 pt-3 flex-wrap border-t border-[var(--border)]">
+            <button
+              type="button"
+              onClick={() => handleOpenFeedback()}
+              className="btn btn-secondary text-xs py-2 px-4 flex items-center gap-1.5 font-bold cursor-pointer"
+            >
+              <Award className="w-4 h-4 text-[var(--accent)]" />
+              <span>Review Scorecard & Peer Feedback</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/interviews')}
+              className="btn btn-primary text-xs py-2 px-5 flex items-center gap-1.5 font-bold shadow-md cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Return to Dashboard</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Peer Feedback Modal (Can be triggered or reviewed directly from finished view) */}
+        <PeerFeedbackModal
+          isOpen={showFeedbackModal}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            if (!hasSecuritySubmitted) {
+              setShowSecurityModal(true);
+            }
+          }}
+          sessionId={sessionId}
+          peerUser={peerUser}
+          roundNumber={feedbackRound}
+          isCompleted={true}
+          onSubmitted={() => {
+            setHasFeedbackSubmitted(true);
+            fetchSession();
+            setShowFeedbackModal(false);
+            setShowSecurityModal(true);
+          }}
+        />
+
+        {/* Post-Feedback Security Modal */}
+        <CredentialAuditModal
+          isOpen={showSecurityModal}
+          onClose={() => {
+            setShowSecurityModal(false);
+            navigate('/interviews');
+          }}
+          sessionId={sessionId}
+          peerUser={peerUser}
+          onCompleted={() => {
+            setHasSecuritySubmitted(true);
+            fetchSession();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
