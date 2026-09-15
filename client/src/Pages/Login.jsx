@@ -43,27 +43,22 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeQuickLogging, setActiveQuickLogging] = useState(null);
   const [error, setError] = useState('');
   const [selectedQuick, setSelectedQuick] = useState(null);
   const navigate = useNavigate();
 
-  const handleQuickSelect = (acc) => {
-    setIdentifier(acc.email);
-    setPassword(acc.password);
-    setSelectedQuick(acc.email);
-    setError('');
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const performAuth = async (loginIdentifier, loginPassword, quickAcc = null) => {
     setError('');
     setLoading(true);
+    if (quickAcc) {
+      setActiveQuickLogging(quickAcc.email);
+    }
 
     try {
-      // Call backend API
       const res = await api.post('/auth/login', {
-        identifier: identifier.trim(),
-        password: password,
+        identifier: loginIdentifier.trim(),
+        password: loginPassword,
       });
 
       if (res && res.token) {
@@ -80,8 +75,8 @@ export default function Login() {
       }
     } catch (err) {
       // Fallback for offline demo or backend delay
-      const quickMatch = QUICK_ACCOUNTS.find(
-        (a) => (a.email === identifier.trim() || identifier.trim() === 'ADMIN01' || identifier.trim() === 'DEV01') && password === 'password'
+      const quickMatch = quickAcc || QUICK_ACCOUNTS.find(
+        (a) => (a.email.toLowerCase() === loginIdentifier.trim().toLowerCase() || loginIdentifier.trim().toUpperCase() === 'ADMIN01' || loginIdentifier.trim().toUpperCase() === 'DEV01') && loginPassword === 'password'
       );
       if (quickMatch) {
         const dummyUser = {
@@ -102,11 +97,24 @@ export default function Login() {
           navigate('/dashboard');
         }
       } else {
-        setError(err.message || 'Invalid credentials. Please contact your college administrator.');
+        setError(err.response?.data?.message || err.message || 'Invalid credentials. Please contact your college administrator.');
       }
     } finally {
       setLoading(false);
+      setActiveQuickLogging(null);
     }
+  };
+
+  const handleQuickLogin = (acc) => {
+    setIdentifier(acc.email);
+    setPassword(acc.password);
+    setSelectedQuick(acc.email);
+    performAuth(acc.email, acc.password, acc);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    performAuth(identifier, password);
   };
 
   return (
@@ -120,39 +128,6 @@ export default function Login() {
         <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
           Access the internal student & admin mock interview system.
         </p>
-      </div>
-
-      {/* Quick Login Cards */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider font-bold">
-          <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
-          <span>Quick Login</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2.5">
-          {QUICK_ACCOUNTS.map((acc) => {
-            const IconComponent = acc.icon;
-            const isSelected = selectedQuick === acc.email || identifier === acc.email;
-            return (
-              <button
-                key={acc.email}
-                type="button"
-                onClick={() => handleQuickSelect(acc)}
-                className={`py-3 px-2 rounded-[var(--radius-sm)] border text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
-                  isSelected
-                    ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-sm)]'
-                    : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)]/50 hover:bg-[var(--bg-raised)]'
-                }`}
-              >
-                <div className={`p-1.5 rounded-full border ${acc.badgeStyle}`}>
-                  <IconComponent className="w-4 h-4" />
-                </div>
-                <span className="text-[12px] font-bold text-[var(--text-primary)]">
-                  {acc.title}
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {error && (
@@ -209,10 +184,57 @@ export default function Login() {
           disabled={loading || !identifier.trim() || !password}
           className="btn btn-primary w-full py-2.5 mt-2"
         >
-          <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
+          <span>{loading && !activeQuickLogging ? 'Authenticating...' : 'Sign In'}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </form>
+
+      {/* Divider */}
+      <div className="relative flex items-center justify-center pt-1">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[var(--border)]" />
+        </div>
+        <div className="relative px-3 bg-[var(--bg-card)] text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
+          Or Quick Demo Login
+        </div>
+      </div>
+
+      {/* Quick Login Cards (Below Sign In button, Single Row of 4 on PC) */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider font-bold">
+          <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <span>Quick 1-Click Login</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {QUICK_ACCOUNTS.map((acc) => {
+            const IconComponent = acc.icon;
+            const isSelected = selectedQuick === acc.email || identifier === acc.email;
+            const isLoggingIn = activeQuickLogging === acc.email;
+
+            return (
+              <button
+                key={acc.email}
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickLogin(acc)}
+                className={`py-3 px-2 rounded-[var(--radius-sm)] border text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                  isSelected || isLoggingIn
+                    ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-sm)]'
+                    : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)]/50 hover:bg-[var(--bg-raised)]'
+                }`}
+                title={`Instant login as ${acc.title}`}
+              >
+                <div className={`p-1.5 rounded-full border ${acc.badgeStyle}`}>
+                  <IconComponent className="w-4 h-4" />
+                </div>
+                <span className="text-[12px] font-bold text-[var(--text-primary)] truncate max-w-full">
+                  {isLoggingIn ? 'Logging in...' : acc.title}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
