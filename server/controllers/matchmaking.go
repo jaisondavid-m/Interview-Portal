@@ -1175,11 +1175,26 @@ func SubmitSessionCode(c *gin.Context) {
 		verdict = "Runtime Error"
 	}
 
-	// Only return open/sample test case execution results (never return hidden test cases to candidate or interviewer)
-	var sampleResults []EvalResult
+	// Sanitize execution results:
+	// - For open/sample test cases: keep input, expected, actual, passed, execution_ms
+	// - For hidden test cases: keep passed, execution_ms, is_hidden, and name; strictly blank out input, expected, and actual values
+	var sanitizedResults []EvalResult
+	hiddenCaseCounter := 1
 	for _, c := range caseResults {
-		if !c.IsHidden {
-			sampleResults = append(sampleResults, c)
+		if c.IsHidden {
+			sanitizedResults = append(sanitizedResults, EvalResult{
+				Index:       c.Index,
+				IsHidden:    true,
+				Name:        fmt.Sprintf("Hidden Test Case %d", hiddenCaseCounter),
+				Input:       "",
+				Expected:    "",
+				Actual:      "",
+				Passed:      c.Passed,
+				ExecutionMs: c.ExecutionMs,
+			})
+			hiddenCaseCounter++
+		} else {
+			sanitizedResults = append(sanitizedResults, c)
 		}
 	}
 
@@ -1190,7 +1205,8 @@ func SubmitSessionCode(c *gin.Context) {
 		"passed_cases":  passedCount,
 		"total_cases":   len(caseResults),
 		"open_cases":    len(openCases),
-		"results":       sampleResults,
+		"hidden_cases":  len(hiddenCases),
+		"results":       sanitizedResults,
 		"all_passed":    verdict == "Accepted",
 		"runtime_ms":    totalExecMs + rand.Intn(15) + 5,
 		"memory_mb":     "14.8 MB",

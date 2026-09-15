@@ -143,7 +143,7 @@ export default function TestCasesConsole({
                 <div className="flex items-center gap-2 flex-wrap">
                   {openTestCases.map((tc, idx) => {
                     const isSelected = selectedCaseIdx === idx;
-                    const result = runResults?.results?.[idx] || submissionResult?.results?.[idx];
+                    const result = runResults?.results?.[idx] || (submissionResult?.results?.filter(r => !r.is_hidden) || [])[idx];
                     return (
                       <button
                         key={idx}
@@ -170,7 +170,7 @@ export default function TestCasesConsole({
 
             {/* Selected Case Content */}
             {openTestCases[selectedCaseIdx] && (() => {
-              const activeResult = runResults?.results?.[selectedCaseIdx] || submissionResult?.results?.[selectedCaseIdx];
+              const activeResult = runResults?.results?.[selectedCaseIdx] || (submissionResult?.results?.filter(r => !r.is_hidden) || [])[selectedCaseIdx];
               return (
                 <div className="space-y-2.5 bg-[var(--bg-raised)] p-3.5 rounded-[var(--radius-sm)] border border-[var(--border)] font-mono text-[12px]">
                   <div className="flex items-center justify-between">
@@ -302,9 +302,9 @@ export default function TestCasesConsole({
               </div>
             )}
 
-            {/* Execution Output Summary (Lists Sample Cases only - hidden cases never exposed) */}
+            {/* Execution Output Summary (Lists Sample Cases & Hidden Cases tracking without exposing secret values) */}
             {(() => {
-              const activeResults = (submissionResult?.results || runResults?.results || []).filter(r => !r.is_hidden);
+              const activeResults = submissionResult?.results || runResults?.results || [];
               const isSubmission = !!submissionResult;
               const allPassed = isSubmission
                 ? (submissionResult.verdict === 'Accepted' || submissionResult.all_passed)
@@ -361,13 +361,19 @@ export default function TestCasesConsole({
                               )}
 
                               <span className="font-bold text-[var(--text-primary)] shrink-0 text-[11px]">
-                                {isHidden ? `Hidden Case ${res.index || i + 1}` : `Sample Case ${res.index || i + 1}`}:
+                                {res.name || (isHidden ? `Hidden Test Case ${res.index || i + 1}` : `Sample Case ${res.index || i + 1}`)}:
                               </span>
 
-                              {/* Only show input string for open sample cases */}
-                              {res.input && !isHidden && (
+                              {/* Only show input string for open sample cases (hidden cases never show input) */}
+                              {!isHidden && res.input && (
                                 <span className="text-[var(--text-muted)] text-[11px] truncate max-w-[260px] sm:max-w-md font-mono">
                                   {res.input}
+                                </span>
+                              )}
+
+                              {isHidden && (
+                                <span className="text-[10px] text-[var(--text-muted)] font-mono italic">
+                                  (Hidden verification test case)
                                 </span>
                               )}
                             </div>
