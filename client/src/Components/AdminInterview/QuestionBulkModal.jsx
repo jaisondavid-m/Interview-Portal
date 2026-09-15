@@ -355,6 +355,7 @@ export default function QuestionBulkModal({
     if (file) {
       processFile(file);
     }
+    e.target.value = '';
   };
 
   const handleDragOver = (e) => {
@@ -613,11 +614,11 @@ export default function QuestionBulkModal({
               {inputMode === 'file' ? (
                 <div>
                   <input
+                    id="bulk-question-file-input"
                     ref={fileInputRef}
                     type="file"
-                    accept=".json,.csv,text/csv,application/json,text/plain"
+                    accept={importFormat === 'json' ? '.json' : '.csv'}
                     onChange={handleFileChange}
-                    onClick={(e) => { e.target.value = ''; }}
                     className="hidden"
                   />
                   {uploadedFile ? (
@@ -636,13 +637,12 @@ export default function QuestionBulkModal({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
+                        <label
+                          htmlFor="bulk-question-file-input"
                           className="btn btn-secondary text-xs py-1.5 px-3 cursor-pointer"
                         >
                           Change File
-                        </button>
+                        </label>
                         <button
                           type="button"
                           onClick={handleResetUpload}
@@ -654,12 +654,12 @@ export default function QuestionBulkModal({
                       </div>
                     </div>
                   ) : (
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
+                    <label
+                      htmlFor="bulk-question-file-input"
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
-                      className={`border-2 border-dashed rounded-[var(--radius-lg)] p-8 text-center transition cursor-pointer space-y-2.5 ${
+                      className={`block border-2 border-dashed rounded-[var(--radius-lg)] p-8 text-center transition cursor-pointer space-y-2.5 ${
                         isDragging
                           ? 'border-[var(--accent)] bg-[var(--accent-dim)]'
                           : 'border-[var(--border-strong)] hover:border-[var(--accent)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-input)]'
@@ -673,10 +673,10 @@ export default function QuestionBulkModal({
                           Click to browse or drop your {importFormat.toUpperCase()} file
                         </p>
                         <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                          Supports JSON array of questions or CSV formatted rows
+                          Accepts valid <strong>.{importFormat}</strong> format
                         </p>
                       </div>
-                    </div>
+                    </label>
                   )}
                 </div>
               ) : (
