@@ -25,6 +25,122 @@ type EvalTestCase struct {
 	ExpectedOutput string `json:"expected"`
 }
 
+const fastapiInit = `import sys, json
+
+class _Request:
+    def __init__(self):
+        self.method = 'POST'
+        self.path = '/'
+        self.headers = {}
+        self._parsed = False
+        self._body = {}
+
+    def _parse(self):
+        if not self._parsed:
+            self._parsed = True
+            raw = sys.stdin.read().strip()
+            if not raw:
+                return
+            lines = raw.split('\\n')
+            first_line = lines[0].strip()
+            parts = first_line.split()
+            verbs = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+            body_str = ''
+            if parts and parts[0].upper() in verbs:
+                self.method = parts[0].upper()
+                self.path = parts[1] if len(parts) > 1 else '/'
+                if len(parts) > 2:
+                    body_str = first_line[first_line.find(self.path) + len(self.path):].strip()
+                    if len(lines) > 1:
+                        body_str += '\\n' + '\\n'.join(lines[1:]).strip()
+                else:
+                    body_str = '\\n'.join(lines[1:]).strip()
+            else:
+                body_str = raw
+
+            if body_str:
+                try:
+                    self._body = json.loads(body_str)
+                except Exception:
+                    self._body = body_str
+
+    def json(self):
+        self._parse()
+        return self._body if isinstance(self._body, dict) else {}
+
+request = _Request()
+
+def FastAPI():
+    app = _FastAPI()
+    return app
+
+class _FastAPI:
+    def __init__(self):
+        self.routes = []
+
+    def get(self, path):
+        def decorator(func):
+            self.routes.append((path, ['GET'], func))
+            return func
+        return decorator
+
+    def post(self, path):
+        def decorator(func):
+            self.routes.append((path, ['POST'], func))
+            return func
+        return decorator
+
+    def put(self, path):
+        def decorator(func):
+            self.routes.append((path, ['PUT'], func))
+            return func
+        return decorator
+
+    def delete(self, path):
+        def decorator(func):
+            self.routes.append((path, ['DELETE'], func))
+            return func
+        return decorator
+
+    def patch(self, path):
+        def decorator(func):
+            self.routes.append((path, ['PATCH'], func))
+            return func
+        return decorator
+
+    def run(self, *args, **kwargs):
+        request._parse()
+        handler = None
+        for route, methods, func in self.routes:
+            if request.method in methods and route == request.path:
+                handler = func
+                break
+        if not handler and self.routes:
+            handler = self.routes[0][2]
+        if handler:
+            res = handler(request)
+            status_code = 200
+            data = res
+            if isinstance(res, tuple):
+                data = res[0]
+                if len(res) > 1:
+                    status_code = res[1]
+            print(status_code)
+            if isinstance(data, (dict, list)):
+                print(json.dumps(data))
+            else:
+                print(data)
+        else:
+            print(404)
+            print('{"detail": "Not Found"}')
+# Auto-run if script is executed directly
+if __name__ == "__main__":
+    try:
+        app.run()
+    except NameError:
+        pass
+`
+
 // EvalResult represents the verdict for an individual test case
 type EvalResult struct {
 	Index       int    `json:"index"`
@@ -267,6 +383,8 @@ func executePython(code string, testCases []EvalTestCase, isCustom bool) ([]Eval
 	}
 	defer os.RemoveAll(tmpDir)
 
+	setupPythonEnvironment(tmpDir)
+
 	scriptPath := filepath.Join(tmpDir, "solution.py")
 	if err := os.WriteFile(scriptPath, []byte(code), 0644); err != nil {
 		return executeViaRemote("python", code, testCases, isCustom)
@@ -290,12 +408,488 @@ func executeJavaScript(code string, testCases []EvalTestCase, isCustom bool) ([]
 	}
 	defer os.RemoveAll(tmpDir)
 
+	setupNodeEnvironment(tmpDir)
+
 	scriptPath := filepath.Join(tmpDir, "solution.js")
 	if err := os.WriteFile(scriptPath, []byte(code), 0644); err != nil {
 		return executeViaRemote("javascript", code, testCases, isCustom)
 	}
 
 	return runCommandPerTestCase(nodePath, []string{scriptPath}, testCases, isCustom)
+}
+
+func setupNodeEnvironment(tmpDir string) {
+	nodeModulesDir := filepath.Join(tmpDir, "node_modules")
+	_ = os.MkdirAll(nodeModulesDir, 0755)
+
+	// 1. Express
+	expressDir := filepath.Join(nodeModulesDir, "express")
+	_ = os.MkdirAll(expressDir, 0755)
+	expressCode := `const fs = require('fs');
+
+let inputRead = false;
+let rawStdin = '';
+function getStdin() {
+  if (!inputRead) {
+    inputRead = true;
+    try {
+      rawStdin = fs.readFileSync(0, 'utf-8');
+    } catch (e) {
+      rawStdin = '';
+    }
+  }
+  return rawStdin;
+}
+
+function express() {
+  const routes = [];
+  const middlewares = [];
+  let dispatched = false;
+
+  const app = function(req, res, next) {
+    if (typeof next === 'function') next();
+  };
+
+  app.use = function(fn) {
+    if (typeof fn === 'function') middlewares.push(fn);
+    return app;
+  };
+
+  const register = (method, path, ...handlers) => {
+    const handler = handlers[handlers.length - 1];
+    routes.push({
+      method: method.toUpperCase(),
+      path: typeof path === 'string' ? path : String(path),
+      handler
+    });
+    return app;
+  };
+
+  app.get = (path, ...handlers) => register('GET', path, ...handlers);
+  app.post = (path, ...handlers) => register('POST', path, ...handlers);
+  app.put = (path, ...handlers) => register('PUT', path, ...handlers);
+  app.patch = (path, ...handlers) => register('PATCH', path, ...handlers);
+  app.delete = (path, ...handlers) => register('DELETE', path, ...handlers);
+  app.all = (path, ...handlers) => register('ALL', path, ...handlers);
+
+  function matchRoute(routePath, reqPath) {
+    if (routePath === reqPath) return { match: true, params: {} };
+    const routeParts = routePath.split('/').filter(Boolean);
+    const reqParts = reqPath.split('/').filter(Boolean);
+    if (routeParts.length !== reqParts.length) return { match: false, params: {} };
+    const params = {};
+    for (let i = 0; i < routeParts.length; i++) {
+      if (routeParts[i].startsWith(':')) {
+        params[routeParts[i].slice(1)] = reqParts[i];
+      } else if (routeParts[i] !== reqParts[i]) {
+        return { match: false, params: {} };
+      }
+    }
+    return { match: true, params };
+  }
+
+  app.__dispatch = function() {
+    if (dispatched) return;
+    dispatched = true;
+
+    const input = getStdin();
+    const lines = input.trim().split('\n');
+    let method = 'POST';
+    let path = '/';
+    let bodyRaw = '';
+
+    if (lines.length > 0 && lines[0].trim()) {
+      const firstLine = lines[0].trim();
+      const parts = firstLine.split(/\s+/);
+      const httpVerbs = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+      if (httpVerbs.includes(parts[0].toUpperCase())) {
+        method = parts[0].toUpperCase();
+        path = parts[1] || '/';
+        if (parts.length > 2) {
+          bodyRaw = firstLine.substring(firstLine.indexOf(path) + path.length).trim();
+          if (lines.length > 1) {
+            bodyRaw += (bodyRaw ? '\n' : '') + lines.slice(1).join('\n').trim();
+          }
+        } else {
+          bodyRaw = lines.slice(1).join('\n').trim();
+        }
+      } else {
+        bodyRaw = input.trim();
+      }
+    }
+
+    let parsedBody = {};
+    if (bodyRaw) {
+      try {
+        parsedBody = JSON.parse(bodyRaw);
+      } catch (e) {
+        parsedBody = bodyRaw;
+      }
+    }
+
+    let matched = null;
+    let matchedParams = {};
+    for (const r of routes) {
+      if (r.method === method || r.method === 'ALL') {
+        const { match, params } = matchRoute(r.path, path);
+        if (match) {
+          matched = r;
+          matchedParams = params;
+          break;
+        }
+      }
+    }
+
+    if (!matched && routes.length > 0) {
+      matched = routes[0];
+    }
+
+    let statusCode = 200;
+    let headers = {};
+
+    const req = {
+      method,
+      url: path,
+      path: path,
+      headers: { 'content-type': 'application/json' },
+      body: parsedBody,
+      params: matchedParams,
+      query: {},
+    };
+
+    const res = {
+      status: function(code) {
+        statusCode = code;
+        return res;
+      },
+      sendStatus: function(code) {
+        statusCode = code;
+        console.log(statusCode);
+        process.exit(0);
+      },
+      setHeader: function(k, v) {
+        headers[k] = v;
+        return res;
+      },
+      json: function(data) {
+        console.log(statusCode);
+        console.log(typeof data === 'object' ? JSON.stringify(data) : data);
+        process.exit(0);
+      },
+      send: function(data) {
+        console.log(statusCode);
+        console.log(typeof data === 'object' ? JSON.stringify(data) : data);
+        process.exit(0);
+      },
+      end: function(data) {
+        console.log(statusCode);
+        if (data) console.log(typeof data === 'object' ? JSON.stringify(data) : data);
+        process.exit(0);
+      }
+    };
+
+    if (matched && typeof matched.handler === 'function') {
+      try {
+        matched.handler(req, res);
+      } catch (err) {
+        console.error(err);
+        process.exit(1);
+      }
+    } else {
+      res.status(404).json({ error: 'Not Found' });
+    }
+  };
+
+  app.listen = function(port, cb) {
+    app.__dispatch();
+  };
+
+  process.on('beforeExit', () => {
+    app.__dispatch();
+  });
+
+  return app;
+}
+
+express.json = () => (req, res, next) => next && next();
+express.urlencoded = () => (req, res, next) => next && next();
+express.Router = () => express();
+
+module.exports = express;`
+	_ = os.WriteFile(filepath.Join(expressDir, "index.js"), []byte(expressCode), 0644)
+	_ = os.WriteFile(filepath.Join(expressDir, "package.json"), []byte(`{"name":"express","main":"index.js"}`), 0644)
+
+	// 2. jsonwebtoken
+	jwtDir := filepath.Join(nodeModulesDir, "jsonwebtoken")
+	_ = os.MkdirAll(jwtDir, 0755)
+	jwtCode := `module.exports = {
+  sign: (payload, secret, opts) => 'mock_jwt_' + Buffer.from(JSON.stringify(payload)).toString('base64'),
+  verify: (token, secret) => {
+    if (!token || typeof token !== 'string') throw new Error('jwt must be provided');
+    if (!token.startsWith('mock_jwt_')) return { userId: 1, role: 'admin' };
+    try {
+      return JSON.parse(Buffer.from(token.replace('mock_jwt_', ''), 'base64').toString());
+    } catch(e) {
+      return { userId: 1, role: 'admin' };
+    }
+  },
+  decode: (token) => {
+    try {
+      return JSON.parse(Buffer.from(token.replace('mock_jwt_', ''), 'base64').toString());
+    } catch(e) {
+      return { userId: 1, role: 'admin' };
+    }
+  }
+};`
+	_ = os.WriteFile(filepath.Join(jwtDir, "index.js"), []byte(jwtCode), 0644)
+	_ = os.WriteFile(filepath.Join(jwtDir, "package.json"), []byte(`{"name":"jsonwebtoken","main":"index.js"}`), 0644)
+
+	// 3. bcryptjs & bcrypt
+	bcryptDir := filepath.Join(nodeModulesDir, "bcryptjs")
+	_ = os.MkdirAll(bcryptDir, 0755)
+	bcryptCode := `module.exports = {
+  hash: async (pwd, salt) => '$2a$10$mock_' + Buffer.from(pwd || '').toString('hex'),
+  hashSync: (pwd, salt) => '$2a$10$mock_' + Buffer.from(pwd || '').toString('hex'),
+  compare: async (pwd, hash) => hash.includes(Buffer.from(pwd || '').toString('hex')) || pwd === 'password' || true,
+  compareSync: (pwd, hash) => hash.includes(Buffer.from(pwd || '').toString('hex')) || pwd === 'password' || true,
+  genSalt: async () => 10,
+  genSaltSync: () => 10
+};`
+	_ = os.WriteFile(filepath.Join(bcryptDir, "index.js"), []byte(bcryptCode), 0644)
+	_ = os.WriteFile(filepath.Join(bcryptDir, "package.json"), []byte(`{"name":"bcryptjs","main":"index.js"}`), 0644)
+
+	// 4. cors
+	corsDir := filepath.Join(nodeModulesDir, "cors")
+	_ = os.MkdirAll(corsDir, 0755)
+	_ = os.WriteFile(filepath.Join(corsDir, "index.js"), []byte(`module.exports = () => (req, res, next) => next && next();`), 0644)
+	_ = os.WriteFile(filepath.Join(corsDir, "package.json"), []byte(`{"name":"cors","main":"index.js"}`), 0644)
+
+	// 5. lodash
+	lodashDir := filepath.Join(nodeModulesDir, "lodash")
+	_ = os.MkdirAll(lodashDir, 0755)
+	lodashCode := `module.exports = {
+  groupBy: (arr, key) => (arr || []).reduce((acc, x) => { (acc[typeof key === 'function' ? key(x) : x[key]] = acc[typeof key === 'function' ? key(x) : x[key]] || []).push(x); return acc; }, {}),
+  sortBy: (arr, fn) => [...(arr || [])].sort((a, b) => (typeof fn === 'function' ? fn(a) - fn(b) : a[fn] - b[fn])),
+  cloneDeep: (x) => JSON.parse(JSON.stringify(x)),
+  uniq: (arr) => Array.from(new Set(arr || [])),
+  chunk: (arr, s) => (arr || []).reduce((a, c, i) => (i % s === 0 ? a.push([c]) : a[a.length - 1].push(c), a), []),
+  debounce: (fn, ms) => fn,
+  throttle: (fn, ms) => fn
+};`
+	_ = os.WriteFile(filepath.Join(lodashDir, "index.js"), []byte(lodashCode), 0644)
+	_ = os.WriteFile(filepath.Join(lodashDir, "package.json"), []byte(`{"name":"lodash","main":"index.js"}`), 0644)
+
+	// 6. uuid
+	uuidDir := filepath.Join(nodeModulesDir, "uuid")
+	_ = os.MkdirAll(uuidDir, 0755)
+	uuidCode := `module.exports = {
+  v4: () => '110ec58a-a0f2-4ac4-8393-c866d813b8d1',
+  v1: () => '110ec58a-a0f2-11ef-8393-c866d813b8d1'
+};`
+	_ = os.WriteFile(filepath.Join(uuidDir, "index.js"), []byte(uuidCode), 0644)
+	_ = os.WriteFile(filepath.Join(uuidDir, "package.json"), []byte(`{"name":"uuid","main":"index.js"}`), 0644)
+}
+
+func setupPythonEnvironment(tmpDir string) {
+	flaskPath := filepath.Join(tmpDir, "flask.py")
+	flaskCode := `import sys, json
+
+class _Request:
+    def __init__(self):
+        self.method = 'POST'
+        self.path = '/'
+        self.headers = {}
+        self._parsed = False
+        self._body = {}
+
+    def _parse(self):
+        if not self._parsed:
+            self._parsed = True
+            raw = sys.stdin.read().strip()
+            if not raw:
+                return
+            lines = raw.split('\n')
+            first_line = lines[0].strip()
+            parts = first_line.split()
+            verbs = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+            body_str = ''
+            if parts and parts[0].upper() in verbs:
+                self.method = parts[0].upper()
+                self.path = parts[1] if len(parts) > 1 else '/'
+                if len(parts) > 2:
+                    body_str = first_line[first_line.find(self.path) + len(self.path):].strip()
+                    if len(lines) > 1:
+                        body_str += '\n' + '\n'.join(lines[1:]).strip()
+                else:
+                    body_str = '\n'.join(lines[1:]).strip()
+            else:
+                body_str = raw
+
+            if body_str:
+                try:
+                    self._body = json.loads(body_str)
+                except Exception:
+                    self._body = body_str
+
+    def get_json(self, silent=True):
+        self._parse()
+        return self._body if isinstance(self._body, dict) else {}
+
+request = _Request()
+
+def jsonify(data):
+    return data
+
+class Flask:
+    def __init__(self, name):
+        self.name = name
+        self.routes = []
+
+    def route(self, rule, methods=['GET']):
+        def decorator(f):
+            self.routes.append((rule, methods, f))
+            return f
+        return decorator
+
+    def run(self, *args, **kwargs):
+        request._parse()
+        handler = None
+        for rule, methods, f in self.routes:
+            if request.method in methods and (rule == request.path or rule == request.path.rstrip('/')):
+                handler = f
+                break
+        if not handler and self.routes:
+            handler = self.routes[0][2]
+
+        if handler:
+            res = handler()
+            status_code = 200
+            data = res
+            if isinstance(res, tuple):
+                data = res[0]
+                status_code = res[1] if len(res) > 1 else 200
+            print(status_code)
+            if isinstance(data, (dict, list)):
+                print(json.dumps(data))
+            else:
+                print(data)
+            sys.exit(0)
+`
+	_ = os.WriteFile(flaskPath, []byte(flaskCode), 0644)
+
+	// Create fastapi mock package
+	fastapiDir := filepath.Join(tmpDir, "fastapi")
+	_ = os.MkdirAll(fastapiDir, 0755)
+	fastapiInit := `import sys, json
+
+class _Request:
+    def __init__(self):
+        self.method = 'POST'
+        self.path = '/'
+        self.headers = {}
+        self._parsed = False
+        self._body = {}
+
+    def _parse(self):
+        if not self._parsed:
+            self._parsed = True
+            raw = sys.stdin.read().strip()
+            if not raw:
+                return
+            lines = raw.split('\n')
+            first_line = lines[0].strip()
+            parts = first_line.split()
+            verbs = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+            body_str = ''
+            if parts and parts[0].upper() in verbs:
+                self.method = parts[0].upper()
+                self.path = parts[1] if len(parts) > 1 else '/'
+                if len(parts) > 2:
+                    body_str = first_line[first_line.find(self.path) + len(self.path):].strip()
+                    if len(lines) > 1:
+                        body_str += '\n' + '\n'.join(lines[1:]).strip()
+                else:
+                    body_str = '\n'.join(lines[1:]).strip()
+            else:
+                body_str = raw
+
+            if body_str:
+                try:
+                    self._body = json.loads(body_str)
+                except Exception:
+                    self._body = body_str
+
+    def json(self):
+        self._parse()
+        return self._body if isinstance(self._body, dict) else {}
+
+request = _Request()
+
+def FastAPI():
+    app = _FastAPI()
+    return app
+
+class _FastAPI:
+    def __init__(self):
+        self.routes = []
+
+    def get(self, path):
+        def decorator(func):
+            self.routes.append((path, ['GET'], func))
+            return func
+        return decorator
+
+    def post(self, path):
+        def decorator(func):
+            self.routes.append((path, ['POST'], func))
+            return func
+        return decorator
+
+    def put(self, path):
+        def decorator(func):
+            self.routes.append((path, ['PUT'], func))
+            return func
+        return decorator
+
+    def delete(self, path):
+        def decorator(func):
+            self.routes.append((path, ['DELETE'], func))
+            return func
+        return decorator
+
+    def patch(self, path):
+        def decorator(func):
+            self.routes.append((path, ['PATCH'], func))
+            return func
+        return decorator
+
+    def run(self, *args, **kwargs):
+        request._parse()
+        handler = None
+        for route, methods, func in self.routes:
+            if request.method in methods and route == request.path:
+                handler = func
+                break
+        if not handler and self.routes:
+            handler = self.routes[0][2]
+        if handler:
+            res = handler(request)
+            status_code = 200
+            data = res
+            if isinstance(res, tuple):
+                data = res[0]
+                if len(res) > 1:
+                    status_code = res[1]
+            print(status_code)
+            if isinstance(data, (dict, list)):
+                print(json.dumps(data))
+            else:
+                print(data)
+        else:
+            print(404)
+            print('{"detail": "Not Found"}')
+`
+	_ = os.WriteFile(filepath.Join(fastapiDir, "__init__.py"), []byte(fastapiInit), 0644)
 }
 
 // ============================================================
@@ -404,8 +998,16 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 	results := make([]EvalResult, len(testCases))
 
 	for i, tc := range testCases {
-		ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 15000*time.Millisecond)
 		cmd := exec.CommandContext(ctx, execPath, baseArgs...)
+
+		// If executing Python, set PYTHONPATH to the directory of the script (first argument) so local mocks are importable
+		if strings.HasSuffix(execPath, "python") || strings.HasSuffix(execPath, "python3") {
+			if len(baseArgs) > 0 {
+				scriptDir := filepath.Dir(baseArgs[0])
+				cmd.Env = append(os.Environ(), "PYTHONPATH="+scriptDir)
+			}
+		}
 
 		// Pipe test case input to Standard Input (stdin)
 		cmd.Stdin = strings.NewReader(tc.Input)

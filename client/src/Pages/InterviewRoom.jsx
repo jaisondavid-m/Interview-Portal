@@ -31,6 +31,7 @@ import TestCasesConsole from '../Components/TestCasesConsole';
 import WhiteboardCanvas from '../Components/Whiteboard/WhiteboardCanvas';
 import FrontendPlayground from '../Components/Frontend/FrontendPlayground';
 import DatabasePlayground from '../Components/Database/DatabasePlayground';
+import BackendPlayground from '../Components/Backend/BackendPlayground';
 import MCQPlayground from '../Components/MCQ/MCQPlayground';
 import VerbalQAPlayground from '../Components/VerbalQA/VerbalQAPlayground';
 import ConfirmModal from '../Components/ConfirmModal';
@@ -1622,6 +1623,31 @@ export default function InterviewRoom() {
               payload={payload}
               currentUserRole={currentUserRole}
               sessionId={sessionId}
+            />
+          ) : isBackendMode ? (
+            <BackendPlayground
+              code={code}
+              onCodeChange={handleCodeChange}
+              language={language}
+              onLanguageChange={handleLanguageChange}
+              isEditable={currentUserRole === 'interviewee'}
+              candidateName={currentUserRole === 'interviewer' ? (peerUser?.username || 'Candidate') : 'You (Candidate)'}
+              question={question}
+              payload={payload}
+              currentUserRole={currentUserRole}
+              sessionId={sessionId}
+              round={currentRound}
+              onRunCode={handleRunCode}
+              onSubmitCode={handleSubmitCode}
+              isRunning={isRunning}
+              isSubmitting={isSubmitting}
+              runResults={runResults}
+              submissionResult={submissionResult}
+              lastExecutionInfo={
+                sessionData?.last_execution_verdict
+                  ? `${sessionData.last_execution_verdict} - ${sessionData.last_execution_passed}/${sessionData.last_execution_total} Passed`
+                  : null
+              }
             />
           ) : (
             <>
