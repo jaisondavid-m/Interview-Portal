@@ -115,7 +115,21 @@ func UploadRecordingChunk(c *gin.Context) {
 		return
 	}
 
-	// 3. Atomically append chunk bytes to the server file
+	// 3. Single-Uploader Guard: Verify or establish the master uploader for this session
+	var recording models.InterviewRecording
+	dbErr := database.DB.Where("session_id = ?", session.ID).First(&recording).Error
+
+	if dbErr == nil && recording.UploaderID > 0 && recording.UploaderID != currentUserID {
+		// Another client is already the designated master recorder for this session.
+		// Ignore secondary stream to prevent audio duplication and WebM chunk interleaving.
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ignored",
+			"message": "Duplicate stream chunk ignored. Master recording is handled by primary participant.",
+		})
+		return
+	}
+
+	// 4. Atomically append chunk bytes to the server file
 	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -143,7 +157,7 @@ func UploadRecordingChunk(c *gin.Context) {
 		currentFileSize = fi.Size()
 	}
 
-	// 4. Mirror to server/uploads/recordings if running locally from repo root
+	// 5. Mirror to server/uploads/recordings if running locally from repo root
 	if fiStat, sErr := os.Stat("server"); sErr == nil && fiStat.IsDir() {
 		serverDir := filepath.Join("server", "uploads", "recordings")
 		_ = os.MkdirAll(serverDir, 0755)
@@ -156,10 +170,7 @@ func UploadRecordingChunk(c *gin.Context) {
 		}
 	}
 
-	// 5. Update or create recording database record in real-time
-	var recording models.InterviewRecording
-	dbErr := database.DB.Where("session_id = ?", session.ID).First(&recording).Error
-
+	// 6. Update or create recording database record in real-time
 	if dbErr != nil {
 		recording = models.InterviewRecording{
 			SessionID:       session.ID,

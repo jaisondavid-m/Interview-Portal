@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Video,
@@ -160,6 +160,18 @@ export default function InterviewRoom() {
     setShowFeedbackModal(true);
   };
 
+  // Deterministic single master recorder per session (lower user ID) to prevent dual recording streams
+  const isMasterRecorder = useMemo(() => {
+    if (!sessionData) return true;
+    const uid1 = Number(sessionData.interviewer_id) || 0;
+    const uid2 = Number(sessionData.interviewee_id) || 0;
+    const myId = Number(myUserId) || 0;
+    if (uid1 > 0 && uid2 > 0) {
+      return myId === Math.min(uid1, uid2);
+    }
+    return myId === uid1;
+  }, [sessionData?.interviewer_id, sessionData?.interviewee_id, myUserId]);
+
   // Live WebRTC Audio Call Hook
   const {
     connectionState,
@@ -175,6 +187,7 @@ export default function InterviewRoom() {
     sessionId,
     currentUserId: myUserId,
     enabled: !micModalOpen && !isCompleted && !ending,
+    isRecorder: isMasterRecorder,
   });
 
   const [elapsedSecs, setElapsedSecs] = useState(() => {

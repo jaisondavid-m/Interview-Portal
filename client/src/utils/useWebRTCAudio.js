@@ -29,6 +29,7 @@ export default function useWebRTCAudio({
   sessionId,
   currentUserId,
   enabled = true,
+  isRecorder = true,
   onRecordingUploaded,
 }) {
   // State
@@ -43,6 +44,8 @@ export default function useWebRTCAudio({
   // References
   const isMutedRef = useRef(false);
   const peerMutedRef = useRef(false);
+  const isRecorderRef = useRef(isRecorder);
+  isRecorderRef.current = isRecorder;
   const wsRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -129,7 +132,7 @@ export default function useWebRTCAudio({
 
   // Process and stream chunks asynchronously to the server
   const processChunkQueue = useCallback(async () => {
-    if (isStreamingChunkRef.current || chunkQueueRef.current.length === 0 || !sessionId) {
+    if (!isRecorderRef.current || isStreamingChunkRef.current || chunkQueueRef.current.length === 0 || !sessionId) {
       return;
     }
 
@@ -191,7 +194,7 @@ export default function useWebRTCAudio({
 
   // Queue incoming audio chunk from MediaRecorder
   const queueAudioChunk = useCallback((blob) => {
-    if (!blob || blob.size === 0) return;
+    if (!blob || blob.size === 0 || !isRecorderRef.current) return;
     chunkSequenceRef.current += 1;
     chunkQueueRef.current.push({
       blob,
@@ -217,17 +220,22 @@ export default function useWebRTCAudio({
       }
       audioContextRef.current = audioCtx;
 
-      // Create mixer destination
-      const dest = audioCtx.createMediaStreamDestination();
-      mixedDestRef.current = dest;
-
-      // Add local stream to mixer & analyser
+      // Add local stream to analyser
       const localSource = audioCtx.createMediaStreamSource(localStream);
       const localAnalyser = audioCtx.createAnalyser();
       localAnalyser.fftSize = 64;
       localAnalyserRef.current = localAnalyser;
-
       localSource.connect(localAnalyser);
+
+      // Only start MediaRecorder if this client is the designated master recorder
+      if (!isRecorderRef.current) {
+        console.log('[WebRTC Audio] Client participating in audio call without redundant recording (master recorder handles stream)');
+        return;
+      }
+
+      // Create mixer destination for master recording
+      const dest = audioCtx.createMediaStreamDestination();
+      mixedDestRef.current = dest;
       localSource.connect(dest);
 
       // Create combined recording stream with active audio tracks
@@ -257,23 +265,25 @@ export default function useWebRTCAudio({
       // Emit chunk every 3 seconds for continuous streaming to server
       recorder.start(3000);
       recordingStartTimeRef.current = Date.now();
-      console.log('[WebRTC Audio] Real-time chunk streaming active with mimeType:', mimeType || 'default');
+      console.log('[WebRTC Audio] Master real-time chunk streaming active with mimeType:', mimeType || 'default');
     } catch (err) {
       console.warn('[WebRTC Audio] Mixer init warning:', err);
-      // Direct stream fallback
-      try {
-        const mimeType = getSupportedAudioMimeType();
-        const fallbackRecorder = new MediaRecorder(localStream, mimeType ? { mimeType } : undefined);
-        mediaRecorderRef.current = fallbackRecorder;
-        fallbackRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            queueAudioChunk(e.data);
-          }
-        };
-        fallbackRecorder.start(3000);
-        recordingStartTimeRef.current = Date.now();
-      } catch (fallbackErr) {
-        console.error('[WebRTC Audio] Fallback recorder error:', fallbackErr);
+      if (isRecorderRef.current) {
+        // Direct stream fallback
+        try {
+          const mimeType = getSupportedAudioMimeType();
+          const fallbackRecorder = new MediaRecorder(localStream, mimeType ? { mimeType } : undefined);
+          mediaRecorderRef.current = fallbackRecorder;
+          fallbackRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+              queueAudioChunk(e.data);
+            }
+          };
+          fallbackRecorder.start(3000);
+          recordingStartTimeRef.current = Date.now();
+        } catch (fallbackErr) {
+          console.error('[WebRTC Audio] Fallback recorder error:', fallbackErr);
+        }
       }
     }
   }, [queueAudioChunk]);
@@ -281,7 +291,7 @@ export default function useWebRTCAudio({
   // Connect remote stream to mixer when track is received
   const connectRemoteToMixer = useCallback(async (remoteStream) => {
     try {
-      if (!audioContextRef.current || !mixedDestRef.current) return;
+      if (!audioContextRef.current) return;
 
       const audioCtx = audioContextRef.current;
       if (audioCtx.state === 'suspended') {
@@ -294,10 +304,12 @@ export default function useWebRTCAudio({
       const remoteAnalyser = audioCtx.createAnalyser();
       remoteAnalyser.fftSize = 64;
       remoteAnalyserRef.current = remoteAnalyser;
-
       remoteSource.connect(remoteAnalyser);
-      remoteSource.connect(mixedDestRef.current);
-      console.log('[WebRTC Audio] Remote peer audio attached to real-time mixer');
+
+      if (isRecorderRef.current && mixedDestRef.current) {
+        remoteSource.connect(mixedDestRef.current);
+        console.log('[WebRTC Audio] Remote peer audio attached to master recording mixer');
+      }
     } catch (err) {
       console.warn('[WebRTC Audio] Remote mixer connect warning:', err);
     }
@@ -397,6 +409,11 @@ export default function useWebRTCAudio({
   // Stop recording, flush remaining chunks, and finalize server recording metadata
   const stopAndUploadRecording = useCallback(async () => {
     if (!sessionId) return null;
+    if (!isRecorderRef.current) {
+      // Non-master peer simply terminates audio call
+      stopAudioCall();
+      return null;
+    }
     if (isFinalizingRef.current) {
       console.log('[WebRTC Audio] Finalize already in progress, ignoring duplicate request');
       return null;
