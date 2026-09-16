@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getSafeUserMedia } from './mediaUtils';
+import { getSafeUserMedia, getHighQualityAudioConstraints, optimizeAudioSDP } from './mediaUtils';
 
 const RTC_CONFIG = {
   iceServers: [
@@ -84,13 +84,17 @@ export default function useWebRTCAudio({
   const iceCandidatesQueueRef = useRef([]);
   const fallbackOfferTimerRef = useRef(null);
 
-  // Create persistent remote audio element for fallback output
+  // Create persistent remote audio element for ultra-low latency playback
   useEffect(() => {
     const el = document.createElement('audio');
     el.autoplay = true;
     el.playsInline = true;
     el.muted = false;
     el.volume = 1.0;
+    el.preload = 'none';
+    if ('preservesPitch' in el) {
+      el.preservesPitch = false;
+    }
     remoteAudioElRef.current = el;
     document.body.appendChild(el);
 
@@ -230,7 +234,7 @@ export default function useWebRTCAudio({
     processChunkQueue();
   }, [processChunkQueue]);
 
-  // Setup Web Audio Mixer & Direct Output Graph
+  // Setup Web Audio Mixer & High-Pass Audio Graph
   const initAudioMixer = useCallback(async (localStream) => {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -242,7 +246,7 @@ export default function useWebRTCAudio({
       }
       audioContextRef.current = audioCtx;
 
-      // Add local stream to analyser (Local source is NOT connected to destination to avoid echo!)
+      // Add local stream to analyser for Voice Activity Detection (VAD)
       const localSource = audioCtx.createMediaStreamSource(localStream);
       const localAnalyser = audioCtx.createAnalyser();
       localAnalyser.fftSize = 64;
@@ -253,10 +257,15 @@ export default function useWebRTCAudio({
         return;
       }
 
-      // Create mixer destination for master recording
+      // Create mixer destination for master recording with low-cut filter (80Hz) to eliminate background room rumble & AC hum
       const dest = audioCtx.createMediaStreamDestination();
       mixedDestRef.current = dest;
-      localSource.connect(dest);
+
+      const hpFilter = audioCtx.createBiquadFilter();
+      hpFilter.type = 'highpass';
+      hpFilter.frequency.setValueAtTime(80, audioCtx.currentTime);
+      localSource.connect(hpFilter);
+      hpFilter.connect(dest);
 
       const recordingStream = new MediaStream();
       dest.stream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
@@ -282,7 +291,8 @@ export default function useWebRTCAudio({
     }
   }, [queueAudioChunk]);
 
-  // Connect remote stream directly to Web Audio destination (speakers) & analyser
+  // Connect remote stream to Web Audio graph (Analyser & Recording mixer)
+  // Dedicated HTML5 <audio> element handles speaker playback cleanly with hardware AEC
   const connectRemoteAudioStream = useCallback((remoteStream) => {
     try {
       if (!audioContextRef.current) return;
@@ -301,18 +311,19 @@ export default function useWebRTCAudio({
       const remoteSource = audioCtx.createMediaStreamSource(remoteStream);
       remoteAudioSourceRef.current = remoteSource;
 
-      // 1. Direct hardware audio output to speakers
-      remoteSource.connect(audioCtx.destination);
-
-      // 2. Connect to analyser for Voice Activity Detection (VAD)
+      // 1. Connect to analyser for Voice Activity Detection (VAD)
       const remoteAnalyser = audioCtx.createAnalyser();
       remoteAnalyser.fftSize = 64;
       remoteAnalyserRef.current = remoteAnalyser;
       remoteSource.connect(remoteAnalyser);
 
-      // 3. Connect to recording mixer if this client is the master recorder
+      // 2. Connect through high-pass filter to recording mixer (if master recorder)
       if (isRecorderRef.current && mixedDestRef.current) {
-        remoteSource.connect(mixedDestRef.current);
+        const hpFilter = audioCtx.createBiquadFilter();
+        hpFilter.type = 'highpass';
+        hpFilter.frequency.setValueAtTime(80, audioCtx.currentTime);
+        remoteSource.connect(hpFilter);
+        hpFilter.connect(mixedDestRef.current);
       }
     } catch (err) {
       console.warn('[WebRTC Audio] Remote Web Audio connection warning:', err);
@@ -532,17 +543,8 @@ export default function useWebRTCAudio({
       try {
         setConnectionState('connecting');
 
-        // 1. Get High-Quality Microphone Audio (with iOS & legacy fallbacks)
-        const stream = await getSafeUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1,
-            sampleRate: 48000,
-          },
-          video: false,
-        });
+        // 1. Get High-Quality Microphone Audio (with noise suppression, echo cancellation, iOS & legacy fallbacks)
+        const stream = await getSafeUserMedia(getHighQualityAudioConstraints());
 
         if (isDestroyed) {
           stream.getTracks().forEach((t) => t.stop());
@@ -561,9 +563,20 @@ export default function useWebRTCAudio({
         const pc = new RTCPeerConnection(RTC_CONFIG);
         pcRef.current = pc;
 
-        // Add local tracks to peer connection
+        // Add local tracks to peer connection with high network priority
         audioTracks.forEach((track) => {
-          pc.addTrack(track, stream);
+          const sender = pc.addTrack(track, stream);
+          if (sender && sender.getParameters) {
+            try {
+              const params = sender.getParameters();
+              if (params && params.encodings && params.encodings.length > 0) {
+                params.encodings[0].networkPriority = 'high';
+                params.encodings[0].priority = 'high';
+                params.encodings[0].maxBitrate = 64000;
+                sender.setParameters(params).catch(() => {});
+              }
+            } catch (e) {}
+          }
         });
 
         pc.onicecandidate = (event) => {
@@ -602,8 +615,20 @@ export default function useWebRTCAudio({
         pc.onconnectionstatechange = updateCalculatedConnectionState;
         pc.oniceconnectionstatechange = updateCalculatedConnectionState;
 
-        // Remote Audio Track Received -> Output to speakers & mixer
+        // Remote Audio Track Received -> Fast zero-delay output to speakers & mixer
         pc.ontrack = (event) => {
+          // 0. Slash jitter buffer & playout delay for instant real-time speech!
+          if (event.receiver) {
+            try {
+              if ('playoutDelayHint' in event.receiver) {
+                event.receiver.playoutDelayHint = 0;
+              }
+              if ('jitterBufferTarget' in event.receiver) {
+                event.receiver.jitterBufferTarget = 0;
+              }
+            } catch (e) {}
+          }
+
           let remoteStream = event.streams && event.streams[0] ? event.streams[0] : null;
           if (!remoteStream && event.track) {
             remoteStream = new MediaStream([event.track]);
@@ -612,10 +637,10 @@ export default function useWebRTCAudio({
           if (remoteStream) {
             remoteStreamRef.current = remoteStream;
 
-            // 1. Direct Web Audio API Output to speakers (0ms delay)
+            // 1. Connect to Web Audio Analyser & Recording Mixer
             connectRemoteAudioStream(remoteStream);
 
-            // 2. Dual fallback to HTML5 audio element
+            // 2. Output to dedicated HTML5 audio element with native hardware echo cancellation & 0ms delay
             if (remoteAudioElRef.current) {
               const el = remoteAudioElRef.current;
               el.srcObject = remoteStream;
@@ -684,7 +709,8 @@ export default function useWebRTCAudio({
                     const offer = await pc.createOffer({
                       offerToReceiveAudio: true,
                     });
-                    await pc.setLocalDescription(offer);
+                    const optimizedSdp = optimizeAudioSDP(offer.sdp);
+                    await pc.setLocalDescription({ type: offer.type, sdp: optimizedSdp });
                     sendSignaling('offer', pc.localDescription);
                   } catch (offerErr) {
                     console.warn('[WebRTC Audio] Create offer error on peer_joined:', offerErr);
@@ -702,7 +728,8 @@ export default function useWebRTCAudio({
                   if (!isDestroyed && pc.signalingState === 'stable' && !pc.remoteDescription) {
                     try {
                       const offer = await pc.createOffer({ offerToReceiveAudio: true });
-                      await pc.setLocalDescription(offer);
+                      const optimizedSdp = optimizeAudioSDP(offer.sdp);
+                      await pc.setLocalDescription({ type: offer.type, sdp: optimizedSdp });
                       sendSignaling('offer', pc.localDescription);
                     } catch (e) {
                       console.warn('[WebRTC Audio] Fallback offer error:', e);
@@ -731,7 +758,8 @@ export default function useWebRTCAudio({
                   const answer = await pc.createAnswer({
                     offerToReceiveAudio: true,
                   });
-                  await pc.setLocalDescription(answer);
+                  const optimizedSdp = optimizeAudioSDP(answer.sdp);
+                  await pc.setLocalDescription({ type: answer.type, sdp: optimizedSdp });
                   sendSignaling('answer', pc.localDescription);
                   updateCalculatedConnectionState();
                 } catch (err) {
