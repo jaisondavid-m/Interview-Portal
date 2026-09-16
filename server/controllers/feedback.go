@@ -1027,9 +1027,11 @@ func GetStudentDashboardStats(c *gin.Context) {
 		grade = "Unranked"
 	}
 
-	// 4. Question-wise feedback score averages across all peer evaluations received
+	// 4. Question-wise feedback score averages across all peer evaluations received (excluding text feedback/comments)
 	var allQuestions []models.FeedbackQuestion
 	database.DB.
+		Where("question_type != ?", "text").
+		Where("is_active = ?", true).
 		Preload("Options").
 		Order("order_index asc, id asc").
 		Find(&allQuestions)
