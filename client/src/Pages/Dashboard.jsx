@@ -20,23 +20,15 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import { Skeleton, SkeletonStatsGrid, SkeletonTableRows } from '../Components/Skeleton';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [recentInterviews, setRecentInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        setUser(JSON.parse(userStr));
-      } catch (e) {}
-    }
-  }, []);
 
   const fetchDashboardData = async () => {
     try {

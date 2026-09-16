@@ -95,23 +95,18 @@ export default function AudioPlayer({
     return '/api/v1';
   }, []);
 
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') || '' : '';
-  const tokenQuery = token ? `token=${encodeURIComponent(token)}` : '';
   const sessionId = recording?.session_id || session?.id;
 
-  // Direct Progressive HTTP Byte-Range Stream URL (Spotify-style chunk streaming)
+  // Direct Progressive HTTP Byte-Range Stream URL (Spotify-style chunk streaming via session cookie)
   const streamUrl = useMemo(() => {
     if (!audioFileName) return '';
-    const base = `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`;
-    return tokenQuery ? `${base}?${tokenQuery}` : base;
-  }, [audioBase, audioFileName, tokenQuery]);
+    return `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`;
+  }, [audioBase, audioFileName]);
 
   const directDownloadUrl = useMemo(() => {
     if (!audioFileName) return '';
-    const base = `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}`;
-    const dlParams = tokenQuery ? `?${tokenQuery}&download=true` : '?download=true';
-    return `${base}${dlParams}`;
-  }, [audioBase, audioFileName, tokenQuery]);
+    return `${audioBase}/admin/recordings/${encodeURIComponent(audioFileName)}?download=true`;
+  }, [audioBase, audioFileName]);
 
   // Update progressive buffer ranges from HTML5 audio element (Spotify-style buffer tracking)
   const updateBufferedRanges = useCallback(() => {

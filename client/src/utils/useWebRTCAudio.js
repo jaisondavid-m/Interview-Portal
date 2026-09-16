@@ -206,15 +206,8 @@ export default function useWebRTCAudio({
         chunkUrl = `http://localhost:8080/api/v1/interviews/sessions/${sessionId}/recording/chunk`;
       }
 
-      const token = localStorage.getItem('token') || '';
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
       await fetch(chunkUrl, {
         method: 'POST',
-        headers,
         credentials: 'include',
         body: formData,
       });
@@ -507,11 +500,7 @@ export default function useWebRTCAudio({
         finalizeUrl = `http://localhost:8080/api/v1/interviews/sessions/${sessionId}/recording/finalize`;
       }
 
-      const token = localStorage.getItem('token') || '';
       const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
 
       const response = await fetch(finalizeUrl, {
         method: 'POST',
@@ -699,8 +688,7 @@ export default function useWebRTCAudio({
         }
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const token = localStorage.getItem('token') || '';
-        const wsUrl = `${protocol}//${wsHost}${wsPath}?token=${encodeURIComponent(token)}`;
+        const wsUrl = `${protocol}//${wsHost}${wsPath}`;
 
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;

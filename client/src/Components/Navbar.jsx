@@ -1,21 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        setUser(JSON.parse(userStr));
-      } catch (e) { }
-    }
-  }, []);
+  const { user } = useAuth();
 
   const isAdmin = user?.role === 'admin';
   const isDeveloper = user?.role === 'developer';
-  const targetPath = isDeveloper ? '/developer/audit-logs' : isAdmin ? '/admin/users' : '/dashboard';
+  const targetPath = isDeveloper ? '/developer/audit-logs' : isAdmin ? '/admin/dashboard' : '/dashboard';
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()

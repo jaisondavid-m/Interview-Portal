@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Lock, User, AlertCircle, ShieldCheck, GraduationCap, Eye, EyeOff, Zap, Check, Terminal } from 'lucide-react';
-import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 
 const QUICK_ACCOUNTS = [
   {
@@ -46,7 +46,21 @@ export default function Login() {
   const [activeQuickLogging, setActiveQuickLogging] = useState(null);
   const [error, setError] = useState('');
   const [selectedQuick, setSelectedQuick] = useState(null);
+  const { user, login } = useAuth();
   const navigate = useNavigate();
+
+  // If already authenticated, direct immediately to respective dashboard
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') {
+        navigate('/admin/dashboard', { replace: true });
+      } else if (user.role === 'developer') {
+        navigate('/developer/audit-logs', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [user, navigate]);
 
   const performAuth = async (loginIdentifier, loginPassword, quickAcc = null) => {
     setError('');
@@ -56,49 +70,21 @@ export default function Login() {
     }
 
     try {
-      const res = await api.post('/auth/login', {
-        identifier: loginIdentifier.trim(),
-        password: loginPassword,
-      });
+      const res = await login(loginIdentifier, loginPassword);
 
-      if (res && res.token) {
-        localStorage.setItem('token', res.token);
-        localStorage.setItem('user', JSON.stringify(res.user));
-
+      if (res && res.success && res.user) {
         if (res.user.role === 'admin') {
-          navigate('/admin/dashboard');
+          navigate('/admin/dashboard', { replace: true });
         } else if (res.user.role === 'developer') {
-          navigate('/developer/audit-logs');
+          navigate('/developer/audit-logs', { replace: true });
         } else {
-          navigate('/dashboard');
-        }
-      }
-    } catch (err) {
-      // Fallback for offline demo or backend delay
-      const quickMatch = quickAcc || QUICK_ACCOUNTS.find(
-        (a) => (a.email.toLowerCase() === loginIdentifier.trim().toLowerCase() || loginIdentifier.trim().toUpperCase() === 'ADMIN01' || loginIdentifier.trim().toUpperCase() === 'DEV01') && loginPassword === 'password'
-      );
-      if (quickMatch) {
-        const dummyUser = {
-          id: quickMatch.role === 'admin' ? 1 : quickMatch.role === 'developer' ? 99 : (quickMatch.title === 'Student 1' ? 2 : 3),
-          name: quickMatch.role === 'admin' ? 'System Administrator' : quickMatch.role === 'developer' ? 'Lead Developer' : (quickMatch.title === 'Student 1' ? 'Jaison David M' : 'Mani M R S'),
-          email: quickMatch.email,
-          roll_no: quickMatch.role === 'admin' ? 'ADMIN01' : quickMatch.role === 'developer' ? 'DEV01' : (quickMatch.title === 'Student 1' ? '7376251CS221' : '7376252AD230'),
-          department: quickMatch.role === 'admin' ? 'Administration' : (quickMatch.title === 'Student 1' ? 'CSE' : 'AI&DS'),
-          role: quickMatch.role,
-        };
-        localStorage.setItem('token', 'session-token-' + Date.now());
-        localStorage.setItem('user', JSON.stringify(dummyUser));
-        if (quickMatch.role === 'admin') {
-          navigate('/admin/dashboard');
-        } else if (quickMatch.role === 'developer') {
-          navigate('/developer/audit-logs');
-        } else {
-          navigate('/dashboard');
+          navigate('/dashboard', { replace: true });
         }
       } else {
-        setError(err.response?.data?.message || err.message || 'Invalid credentials. Please contact your college administrator.');
+        setError(res?.error || 'Invalid email/roll number or password');
       }
+    } catch (err) {
+      setError(err.message || 'Invalid credentials. Please contact your college administrator.');
     } finally {
       setLoading(false);
       setActiveQuickLogging(null);

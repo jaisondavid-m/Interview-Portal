@@ -1,23 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, SlidersHorizontal } from 'lucide-react';
+import { LayoutDashboard, Users, SlidersHorizontal, Terminal } from 'lucide-react';
 import Navbar from '../Components/Navbar';
 import Sidebar from '../Components/Sidebar';
+import { useAuth } from '../context/AuthContext';
 
 export default function DashboardLayout() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        setUser(JSON.parse(userStr));
-      } catch (e) { }
-    }
-  }, []);
+  const { user } = useAuth();
 
   const isAdmin = user?.role === 'admin';
-  const mobileNavItems = isAdmin
+  const isDeveloper = user?.role === 'developer';
+  const mobileNavItems = isDeveloper
+    ? [
+      { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
+    ]
+    : isAdmin
     ? [
       { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
       { name: 'Users', path: '/admin/users', icon: Users },

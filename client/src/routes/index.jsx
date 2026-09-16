@@ -28,25 +28,30 @@ import ProtectedRoute from '../Components/ProtectedRoute';
 import AdminRoute from '../Components/AdminRoute';
 import DeveloperRoute from '../Components/DeveloperRoute';
 import { RouteErrorBoundary } from '../Components/ErrorBoundary';
+import { useAuth } from '../context/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 // Helper component for root redirect
 function RootRedirect() {
-  const token = localStorage.getItem('token');
-  const userStr = localStorage.getItem('user');
+  const { user, loading } = useAuth();
 
-  if (token && userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      if (user.role === 'admin') {
-        return <Navigate to="/admin/dashboard" replace />;
-      }
-      if (user.role === 'developer') {
-        return <Navigate to="/developer/audit-logs" replace />;
-      }
-      return <Navigate to="/dashboard" replace />;
-    } catch (e) {
-      return <Navigate to="/login" replace />;
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-[var(--bg)] text-[var(--text-primary)]">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
+      </div>
+    );
+  }
+
+  if (user) {
+    const role = user.role?.toLowerCase();
+    if (role === 'admin') {
+      return <Navigate to="/admin/dashboard" replace />;
     }
+    if (role === 'developer') {
+      return <Navigate to="/developer/audit-logs" replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Navigate to="/login" replace />;

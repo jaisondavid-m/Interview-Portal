@@ -2,20 +2,16 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, ArrowLeft } from 'lucide-react';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function NotFound() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // Determine user's home dashboard based on role
-  const userStr = localStorage.getItem('user');
   let targetDashboard = '/dashboard';
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      if (user?.role === 'admin') targetDashboard = '/admin/users';
-      else if (user?.role === 'developer') targetDashboard = '/developer/audit-logs';
-    } catch (e) {}
-  }
+  if (user?.role === 'admin') targetDashboard = '/admin/dashboard';
+  else if (user?.role === 'developer') targetDashboard = '/developer/audit-logs';
 
   return (
     <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-4 py-6 space-y-4 animate-fadeIn font-sans">

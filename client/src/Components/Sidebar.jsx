@@ -1,24 +1,14 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, LogOut, SlidersHorizontal, Video, History, MessageSquareCheck, Trophy, Terminal } from 'lucide-react';
-import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const userStr = localStorage.getItem('user');
-  let user = null;
-  if (userStr) {
-    try {
-      user = JSON.parse(userStr);
-    } catch (e) {}
-  }
+  const { user, logout } = useAuth();
 
   const handleLogout = async () => {
-    try {
-      await api.post('/auth/logout');
-    } catch (e) {}
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    await logout();
     navigate('/login');
   };
 
