@@ -19,6 +19,7 @@ export default function DashboardLayout() {
   const isAdmin = user?.role === 'admin';
   const mobileNavItems = isAdmin
     ? [
+      { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
       { name: 'Users', path: '/admin/users', icon: Users },
       { name: 'Interviews', path: '/admin/interviews', icon: SlidersHorizontal },
     ]

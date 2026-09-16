@@ -107,6 +107,9 @@ func SetupRouter() *gin.Engine {
 		admin := g.Group("/admin")
 		admin.Use(middlewares.AuthMiddleware(), middlewares.RequireAdmin())
 		{
+			// Dashboard & Platform Analytics
+			admin.GET("/analytics/dashboard", controllers.AdminGetDashboardAnalytics)
+
 			// Admin-Only Audio Recording Streaming Route (Supports HTTP byte-range for players)
 			admin.GET("/recordings/:filename", controllers.StreamInterviewRecording)
 

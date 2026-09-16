@@ -7,6 +7,7 @@ import AuthLayout from '../Layout/AuthLayout';
 
 // Pages
 import Dashboard from '../Pages/Dashboard';
+import AdminDashboard from '../Pages/AdminDashboard';
 import MockInterview from '../Pages/MockInterview';
 import History from '../Pages/History';
 import Login from '../Pages/Login';
@@ -37,7 +38,7 @@ function RootRedirect() {
     try {
       const user = JSON.parse(userStr);
       if (user.role === 'admin') {
-        return <Navigate to="/admin/users" replace />;
+        return <Navigate to="/admin/dashboard" replace />;
       }
       if (user.role === 'developer') {
         return <Navigate to="/developer/audit-logs" replace />;
@@ -80,6 +81,14 @@ export const router = createBrowserRouter([
         element: <DashboardLayout />,
         errorElement: <RouteErrorBoundary />,
         children: [
+          {
+            path: 'admin',
+            element: <Navigate to="/admin/dashboard" replace />,
+          },
+          {
+            path: 'admin/dashboard',
+            element: <AdminDashboard />,
+          },
           {
             path: 'admin/users',
             element: <AdminUsers />,

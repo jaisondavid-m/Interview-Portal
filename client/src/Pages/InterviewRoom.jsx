@@ -1006,18 +1006,6 @@ export default function InterviewRoom() {
             <span>Session: <strong>{formatTime(elapsedSecs)}</strong></span>
           </div>
 
-          {/* Round 1 Feedback Shortcut for Round 1 Interviewer during Round 2 */}
-          {currentRound === 2 && !isCompleted && initialRoleRef.current === 'interviewer' && (
-            <button
-              onClick={handleOpenFeedback}
-              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-dim)] cursor-pointer shadow-sm animate-pulse"
-              title="Give or review feedback for Round 1 Candidate"
-            >
-              <Award className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>Round 1 Scorecard</span>
-            </button>
-          )}
-
           {/* Role Swap Action Button (Disabled after 1 one-time switch) */}
           {!isCompleted && (
             <button

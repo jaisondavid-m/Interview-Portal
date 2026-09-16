@@ -32,6 +32,7 @@ export default function Sidebar() {
       ]
     : isAdmin
     ? [
+        { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'User Management', path: '/admin/users', icon: Users },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
         { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
