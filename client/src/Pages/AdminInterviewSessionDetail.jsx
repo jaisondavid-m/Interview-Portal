@@ -123,9 +123,9 @@ export default function AdminInterviewSessionDetail() {
         </button>
 
         <div className="panel-card p-10 sm:p-14 text-center space-y-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs">
-          <div className="w-52 h-52 sm:w-64 sm:h-64 mx-auto flex items-center justify-center">
+          <div className="w-44 h-44 sm:w-52 sm:h-52 mx-auto flex items-center justify-center">
             <DotLottieReact
-              src="/lotties/404.lottie"
+              src="/lotties/document-empty.lottie"
               loop
               autoplay
               style={{ width: '100%', height: '100%' }}

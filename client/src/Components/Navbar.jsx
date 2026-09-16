@@ -14,14 +14,15 @@ export default function Navbar() {
   }, []);
 
   const isAdmin = user?.role === 'admin';
-  const targetPath = isAdmin ? '/admin/users' : '/dashboard';
+  const isDeveloper = user?.role === 'developer';
+  const targetPath = isDeveloper ? '/developer/audit-logs' : isAdmin ? '/admin/users' : '/dashboard';
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
-    : 'SA';
+    : isDeveloper ? 'DEV' : isAdmin ? 'SA' : 'ST';
 
-  const displayName = user?.name || (isAdmin ? 'System Administrator' : 'College Student');
-  const displayRoll = user?.roll_no || (isAdmin ? 'ADMIN01' : user?.email || 'STUDENT01');
+  const displayName = user?.name || (isDeveloper ? 'Lead Developer' : isAdmin ? 'System Administrator' : 'College Student');
+  const displayRoll = user?.roll_no || (isDeveloper ? 'DEV01' : isAdmin ? 'ADMIN01' : user?.email || 'STUDENT01');
 
   return (
     <header className="sticky top-0 z-50 bg-[var(--bg-card)]/95 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)] h-16">

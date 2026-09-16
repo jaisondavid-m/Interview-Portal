@@ -391,9 +391,10 @@ export default function AdminUsers() {
       const name = nameIdx !== -1 ? (cols[nameIdx] || '') : (cols[0] || '');
       const email = emailIdx !== -1 ? (cols[emailIdx] || '') : (cols[1] || '');
       const roll_no = rollIdx !== -1 ? (cols[rollIdx] || '') : (cols[2] || '');
-      const department = deptIdx !== -1 ? (cols[deptIdx] || bulkDefaultDept) : (cols[3] || bulkDefaultDept);
-      const role = roleIdx !== -1 ? (cols[roleIdx]?.toLowerCase().includes('admin') ? 'admin' : 'student') : bulkDefaultRole;
-      const password = passIdx !== -1 && cols[passIdx] ? cols[passIdx] : (bulkDefaultPassword || 'mockmate123');
+      const rawRole = (cols[roleIdx] || '').toLowerCase().trim();
+      const role = roleIdx !== -1 
+        ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : 'student') 
+        : bulkDefaultRole;
 
       let status = 'valid';
       let message = 'Ready to import';
@@ -769,8 +770,14 @@ export default function AdminUsers() {
                         {user.department || '—'}
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`status-pill ${user.role === 'admin' ? 'status-accent' : 'status-active'}`}>
-                          {user.role === 'admin' ? 'Administrator' : 'Student'}
+                        <span className={`status-pill ${
+                          user.role === 'admin'
+                            ? 'status-accent'
+                            : user.role === 'developer'
+                            ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
+                            : 'status-active'
+                        }`}>
+                          {user.role === 'admin' ? 'Administrator' : user.role === 'developer' ? 'Developer' : 'Student'}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right space-x-2">
@@ -1094,7 +1101,11 @@ export default function AdminUsers() {
                                 </td>
                                 <td className="py-2 px-3">
                                   <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded ${
-                                    r.role === 'admin' ? 'bg-purple-500/10 text-purple-600 font-bold' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
+                                    r.role === 'admin' 
+                                      ? 'bg-purple-500/10 text-purple-600 font-bold' 
+                                      : r.role === 'developer'
+                                      ? 'bg-indigo-500/10 text-indigo-600 font-bold'
+                                      : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
                                   }`}>
                                     {r.role}
                                   </span>
