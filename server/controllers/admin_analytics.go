@@ -3,6 +3,7 @@ package controllers
 import (
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"server/database"
@@ -13,11 +14,25 @@ import (
 
 // AdminGetDashboardAnalytics computes comprehensive platform-wide analytics for the Admin Dashboard
 func AdminGetDashboardAnalytics(c *gin.Context) {
+	selectedDept := strings.TrimSpace(c.Query("department"))
+	selectedDomain := strings.TrimSpace(c.Query("domain"))
+	if selectedDomain == "" {
+		selectedDomain = strings.TrimSpace(c.Query("track_id"))
+	}
+
 	// 1. User Metrics
 	var totalStudents int64
 	var totalAdmins int64
 	database.DB.Model(&models.User{}).Where("role = ?", "student").Count(&totalStudents)
 	database.DB.Model(&models.User{}).Where("role = ?", "admin").Count(&totalAdmins)
+
+	// Fetch distinct student departments for the filter dropdown
+	var departments []string
+	database.DB.Model(&models.User{}).
+		Where("role = ? AND department IS NOT NULL AND department != ''", "student").
+		Distinct("department").
+		Order("department asc").
+		Pluck("department", &departments)
 
 	// 2. Session Metrics
 	var allSessions []models.InterviewSession
@@ -111,64 +126,7 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 		}
 	}
 
-	// 5. Daily Time-Series Velocity (Last 30 Days)
-	now := time.Now()
-	type DailyActivity struct {
-		Date          string  `json:"date"`           // "2026-03-15"
-		Label         string  `json:"label"`          // "Mar 15"
-		SessionsCount int     `json:"sessions_count"` // Completed or conducted
-		PracticeHours float64 `json:"practice_hours"`
-		AvgScorePct   float64 `json:"avg_score_pct"`
-	}
-
-	// Map days to date keys
-	dailyMap := make(map[string]*DailyActivity)
-	var dailyList []DailyActivity
-
-	for i := 29; i >= 0; i-- {
-		day := now.AddDate(0, 0, -i)
-		dateKey := day.Format("2006-01-02")
-		label := day.Format("Jan 02")
-		da := &DailyActivity{
-			Date:          dateKey,
-			Label:         label,
-			SessionsCount: 0,
-			PracticeHours: 0,
-			AvgScorePct:   0,
-		}
-		dailyMap[dateKey] = da
-		dailyList = append(dailyList, *da)
-	}
-
-	for _, s := range allSessions {
-		if s.Status == "cancelled" {
-			continue
-		}
-		targetDate := s.CreatedAt.Format("2006-01-02")
-		if da, exists := dailyMap[targetDate]; exists {
-			da.SessionsCount++
-			if s.EndedAt != nil && !s.StartedAt.IsZero() {
-				diff := s.EndedAt.Sub(s.StartedAt).Hours()
-				if diff > 0 {
-					da.PracticeHours += diff
-				} else {
-					da.PracticeHours += 0.75
-				}
-			} else {
-				da.PracticeHours += 0.75
-			}
-		}
-	}
-
-	// Re-sync dailyList from dailyMap with rounded values
-	for idx, item := range dailyList {
-		if da, exists := dailyMap[item.Date]; exists {
-			da.PracticeHours = math.Round(da.PracticeHours*10) / 10
-			dailyList[idx] = *da
-		}
-	}
-
-	// 6. Track Breakdown
+	// 5. Track Breakdown
 	type TrackStat struct {
 		TrackID        uint    `json:"track_id"`
 		Title          string  `json:"title"`
@@ -218,12 +176,12 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 			SessionsCount:  sCount,
 			CompletedCount: cCount,
 			StudentCount:   len(studentSet),
-			AvgScorePct:    platformAvgScore, // base baseline
+			AvgScorePct:    platformAvgScore,
 			SharePct:       sharePct,
 		})
 	}
 
-	// 7. Rubric Competency Breakdown across peer feedback questions
+	// 6. Overall Rubric Competency & Feedback Question Averages (Supports Dept & Domain filters)
 	var feedbackQuestions []models.FeedbackQuestion
 	database.DB.
 		Where("question_type != ?", "text").
@@ -239,14 +197,31 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 		QuestionType    string  `json:"question_type"`
 		MaxMarks        float64 `json:"max_marks"`
 		ResponsesCount  int     `json:"responses_count"`
+		AverageScore    float64 `json:"average_score"`
+		ScorePercentage float64 `json:"score_percentage"`
 		AvgAwardedMarks float64 `json:"avg_awarded_marks"`
 		AvgScorePct     float64 `json:"avg_score_pct"`
 	}
 
 	var rubricStats []RubricStat
+	var totalFilteredEvals int
+
 	for _, q := range feedbackQuestions {
+		query := database.DB.Model(&models.InterviewFeedbackResponse{}).
+			Joins("JOIN interview_feedbacks ON interview_feedbacks.id = interview_feedback_responses.feedback_id").
+			Joins("JOIN users ON users.id = interview_feedbacks.reviewee_id").
+			Joins("JOIN interview_sessions ON interview_sessions.id = interview_feedbacks.session_id").
+			Where("interview_feedback_responses.question_id = ?", q.ID)
+
+		if selectedDept != "" && selectedDept != "all" {
+			query = query.Where("users.department = ?", selectedDept)
+		}
+		if selectedDomain != "" && selectedDomain != "all" {
+			query = query.Where("interview_sessions.track_id = ?", selectedDomain)
+		}
+
 		var responses []models.InterviewFeedbackResponse
-		database.DB.Where("question_id = ?", q.ID).Find(&responses)
+		query.Find(&responses)
 
 		var totalAwarded float64
 		var maxPossible float64
@@ -268,6 +243,9 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 			} else if q.MaxMarks > 0 {
 				avgPct = (avgAwarded / q.MaxMarks) * 100.0
 			}
+			if len(responses) > totalFilteredEvals {
+				totalFilteredEvals = len(responses)
+			}
 		}
 
 		label := q.ShortLabel
@@ -279,6 +257,9 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 			}
 		}
 
+		roundedAvg := math.Round(avgAwarded*10) / 10
+		roundedPct := math.Round(avgPct*10) / 10
+
 		rubricStats = append(rubricStats, RubricStat{
 			QuestionID:      q.ID,
 			QuestionText:    q.QuestionText,
@@ -286,12 +267,14 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 			QuestionType:    q.QuestionType,
 			MaxMarks:        q.MaxMarks,
 			ResponsesCount:  len(responses),
-			AvgAwardedMarks: math.Round(avgAwarded*10) / 10,
-			AvgScorePct:     math.Round(avgPct*10) / 10,
+			AverageScore:    roundedAvg,
+			ScorePercentage: roundedPct,
+			AvgAwardedMarks: roundedAvg,
+			AvgScorePct:     roundedPct,
 		})
 	}
 
-	// 8. Student Grade / Performance Cohorts
+	// 7. Student Grade / Performance Cohorts
 	type studentAgg struct {
 		totalScore    float64
 		totalMaxScore float64
@@ -342,7 +325,7 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 		"total_students": len(students),
 	}
 
-	// 9. Recent Sessions Feed (Latest 6)
+	// 8. Recent Sessions Feed (Latest 6)
 	type RecentSessionItem struct {
 		ID              uint      `json:"id"`
 		TrackTitle      string    `json:"track_title"`
@@ -409,7 +392,7 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 		})
 	}
 
-	// 10. Top Performers Snapshot (Top 5)
+	// 9. Top Performers Snapshot (Top 5)
 	type TopPerformer struct {
 		ID                 uint    `json:"id"`
 		Name               string  `json:"name"`
@@ -495,12 +478,17 @@ func AdminGetDashboardAnalytics(c *gin.Context) {
 				"platform_avg_score":        platformAvgScore,
 				"platform_grade":            platformGrade,
 			},
-			"daily_activity":     dailyList,
-			"track_distribution": trackStats,
-			"rubric_breakdown":   rubricStats,
-			"grade_distribution": gradeDistribution,
-			"recent_sessions":    recentSessions,
-			"top_performers":     topPerformers,
+			"departments":                departments,
+			"tracks":                     tracks,
+			"feedback_averages":          rubricStats,
+			"rubric_breakdown":           rubricStats,
+			"total_filtered_evaluations": totalFilteredEvals,
+			"selected_department":        selectedDept,
+			"selected_domain":            selectedDomain,
+			"track_distribution":         trackStats,
+			"grade_distribution":         gradeDistribution,
+			"recent_sessions":            recentSessions,
+			"top_performers":             topPerformers,
 		},
 	})
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -9,8 +9,10 @@ import {
   BookOpen,
   Layers,
   ChevronRight,
+  ChevronDown,
   ExternalLink,
   RefreshCw,
+  BarChart2,
   BarChart3,
   Calendar,
   Sparkles,
@@ -24,10 +26,134 @@ import {
   UserCheck,
   Zap,
   Target,
-  FileText
+  FileText,
+  Filter,
+  GraduationCap,
+  X,
+  Search,
+  Check
 } from 'lucide-react';
 import api from '../api/axios';
 import { Skeleton, SkeletonStatsGrid, SkeletonTableRows } from '../Components/Skeleton';
+
+// Searchable Dropdown Select Component
+function SearchSelect({
+  label,
+  icon: Icon,
+  options = [],
+  value,
+  onChange,
+  placeholder = 'Search...',
+  allLabel = 'All',
+  className = ''
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = useMemo(() => {
+    if (!query.trim()) return options;
+    return options.filter((opt) =>
+      opt.label.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [options, query]);
+
+  const selectedOption = options.find((opt) => String(opt.value) === String(value)) || options[0];
+
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setQuery('');
+        }}
+        className={`w-full flex items-center justify-between gap-3 py-2 px-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border transition-all text-xs font-semibold cursor-pointer shadow-xs ${
+          isOpen
+            ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/20 bg-[var(--bg-card)]'
+            : value !== 'all'
+            ? 'border-[var(--accent)]/60 bg-[var(--accent-dim)] text-[var(--accent)]'
+            : 'border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--text-primary)]'
+        }`}
+      >
+        <div className="flex items-center gap-2 truncate">
+          {Icon && <Icon className="w-4 h-4 text-[var(--accent)] shrink-0" />}
+          <span className="text-[var(--text-muted)] font-medium text-[11px] uppercase font-mono tracking-wider">
+            {label}:
+          </span>
+          <span className="font-bold text-[13px] truncate">
+            {selectedOption?.label || allLabel}
+          </span>
+        </div>
+        <ChevronDown
+          className={`w-4 h-4 text-[var(--text-secondary)] shrink-0 transition-transform duration-200 ${
+            isOpen ? 'rotate-180 text-[var(--accent)]' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-1.5 w-full min-w-[260px] z-50 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-lg)] py-1.5 animate-fadeIn">
+          {/* Search Box */}
+          <div className="px-2.5 pb-2 pt-1 border-b border-[var(--border)]">
+            <div className="relative flex items-center">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 text-[var(--text-muted)] pointer-events-none" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={placeholder}
+                autoFocus
+                className="w-full bg-[var(--bg-input)] pl-8 pr-2.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+          </div>
+
+          {/* Options List */}
+          <div className="max-h-56 overflow-y-auto custom-scrollbar py-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-[var(--text-muted)] font-mono text-center">
+                No matching results
+              </div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = String(opt.value) === String(value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(opt.value);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-bold'
+                        : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                    }`}
+                  >
+                    <span className="truncate pr-2">{opt.label}</span>
+                    {isSelected && <Check className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -36,10 +162,9 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  // Chart Controls
-  const [timeframe, setTimeframe] = useState('14d'); // '7d' | '14d' | '30d'
-  const [chartMetric, setChartMetric] = useState('sessions'); // 'sessions' | 'hours'
-  const [hoveredPoint, setHoveredPoint] = useState(null);
+  // Department and Domain Filters for the Feedback Questions Bar Chart
+  const [selectedDept, setSelectedDept] = useState('all');
+  const [selectedDomain, setSelectedDomain] = useState('all');
 
   const fetchAnalytics = async (isManualRefresh = false) => {
     try {
@@ -47,7 +172,15 @@ export default function AdminDashboard() {
       else setLoading(true);
       setError('');
 
-      const res = await api.get('/admin/analytics/dashboard');
+      const params = {};
+      if (selectedDept && selectedDept !== 'all') {
+        params.department = selectedDept;
+      }
+      if (selectedDomain && selectedDomain !== 'all') {
+        params.domain = selectedDomain;
+      }
+
+      const res = await api.get('/admin/analytics/dashboard', { params });
       const payload = res?.data?.data || res?.data || null;
       if (payload) {
         setData(payload);
@@ -63,47 +196,41 @@ export default function AdminDashboard() {
     }
   };
 
+  // Re-fetch when department or domain filter changes
   useEffect(() => {
     fetchAnalytics();
-  }, []);
+  }, [selectedDept, selectedDomain]);
 
   const kpis = data?.kpis || {};
-  const rawDailyActivity = data?.daily_activity || [];
+  const departments = data?.departments || [];
+  const tracks = data?.tracks || [];
+  const rawFeedbackList = data?.feedback_averages || data?.rubric_breakdown || [];
   const trackDistribution = data?.track_distribution || [];
-  const rubricBreakdown = data?.rubric_breakdown || [];
   const gradeDistribution = data?.grade_distribution || {};
   const recentSessions = data?.recent_sessions || [];
   const topPerformers = data?.top_performers || [];
 
-  // Filter Daily Activity based on selected timeframe
-  const filteredActivity = useMemo(() => {
-    if (!rawDailyActivity.length) return [];
-    const count = timeframe === '7d' ? 7 : timeframe === '14d' ? 14 : 30;
-    return rawDailyActivity.slice(-count);
-  }, [rawDailyActivity, timeframe]);
+  // Options for Searchable Department and Domain Dropdowns
+  const deptOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'All Departments' },
+      ...departments.map((d) => ({ value: d, label: d })),
+    ];
+  }, [departments]);
 
-  // Chart Metrics Calculations
-  const chartMaxVal = useMemo(() => {
-    if (!filteredActivity.length) return 10;
-    const vals = filteredActivity.map((d) =>
-      chartMetric === 'sessions' ? d.sessions_count : d.practice_hours
+  const domainOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'All Tracks / Domains' },
+      ...tracks.map((t) => ({ value: String(t.id), label: t.title })),
+    ];
+  }, [tracks]);
+
+  // Filter out text-only questions or comments
+  const feedbackList = useMemo(() => {
+    return rawFeedbackList.filter(
+      (item) => item.question_type !== 'text' && !item.question_text?.toLowerCase().includes('additional feedback')
     );
-    const max = Math.max(...vals, 1);
-    return Math.ceil(max * 1.25);
-  }, [filteredActivity, chartMetric]);
-
-  const totalTimeframeSessions = useMemo(() => {
-    return filteredActivity.reduce((acc, curr) => acc + curr.sessions_count, 0);
-  }, [filteredActivity]);
-
-  const totalTimeframeHours = useMemo(() => {
-    return filteredActivity.reduce((acc, curr) => acc + curr.practice_hours, 0);
-  }, [filteredActivity]);
-
-  const avgTimeframeVelocity = useMemo(() => {
-    if (!filteredActivity.length) return '0.0';
-    return (totalTimeframeSessions / filteredActivity.length).toFixed(1);
-  }, [filteredActivity, totalTimeframeSessions]);
+  }, [rawFeedbackList]);
 
   const formatDateTime = (dateStr) => {
     if (!dateStr) return '—';
@@ -114,6 +241,13 @@ export default function AdminDashboard() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const hasActiveFilters = selectedDept !== 'all' || selectedDomain !== 'all';
+
+  const resetFilters = () => {
+    setSelectedDept('all');
+    setSelectedDomain('all');
   };
 
   return (
@@ -130,7 +264,7 @@ export default function AdminDashboard() {
             </span>
           </div>
           <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Real-time insights on student participation, mock interview velocity, rubric competencies, and domain breakdowns.
+            Overall student feedback evaluation score averages, domain competencies, and mock interview performance.
           </p>
         </div>
 
@@ -180,7 +314,7 @@ export default function AdminDashboard() {
       )}
 
       {/* 1. Executive KPI Cards Grid */}
-      {loading ? (
+      {loading && !data ? (
         <SkeletonStatsGrid count={6} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
@@ -241,7 +375,7 @@ export default function AdminDashboard() {
                 <span className="text-[11px] font-mono text-[var(--text-muted)]">hrs</span>
               </div>
               <p className="text-[10px] text-[var(--text-muted)] font-mono mt-1">
-                Cumulative audio & code time
+                Cumulative practice time
               </p>
             </div>
           </div>
@@ -249,7 +383,7 @@ export default function AdminDashboard() {
           {/* Card 4: Platform Average Score */}
           <div className="panel-card p-4 space-y-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] hover:border-[var(--accent)]/40 transition">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Platform Avg Score</span>
+              <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Overall Avg Score</span>
               <div className="p-1.5 rounded-[var(--radius-sm)] bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                 <TrendingUp className="w-4 h-4" />
               </div>
@@ -309,269 +443,232 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* 2. Interactive Time-Series Activity Velocity Chart */}
-      <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs space-y-5">
-        {/* Chart Header & Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-[var(--radius-xs)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                <Activity className="w-4 h-4" />
-              </div>
-              <h2 className="text-[16px] font-bold text-[var(--text-primary)] tracking-tight">
-                Interview Activity Velocity & Session Volume
+      {/* 2. Feedback Questions & Rubric Performance (X-Y Bar Chart with Dept & Domain Filter) */}
+      <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-6 shadow-xs">
+        {/* Section Header & Filters */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0 mt-0.5">
+              <BarChart3 className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-[18px] font-bold text-[var(--text-primary)] tracking-tight leading-tight">
+                Feedback Questions & Rubric Performance
               </h2>
+              <p className="text-[13px] text-[var(--text-secondary)] mt-1 leading-normal">
+                Overall score percentage and mark averages across all students. Filter dynamically by department and domain.
+              </p>
             </div>
-            <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-              Daily mock interview frequency and cumulative practice time over selected timeframe.
-            </p>
           </div>
 
+          {/* Department & Domain Searchable Selectors */}
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Metric Switcher */}
-            <div className="flex items-center bg-[var(--bg-input)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)] text-xs font-semibold">
-              <button
-                onClick={() => setChartMetric('sessions')}
-                className={`px-3 py-1 rounded-[var(--radius-xs)] transition ${
-                  chartMetric === 'sessions'
-                    ? 'bg-[var(--accent)] text-white shadow-xs'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                Sessions Count
-              </button>
-              <button
-                onClick={() => setChartMetric('hours')}
-                className={`px-3 py-1 rounded-[var(--radius-xs)] transition ${
-                  chartMetric === 'hours'
-                    ? 'bg-[var(--accent)] text-white shadow-xs'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                Practice Hours
-              </button>
-            </div>
+            <SearchSelect
+              label="Dept"
+              icon={GraduationCap}
+              options={deptOptions}
+              value={selectedDept}
+              onChange={setSelectedDept}
+              placeholder="Search department..."
+              allLabel="All Departments"
+              className="w-full sm:w-56"
+            />
 
-            {/* Timeframe Selector */}
-            <div className="flex items-center bg-[var(--bg-input)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)] text-xs font-semibold">
-              {['7d', '14d', '30d'].map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`px-2.5 py-1 rounded-[var(--radius-xs)] uppercase transition ${
-                    timeframe === tf
-                      ? 'bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border-accent)] shadow-xs font-bold'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
+            <SearchSelect
+              label="Domain"
+              icon={Layers}
+              options={domainOptions}
+              value={selectedDomain}
+              onChange={setSelectedDomain}
+              placeholder="Search track/domain..."
+              allLabel="All Tracks / Domains"
+              className="w-full sm:w-64"
+            />
+
+            {/* Reset Filters Button */}
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shadow-xs"
+                title="Reset filters to All"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Summary Badges Bar */}
-        <div className="flex items-center gap-4 text-xs font-mono text-[var(--text-secondary)] bg-[var(--bg-raised)]/60 px-4 py-2.5 rounded-[var(--radius-md)] border border-[var(--border)] flex-wrap">
-          <div>
-            Total in period:{' '}
-            <strong className="text-[var(--text-primary)]">
-              {chartMetric === 'sessions' ? `${totalTimeframeSessions} sessions` : `${totalTimeframeHours.toFixed(1)} hrs`}
-            </strong>
+        {/* Filter Indicator Badge */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] bg-[var(--accent-dim)] px-3.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border-accent)]">
+            <Filter className="w-3.5 h-3.5 text-[var(--accent)]" />
+            <span>
+              Filtering: {selectedDept !== 'all' ? `Department: ${selectedDept}` : 'All Depts'} •{' '}
+              {selectedDomain !== 'all'
+                ? `Domain: ${tracks.find((t) => String(t.id) === String(selectedDomain))?.title || selectedDomain}`
+                : 'All Domains'}
+            </span>
           </div>
-          <div className="text-[var(--border-strong)]">•</div>
-          <div>
-            Average Daily Velocity:{' '}
-            <strong className="text-[var(--accent)]">
-              {avgTimeframeVelocity} sessions / day
-            </strong>
-          </div>
-          <div className="text-[var(--border-strong)]">•</div>
-          <div>
-            Timeframe: <strong className="text-[var(--text-primary)]">{filteredActivity.length} Days</strong>
-          </div>
-        </div>
+        )}
 
-        {/* Responsive Interactive SVG Chart */}
-        <div className="relative pt-2 pb-1">
-          {loading ? (
-            <div className="h-56 flex items-center justify-center">
-              <Skeleton className="w-full h-48 rounded-[var(--radius-md)]" />
-            </div>
-          ) : filteredActivity.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-xs text-[var(--text-muted)] font-mono">
-              No activity logs recorded for this timeframe.
-            </div>
-          ) : (
-            <div className="w-full h-64 relative">
-              <svg
-                viewBox={`0 0 800 200`}
-                className="w-full h-full overflow-visible"
-                preserveAspectRatio="none"
-              >
-                <defs>
-                  <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
+        {/* Bar Chart Body */}
+        {(() => {
+          if (loading && !data) {
+            return (
+              <div className="space-y-4 animate-fadeIn py-6">
+                <div className="flex items-end justify-between gap-4 h-56 px-6">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+                      <Skeleton className="w-full rounded-t-md" style={{ height: `${30 + idx * 15}%` }} />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
 
-                {/* Horizontal Gridlines */}
-                {[0, 0.25, 0.5, 0.75, 1].map((pct, idx) => {
-                  const y = 180 - pct * 150;
-                  const labelVal = Math.round(pct * chartMaxVal);
-                  return (
-                    <g key={idx}>
-                      <line
-                        x1="40"
-                        y1={y}
-                        x2="790"
-                        y2={y}
-                        stroke="var(--border)"
-                        strokeDasharray="4,4"
-                        strokeWidth="1"
-                      />
-                      <text
-                        x="32"
-                        y={y + 3}
-                        fontSize="10"
-                        fill="var(--text-muted)"
-                        textAnchor="end"
-                        fontFamily="monospace"
-                      >
-                        {labelVal}
-                      </text>
-                    </g>
-                  );
-                })}
+          if (!feedbackList || feedbackList.length === 0) {
+            return (
+              <div className="py-12 text-center space-y-3 border border-dashed border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-raised)]/50">
+                <BarChart2 className="w-10 h-10 mx-auto text-[var(--text-muted)] opacity-50" />
+                <h4 className="text-[15px] font-bold text-[var(--text-primary)]">No Feedback Questions Found</h4>
+                <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
+                  {hasActiveFilters
+                    ? 'No evaluations match the selected department or domain filter. Try changing your filters.'
+                    : 'Once peer feedback rubrics are evaluated in mock interviews, per-question score averages will appear here.'}
+                </p>
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="btn btn-secondary text-xs py-1.5 px-3.5 inline-flex items-center gap-1.5 mt-2"
+                  >
+                    <span>Clear Filters</span>
+                  </button>
+                )}
+              </div>
+            );
+          }
 
-                {/* Draw Area & Line */}
-                {(() => {
-                  const points = filteredActivity.map((item, idx) => {
-                    const x = 50 + (idx / Math.max(filteredActivity.length - 1, 1)) * 730;
-                    const val = chartMetric === 'sessions' ? item.sessions_count : item.practice_hours;
-                    const y = 180 - (val / chartMaxVal) * 150;
-                    return { x, y, item };
-                  });
+          return (
+            <div className="space-y-6">
+              {/* Interactive X-Y Bar Chart */}
+              <div className="relative pt-6 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)]">
+                {/* Y-Axis Grid Lines & Background */}
+                <div className="relative h-64 flex items-end">
+                  {/* Horizontal grid guide lines */}
+                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8">
+                    {[100, 75, 50, 25, 0].map((pct) => (
+                      <div key={pct} className="flex items-center gap-2 w-full text-[10px] font-mono text-[var(--text-muted)]">
+                        <span className="w-8 text-right shrink-0">{pct}%</span>
+                        <div className="h-[1px] flex-1 bg-[var(--border)]/60 border-t border-dashed border-[var(--border)]" />
+                      </div>
+                    ))}
+                  </div>
 
-                  if (points.length === 0) return null;
+                  {/* X-Y Bars Container */}
+                  <div className="relative z-10 w-full pl-10 pr-2 h-full flex items-end justify-around gap-2 sm:gap-4 pb-8">
+                    {feedbackList.map((item, idx) => {
+                      const pct = Math.max(0, Math.min(100, item.score_percentage || item.avg_score_pct || 0));
+                      const avgScore = item.average_score ?? item.avg_awarded_marks ?? 0;
+                      const hasResponses = (item.responses_count || 0) > 0;
 
-                  // Construct Smooth Path (SVG Path)
-                  let dPath = `M ${points[0].x} ${points[0].y}`;
-                  for (let i = 1; i < points.length; i++) {
-                    const prev = points[i - 1];
-                    const curr = points[i];
-                    const cp1x = prev.x + (curr.x - prev.x) / 2;
-                    const cp1y = prev.y;
-                    const cp2x = prev.x + (curr.x - prev.x) / 2;
-                    const cp2y = curr.y;
-                    dPath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
-                  }
+                      // Purple brand color bar palette
+                      const barGradient = hasResponses
+                        ? 'from-[#6e56cf] to-[#9065f0]'
+                        : 'from-slate-400/30 to-slate-500/30';
+                      const barTextColor = hasResponses
+                        ? 'text-purple-600 dark:text-purple-400'
+                        : 'text-[var(--text-muted)]';
+                      const barBorder = hasResponses
+                        ? 'border-purple-500/40'
+                        : 'border-[var(--border)]';
 
-                  const areaPath = `${dPath} L ${points[points.length - 1].x} 180 L ${points[0].x} 180 Z`;
+                      return (
+                        <div
+                          key={item.question_id || idx}
+                          className="group relative flex-1 h-full flex flex-col justify-end items-center max-w-[90px]"
+                        >
+                          {/* Hover Tooltip Popover */}
+                          <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 transform -translate-y-1 group-hover:translate-y-0 w-48 text-center">
+                            <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-xl text-left space-y-1 text-xs">
+                              <div className="font-bold text-[var(--text-primary)] flex items-center justify-between">
+                                <span className="truncate">{item.short_label || `Question ${idx + 1}`}</span>
+                                <span className={`font-mono ${barTextColor} font-extrabold`}>{pct.toFixed(0)}%</span>
+                              </div>
+                              <p className="text-[10px] text-[var(--text-secondary)] line-clamp-2 leading-tight">
+                                {item.question_text}
+                              </p>
+                              <div className="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)]">
+                                <span>
+                                  Avg: <strong className="text-[var(--text-primary)]">{avgScore.toFixed(1)} / {item.max_marks}</strong>
+                                </span>
+                                <span>{item.responses_count} {item.responses_count === 1 ? 'eval' : 'evals'}</span>
+                              </div>
+                            </div>
+                          </div>
 
-                  return (
-                    <g>
-                      {/* Gradient Fill */}
-                      <path d={areaPath} fill="url(#purpleGradient)" />
+                          {/* Value Label above Bar */}
+                          <div className="mb-1 text-center font-mono">
+                            <span className={`text-[11px] font-bold ${barTextColor} transition-all group-hover:scale-110 block`}>
+                              {hasResponses ? `${pct.toFixed(0)}%` : '0%'}
+                            </span>
+                            <span className="text-[9px] text-[var(--text-muted)] hidden sm:block">
+                              {hasResponses ? `${avgScore.toFixed(1)} pts` : '—'}
+                            </span>
+                          </div>
 
-                      {/* Line Stroke */}
-                      <path
-                        d={dPath}
-                        fill="none"
-                        stroke="var(--accent)"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                      />
-
-                      {/* Interactive Data Points & Hover Targets */}
-                      {points.map((pt, idx) => {
-                        const isHovered = hoveredPoint?.item?.date === pt.item.date;
-                        return (
-                          <g key={idx} className="cursor-pointer">
-                            {/* Vertical Hover Indicator Line */}
-                            {isHovered && (
-                              <line
-                                x1={pt.x}
-                                y1="15"
-                                x2={pt.x}
-                                y2="180"
-                                stroke="var(--accent)"
-                                strokeWidth="1.5"
-                                strokeDasharray="3,3"
-                              />
-                            )}
-
-                            {/* Circle Node */}
-                            <circle
-                              cx={pt.x}
-                              cy={pt.y}
-                              r={isHovered ? 6 : 4}
-                              fill={isHovered ? '#ffffff' : 'var(--accent)'}
-                              stroke="var(--accent)"
-                              strokeWidth={isHovered ? 3 : 2}
-                              className="transition-all duration-150"
+                          {/* Bar Pillar */}
+                          <div className="w-full bg-[var(--bg-card)] rounded-t-[var(--radius-xs)] overflow-hidden border-t border-x border-[var(--border)] flex flex-col justify-end h-full max-h-[160px]">
+                            <div
+                              style={{ height: hasResponses ? `${Math.max(pct, 6)}%` : '4%' }}
+                              className={`w-full bg-gradient-to-t ${barGradient} border-t ${barBorder} rounded-t-[var(--radius-xs)] shadow-sm transition-all duration-500 ease-out group-hover:brightness-110 group-hover:shadow-[0_0_12px_rgba(110,86,207,0.35)]`}
                             />
+                          </div>
 
-                            {/* Click / Hover Target Zone */}
-                            <rect
-                              x={pt.x - 15}
-                              y="10"
-                              width="30"
-                              height="180"
-                              fill="transparent"
-                              onMouseEnter={() => setHoveredPoint(pt)}
-                              onMouseLeave={() => setHoveredPoint(null)}
-                            />
-
-                            {/* Date Label on X Axis */}
-                            {(idx === 0 ||
-                              idx === points.length - 1 ||
-                              idx % Math.ceil(points.length / 7) === 0) && (
-                              <text
-                                x={pt.x}
-                                y="195"
-                                fontSize="10"
-                                fill="var(--text-secondary)"
-                                textAnchor="middle"
-                                fontFamily="monospace"
-                              >
-                                {pt.item.label}
-                              </text>
-                            )}
-                          </g>
-                        );
-                      })}
-                    </g>
-                  );
-                })()}
-              </svg>
-
-              {/* Dynamic Tooltip */}
-              {hoveredPoint && (
-                <div
-                  className="absolute z-20 pointer-events-none panel-card p-2.5 bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-sm)] shadow-[var(--shadow-md)] text-xs font-mono transform -translate-x-1/2 -translate-y-full"
-                  style={{
-                    left: `${(hoveredPoint.x / 800) * 100}%`,
-                    top: `${(hoveredPoint.y / 200) * 100 - 10}%`,
-                  }}
-                >
-                  <p className="font-bold text-[var(--text-primary)] border-b border-[var(--border)] pb-1">
-                    {hoveredPoint.item.label} ({hoveredPoint.item.date})
-                  </p>
-                  <div className="pt-1.5 space-y-0.5 text-[11px]">
-                    <p className="text-[var(--accent)] font-semibold">
-                      Sessions: {hoveredPoint.item.sessions_count}
-                    </p>
-                    <p className="text-[var(--text-secondary)]">
-                      Hours: {hoveredPoint.item.practice_hours} hrs
-                    </p>
+                          {/* X-Axis Label */}
+                          <div className="w-full mt-2 text-center">
+                            <span
+                              className="text-[11px] font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-ui block truncate max-w-full px-0.5 transition-colors cursor-default"
+                              title={`${item.short_label || item.question_text} (${item.question_text})`}
+                            >
+                              {item.short_label || item.question_text}
+                            </span>
+                            <span className="text-[9px] font-mono text-[var(--text-muted)] block truncate uppercase">
+                              {item.question_type}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
+
+                {/* Chart Footer Indicator */}
+                <div className="mt-4 pt-3 border-t border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-[var(--text-muted)] gap-2">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span className="font-mono text-[10px] uppercase font-bold text-[var(--text-secondary)]">
+                      Indicator:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#6e56cf]" />
+                      <span>Evaluated Score Average</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-slate-400/40" />
+                      <span>Pending Evaluations (0%)</span>
+                    </div>
+                  </div>
+
+                  <span className="font-mono text-[10px]">
+                    Showing {feedbackList.length} rubric dimensions
+                  </span>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
 
       {/* 3. Mid Grid: Track Distribution & Student Performance Cohorts */}
@@ -602,7 +699,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {loading ? (
+          {loading && !data ? (
             <SkeletonTableRows count={3} />
           ) : trackDistribution.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)] font-mono py-6 text-center">
@@ -672,7 +769,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {loading ? (
+          {loading && !data ? (
             <SkeletonTableRows count={4} />
           ) : (
             <div className="space-y-3">
@@ -750,92 +847,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 4. Rubric Competency & Skill Performance Breakdown */}
-      <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-[var(--radius-xs)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-              <BarChart3 className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
-                Peer Evaluation Rubrics & Skill Competency
-              </h3>
-              <p className="text-[12px] text-[var(--text-secondary)]">
-                Average marks and percentage achieved across all peer feedback dimensions.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => navigate('/admin/feedback')}
-            className="text-xs font-bold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <span>Configure Rubrics</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {loading ? (
-          <SkeletonTableRows count={3} />
-        ) : rubricBreakdown.length === 0 ? (
-          <p className="text-xs text-[var(--text-muted)] font-mono py-4 text-center">
-            No active peer feedback evaluation questions configured.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-            {rubricBreakdown.map((rubric) => {
-              const pct = rubric.avg_score_pct || 0;
-              const isHigh = pct >= 75;
-              const isMid = pct >= 50 && pct < 75;
-              const colorClass = isHigh
-                ? 'from-emerald-500 to-teal-500'
-                : isMid
-                ? 'from-amber-500 to-orange-500'
-                : 'from-rose-500 to-red-500';
-
-              return (
-                <div
-                  key={rubric.question_id}
-                  className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-2.5"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="text-[13px] font-bold text-[var(--text-primary)]">
-                        {rubric.short_label || rubric.question_text}
-                      </h4>
-                      <p className="text-[11px] text-[var(--text-secondary)] line-clamp-1 mt-0.5">
-                        {rubric.question_text}
-                      </p>
-                    </div>
-
-                    <span className="text-[14px] font-bold font-mono text-[var(--accent)] shrink-0">
-                      {pct}%
-                    </span>
-                  </div>
-
-                  {/* Horizontal Bar */}
-                  <div className="w-full bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border)]/40">
-                    <div
-                      className={`bg-gradient-to-r ${colorClass} h-full rounded-full transition-all duration-500`}
-                      style={{ width: `${Math.min(pct, 100)}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] pt-0.5">
-                    <span>
-                      Avg: <strong>{rubric.avg_awarded_marks}</strong> / {rubric.max_marks} marks
-                    </span>
-                    <span>{rubric.responses_count} reviews evaluated</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 5. Bottom Grid: Recent Live Interviews & Top Student Performers */}
+      {/* 4. Bottom Grid: Recent Live Interviews & Top Student Performers */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Recent Live Interviews Feed (8 Cols) */}
         <div className="lg:col-span-8 panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs space-y-4">
@@ -863,7 +875,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {loading ? (
+          {loading && !data ? (
             <SkeletonTableRows count={4} />
           ) : recentSessions.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)] font-mono py-8 text-center">
@@ -972,7 +984,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {loading ? (
+          {loading && !data ? (
             <SkeletonTableRows count={4} />
           ) : topPerformers.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)] font-mono py-8 text-center">
