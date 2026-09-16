@@ -179,6 +179,8 @@ export default function InterviewRoom() {
     peerMuted,
     isSpeaking,
     isPeerSpeaking,
+    isAutoplayBlocked,
+    unblockAudio,
     toggleMute,
     stopAudioCall,
     stopAndUploadRecording,
@@ -1089,6 +1091,8 @@ export default function InterviewRoom() {
           peerMuted={peerMuted}
           isSpeaking={isSpeaking}
           isPeerSpeaking={isPeerSpeaking}
+          isAutoplayBlocked={isAutoplayBlocked}
+          onUnblockAudio={unblockAudio}
           onToggleMute={toggleMute}
           peerName="Anonymous Peer"
           uploadingRecording={uploadingRecording}

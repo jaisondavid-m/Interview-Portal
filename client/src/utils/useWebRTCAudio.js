@@ -1,12 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import api from '../api/axios';
 
 const RTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.services.mozilla.com' },
   ],
+  iceCandidatePoolSize: 10,
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require',
 };
 
 const getSupportedAudioMimeType = () => {
@@ -32,12 +39,13 @@ export default function useWebRTCAudio({
   isRecorder = true,
   onRecordingUploaded,
 }) {
-  // State
+  // Connection & Voice States
   const [connectionState, setConnectionState] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed'
   const [isMuted, setIsMuted] = useState(false);
   const [peerMuted, setPeerMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPeerSpeaking, setIsPeerSpeaking] = useState(false);
+  const [isAutoplayBlocked, setIsAutoplayBlocked] = useState(false);
   const [uploadingRecording, setUploadingRecording] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
@@ -52,15 +60,16 @@ export default function useWebRTCAudio({
   const remoteStreamRef = useRef(null);
   const remoteAudioElRef = useRef(null);
 
-  // Web Audio Mixer & Real-time Chunk Streaming Refs
+  // Web Audio Graph & Real-Time Output Destination
   const audioContextRef = useRef(null);
   const mixedDestRef = useRef(null);
+  const remoteAudioSourceRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordingStartTimeRef = useRef(null);
   const isFinalizingRef = useRef(false);
   const uploadSuccessRef = useRef(false);
 
-  // Chunk Streaming Queue (Zero client-side disk storage - streamed & discarded immediately)
+  // Chunk Streaming Queue
   const chunkQueueRef = useRef([]);
   const isStreamingChunkRef = useRef(false);
   const chunkSequenceRef = useRef(0);
@@ -70,14 +79,17 @@ export default function useWebRTCAudio({
   const remoteAnalyserRef = useRef(null);
   const vadIntervalRef = useRef(null);
 
-  // Pending ICE candidates queue
+  // State Tracking
   const iceCandidatesQueueRef = useRef([]);
+  const fallbackOfferTimerRef = useRef(null);
 
-  // Create remote hidden audio element
+  // Create persistent remote audio element for fallback output
   useEffect(() => {
     const el = document.createElement('audio');
     el.autoplay = true;
     el.playsInline = true;
+    el.muted = false;
+    el.volume = 1.0;
     remoteAudioElRef.current = el;
     document.body.appendChild(el);
 
@@ -89,6 +101,24 @@ export default function useWebRTCAudio({
         remoteAudioElRef.current = null;
       }
     };
+  }, []);
+
+  // Unlock Audio Function (called on user gesture or explicitly)
+  const unblockAudio = useCallback(async () => {
+    try {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      if (remoteAudioElRef.current && remoteStreamRef.current) {
+        remoteAudioElRef.current.srcObject = remoteStreamRef.current;
+        remoteAudioElRef.current.muted = false;
+        remoteAudioElRef.current.volume = 1.0;
+        await remoteAudioElRef.current.play();
+        setIsAutoplayBlocked(false);
+      }
+    } catch (err) {
+      console.warn('[WebRTC Audio] Manual unblock audio attempt:', err);
+    }
   }, []);
 
   // Voice Activity Detection (VAD) Loop
@@ -105,7 +135,7 @@ export default function useWebRTCAudio({
           sum += dataArray[i];
         }
         const avg = sum / dataArray.length;
-        setIsSpeaking(avg > 15);
+        setIsSpeaking(avg > 12);
       } else {
         setIsSpeaking(false);
       }
@@ -119,7 +149,7 @@ export default function useWebRTCAudio({
           sum += dataArray[i];
         }
         const avg = sum / dataArray.length;
-        const peerSpeaking = avg > 15;
+        const peerSpeaking = avg > 12;
         setIsPeerSpeaking(peerSpeaking);
         if (peerSpeaking) {
           setConnectionState((prev) => (prev !== 'connected' ? 'connected' : prev));
@@ -127,7 +157,7 @@ export default function useWebRTCAudio({
       } else {
         setIsPeerSpeaking(false);
       }
-    }, 150);
+    }, 100);
   }, []);
 
   // Process and stream chunks asynchronously to the server
@@ -171,20 +201,15 @@ export default function useWebRTCAudio({
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const res = await fetch(chunkUrl, {
+      await fetch(chunkUrl, {
         method: 'POST',
         headers,
         credentials: 'include',
         body: formData,
       });
-
-      if (!res.ok) {
-        console.warn(`[WebRTC Audio Stream] Chunk ${item.seq} upload returned status ${res.status}`);
-      }
     } catch (err) {
       console.warn('[WebRTC Audio Stream] Error streaming chunk to server:', err);
     } finally {
-      // Chunk is uploaded and memory is freed immediately
       isStreamingChunkRef.current = false;
       if (chunkQueueRef.current.length > 0) {
         processChunkQueue();
@@ -204,32 +229,26 @@ export default function useWebRTCAudio({
     processChunkQueue();
   }, [processChunkQueue]);
 
-  // Setup Web Audio Mixer for Dual-Speaker Recording
+  // Setup Web Audio Mixer & Direct Output Graph
   const initAudioMixer = useCallback(async (localStream) => {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
 
-      const audioCtx = new AudioCtx();
+      const audioCtx = new AudioCtx({ latencyHint: 'interactive' });
       if (audioCtx.state === 'suspended') {
-        try {
-          await audioCtx.resume();
-        } catch (e) {
-          console.warn('[WebRTC Audio] AudioContext resume failed on init:', e);
-        }
+        audioCtx.resume().catch(() => {});
       }
       audioContextRef.current = audioCtx;
 
-      // Add local stream to analyser
+      // Add local stream to analyser (Local source is NOT connected to destination to avoid echo!)
       const localSource = audioCtx.createMediaStreamSource(localStream);
       const localAnalyser = audioCtx.createAnalyser();
       localAnalyser.fftSize = 64;
       localAnalyserRef.current = localAnalyser;
       localSource.connect(localAnalyser);
 
-      // Only start MediaRecorder if this client is the designated master recorder
       if (!isRecorderRef.current) {
-        console.log('[WebRTC Audio] Client participating in audio call without redundant recording (master recorder handles stream)');
         return;
       }
 
@@ -238,14 +257,12 @@ export default function useWebRTCAudio({
       mixedDestRef.current = dest;
       localSource.connect(dest);
 
-      // Create combined recording stream with active audio tracks
       const recordingStream = new MediaStream();
       dest.stream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
       if (recordingStream.getAudioTracks().length === 0) {
         localStream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
       }
 
-      // Initialize MediaRecorder on the mixed destination stream
       const mimeType = getSupportedAudioMimeType();
       const recorderOptions = mimeType ? { mimeType } : undefined;
       const recorder = new MediaRecorder(recordingStream, recorderOptions);
@@ -253,65 +270,51 @@ export default function useWebRTCAudio({
 
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
-          // Stream chunk directly to server; zero client-side disk storage
           queueAudioChunk(event.data);
         }
       };
 
-      recorder.onerror = (e) => {
-        console.warn('[WebRTC Audio] MediaRecorder error:', e);
-      };
-
-      // Emit chunk every 3 seconds for continuous streaming to server
       recorder.start(3000);
       recordingStartTimeRef.current = Date.now();
-      console.log('[WebRTC Audio] Master real-time chunk streaming active with mimeType:', mimeType || 'default');
     } catch (err) {
       console.warn('[WebRTC Audio] Mixer init warning:', err);
-      if (isRecorderRef.current) {
-        // Direct stream fallback
-        try {
-          const mimeType = getSupportedAudioMimeType();
-          const fallbackRecorder = new MediaRecorder(localStream, mimeType ? { mimeType } : undefined);
-          mediaRecorderRef.current = fallbackRecorder;
-          fallbackRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
-              queueAudioChunk(e.data);
-            }
-          };
-          fallbackRecorder.start(3000);
-          recordingStartTimeRef.current = Date.now();
-        } catch (fallbackErr) {
-          console.error('[WebRTC Audio] Fallback recorder error:', fallbackErr);
-        }
-      }
     }
   }, [queueAudioChunk]);
 
-  // Connect remote stream to mixer when track is received
-  const connectRemoteToMixer = useCallback(async (remoteStream) => {
+  // Connect remote stream directly to Web Audio destination (speakers) & analyser
+  const connectRemoteAudioStream = useCallback((remoteStream) => {
     try {
       if (!audioContextRef.current) return;
-
       const audioCtx = audioContextRef.current;
       if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+
+      // Disconnect previous remote source if any
+      if (remoteAudioSourceRef.current) {
         try {
-          await audioCtx.resume();
+          remoteAudioSourceRef.current.disconnect();
         } catch (e) {}
       }
 
       const remoteSource = audioCtx.createMediaStreamSource(remoteStream);
+      remoteAudioSourceRef.current = remoteSource;
+
+      // 1. Direct hardware audio output to speakers
+      remoteSource.connect(audioCtx.destination);
+
+      // 2. Connect to analyser for Voice Activity Detection (VAD)
       const remoteAnalyser = audioCtx.createAnalyser();
       remoteAnalyser.fftSize = 64;
       remoteAnalyserRef.current = remoteAnalyser;
       remoteSource.connect(remoteAnalyser);
 
+      // 3. Connect to recording mixer if this client is the master recorder
       if (isRecorderRef.current && mixedDestRef.current) {
         remoteSource.connect(mixedDestRef.current);
-        console.log('[WebRTC Audio] Remote peer audio attached to master recording mixer');
       }
     } catch (err) {
-      console.warn('[WebRTC Audio] Remote mixer connect warning:', err);
+      console.warn('[WebRTC Audio] Remote Web Audio connection warning:', err);
     }
   }, []);
 
@@ -327,16 +330,32 @@ export default function useWebRTCAudio({
     }
   }, []);
 
-  // Full stop & teardown of all audio hardware, media streams, peer connections, and signaling
+  // Drain pending ICE candidates queue after remote description is set
+  const drainIceCandidatesQueue = useCallback(async (pc) => {
+    while (iceCandidatesQueueRef.current.length > 0) {
+      const candidate = iceCandidatesQueueRef.current.shift();
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn('[WebRTC Audio] Queued ICE candidate error:', err);
+      }
+    }
+  }, []);
+
+  // Full stop & teardown of audio hardware and WebRTC sessions
   const stopAudioCall = useCallback(() => {
-    console.log('[WebRTC Audio] Fully stopping audio call, releasing microphone & closing peer connection');
+    console.log('[WebRTC Audio] Stopping audio call, freeing microphone & peer connection');
+
+    if (fallbackOfferTimerRef.current) {
+      clearTimeout(fallbackOfferTimerRef.current);
+      fallbackOfferTimerRef.current = null;
+    }
 
     if (vadIntervalRef.current) {
       clearInterval(vadIntervalRef.current);
       vadIntervalRef.current = null;
     }
 
-    // Stop local microphone tracks completely
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
         try {
@@ -347,7 +366,6 @@ export default function useWebRTCAudio({
       localStreamRef.current = null;
     }
 
-    // Stop remote tracks
     if (remoteStreamRef.current) {
       remoteStreamRef.current.getTracks().forEach((track) => {
         try {
@@ -358,7 +376,13 @@ export default function useWebRTCAudio({
       remoteStreamRef.current = null;
     }
 
-    // Disconnect and silence audio element
+    if (remoteAudioSourceRef.current) {
+      try {
+        remoteAudioSourceRef.current.disconnect();
+      } catch (e) {}
+      remoteAudioSourceRef.current = null;
+    }
+
     if (remoteAudioElRef.current) {
       try {
         remoteAudioElRef.current.pause();
@@ -366,7 +390,6 @@ export default function useWebRTCAudio({
       } catch (e) {}
     }
 
-    // Stop recorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop();
@@ -374,7 +397,6 @@ export default function useWebRTCAudio({
       mediaRecorderRef.current = null;
     }
 
-    // Close AudioContext
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       try {
         audioContextRef.current.close().catch(() => {});
@@ -382,7 +404,6 @@ export default function useWebRTCAudio({
       audioContextRef.current = null;
     }
 
-    // Close PeerConnection
     if (pcRef.current) {
       try {
         pcRef.current.close();
@@ -390,7 +411,6 @@ export default function useWebRTCAudio({
       pcRef.current = null;
     }
 
-    // Close WebSocket signaling
     if (wsRef.current) {
       try {
         if (wsRef.current.readyState === WebSocket.OPEN) {
@@ -410,16 +430,13 @@ export default function useWebRTCAudio({
   const stopAndUploadRecording = useCallback(async () => {
     if (!sessionId) return null;
     if (!isRecorderRef.current) {
-      // Non-master peer simply terminates audio call
       stopAudioCall();
       return null;
     }
     if (isFinalizingRef.current) {
-      console.log('[WebRTC Audio] Finalize already in progress, ignoring duplicate request');
       return null;
     }
     if (uploadSuccessRef.current) {
-      console.log('[WebRTC Audio] Recording already finalized for session:', sessionId);
       return null;
     }
 
@@ -427,9 +444,6 @@ export default function useWebRTCAudio({
     setUploadingRecording(true);
 
     try {
-      console.log('[WebRTC Audio] Finalizing real-time recording for session:', sessionId);
-
-      // 1. Request final data chunk and stop recorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try {
           mediaRecorderRef.current.requestData();
@@ -450,7 +464,6 @@ export default function useWebRTCAudio({
         });
       }
 
-      // 2. Wait for all pending chunks in the queue to be transmitted
       let waitIterations = 0;
       while ((chunkQueueRef.current.length > 0 || isStreamingChunkRef.current) && waitIterations < 20) {
         await new Promise((r) => setTimeout(r, 150));
@@ -461,7 +474,6 @@ export default function useWebRTCAudio({
         ? Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000))
         : 1;
 
-      // 3. Notify server to seal the recording metadata
       let finalizeUrl = `/api/v1/interviews/sessions/${sessionId}/recording/finalize`;
       const envApiUrl = import.meta.env.VITE_API_URL;
       if (envApiUrl && envApiUrl.startsWith('http')) {
@@ -494,7 +506,6 @@ export default function useWebRTCAudio({
         onRecordingUploaded(resData?.recording);
       }
 
-      // Now that recording is finalized, ensure audio call and mic are completely stopped
       stopAudioCall();
       return resData?.recording;
     } catch (err) {
@@ -507,10 +518,9 @@ export default function useWebRTCAudio({
     }
   }, [sessionId, onRecordingUploaded, stopAudioCall]);
 
-  // Main WebRTC & WebSocket initialization & cleanup loop
+  // Main WebRTC & WebSocket initialization lifecycle
   useEffect(() => {
     if (!enabled || !sessionId) {
-      // Immediately stop and release all audio if disabled
       stopAudioCall();
       return;
     }
@@ -521,12 +531,14 @@ export default function useWebRTCAudio({
       try {
         setConnectionState('connecting');
 
-        // 1. Get User Media Microphone Audio
+        // 1. Get High-Quality Microphone Audio
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            channelCount: 1,
+            sampleRate: 48000,
           },
           video: false,
         });
@@ -548,7 +560,8 @@ export default function useWebRTCAudio({
         const pc = new RTCPeerConnection(RTC_CONFIG);
         pcRef.current = pc;
 
-        stream.getTracks().forEach((track) => {
+        // Add local tracks to peer connection
+        audioTracks.forEach((track) => {
           pc.addTrack(track, stream);
         });
 
@@ -577,17 +590,9 @@ export default function useWebRTCAudio({
           } else if (connState === 'connecting' || iceState === 'checking' || connState === 'new' || iceState === 'new') {
             setConnectionState('connecting');
           } else if (connState === 'disconnected' || iceState === 'disconnected') {
-            if (hasRemoteTracks) {
-              setConnectionState('connected');
-            } else {
-              setConnectionState('reconnecting');
-            }
+            setConnectionState(hasRemoteTracks ? 'connected' : 'reconnecting');
           } else if (connState === 'failed' || iceState === 'failed') {
-            if (hasRemoteTracks) {
-              setConnectionState('connected');
-            } else {
-              setConnectionState('reconnecting');
-            }
+            setConnectionState(hasRemoteTracks ? 'connected' : 'reconnecting');
           } else if (connState === 'closed' || iceState === 'closed') {
             setConnectionState('disconnected');
           }
@@ -596,6 +601,7 @@ export default function useWebRTCAudio({
         pc.onconnectionstatechange = updateCalculatedConnectionState;
         pc.oniceconnectionstatechange = updateCalculatedConnectionState;
 
+        // Remote Audio Track Received -> Output to speakers & mixer
         pc.ontrack = (event) => {
           let remoteStream = event.streams && event.streams[0] ? event.streams[0] : null;
           if (!remoteStream && event.track) {
@@ -605,12 +611,23 @@ export default function useWebRTCAudio({
           if (remoteStream) {
             remoteStreamRef.current = remoteStream;
 
+            // 1. Direct Web Audio API Output to speakers (0ms delay)
+            connectRemoteAudioStream(remoteStream);
+
+            // 2. Dual fallback to HTML5 audio element
             if (remoteAudioElRef.current) {
-              remoteAudioElRef.current.srcObject = remoteStream;
-              remoteAudioElRef.current.play().catch(() => {});
+              const el = remoteAudioElRef.current;
+              el.srcObject = remoteStream;
+              el.muted = false;
+              el.volume = 1.0;
+              el.play().then(() => {
+                setIsAutoplayBlocked(false);
+              }).catch((e) => {
+                console.warn('[WebRTC Audio] HTML audio autoplay deferred:', e);
+                setIsAutoplayBlocked(true);
+              });
             }
 
-            connectRemoteToMixer(remoteStream);
             setConnectionState('connected');
           }
         };
@@ -648,7 +665,7 @@ export default function useWebRTCAudio({
             if (ws.readyState === WebSocket.OPEN) {
               sendSignaling('ping');
             }
-          }, 15000);
+          }, 10000);
         };
 
         ws.onmessage = async (event) => {
@@ -658,91 +675,100 @@ export default function useWebRTCAudio({
 
             switch (msg.type) {
               case 'peer_joined': {
+                // Existing peer initiates offer
                 sendSignaling('mute-status', null, { is_muted: isMutedRef.current });
-                try {
-                  const offer = await pc.createOffer({
-                    offerToReceiveAudio: true,
-                  });
-                  await pc.setLocalDescription(offer);
-                  sendSignaling('offer', offer);
-                } catch (offerErr) {
-                  console.warn('[WebRTC Audio] Create offer error on peer_joined:', offerErr);
+
+                if (pc.signalingState === 'stable') {
+                  try {
+                    const offer = await pc.createOffer({
+                      offerToReceiveAudio: true,
+                    });
+                    await pc.setLocalDescription(offer);
+                    sendSignaling('offer', pc.localDescription);
+                  } catch (offerErr) {
+                    console.warn('[WebRTC Audio] Create offer error on peer_joined:', offerErr);
+                  }
                 }
                 break;
               }
 
               case 'peer_ready': {
                 sendSignaling('mute-status', null, { is_muted: isMutedRef.current });
-                setTimeout(async () => {
+
+                // Set fallback timer: if no offer arrives in 1.5 seconds, initiate offer
+                if (fallbackOfferTimerRef.current) clearTimeout(fallbackOfferTimerRef.current);
+                fallbackOfferTimerRef.current = setTimeout(async () => {
                   if (!isDestroyed && pc.signalingState === 'stable' && !pc.remoteDescription) {
                     try {
                       const offer = await pc.createOffer({ offerToReceiveAudio: true });
                       await pc.setLocalDescription(offer);
-                      sendSignaling('offer', offer);
-                    } catch (e) {}
+                      sendSignaling('offer', pc.localDescription);
+                    } catch (e) {
+                      console.warn('[WebRTC Audio] Fallback offer error:', e);
+                    }
                   }
-                }, 1000);
+                }, 1500);
                 break;
               }
 
               case 'offer': {
-                if (msg.payload) {
-                  try {
-                    await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+                if (!msg.payload) return;
+                if (fallbackOfferTimerRef.current) {
+                  clearTimeout(fallbackOfferTimerRef.current);
+                  fallbackOfferTimerRef.current = null;
+                }
 
-                    while (iceCandidatesQueueRef.current.length > 0) {
-                      const cand = iceCandidatesQueueRef.current.shift();
-                      try {
-                        await pc.addIceCandidate(new RTCIceCandidate(cand));
-                      } catch (candErr) {
-                        console.warn('[WebRTC Audio] Queued candidate error:', candErr);
-                      }
-                    }
-
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    sendSignaling('answer', answer);
-                    updateCalculatedConnectionState();
-                  } catch (err) {
-                    console.error('[WebRTC Audio] Offer processing error:', err);
+                try {
+                  // If we already have a local offer in flight, rollback to accept incoming offer
+                  if (pc.signalingState === 'have-local-offer') {
+                    await pc.setLocalDescription({ type: 'rollback' });
                   }
+
+                  await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+                  await drainIceCandidatesQueue(pc);
+
+                  const answer = await pc.createAnswer({
+                    offerToReceiveAudio: true,
+                  });
+                  await pc.setLocalDescription(answer);
+                  sendSignaling('answer', pc.localDescription);
+                  updateCalculatedConnectionState();
+                } catch (err) {
+                  console.error('[WebRTC Audio] Offer processing error:', err);
                 }
                 break;
               }
 
               case 'answer': {
-                if (msg.payload) {
-                  try {
-                    await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+                if (!msg.payload) return;
+                if (fallbackOfferTimerRef.current) {
+                  clearTimeout(fallbackOfferTimerRef.current);
+                  fallbackOfferTimerRef.current = null;
+                }
 
-                    while (iceCandidatesQueueRef.current.length > 0) {
-                      const cand = iceCandidatesQueueRef.current.shift();
-                      try {
-                        await pc.addIceCandidate(new RTCIceCandidate(cand));
-                      } catch (candErr) {
-                        console.warn('[WebRTC Audio] Queued candidate error:', candErr);
-                      }
-                    }
+                try {
+                  if (pc.signalingState === 'have-local-offer') {
+                    await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+                    await drainIceCandidatesQueue(pc);
                     updateCalculatedConnectionState();
-                  } catch (err) {
-                    console.error('[WebRTC Audio] Answer processing error:', err);
                   }
+                } catch (err) {
+                  console.error('[WebRTC Audio] Answer processing error:', err);
                 }
                 break;
               }
 
               case 'ice-candidate': {
-                if (msg.payload) {
-                  try {
-                    if (pc.remoteDescription && pc.remoteDescription.type) {
-                      await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
-                    } else {
-                      iceCandidatesQueueRef.current.push(msg.payload);
-                    }
-                    updateCalculatedConnectionState();
-                  } catch (candErr) {
-                    console.warn('[WebRTC Audio] ICE candidate add error:', candErr);
+                if (!msg.payload) return;
+                try {
+                  if (pc.remoteDescription && pc.remoteDescription.type) {
+                    await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+                  } else {
+                    iceCandidatesQueueRef.current.push(msg.payload);
                   }
+                  updateCalculatedConnectionState();
+                } catch (candErr) {
+                  console.warn('[WebRTC Audio] ICE candidate add error:', candErr);
                 }
                 break;
               }
@@ -760,6 +786,12 @@ export default function useWebRTCAudio({
               case 'peer_left':
               case 'call_ended':
               case 'session_ended': {
+                if (remoteAudioSourceRef.current) {
+                  try {
+                    remoteAudioSourceRef.current.disconnect();
+                  } catch (e) {}
+                  remoteAudioSourceRef.current = null;
+                }
                 if (remoteAudioElRef.current) {
                   remoteAudioElRef.current.pause();
                   remoteAudioElRef.current.srcObject = null;
@@ -779,7 +811,7 @@ export default function useWebRTCAudio({
                 break;
             }
           } catch (e) {
-            console.warn('[WebRTC Signaling] Message handler error:', e);
+            console.warn('[WebRTC Signaling] Message processing error:', e);
           }
         };
 
@@ -812,20 +844,29 @@ export default function useWebRTCAudio({
       isDestroyed = true;
       stopAudioCall();
     };
-  }, [enabled, sessionId, initAudioMixer, connectRemoteToMixer, sendSignaling, startVAD, stopAudioCall]);
+  }, [enabled, sessionId, initAudioMixer, connectRemoteAudioStream, sendSignaling, startVAD, stopAudioCall, drainIceCandidatesQueue]);
 
-  // Resume AudioContext on any user interaction
+  // Global user gesture listener to unlock AudioContext & output
   useEffect(() => {
     const handleUserGesture = () => {
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume().catch(() => {});
       }
+      if (remoteAudioElRef.current && remoteAudioElRef.current.paused && remoteStreamRef.current) {
+        remoteAudioElRef.current.play().then(() => setIsAutoplayBlocked(false)).catch(() => {});
+      }
     };
+
     window.addEventListener('click', handleUserGesture);
     window.addEventListener('keydown', handleUserGesture);
+    window.addEventListener('touchstart', handleUserGesture);
+    window.addEventListener('pointerdown', handleUserGesture);
+
     return () => {
       window.removeEventListener('click', handleUserGesture);
       window.removeEventListener('keydown', handleUserGesture);
+      window.removeEventListener('touchstart', handleUserGesture);
+      window.removeEventListener('pointerdown', handleUserGesture);
     };
   }, []);
 
@@ -852,6 +893,8 @@ export default function useWebRTCAudio({
     peerMuted,
     isSpeaking,
     isPeerSpeaking,
+    isAutoplayBlocked,
+    unblockAudio,
     toggleMute,
     stopAudioCall,
     stopAndUploadRecording,

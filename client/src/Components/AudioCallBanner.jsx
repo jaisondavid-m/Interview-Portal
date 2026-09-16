@@ -19,6 +19,8 @@ export default function AudioCallBanner({
   peerMuted,
   isSpeaking,
   isPeerSpeaking,
+  isAutoplayBlocked = false,
+  onUnblockAudio,
   onToggleMute,
   peerName = 'Peer Student',
   uploadingRecording = false,
@@ -103,8 +105,21 @@ export default function AudioCallBanner({
         </div>
       </div>
 
-      {/* Right: Mic Control & Local Speaking Wave */}
-      <div className="flex items-center gap-2.5 self-end sm:self-auto">
+      {/* Right: Mic Control, Autoplay Unlock & Local Speaking Wave */}
+      <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
+        {/* Autoplay Unblock Button if Browser blocks sound */}
+        {isAutoplayBlocked && (
+          <button
+            type="button"
+            onClick={onUnblockAudio}
+            className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold animate-bounce shadow-md bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+            title="Click to enable sound output"
+          >
+            <Volume2 className="w-3.5 h-3.5" />
+            <span>Click to Enable Audio</span>
+          </button>
+        )}
+
         {/* Local Speaking Status Indicator */}
         {isConnected && (
           <div className={`text-[11px] font-mono px-2 py-1 rounded flex items-center gap-1.5 ${

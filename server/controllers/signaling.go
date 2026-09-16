@@ -21,13 +21,13 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true // Allow all cross-origin for student clients
 	},
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	ReadBufferSize:  4096,
+	WriteBufferSize: 4096,
 }
 
 // SignalingMessage defines payload exchanged between WebRTC peers
 type SignalingMessage struct {
-	Type      string          `json:"type"` // "join", "offer", "answer", "ice-candidate", "mute-status", "peer_joined", "peer_left", "ping", "pong"
+	Type      string          `json:"type"` // "join", "offer", "answer", "ice-candidate", "mute-status", "peer_joined", "peer_ready", "peer_left", "ping", "pong"
 	SenderID  uint            `json:"sender_id,omitempty"`
 	TargetID  uint            `json:"target_id,omitempty"`
 	Payload   json.RawMessage `json:"payload,omitempty"`
@@ -42,6 +42,8 @@ type Client struct {
 	Conn      *websocket.Conn
 	Send      chan []byte
 	Hub       *SignalingHub
+	Closed    bool
+	Mu        sync.Mutex
 }
 
 // Room represents an active interview session audio room
@@ -78,32 +80,37 @@ func (h *SignalingHub) GetOrCreateRoom(sessionID string) *Room {
 	return room
 }
 
-// RemoveClient removes a client and cleans up empty rooms
-func (h *SignalingHub) RemoveClient(sessionID string, userID uint) {
+// RemoveClient removes a client instance safely without breaking reconnects
+func (h *SignalingHub) RemoveClient(sessionID string, client *Client) {
 	h.Mutex.Lock()
 	defer h.Mutex.Unlock()
 
 	if room, exists := h.Rooms[sessionID]; exists {
 		room.Mutex.Lock()
-		if client, ok := room.Clients[userID]; ok {
-			close(client.Send)
-			delete(room.Clients, userID)
-		}
-
-		// Broadcast peer_left to remaining client
-		for _, otherClient := range room.Clients {
-			msg := SignalingMessage{
-				Type:      "peer_left",
-				SenderID:  userID,
-				Timestamp: time.Now().UnixMilli(),
+		// Only delete if the registered client in the room is this exact instance
+		if currentClient, ok := room.Clients[client.UserID]; ok && currentClient == client {
+			client.Mu.Lock()
+			if !client.Closed {
+				client.Closed = true
+				close(client.Send)
 			}
-			data, _ := json.Marshal(msg)
-			select {
-			case otherClient.Send <- data:
-			default:
+			client.Mu.Unlock()
+			delete(room.Clients, client.UserID)
+
+			// Broadcast peer_left to remaining clients
+			for _, otherClient := range room.Clients {
+				msg := SignalingMessage{
+					Type:      "peer_left",
+					SenderID:  client.UserID,
+					Timestamp: time.Now().UnixMilli(),
+				}
+				data, _ := json.Marshal(msg)
+				select {
+				case otherClient.Send <- data:
+				default:
+				}
 			}
 		}
-
 		isEmpty := len(room.Clients) == 0
 		room.Mutex.Unlock()
 
@@ -120,11 +127,15 @@ func (r *Room) BroadcastToPeer(senderID uint, message []byte) {
 
 	for uid, client := range r.Clients {
 		if uid != senderID {
-			select {
-			case client.Send <- message:
-			default:
-				log.Printf("[WARN] Signaling message buffer full for user %d in session %s\n", uid, r.SessionID)
+			client.Mu.Lock()
+			if !client.Closed {
+				select {
+				case client.Send <- message:
+				default:
+					log.Printf("[WARN] Signaling message buffer full for user %d in session %s\n", uid, r.SessionID)
+				}
 			}
+			client.Mu.Unlock()
 		}
 	}
 }
@@ -133,7 +144,7 @@ func (r *Room) BroadcastToPeer(senderID uint, message []byte) {
 func HandleWebRTCSignaling(c *gin.Context) {
 	sessionID := c.Param("id")
 
-	// 1. Authenticate user from JWT token (from Query param, Header, or Cookie)
+	// 1. Authenticate user from JWT token
 	tokenStr := c.Query("token")
 	if tokenStr == "" {
 		authHeader := c.GetHeader("Authorization")
@@ -195,33 +206,59 @@ func HandleWebRTCSignaling(c *gin.Context) {
 		SessionID: sessionID,
 		UserID:    userID,
 		Conn:      conn,
-		Send:      make(chan []byte, 256),
+		Send:      make(chan []byte, 512),
 		Hub:       GlobalSignalingHub,
+		Closed:    false,
 	}
 
 	room := GlobalSignalingHub.GetOrCreateRoom(sessionID)
 
 	room.Mutex.Lock()
+	// Clean up any stale client from previous connection for this same user
+	if oldClient, ok := room.Clients[userID]; ok && oldClient != client {
+		oldClient.Mu.Lock()
+		if !oldClient.Closed {
+			oldClient.Closed = true
+			close(oldClient.Send)
+		}
+		oldClient.Mu.Unlock()
+		oldClient.Conn.Close()
+	}
 	room.Clients[userID] = client
 	peerCount := len(room.Clients)
 	room.Mutex.Unlock()
 
-	// Writer pump
+	// 4. Server-Side Heartbeat & Writer Pump
 	go func() {
+		ticker := time.NewTicker(20 * time.Second)
 		defer func() {
+			ticker.Stop()
 			conn.Close()
 		}()
-		for message := range client.Send {
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				return
+
+		for {
+			select {
+			case message, ok := <-client.Send:
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if !ok {
+					conn.WriteMessage(websocket.CloseMessage, []byte{})
+					return
+				}
+				if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+					return
+				}
+			case <-ticker.C:
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
 			}
 		}
 	}()
 
-	// Notify existing peer or notify self of peer status
+	// 5. Notify peers of arrival
 	if peerCount > 1 {
-		// Peer is already present! Broadcast "peer_joined" to the existing peer
+		// Broadcast to existing peer that a partner has joined
 		joinMsg := SignalingMessage{
 			Type:      "peer_joined",
 			SenderID:  userID,
@@ -230,23 +267,26 @@ func HandleWebRTCSignaling(c *gin.Context) {
 		data, _ := json.Marshal(joinMsg)
 		room.BroadcastToPeer(userID, data)
 
-		// Also notify newly joined client that peer is present
+		// Notify this client that peer is ready
 		readyMsg := SignalingMessage{
 			Type:      "peer_ready",
 			SenderID:  userID,
 			Timestamp: time.Now().UnixMilli(),
 		}
 		readyData, _ := json.Marshal(readyMsg)
-		client.Send <- readyData
+		select {
+		case client.Send <- readyData:
+		default:
+		}
 	}
 
-	// Reader pump
+	// 6. Reader Pump
 	defer func() {
-		GlobalSignalingHub.RemoveClient(sessionID, userID)
+		GlobalSignalingHub.RemoveClient(sessionID, client)
 		conn.Close()
 	}()
 
-	conn.SetReadLimit(65536)
+	conn.SetReadLimit(131072) // 128 KB limit for large SDP descriptions
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -273,11 +313,14 @@ func HandleWebRTCSignaling(c *gin.Context) {
 		if sigMsg.Type == "ping" {
 			pongMsg := SignalingMessage{Type: "pong", Timestamp: time.Now().UnixMilli()}
 			pongData, _ := json.Marshal(pongMsg)
-			client.Send <- pongData
+			select {
+			case client.Send <- pongData:
+			default:
+			}
 			continue
 		}
 
-		// Relay offer, answer, ice-candidate, mute-status to the peer
+		// Relay signaling message (offer, answer, ice-candidate, mute-status) to peer
 		relayedData, err := json.Marshal(sigMsg)
 		if err == nil {
 			room.BroadcastToPeer(userID, relayedData)
