@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import {
   ArrowLeft,
   History,
@@ -111,29 +112,40 @@ export default function AdminInterviewSessionDetail() {
 
   if (error || !session) {
     return (
-      <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-fadeIn font-sans">
         <button
           type="button"
           onClick={() => navigate('/admin/history')}
-          className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 cursor-pointer"
+          className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 cursor-pointer shadow-xs"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Interview History</span>
         </button>
 
-        <div className="panel-card p-10 text-center space-y-4">
-          <AlertCircle className="w-10 h-10 text-[var(--red)] mx-auto" />
-          <h3 className="text-[17px] font-bold text-[var(--text-primary)]">Session Record Not Found</h3>
-          <p className="text-[13px] text-[var(--text-muted)] max-w-md mx-auto">
-            {error || `Unable to locate interview session record #${sessionId}.`}
-          </p>
-          <button
-            onClick={fetchSessionDetails}
-            className="btn btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Try Again</span>
-          </button>
+        <div className="panel-card p-10 sm:p-14 text-center space-y-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-xs">
+          <div className="w-52 h-52 sm:w-64 sm:h-64 mx-auto flex items-center justify-center">
+            <DotLottieReact
+              src="/lotties/404.lottie"
+              loop
+              autoplay
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h3 className="text-[18px] font-bold text-[var(--text-primary)]">Session Record Not Found</h3>
+            <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+              {error || `Unable to locate interview session record #${sessionId}. It may have been deleted or does not exist.`}
+            </p>
+          </div>
+          <div className="pt-2 flex items-center justify-center gap-3">
+            <button
+              onClick={fetchSessionDetails}
+              className="btn btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 font-bold shadow-sm"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Try Again</span>
+            </button>
+          </div>
         </div>
       </div>
     );
