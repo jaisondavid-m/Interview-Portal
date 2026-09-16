@@ -86,12 +86,9 @@ function SearchSelect({
             : 'border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--text-primary)]'
         }`}
       >
-        <div className="flex items-center gap-2 truncate">
+        <div className="flex items-center gap-2.5 truncate">
           {Icon && <Icon className="w-4 h-4 text-[var(--accent)] shrink-0" />}
-          <span className="text-[var(--text-muted)] font-medium text-[11px] uppercase font-mono tracking-wider">
-            {label}:
-          </span>
-          <span className="font-bold text-[13px] truncate">
+          <span className="font-bold text-[13px] text-[var(--text-primary)] truncate">
             {selectedOption?.label || allLabel}
           </span>
         </div>
@@ -445,8 +442,8 @@ export default function AdminDashboard() {
 
       {/* 2. Feedback Questions & Rubric Performance (X-Y Bar Chart with Dept & Domain Filter) */}
       <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-6 shadow-xs">
-        {/* Section Header & Filters */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+        {/* Section Header & Filters (Single Row) */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0 mt-0.5">
               <BarChart3 className="w-5 h-5" />
@@ -461,35 +458,33 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Department & Domain Searchable Selectors */}
-          <div className="flex items-center gap-3 flex-wrap">
+          {/* Department & Domain Searchable Selectors in Single Row */}
+          <div className="flex items-center gap-2.5 flex-nowrap shrink-0">
             <SearchSelect
-              label="Dept"
               icon={GraduationCap}
               options={deptOptions}
               value={selectedDept}
               onChange={setSelectedDept}
               placeholder="Search department..."
               allLabel="All Departments"
-              className="w-full sm:w-56"
+              className="w-48 sm:w-52"
             />
 
             <SearchSelect
-              label="Domain"
               icon={Layers}
               options={domainOptions}
               value={selectedDomain}
               onChange={setSelectedDomain}
               placeholder="Search track/domain..."
               allLabel="All Tracks / Domains"
-              className="w-full sm:w-64"
+              className="w-56 sm:w-60"
             />
 
             {/* Reset Filters Button */}
             {hasActiveFilters && (
               <button
                 onClick={resetFilters}
-                className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shadow-xs"
+                className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shadow-xs shrink-0"
                 title="Reset filters to All"
               >
                 <X className="w-3.5 h-3.5" />

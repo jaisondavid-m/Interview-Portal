@@ -66,7 +66,7 @@ export default function Login() {
         localStorage.setItem('user', JSON.stringify(res.user));
 
         if (res.user.role === 'admin') {
-          navigate('/admin/users');
+          navigate('/admin/dashboard');
         } else if (res.user.role === 'developer') {
           navigate('/developer/audit-logs');
         } else {
@@ -90,7 +90,7 @@ export default function Login() {
         localStorage.setItem('token', 'session-token-' + Date.now());
         localStorage.setItem('user', JSON.stringify(dummyUser));
         if (quickMatch.role === 'admin') {
-          navigate('/admin/users');
+          navigate('/admin/dashboard');
         } else if (quickMatch.role === 'developer') {
           navigate('/developer/audit-logs');
         } else {
