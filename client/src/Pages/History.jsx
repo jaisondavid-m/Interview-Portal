@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import {
   Calendar,
   Clock,
@@ -22,6 +24,7 @@ import api from '../api/axios';
 import { Skeleton } from '../Components/Skeleton';
 
 export default function History() {
+  const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -128,14 +131,32 @@ export default function History() {
           </button>
         </div>
       ) : history.length === 0 ? (
-        <div className="panel-card p-12 text-center space-y-3 border-dashed border border-[var(--border)] rounded-[var(--radius-md)]">
-          <Video className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-40" />
-          <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
-            No interview history found
-          </h3>
-          <p className="text-[13px] text-[var(--text-muted)] max-w-md mx-auto">
-            You haven't participated in any mock interview sessions yet. Join matchmaking to start practicing.
-          </p>
+        <div className="panel-card p-10 sm:p-14 text-center space-y-4 border-dashed border border-[var(--border)] rounded-[var(--radius-lg)] bg-[var(--bg-card)] shadow-xs">
+          <div className="w-44 h-44 sm:w-52 sm:h-52 mx-auto flex items-center justify-center">
+            <DotLottieReact
+              src="/lotties/document-empty.lottie"
+              loop
+              autoplay
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
+              No interview history found
+            </h3>
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              You haven't participated in any mock interview sessions yet. Join matchmaking or start an interview to begin practicing.
+            </p>
+          </div>
+          <div className="pt-1">
+            <button
+              onClick={() => navigate('/interviews')}
+              className="btn btn-primary text-xs py-2 px-4 inline-flex items-center gap-2 font-bold shadow-sm"
+            >
+              <Video className="w-4 h-4" />
+              <span>Join Mock Interview</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
