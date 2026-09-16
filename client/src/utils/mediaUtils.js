@@ -1,7 +1,7 @@
 /**
  * Safe Cross-Platform Media Utilities & Audio Optimization
  * Handles iOS Safari / WebKit quirks, insecure context detections (HTTP vs HTTPS),
- * legacy getUserMedia fallbacks, and WebRTC SDP audio tuning for crystal-clear voice.
+ * legacy getUserMedia fallbacks, real-time noise cleaning DSP, and WebRTC SDP tuning.
  */
 
 export function isIOS() {
@@ -79,14 +79,136 @@ export function getHighQualityAudioConstraints() {
       sampleRate: 48000,
       // Vendor-specific extensions (Chromium / WebKit)
       googEchoCancellation: true,
+      googEchoCancellation2: true,
       googAutoGainControl: true,
+      googAutoGainControl2: true,
       googNoiseSuppression: true,
+      googNoiseSuppression2: true,
       googHighpassFilter: true,
       googTypingNoiseDetection: true,
       googAudioMirroring: false,
     },
     video: false,
   };
+}
+
+/**
+ * Real-time Studio Voice DSP Chain:
+ * 1. High-Pass Filter (85 Hz): Removes table thumps, AC airflow, and breath plosives.
+ * 2. 50Hz & 60Hz Mains Notch Filters: Strips electrical power line hum.
+ * 3. Low-Pass Filter (7800 Hz): Removes computer coil whine and fan hiss.
+ * 4. Dynamics Compressor: Levels voice volume without boosting background noise.
+ * 5. Intelligent Real-Time Noise Gate: Closes background noise by ~98% during silence and opens instantly when speech begins.
+ */
+export function createNoiseCleanedStream(rawStream, audioCtx) {
+  try {
+    if (!audioCtx || !rawStream || rawStream.getAudioTracks().length === 0) {
+      return { cleanedStream: rawStream, cleanup: () => {} };
+    }
+
+    const source = audioCtx.createMediaStreamSource(rawStream);
+
+    // 1. High-pass filter (85Hz)
+    const highpass = audioCtx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.setValueAtTime(85, audioCtx.currentTime);
+    highpass.Q.setValueAtTime(0.707, audioCtx.currentTime);
+
+    // 2. Low-pass filter (7800Hz)
+    const lowpass = audioCtx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.setValueAtTime(7800, audioCtx.currentTime);
+    lowpass.Q.setValueAtTime(0.707, audioCtx.currentTime);
+
+    // 3. Electrical Notch Filters (50Hz / 60Hz)
+    const notch50 = audioCtx.createBiquadFilter();
+    notch50.type = 'notch';
+    notch50.frequency.setValueAtTime(50, audioCtx.currentTime);
+    notch50.Q.setValueAtTime(4.0, audioCtx.currentTime);
+
+    const notch60 = audioCtx.createBiquadFilter();
+    notch60.type = 'notch';
+    notch60.frequency.setValueAtTime(60, audioCtx.currentTime);
+    notch60.Q.setValueAtTime(4.0, audioCtx.currentTime);
+
+    // 4. Dynamics Compressor
+    const compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-24, audioCtx.currentTime);
+    compressor.knee.setValueAtTime(8, audioCtx.currentTime);
+    compressor.ratio.setValueAtTime(3.5, audioCtx.currentTime);
+    compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+    compressor.release.setValueAtTime(0.12, audioCtx.currentTime);
+
+    // 5. Intelligent Noise Gate
+    const gateGain = audioCtx.createGain();
+    gateGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+
+    const gateAnalyser = audioCtx.createAnalyser();
+    gateAnalyser.fftSize = 256;
+    gateAnalyser.smoothingTimeConstant = 0.2;
+
+    // Connect DSP chain
+    source.connect(highpass);
+    highpass.connect(notch50);
+    notch50.connect(notch60);
+    notch60.connect(lowpass);
+    lowpass.connect(compressor);
+    compressor.connect(gateAnalyser);
+    compressor.connect(gateGain);
+
+    const dest = audioCtx.createMediaStreamDestination();
+    gateGain.connect(dest);
+
+    // Fast noise-gate loop
+    const dataArray = new Uint8Array(gateAnalyser.frequencyBinCount);
+    let isGateOpen = true;
+    let silenceFrames = 0;
+
+    const gateInterval = setInterval(() => {
+      if (audioCtx.state !== 'running') return;
+      gateAnalyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      const avg = sum / dataArray.length;
+
+      if (avg > 8) {
+        silenceFrames = 0;
+        if (!isGateOpen) {
+          isGateOpen = true;
+          gateGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.008); // 8ms instant smooth open
+        }
+      } else {
+        silenceFrames++;
+        if (silenceFrames > 6 && isGateOpen) {
+          isGateOpen = false;
+          gateGain.gain.setTargetAtTime(0.02, audioCtx.currentTime, 0.035); // 35ms smooth close
+        }
+      }
+    }, 25);
+
+    const cleanup = () => {
+      clearInterval(gateInterval);
+      try {
+        source.disconnect();
+        highpass.disconnect();
+        notch50.disconnect();
+        notch60.disconnect();
+        lowpass.disconnect();
+        compressor.disconnect();
+        gateGain.disconnect();
+        dest.disconnect();
+      } catch (e) {}
+    };
+
+    const cleanedStream = dest.stream;
+    return { cleanedStream, cleanup };
+  } catch (err) {
+    console.warn('[WebRTC Audio] Noise cleaning DSP fallback to raw stream:', err);
+    return { cleanedStream: rawStream, cleanup: () => {} };
+  }
 }
 
 /**

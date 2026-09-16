@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getSafeUserMedia, getHighQualityAudioConstraints, optimizeAudioSDP } from './mediaUtils';
+import {
+  getSafeUserMedia,
+  getHighQualityAudioConstraints,
+  optimizeAudioSDP,
+  createNoiseCleanedStream
+} from './mediaUtils';
 
 const RTC_CONFIG = {
   iceServers: [
@@ -60,6 +65,7 @@ export default function useWebRTCAudio({
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const remoteAudioElRef = useRef(null);
+  const dspCleanupRef = useRef(null);
 
   // Web Audio Graph & Real-Time Output Destination
   const audioContextRef = useRef(null);
@@ -402,6 +408,13 @@ export default function useWebRTCAudio({
       } catch (e) {}
     }
 
+    if (dspCleanupRef.current) {
+      try {
+        dspCleanupRef.current();
+      } catch (e) {}
+      dspCleanupRef.current = null;
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop();
@@ -552,20 +565,30 @@ export default function useWebRTCAudio({
         }
 
         localStreamRef.current = stream;
-        const audioTracks = stream.getAudioTracks();
+
+        // Initialize Web Audio Graph & Mixer
+        await initAudioMixer(stream);
+
+        // Apply Studio Real-time Voice Noise Cleaner (High-Pass, Notch, Low-Pass, Dynamics Compressor & Smart Noise Gate)
+        let transmitStream = stream;
+        if (audioContextRef.current) {
+          const { cleanedStream, cleanup } = createNoiseCleanedStream(stream, audioContextRef.current);
+          transmitStream = cleanedStream;
+          dspCleanupRef.current = cleanup;
+        }
+
+        const audioTracks = transmitStream.getAudioTracks();
         if (audioTracks.length > 0) {
           audioTracks[0].enabled = !isMutedRef.current;
         }
-
-        await initAudioMixer(stream);
 
         // 2. Setup RTCPeerConnection
         const pc = new RTCPeerConnection(RTC_CONFIG);
         pcRef.current = pc;
 
-        // Add local tracks to peer connection with high network priority
+        // Add studio-cleaned local tracks to peer connection with high network priority
         audioTracks.forEach((track) => {
-          const sender = pc.addTrack(track, stream);
+          const sender = pc.addTrack(track, transmitStream);
           if (sender && sender.getParameters) {
             try {
               const params = sender.getParameters();
