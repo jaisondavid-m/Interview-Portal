@@ -838,14 +838,21 @@ export default function AdminUsers() {
             <div className="overflow-y-auto space-y-4 pr-1 flex-1 custom-scrollbar">
               {/* Success / Result View if upload just finished */}
               {bulkResult ? (
-                <div className="space-y-4 py-2">
-                  <div className="p-4 bg-[var(--green-bg)] border border-[var(--green)]/30 rounded-[var(--radius-md)] flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-[var(--green)] shrink-0 mt-0.5" />
+                <div className="space-y-4 py-3">
+                  <div className="p-5 bg-[var(--bg-raised)] border border-[var(--border)] rounded-[var(--radius-md)] flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                    <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+                      <DotLottieReact
+                        src="/lotties/success_tick.lottie"
+                        loop={false}
+                        autoplay
+                        style={{ width: '100%', height: '100%' }}
+                      />
+                    </div>
                     <div>
-                      <h4 className="text-[14px] font-bold text-[var(--green)]">
+                      <h4 className="text-[16px] font-bold text-[var(--text-primary)]">
                         Bulk Provisioning Completed!
                       </h4>
-                      <p className="text-[12px] text-[var(--text-primary)] mt-1">
+                      <p className="text-[13px] text-[var(--text-secondary)] mt-1">
                         <strong>{bulkResult.created_count || 0}</strong> accounts were successfully registered.
                         {bulkResult.skipped_count > 0 && ` ${bulkResult.skipped_count} entries were skipped.`}
                       </p>

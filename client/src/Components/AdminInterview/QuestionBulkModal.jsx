@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import {
   Upload,
   Download,
@@ -868,13 +869,20 @@ export default function QuestionBulkModal({
         <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4 custom-scrollbar">
           {importResult ? (
             <div className="space-y-4 py-2">
-              <div className="p-4 bg-[var(--green-bg)] border border-[var(--green)]/30 rounded-[var(--radius-md)] flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--green)] shrink-0 mt-0.5" />
+              <div className="p-4 bg-[var(--green-bg)] border border-[var(--green)]/30 rounded-[var(--radius-md)] flex items-center gap-4">
+                <div className="w-12 h-12 shrink-0">
+                  <DotLottieReact
+                    src="/lotties/success_tick.lottie"
+                    loop={false}
+                    autoplay
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </div>
                 <div>
-                  <h4 className="text-[14px] font-bold text-[var(--green)]">
+                  <h4 className="text-[15px] font-bold text-[var(--green)]">
                     Questions Imported Successfully!
                   </h4>
-                  <p className="text-[12px] text-[var(--text-primary)] mt-1">
+                  <p className="text-[12px] text-[var(--text-primary)] mt-0.5">
                     <strong>{importResult.created_count || 0}</strong> questions were added into Level {currentLevel?.level_number}.
                     {importResult.skipped_count > 0 && ` (${importResult.skipped_count} items skipped)`}
                   </p>

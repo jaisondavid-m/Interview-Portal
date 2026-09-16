@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import {
   Award,
   Star,
@@ -151,9 +152,9 @@ export default function PeerFeedbackModal({
       if (onSubmitted) {
         onSubmitted();
       }
-      if (onClose) {
-        onClose();
-      }
+      setTimeout(() => {
+        if (onClose) onClose();
+      }, 1800);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to submit feedback.');
     } finally {
@@ -203,7 +204,26 @@ export default function PeerFeedbackModal({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-5 custom-scrollbar">
-          {loading ? (
+          {success ? (
+            <div className="py-12 text-center space-y-3.5 flex flex-col items-center justify-center animate-fadeIn">
+              <div className="w-28 h-28 sm:w-36 sm:h-36 mx-auto flex items-center justify-center">
+                <DotLottieReact
+                  src="/lotties/success_tick.lottie"
+                  loop={false}
+                  autoplay
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+              <div className="space-y-1 max-w-sm mx-auto">
+                <h3 className="text-[18px] font-bold text-[var(--text-primary)]">
+                  Feedback Submitted!
+                </h3>
+                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                  Your peer evaluation ratings and rubric marks have been submitted successfully.
+                </p>
+              </div>
+            </div>
+          ) : loading ? (
             <div className="py-16 text-center space-y-3">
               <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mx-auto" />
               <p className="text-[13px] text-[var(--text-muted)]">Loading peer evaluation questions...</p>
