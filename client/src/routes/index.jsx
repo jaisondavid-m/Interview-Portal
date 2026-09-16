@@ -197,10 +197,15 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Fallback -> Redirect
+  // Fallback 404 Page (Wrapped with DashboardLayout for topbar & sidebar)
   {
-    path: '*',
-    element: <NotFound />,
+    element: <DashboardLayout />,
     errorElement: <RouteErrorBoundary />,
+    children: [
+      {
+        path: '*',
+        element: <NotFound />,
+      },
+    ],
   },
 ]);

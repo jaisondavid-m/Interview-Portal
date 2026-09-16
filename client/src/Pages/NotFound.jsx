@@ -6,9 +6,20 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 export default function NotFound() {
   const navigate = useNavigate();
 
+  // Determine user's home dashboard based on role
+  const userStr = localStorage.getItem('user');
+  let targetDashboard = '/dashboard';
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user?.role === 'admin') targetDashboard = '/admin/users';
+      else if (user?.role === 'developer') targetDashboard = '/developer/audit-logs';
+    } catch (e) {}
+  }
+
   return (
-    <div className="min-h-[75vh] flex flex-col items-center justify-center text-center px-4 py-8 space-y-4 animate-fadeIn font-sans">
-      <div className="w-64 h-64 sm:w-80 sm:h-80 mx-auto flex items-center justify-center">
+    <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-4 py-6 space-y-4 animate-fadeIn font-sans">
+      <div className="w-64 h-64 sm:w-72 sm:h-72 mx-auto flex items-center justify-center">
         <DotLottieReact
           src="/lotties/404.lottie"
           loop
@@ -37,7 +48,7 @@ export default function NotFound() {
         </button>
 
         <Link
-          to="/dashboard"
+          to={targetDashboard}
           className="btn btn-primary text-xs py-2 px-4 font-bold shadow-sm inline-flex items-center gap-1.5"
         >
           <LayoutDashboard className="w-3.5 h-3.5" />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import {
   History,
   Search,
@@ -174,14 +175,37 @@ export default function AdminInterviewHistory() {
           </div>
         </div>
       ) : filteredSessions.length === 0 ? (
-        <div className="panel-card p-12 text-center space-y-2">
-          <History className="w-8 h-8 text-[var(--text-muted)] mx-auto" />
-          <h3 className="text-[15px] font-bold text-[var(--text-primary)]">No interview sessions found</h3>
-          <p className="text-[13px] text-[var(--text-muted)]">
-            {searchQuery || statusFilter !== 'ALL'
-              ? 'Try changing your search query or filter.'
-              : 'Students have not started any peer mock interviews yet.'}
-          </p>
+        <div className="panel-card p-10 sm:p-14 text-center space-y-4 border border-[var(--border)] rounded-[var(--radius-lg)] bg-[var(--bg-card)] shadow-xs">
+          <div className="w-52 h-52 sm:w-60 sm:h-60 mx-auto flex items-center justify-center">
+            <DotLottieReact
+              src="/lotties/404.lottie"
+              loop
+              autoplay
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h3 className="text-[17px] font-bold text-[var(--text-primary)]">No interview sessions found</h3>
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              {searchQuery || statusFilter !== 'ALL'
+                ? 'Try changing your search query or status filter.'
+                : 'Students have not started any peer mock interviews yet.'}
+            </p>
+          </div>
+          {(searchQuery || statusFilter !== 'ALL') && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('ALL');
+                }}
+                className="btn btn-secondary text-xs py-1.5 px-3.5 inline-flex items-center gap-1.5 cursor-pointer shadow-xs font-mono"
+              >
+                <span>Clear Filters</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="panel-card overflow-hidden border border-[var(--border)]">
