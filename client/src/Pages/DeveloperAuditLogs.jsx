@@ -771,9 +771,15 @@ export default function DeveloperAuditLogs() {
                     </button>
                   )}
                 </div>
-                <pre className="p-3.5 rounded-xl bg-[#1e222b] text-cyan-300 border border-[#303642] overflow-x-auto text-[11px] max-h-56 leading-relaxed select-all">
-                  {selectedLog.request_body ? formatJson(selectedLog.request_body) : '// No request payload (GET / Empty body)'}
-                </pre>
+                <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] overflow-x-auto max-h-56 select-all shadow-xs">
+                  <pre className="text-[11px] font-mono leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                    {selectedLog.request_body ? (
+                      formatJson(selectedLog.request_body)
+                    ) : (
+                      <span className="text-[var(--text-muted)] italic font-mono">// No request payload (GET / Empty body)</span>
+                    )}
+                  </pre>
+                </div>
               </div>
 
               {/* Response Body Payload */}
@@ -798,9 +804,15 @@ export default function DeveloperAuditLogs() {
                     </button>
                   )}
                 </div>
-                <pre className="p-3.5 rounded-xl bg-[#1e222b] text-emerald-300 border border-[#303642] overflow-x-auto text-[11px] max-h-64 leading-relaxed select-all">
-                  {selectedLog.response_body ? formatJson(selectedLog.response_body) : '// Empty response body'}
-                </pre>
+                <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] overflow-x-auto max-h-64 select-all shadow-xs">
+                  <pre className="text-[11px] font-mono leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                    {selectedLog.response_body ? (
+                      formatJson(selectedLog.response_body)
+                    ) : (
+                      <span className="text-[var(--text-muted)] italic font-mono">// Empty response body</span>
+                    )}
+                  </pre>
+                </div>
               </div>
 
               {/* Error Message banner if any */}
