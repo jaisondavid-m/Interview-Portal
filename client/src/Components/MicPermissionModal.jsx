@@ -8,8 +8,10 @@ import {
   ShieldAlert,
   Loader2,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Info
 } from 'lucide-react';
+import { getSafeUserMedia, checkMicrophoneSupport } from '../utils/mediaUtils';
 
 export default function MicPermissionModal({
   isOpen,
@@ -19,20 +21,29 @@ export default function MicPermissionModal({
   const [audioLevel, setAudioLevel] = useState(0); // 0 to 100
   const [requesting, setRequesting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [supportInfo, setSupportInfo] = useState({ supported: true, isSecure: true, isIOS: false, reason: '' });
 
   const streamRef = useRef(null);
   const audioContextRef = useRef(null);
   const animFrameRef = useRef(null);
 
-  // Check initial permission status
+  // Check initial permission status & support
   useEffect(() => {
     if (!isOpen) return;
 
     let isMounted = true;
+    const support = checkMicrophoneSupport();
+    setSupportInfo(support);
+
+    if (!support.supported) {
+      setPermissionState('denied');
+      setErrorMessage(support.reason || 'Microphone access is unavailable.');
+      return;
+    }
 
     const checkInitialPermission = async () => {
       try {
-        if (navigator.permissions && navigator.permissions.query) {
+        if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
           const status = await navigator.permissions.query({ name: 'microphone' });
           if (isMounted) {
             if (status.state === 'granted') {
@@ -56,7 +67,7 @@ export default function MicPermissionModal({
             };
           }
         } else {
-          // Fallback if permissions.query not supported
+          // Fallback if permissions.query not supported (e.g. iOS Safari)
           if (isMounted) setPermissionState('prompt');
         }
       } catch (err) {
@@ -74,7 +85,7 @@ export default function MicPermissionModal({
 
   const startAudioLevelMeter = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await getSafeUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
         video: false,
       });
@@ -84,6 +95,10 @@ export default function MicPermissionModal({
       if (AudioCtx) {
         const audioCtx = new AudioCtx();
         audioContextRef.current = audioCtx;
+
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume().catch(() => {});
+        }
 
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
@@ -107,7 +122,7 @@ export default function MicPermissionModal({
         updateMeter();
       }
     } catch (e) {
-      // ignore
+      // ignore visualizer startup failures if permission is already granted
     }
   };
 
@@ -127,7 +142,7 @@ export default function MicPermissionModal({
     setRequesting(true);
     setErrorMessage('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await getSafeUserMedia({
         audio: true,
         video: false,
       });
@@ -138,9 +153,12 @@ export default function MicPermissionModal({
     } catch (err) {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setPermissionState('denied');
-        setErrorMessage('Microphone access was denied. Please allow microphone access in your browser settings.');
+        setErrorMessage('Microphone access was denied. Please allow microphone access in your browser / iOS settings.');
+      } else if (err.name === 'SecurityError') {
+        setPermissionState('denied');
+        setErrorMessage(err.message || 'Microphone access blocked: HTTPS is required on iOS / Mobile browsers.');
       } else {
-        setErrorMessage(err.message || 'Unable to access microphone.');
+        setErrorMessage(err.message || 'Unable to access microphone on this device.');
       }
     } finally {
       setRequesting(false);
@@ -178,14 +196,14 @@ export default function MicPermissionModal({
             {permissionState === 'granted'
               ? 'Microphone Ready & Connected'
               : permissionState === 'denied'
-              ? 'Microphone Permission Blocked'
+              ? 'Microphone Access Issue'
               : 'Enable Microphone for Live Call'}
           </h3>
           <p className="text-[13px] text-[var(--text-secondary)] max-w-xs mx-auto">
             {permissionState === 'granted'
               ? 'Speak into your microphone to verify the volume visualizer before entering.'
               : permissionState === 'denied'
-              ? 'Your browser has blocked microphone permissions. Click the lock/settings icon in the address bar to allow audio.'
+              ? (supportInfo.reason || 'Your browser has blocked microphone permissions or requires HTTPS on iOS.')
               : 'Peer mock interviews require microphone audio so you and your partner can communicate in real time.'}
           </p>
         </div>
@@ -215,11 +233,21 @@ export default function MicPermissionModal({
           </div>
         )}
 
+        {/* Insecure Context / iOS Warning Tip */}
+        {!supportInfo.isSecure && (
+          <div className="p-3 rounded-[var(--radius-sm)] bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex items-start gap-2 text-left">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              <strong>iOS / Mobile Notice:</strong> iOS Safari strictly requires a Secure Context (<strong>HTTPS</strong>). Connecting over plain HTTP ({typeof window !== 'undefined' ? window.location.host : 'local IP'}) disables microphone APIs.
+            </p>
+          </div>
+        )}
+
         {/* Error Callout */}
         {errorMessage && (
-          <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/30 text-[var(--red)] text-xs flex items-center gap-2 text-left">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <p>{errorMessage}</p>
+          <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/30 text-[var(--red)] text-xs flex items-start gap-2 text-left">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">{errorMessage}</p>
           </div>
         )}
 
@@ -243,7 +271,7 @@ export default function MicPermissionModal({
                 {requesting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Retry Permission Check'}
               </button>
               <p className="text-[11px] text-[var(--text-muted)] font-mono">
-                💡 Tip: Check address bar lock icon 🔒 → Site Settings → Microphone → Allow
+                💡 Tip: Check address bar settings 🔒 → Microphone → Allow, or open via HTTPS.
               </p>
             </div>
           ) : (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { getSafeUserMedia } from './mediaUtils';
 
 const RTC_CONFIG = {
   iceServers: [
@@ -531,8 +532,8 @@ export default function useWebRTCAudio({
       try {
         setConnectionState('connecting');
 
-        // 1. Get High-Quality Microphone Audio
-        const stream = await navigator.mediaDevices.getUserMedia({
+        // 1. Get High-Quality Microphone Audio (with iOS & legacy fallbacks)
+        const stream = await getSafeUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
