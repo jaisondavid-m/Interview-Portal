@@ -113,13 +113,13 @@ export default function FrontendPlayground({
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shadow-xs">
+              <div className="w-11 h-11 rounded-xl bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] flex items-center justify-center shadow-xs">
                 <Code2 className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
                   <span>Frontend Studio</span>
-                  <span className="text-[10px] bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 px-2 py-0.5 rounded-full font-mono font-bold uppercase border border-cyan-500/30">
+                  <span className="text-[10px] bg-[var(--accent-dim)] text-[var(--accent)] px-2 py-0.5 rounded-full font-mono font-bold uppercase border border-[var(--border-accent)]">
                     Studio Mode
                   </span>
                 </h3>
@@ -130,8 +130,8 @@ export default function FrontendPlayground({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-md font-mono text-[11px] font-bold border bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+              <span className="px-2.5 py-1 rounded-md font-mono text-[11px] font-bold border bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
                 <span>Live Hot Reload</span>
               </span>
             </div>
@@ -145,7 +145,7 @@ export default function FrontendPlayground({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1.5">
               <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
-                <Code2 className="w-4 h-4 text-cyan-500" />
+                <Code2 className="w-4 h-4 text-[var(--accent)]" />
                 <span>Interactive JSX Editor</span>
               </div>
               <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
@@ -155,7 +155,7 @@ export default function FrontendPlayground({
 
             <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1.5">
               <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
-                <Layout className="w-4 h-4 text-blue-500" />
+                <Layout className="w-4 h-4 text-indigo-500" />
                 <span>Responsive Viewports</span>
               </div>
               <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
@@ -165,18 +165,18 @@ export default function FrontendPlayground({
           </div>
 
           {/* Package Info */}
-          <div className="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20 text-xs font-mono flex items-center justify-between flex-wrap gap-2">
+          <div className="p-3 rounded-xl bg-[var(--accent-dim)] border border-[var(--border-accent)] text-xs font-mono flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <Package className="w-3.5 h-3.5 text-cyan-500" />
+              <Package className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span>Installed Packages:</span>
-              <strong className="text-cyan-600 dark:text-cyan-400">TailwindCSS, Lucide Icons, Framer Motion, Lodash, Axios</strong>
+              <strong className="text-[var(--text-primary)]">TailwindCSS, Lucide, Framer Motion, Lodash</strong>
             </div>
             <button
               type="button"
               onClick={() => setShowPackagesModal(true)}
-              className="text-[11px] text-cyan-600 dark:text-cyan-400 font-bold hover:underline cursor-pointer"
+              className="text-[11px] text-[var(--accent)] font-bold hover:underline cursor-pointer flex items-center gap-1"
             >
-              View Packages ({INSTALLED_FRONTEND_PACKAGES.length})
+              <span>View Packages ({INSTALLED_FRONTEND_PACKAGES.length})</span>
             </button>
           </div>
         </div>
@@ -184,14 +184,14 @@ export default function FrontendPlayground({
         {/* Action Dock */}
         <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3 flex-wrap">
           <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-500" />
+            <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Click below or press <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] text-[10px] font-bold text-[var(--text-primary)]">F</kbd> for full screen</span>
           </div>
 
           <button
             type="button"
             onClick={() => setIsFullscreen(true)}
-            className="h-10 px-5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
+            className="btn btn-primary h-10 px-5 text-xs font-bold flex items-center gap-2 shadow-lg shadow-[var(--accent-glow)] hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
             title="Open Frontend Studio in Full Screen (Shortcut: F)"
           >
             <Play className="w-4 h-4 fill-white" />
@@ -221,7 +221,7 @@ export default function FrontendPlayground({
         <div className="flex items-center gap-2 flex-wrap">
           {/* Role Status Badge */}
           {isEditable ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-xs font-mono font-bold shadow-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] text-xs font-mono font-bold shadow-xs">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               <span>React Frontend Editor</span>
             </div>
@@ -273,12 +273,12 @@ export default function FrontendPlayground({
           <button
             type="button"
             onClick={() => setShowPackagesModal(true)}
-            className="px-2.5 py-1 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-raised)] text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            className="px-2.5 py-1 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border-accent)] text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
             title="View all installed packages (Tailwind, Lucide, Framer Motion, Lodash, Axios, etc.)"
           >
-            <Package className="w-3.5 h-3.5 text-cyan-500" />
+            <Package className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Packages</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/10 text-cyan-500 font-bold border border-cyan-500/30">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)]">
               {INSTALLED_FRONTEND_PACKAGES.length}
             </span>
           </button>
