@@ -1,6 +1,6 @@
 module server
 
-go 1.26.0
+go 1.23.0
 
 require (
 	github.com/gin-gonic/gin v1.10.0
@@ -10,8 +10,8 @@ require (
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/crypto v0.31.0
 	gorm.io/driver/mysql v1.5.7
-	gorm.io/gorm v1.26.0
-	gorm.io/plugin/dbresolver v1.6.2
+	gorm.io/gorm v1.25.12
+	gorm.io/plugin/dbresolver v1.5.3
 )
 
 require (
@@ -39,7 +39,7 @@ require (
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

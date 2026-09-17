@@ -5,11 +5,19 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Copy all source files including modules
+ENV GOTOOLCHAIN=auto
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+
+# Copy dependency manifests and download modules
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source files
 COPY . .
 
 # Build lightweight static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server main.go
+RUN go build -ldflags="-w -s" -o /app/server main.go
 
 # ==========================================
 # Production Stage (Node.js + Python3 Runtime)
