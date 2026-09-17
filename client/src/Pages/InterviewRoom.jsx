@@ -22,6 +22,7 @@ import {
   FileText,
   Eye,
   Lock,
+  ChevronLeft,
   ChevronRight,
   Check
 } from 'lucide-react';
@@ -75,6 +76,21 @@ export default function InterviewRoom() {
   const payload = question?.payload || {};
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
+
+  // Multi-question per round handling
+  const roundQuestions = useMemo(() => {
+    if (Array.isArray(sessionData?.level_questions) && sessionData.level_questions.length > 0) {
+      return sessionData.level_questions;
+    }
+    return question ? [question] : [];
+  }, [sessionData?.level_questions, question]);
+
+  const hasMultipleQuestions = roundQuestions.length > 1;
+  const currentQIndex = useMemo(() => {
+    if (!question || roundQuestions.length === 0) return 0;
+    const idx = roundQuestions.findIndex((q) => Number(q.id) === Number(question.id));
+    return idx >= 0 ? idx : 0;
+  }, [roundQuestions, question]);
 
   // Detect if current level or question is Whiteboard, Frontend, Database, MCQ, or Verbal Q&A mode
   const levelMode = String(level?.mode || level?.level_mode || sessionData?.level_mode || track?.mode || '').toLowerCase().trim();
@@ -217,6 +233,48 @@ export default function InterviewRoom() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [runResults, setRunResults] = useState(null);
   const [submissionResult, setSubmissionResult] = useState(null);
+  const [switchingQuestion, setSwitchingQuestion] = useState(false);
+
+  // Switch question within round
+  const handleSelectQuestion = async (targetQ) => {
+    if (!targetQ || targetQ.id === question?.id || switchingQuestion) return;
+    try {
+      setSwitchingQuestion(true);
+      activeQIdRef.current = targetQ.id;
+
+      // Optimistically update active question in local state
+      setSessionData((prev) => ({
+        ...prev,
+        current_question_id: targetQ.id,
+        current_question: targetQ,
+      }));
+      setRunResults(null);
+      setSubmissionResult(null);
+
+      const qStarter =
+        targetQ?.payload?.starter_code ||
+        (Array.isArray(targetQ?.templates) &&
+          targetQ?.templates.find((t) => t.starter_code)?.starter_code) ||
+        '';
+
+      if (currentUserRole === 'interviewee') {
+        const initialCode = qStarter || '';
+        setCode(initialCode);
+        api.post(`/interviews/sessions/${sessionId}/code`, {
+          code: initialCode,
+          lang: language,
+        }).catch(() => {});
+      }
+
+      await api.post(`/interviews/sessions/${sessionId}/question`, {
+        question_id: targetQ.id,
+      });
+    } catch (err) {
+      console.error('Failed to switch question', err);
+    } finally {
+      setSwitchingQuestion(false);
+    }
+  };
 
   // Whiteboard system design state
   const [whiteboardData, setWhiteboardData] = useState('');
@@ -1306,6 +1364,83 @@ export default function InterviewRoom() {
           </div>
         )}
       </div>
+
+      {/* Multi-Question Top Navigation Bar (Shown when round has > 1 question, except MCQ which has its own palette) */}
+      {hasMultipleQuestions && !isMCQMode && (
+        <div className="p-2.5 sm:p-3 bg-[var(--bg-card)] rounded-[var(--radius-md)] border border-[var(--border)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--accent)] text-white text-[11px] font-mono font-bold tracking-wide uppercase shadow-xs">
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Question {currentQIndex + 1} of {roundQuestions.length}</span>
+            </div>
+
+            {/* Question Quick Jump Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+              {roundQuestions.map((q, idx) => {
+                const isSelected = idx === currentQIndex;
+                return (
+                  <button
+                    key={q.id || idx}
+                    type="button"
+                    onClick={() => handleSelectQuestion(q)}
+                    disabled={switchingQuestion || isSelected}
+                    className={`px-3 py-1 rounded text-xs font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[var(--accent)] text-white shadow-xs ring-2 ring-[var(--accent)]/30'
+                        : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border)]'
+                    }`}
+                    title={q.title || `Question ${idx + 1}`}
+                  >
+                    <span>Q{idx + 1}</span>
+                    {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <span className="hidden md:inline-block text-xs font-semibold text-[var(--text-secondary)] truncate max-w-xs">
+              {question?.title || `Question ${currentQIndex + 1}`}
+            </span>
+          </div>
+
+          {/* Prev / Next Question Navigation Buttons */}
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (currentQIndex > 0) {
+                  handleSelectQuestion(roundQuestions[currentQIndex - 1]);
+                }
+              }}
+              disabled={currentQIndex === 0 || switchingQuestion}
+              className={`btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 font-bold ${
+                currentQIndex === 0 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-[var(--accent)]'
+              }`}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Previous</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (currentQIndex < roundQuestions.length - 1) {
+                  handleSelectQuestion(roundQuestions[currentQIndex + 1]);
+                }
+              }}
+              disabled={currentQIndex >= roundQuestions.length - 1 || switchingQuestion}
+              className={`btn text-xs py-1.5 px-3 flex items-center gap-1 font-bold ${
+                currentQIndex >= roundQuestions.length - 1
+                  ? 'btn-secondary opacity-40 cursor-not-allowed'
+                  : 'btn-primary cursor-pointer'
+              }`}
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Dual-Panel Workspace Grid or Full-Width Assessment Modes */}
       {isMCQMode ? (

@@ -976,6 +976,81 @@ func UpdateSessionWhiteboard(c *gin.Context) {
 	})
 }
 
+// SwitchSessionQuestion allows changing the active question within the current round
+func SwitchSessionQuestion(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	currentUserID := rawUserID.(uint)
+	sessionID := c.Param("id")
+
+	var input struct {
+		QuestionID uint `json:"question_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid question payload"})
+		return
+	}
+
+	var session models.InterviewSession
+	if err := database.DB.Preload("Level.Questions").First(&session, sessionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Interview session is already concluded"})
+		return
+	}
+
+	var question models.InterviewQuestion
+	err := database.DB.
+		Preload("Detail").
+		Preload("Templates").
+		Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		First(&question, input.QuestionID).Error
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Question not found"})
+		return
+	}
+
+	// Update session active question
+	session.CurrentQuestionID = question.ID
+	session.CurrentQuestion = &question
+	database.DB.Model(&session).Updates(map[string]interface{}{
+		"current_question_id": question.ID,
+	})
+
+	role := "interviewee"
+	if session.InterviewerID == currentUserID {
+		role = "interviewer"
+	}
+
+	var respQ gin.H
+	if role == "interviewer" {
+		respQ = fullQuestionForInterviewer(question)
+	} else {
+		respQ = sanitizeQuestionForCandidate(question)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"current_question_id": question.ID,
+			"current_question":    respQ,
+		},
+	})
+}
+
 // UpdateSessionRubrics synchronizes the evaluation rubrics scored/updated by the interviewer
 func UpdateSessionRubrics(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")

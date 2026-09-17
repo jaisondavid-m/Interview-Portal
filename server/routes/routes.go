@@ -55,6 +55,7 @@ func SetupRouter() *gin.Engine {
 
 			// Live Session
 			interviews.GET("/sessions/:id", controllers.GetInterviewSession)
+			interviews.POST("/sessions/:id/question", controllers.SwitchSessionQuestion)
 			interviews.POST("/sessions/:id/code", controllers.UpdateSessionCode)
 			interviews.POST("/sessions/:id/whiteboard", controllers.UpdateSessionWhiteboard)
 			interviews.POST("/sessions/:id/rubrics", controllers.UpdateSessionRubrics)
