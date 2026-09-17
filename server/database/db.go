@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"server/config"
@@ -12,6 +13,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/plugin/dbresolver"
 )
 
 // DB is the global database connection instance
@@ -52,19 +54,64 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to MySQL database after %d attempts: %w", maxRetries, err)
 	}
 
-	// Configure connection pool
+	// Configure connection pool for Primary
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure connection pool: %w", err)
 	}
 
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	maxIdle := cfg.DBMaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = 10
+	}
+	maxOpen := cfg.DBMaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 100
+	}
 
-	log.Printf("[INFO] Connected successfully to MySQL database '%s' at %s:%s\n", cfg.DBName, cfg.DBHost, cfg.DBPort)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetConnMaxLifetime(cfg.DBConnMaxLifetime)
 
-	// Run automatic database migrations
+	log.Printf("[INFO] Connected successfully to MySQL Primary database '%s' at %s:%s\n", cfg.DBName, cfg.DBHost, cfg.DBPort)
+
+	// Configure DBResolver for Read/Write splitting if Replicas are specified
+	if len(cfg.DBReplicaHosts) > 0 {
+		var replicaDialectors []gorm.Dialector
+		for _, hostPort := range cfg.DBReplicaHosts {
+			host := hostPort
+			port := "3306"
+			if strings.Contains(hostPort, ":") {
+				parts := strings.Split(hostPort, ":")
+				host = parts[0]
+				port = parts[1]
+			}
+			replicaDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+				cfg.DBUser, cfg.DBPassword, host, port, cfg.DBName)
+			replicaDialectors = append(replicaDialectors, mysql.Open(replicaDSN))
+			log.Printf("[INFO] Registered MySQL Read Replica: %s:%s\n", host, port)
+		}
+
+		resolverCfg := dbresolver.Config{
+			Sources:  []gorm.Dialector{mysql.Open(dsn)},
+			Replicas: replicaDialectors,
+			Policy:   dbresolver.RandomPolicy{},
+		}
+
+		err = db.Use(
+			dbresolver.Register(resolverCfg).
+				SetMaxIdleConns(maxIdle).
+				SetMaxOpenConns(maxOpen).
+				SetConnMaxLifetime(cfg.DBConnMaxLifetime),
+		)
+		if err != nil {
+			log.Printf("[WARN] Failed to attach DBResolver read-replica plugin: %v\n", err)
+		} else {
+			log.Printf("[INFO] DBResolver initialized successfully with %d read replica(s)\n", len(replicaDialectors))
+		}
+	}
+
+	// Run automatic database migrations on Primary
 	if err := runMigrations(db); err != nil {
 		log.Printf("[WARN] Migration warning: %v\n", err)
 	}

@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # ============================================================
+  # MySQL Primary Node (Leader / RW on Port 3306)
+  # ============================================================
+  mysql-primary:
+    image: mysql:8.0
+    container_name: mockmate-mysql-primary
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: jaison
+      MYSQL_DATABASE: mock_mate
+      MYSQL_USER: root
+      MYSQL_PASSWORD: jaison
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./infrastructure/mysql/primary/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./infrastructure/mysql/init-scripts:/docker-entrypoint-initdb.d:ro
+      - mysql-primary-data:/var/lib/mysql
+      - mysql-primary-logs:/var/log/mysql
+    networks:
+      - mockmate-cluster-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pjaison"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================
+  # MySQL Read Replica 1 (Follower on Port 3307)
+  # ============================================================
+  mysql-replica-1:
+    image: mysql:8.0
+    container_name: mockmate-mysql-replica-1
+    restart: unless-stopped
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: jaison
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./infrastructure/mysql/replica/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - mysql-replica1-data:/var/lib/mysql
+      - mysql-replica1-logs:/var/log/mysql
+    networks:
+      - mockmate-cluster-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pjaison"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================
+  # MySQL Read Replica 2 (Follower on Port 3308)
+  # ============================================================
+  mysql-replica-2:
+    image: mysql:8.0
+    container_name: mockmate-mysql-replica-2
+    restart: unless-stopped
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: jaison
+    ports:
+      - "3308:3306"
+    volumes:
+      - ./infrastructure/mysql/replica/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - mysql-replica2-data:/var/lib/mysql
+      - mysql-replica2-logs:/var/log/mysql
+    networks:
+      - mockmate-cluster-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pjaison"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================
+  # Failover & Topology Health Daemon
+  # ============================================================
+  db-failover-manager:
+    image: python:3.10-slim
+    container_name: mockmate-failover-manager
+    restart: unless-stopped
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+      mysql-replica-1:
+        condition: service_healthy
+      mysql-replica-2:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/scripts:/scripts:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /scripts
+    environment:
+      MYSQL_ROOT_PASSWORD: jaison
+      PRIMARY_HOST: mysql-primary
+      PRIMARY_PORT: 3306
+      REPLICA1_HOST: mysql-replica-1
+      REPLICA1_PORT: 3306
+      REPLICA2_HOST: mysql-replica-2
+      REPLICA2_PORT: 3306
+    entrypoint: ["bash", "-c", "apt-get update && apt-get install -y default-mysql-client && python /scripts/failover_manager.py"]
+    networks:
+      - mockmate-cluster-net
+
+networks:
+  mockmate-cluster-net:
+    driver: bridge
+
+volumes:
+  mysql-primary-data:
+  mysql-primary-logs:
+  mysql-replica1-data:
+  mysql-replica1-logs:
+  mysql-replica2-data:
+  mysql-replica2-logs:
