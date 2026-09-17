@@ -41,6 +41,10 @@ RUN ln -sf /usr/local/bin/python3 /usr/bin/python3 && \
     ln -sf /usr/local/bin/node /usr/bin/node 2>/dev/null || true
 
 
+# Copy Go runtime from official golang builder (zero network dependency during build)
+COPY --from=builder /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
+
 # Copy binary from build stage
 COPY --from=builder /app/server /app/server
 

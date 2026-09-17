@@ -92,26 +92,56 @@ func main() {
 	}
 }
 
-func TestExecuteGoCustomInput(t *testing.T) {
+func TestExecuteGoContainsDuplicate(t *testing.T) {
 	code := `package main
 
-import (
-	"fmt"
-	"os"
-	"io"
-)
+import "fmt"
 
 func main() {
-	b, _ := io.ReadAll(os.Stdin)
-	fmt.Printf("Received: %s", string(b))
-}
-`
-	res, err := ExecuteCustomInput(code, "go", "custom test payload")
-	if err != nil {
-		t.Fatalf("ExecuteCustomInput failed: %v", err)
+	var n int
+	fmt.Scan(&n)
+
+	seen := make(map[int]bool)
+
+	for i := 0; i < n; i++ {
+		var x int
+		fmt.Scan(&x)
+
+		if seen[x] {
+			fmt.Println("true")
+			return
+		}
+
+		seen[x] = true
 	}
 
-	if res.Actual != "Received: custom test payload" {
-		t.Fatalf("expected 'Received: custom test payload', got %q", res.Actual)
+	fmt.Println("false")
+}
+`
+	testCases := []EvalTestCase{
+		{
+			Index:          1,
+			IsHidden:       false,
+			Name:           "Sample Case 1",
+			Input:          "4\n1 2 3 1",
+			ExpectedOutput: "true",
+		},
+		{
+			Index:          2,
+			IsHidden:       false,
+			Name:           "Sample Case 2",
+			Input:          "5\n1 2 3 4 5",
+			ExpectedOutput: "false",
+		},
+	}
+
+	results, err := ExecuteTestCases(code, "go", testCases)
+	if err != nil {
+		t.Fatalf("ExecuteTestCases failed: %v", err)
+	}
+
+	for i, r := range results {
+		t.Logf("Result %d: Passed=%v, Expected=%q, Actual=%q, ExecutionMs=%d", i+1, r.Passed, r.Expected, r.Actual, r.ExecutionMs)
 	}
 }
+
