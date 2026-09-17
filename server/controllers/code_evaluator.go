@@ -417,15 +417,34 @@ func executeGo(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResu
 	binPath := filepath.Join(tmpDir, binName)
 
 	preparedCode := prepareGoBackendCode(code)
+	pkgRegex := regexp.MustCompile(`(?m)^\s*package\s+[a-zA-Z0-9_]+`)
+	if !pkgRegex.MatchString(preparedCode) {
+		preparedCode = "package main\n\n" + preparedCode
+	}
+
 	if err := os.WriteFile(srcPath, []byte(preparedCode), 0644); err != nil {
 		return executeViaRemote("go", code, testCases, isCustom)
 	}
 
-	// Compile Go binary for fast multi-test case execution
+	// Create an isolated go.mod in the temporary directory so the compiler runs
+	// independently without searching for parent modules, workspaces, or vendor directories
+	goModPath := filepath.Join(tmpDir, "go.mod")
+	_ = os.WriteFile(goModPath, []byte("module mockmate_solution\n\ngo 1.20\n"), 0644)
+
+	// Compile Go binary for fast multi-test case execution (CGO_ENABLED=0 ensures pure internal linker without MinGW/GCC delays)
 	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelCompile()
 
-	compileCmd := exec.CommandContext(ctxCompile, goPath, "build", "-o", binPath, srcPath)
+	compileCmd := exec.CommandContext(ctxCompile, goPath, "build", "-mod=mod", "-o", binPath, "main.go")
+	compileCmd.Dir = tmpDir
+	compileCmd.Env = append(os.Environ(),
+		"CGO_ENABLED=0",
+		"GOWORK=off",
+		"GO111MODULE=on",
+		"GOPROXY=off",
+		"GONOPROXY=*",
+		"GONOSUMDB=*",
+	)
 	var compileStderr bytes.Buffer
 	compileCmd.Stderr = &compileStderr
 
@@ -433,6 +452,10 @@ func executeGo(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResu
 		errStr := strings.TrimSpace(compileStderr.String())
 		if errStr == "" {
 			errStr = err.Error()
+		}
+		// If compilation failed because of missing external module, try remote fallback
+		if strings.Contains(errStr, "cannot find package") || strings.Contains(errStr, "no required module") {
+			return executeViaRemote("go", code, testCases, isCustom)
 		}
 		return makeErrorResults(testCases, "Go Compilation Error:\n"+errStr), nil
 	}
@@ -1436,7 +1459,7 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 		ctx, cancel := context.WithTimeout(context.Background(), 15000*time.Millisecond)
 		cmd := exec.CommandContext(ctx, execPath, baseArgs...)
 
-		// Set working directory if script path is provided
+		// Set working directory if script path or binary path is provided
 		if len(baseArgs) > 0 {
 			for _, arg := range baseArgs {
 				if strings.Contains(arg, "solution") || strings.Contains(arg, "main") || strings.HasSuffix(arg, ".js") || strings.HasSuffix(arg, ".py") || strings.HasSuffix(arg, ".java") {
@@ -1450,6 +1473,9 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 					break
 				}
 			}
+		}
+		if cmd.Dir == "" && filepath.Dir(execPath) != "" && filepath.Dir(execPath) != "." {
+			cmd.Dir = filepath.Dir(execPath)
 		}
 
 		// Pipe test case input to Standard Input (stdin)
@@ -1574,6 +1600,14 @@ func executeViaRemote(lang string, code string, testCases []EvalTestCase, isCust
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	for i, tc := range testCases {
+		// 1. Try Piston API first (Fast ~500ms execution with high reliability)
+		pistonRes, pErr := executeViaPiston(lang, code, tc, isCustom)
+		if pErr == nil && !strings.Contains(pistonRes.Actual, "Execution Engine Unavailable") {
+			results[i] = pistonRes
+			continue
+		}
+
+		// 2. Fallback to Judge0 CE API if Piston is unreachable
 		payload := map[string]interface{}{
 			"source_code": code,
 			"language_id": langID,
@@ -1589,12 +1623,6 @@ func executeViaRemote(lang string, code string, testCases []EvalTestCase, isCust
 		}
 
 		if err != nil {
-			// Fallback to Piston API
-			pistonRes, pErr := executeViaPiston(lang, code, tc, isCustom)
-			if pErr == nil {
-				results[i] = pistonRes
-				continue
-			}
 			results[i] = EvalResult{
 				Index:       tc.Index,
 				IsHidden:    tc.IsHidden,

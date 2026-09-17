@@ -725,29 +725,25 @@ export default function WhiteboardCanvas({
       {/* ============================================================ */}
       {/* TOP CONTROLS & STATUS TOOLBAR */}
       {/* ============================================================ */}
-      <div className="min-h-14 px-3 sm:px-4 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2.5 shrink-0 z-20">
-        {/* Left Side: Mode Pill, Status & Primary Actions */}
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="h-14 px-3 sm:px-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0 z-20 select-none overflow-x-auto custom-scrollbar">
+        {/* Left Section: Brand & Problem Requirements */}
+        <div className="flex items-center gap-2 shrink-0">
           {/* Role Status Badge */}
           {isEditable ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-mono font-bold shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse text-blue-500" />
-              <span>Whiteboard Editor</span>
-              {isFullscreen && (
-                <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
-                  Fullscreen
-                </span>
-              )}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-semibold shadow-xs">
+              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-[var(--text-primary)] font-bold">Whiteboard</span>
+              <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded font-bold uppercase border border-blue-500/20">
+                Editor
+              </span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold shadow-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-semibold shadow-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Live Observer • {candidateName}</span>
-              {isFullscreen && (
-                <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
-                  Fullscreen
-                </span>
-              )}
+              <span className="text-[var(--text-primary)] font-bold">Live Observer</span>
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase border border-emerald-500/20">
+                {candidateName}
+              </span>
             </div>
           )}
 
@@ -756,173 +752,193 @@ export default function WhiteboardCanvas({
             <button
               type="button"
               onClick={() => setShowRequirements((prev) => !prev)}
-              className={`btn text-xs py-1 px-2.5 flex items-center gap-1.5 font-medium transition cursor-pointer ${
+              className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border shadow-xs ${
                 showRequirements
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                  : 'btn-secondary text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
               }`}
               title="View Challenge Scenario & Scale Requirements"
             >
-              <BookOpen className="w-3.5 h-3.5" />
+              <BookOpen className="w-3.5 h-3.5 text-amber-500" />
               <span className="hidden sm:inline">Requirements</span>
               {payload?.scenario && (
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
               )}
             </button>
           )}
+        </div>
 
-          {/* Candidate Action Buttons */}
-          {isEditable && (
-            <div className="flex items-center gap-1.5 border-l border-[var(--border)] pl-2">
+        {/* Center Section: Primary Authoring Tools */}
+        {isEditable && (
+          <div className="flex items-center gap-1.5 bg-[var(--bg-card)] p-1 rounded-lg border border-[var(--border)] shadow-xs shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowCatalogModal(true)}
+              className="h-7.5 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              title="Add New Component (or browse catalog)"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Node</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTool(activeTool === 'connect' ? 'select' : 'connect');
+                setConnectSourceId(null);
+              }}
+              className={`h-7.5 px-2.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
+                activeTool === 'connect'
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                  : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]'
+              }`}
+              title="Click two components to draw a directional connection arrow"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span>{activeTool === 'connect' ? 'Connecting...' : 'Connect'}</span>
+            </button>
+
+            <div className="w-[1px] h-4 bg-[var(--border)] mx-0.5" />
+
+            {/* Undo and Redo Action Buttons */}
+            <div className="flex items-center gap-0.5">
               <button
                 type="button"
-                onClick={() => setShowCatalogModal(true)}
-                className="btn btn-primary text-xs py-1 px-2.5 flex items-center gap-1 font-bold shadow-sm cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
-                title="Open Component Library"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                className="w-7.5 h-7.5 rounded flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition cursor-pointer"
+                title="Undo (Ctrl+Z)"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Node</span>
+                <Undo2 className="w-3.5 h-3.5" />
               </button>
-
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTool(activeTool === 'connect' ? 'select' : 'connect');
-                  setConnectSourceId(null);
-                }}
-                className={`btn text-xs py-1 px-2.5 flex items-center gap-1 font-medium transition cursor-pointer ${
-                  activeTool === 'connect'
-                    ? 'bg-amber-500 text-white hover:bg-amber-600 border border-amber-600 shadow-sm'
-                    : 'btn-secondary'
-                }`}
-                title="Click two components to draw a directional connection arrow"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                className="w-7.5 h-7.5 rounded flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition cursor-pointer"
+                title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
               >
-                <Link2 className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">{activeTool === 'connect' ? 'Connecting...' : 'Connect'}</span>
+                <Redo2 className="w-3.5 h-3.5" />
               </button>
+            </div>
 
-              {/* Undo and Redo Action Buttons */}
-              <div className="flex items-center gap-0.5 ml-0.5">
-                <button
-                  type="button"
-                  onClick={handleUndo}
-                  disabled={!canUndo}
-                  className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:hover:text-[var(--text-muted)] disabled:cursor-not-allowed transition cursor-pointer"
-                  title="Undo (Ctrl+Z)"
-                >
-                  <Undo2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRedo}
-                  disabled={!canRedo}
-                  className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:hover:text-[var(--text-muted)] disabled:cursor-not-allowed transition cursor-pointer"
-                  title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
-                >
-                  <Redo2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {(selectedNodeId || selectedConnectionId) && (
+            {/* Contextual Selection Action (Edit / Delete) */}
+            {(selectedNode || selectedConnectionId) && (
+              <>
+                <div className="w-[1px] h-4 bg-[var(--border)] mx-0.5" />
+                {selectedNode && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingNode(selectedNode)}
+                    className="h-7.5 px-2.5 rounded-md text-xs font-semibold flex items-center gap-1 bg-[var(--bg-raised)] text-[var(--text-primary)] hover:bg-[var(--border)] transition cursor-pointer"
+                    title="Edit component properties"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="hidden sm:inline">Edit</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleDeleteSelected}
-                  className="btn btn-danger text-xs py-1 px-2 flex items-center gap-1 font-medium cursor-pointer"
+                  className="h-7.5 px-2.5 rounded-md text-xs font-semibold flex items-center gap-1 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer"
                   title="Delete selected item (Delete/Backspace)"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Delete</span>
                 </button>
-              )}
+              </>
+            )}
+          </div>
+        )}
 
-              {selectedNode && (
-                <button
-                  type="button"
-                  onClick={() => setEditingNode(selectedNode)}
-                  className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1 font-medium cursor-pointer"
-                  title="Edit component properties (or double-click node)"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Edit</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Right Section: Viewport Controls, Stats & Fullscreen Toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Diagram Stats Badge */}
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)] shadow-xs">
+            <Layers className="w-3 h-3 text-blue-500" />
+            <span>{nodes.length} Nodes</span>
+            <span>•</span>
+            <span>{connections.length} Links</span>
+          </div>
 
-        {/* Right Side: Viewport Controls & Fullscreen Toggle */}
-        <div className="flex items-center gap-1 text-xs ml-auto">
-          <span className="text-[11px] font-mono text-[var(--text-muted)] mr-1 hidden xl:inline">
-            {nodes.length} Components • {connections.length} Links
-          </span>
-
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(1))))}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
-            title="Zoom Out"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
-
-          <span className="font-mono text-[11px] text-[var(--text-secondary)] px-1 min-w-[38px] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.min(2.0, Number((z + 0.1).toFixed(1))))}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
-            title="Zoom In"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleFitToScreen}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
-            title="Fit Diagram to View"
-          >
-            <Compass className="w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleResetView}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
-            title="Reset Zoom & Pan (100%)"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-
-          {isEditable && (
+          {/* Zoom & Viewport Segmented Group */}
+          <div className="flex items-center bg-[var(--bg-card)] p-0.5 rounded-lg border border-[var(--border)] shadow-xs">
             <button
               type="button"
-              onClick={handleClearCanvas}
-              className="p-1.5 rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-500 transition ml-0.5 cursor-pointer"
-              title="Clear Whiteboard"
+              onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(1))))}
+              className="w-7.5 h-7.5 rounded flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer"
+              title="Zoom Out"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <ZoomOut className="w-3.5 h-3.5" />
             </button>
-          )}
 
-          {/* PRIMARY FULLSCREEN / MINIMIZE TOGGLE BUTTON */}
+            <button
+              type="button"
+              onClick={handleResetView}
+              className="px-2 h-7.5 font-mono text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
+              title="Reset Zoom to 100%"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(2.0, Number((z + 0.1).toFixed(1))))}
+              className="w-7.5 h-7.5 rounded flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="w-[1px] h-3.5 bg-[var(--border)] mx-0.5" />
+
+            <button
+              type="button"
+              onClick={handleFitToScreen}
+              className="w-7.5 h-7.5 rounded flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer"
+              title="Fit Diagram to View"
+            >
+              <Compass className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetView}
+              className="w-7.5 h-7.5 rounded flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer"
+              title="Reset Pan & Zoom"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            {isEditable && (
+              <>
+                <div className="w-[1px] h-3.5 bg-[var(--border)] mx-0.5" />
+                <button
+                  type="button"
+                  onClick={handleClearCanvas}
+                  className="w-7.5 h-7.5 rounded flex items-center justify-center text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition cursor-pointer"
+                  title="Clear Whiteboard"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Fullscreen / Minimize Toggle */}
           <button
             type="button"
             onClick={() => setIsFullscreen((prev) => !prev)}
-            className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ml-1 border font-bold text-xs cursor-pointer shadow-xs ${
+            className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border shadow-xs ${
               isFullscreen
-                ? 'bg-blue-600 text-white border-blue-600 shadow-md hover:opacity-90'
+                ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
                 : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-primary)] hover:border-blue-500 hover:text-blue-500'
             }`}
-            title={isFullscreen ? 'Exit Fullscreen Mode (Press F or Esc)' : 'Expand to Fullscreen Mode (Press F)'}
+            title={isFullscreen ? 'Exit Fullscreen Mode (Press Esc or F)' : 'Expand to Fullscreen Mode (Press F)'}
           >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            <span className="font-mono">
-              {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-            </span>
-            <kbd className="hidden sm:inline-block text-[9px] font-mono px-1 py-0.5 rounded bg-black/10 dark:bg-white/10 uppercase ml-0.5">
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span className="font-mono">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+            <kbd className="hidden sm:inline-block text-[9px] font-mono px-1 py-0.2 rounded bg-black/15 dark:bg-white/15 uppercase">
               {isFullscreen ? 'Esc' : 'F'}
             </kbd>
           </button>
@@ -1227,17 +1243,19 @@ export default function WhiteboardCanvas({
           )}
 
           {/* FLOATING QUICK FULLSCREEN ACTION BUTTON ON CANVAS */}
-          <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsFullscreen((prev) => !prev)}
-              className="px-3 py-2 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--text-primary)] hover:border-blue-500 hover:text-blue-500 shadow-xl transition flex items-center gap-2 font-mono text-xs font-bold cursor-pointer hover:scale-105 active:scale-95"
-              title={isFullscreen ? 'Exit Fullscreen (Esc or F)' : 'Enter Fullscreen (F)'}
-            >
-              {isFullscreen ? <Minimize2 className="w-4 h-4 text-blue-500" /> : <Maximize2 className="w-4 h-4 text-blue-500" />}
-              <span>{isFullscreen ? 'Exit Fullscreen' : 'Expand Fullscreen'}</span>
-            </button>
-          </div>
+          {!isFullscreen && (
+            <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsFullscreen(true)}
+                className="px-3 py-2 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--text-primary)] hover:border-blue-500 hover:text-blue-500 shadow-xl transition flex items-center gap-2 font-mono text-xs font-bold cursor-pointer hover:scale-105 active:scale-95"
+                title="Enter Fullscreen (F)"
+              >
+                <Maximize2 className="w-4 h-4 text-blue-500" />
+                <span>Expand Fullscreen</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* SLIDE-OVER / SIDE DRAWER FOR PROBLEM REQUIREMENTS */}
