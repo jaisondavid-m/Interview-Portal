@@ -237,9 +237,9 @@ export default function AdminLeaderboard() {
           <div className="panel-card p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] uppercase">
               <span>Cohort Average</span>
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+              <TrendingUp className="w-3.5 h-3.5 text-purple-500" />
             </div>
-            <div className="text-[22px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+            <div className="text-[22px] font-bold text-purple-600 dark:text-purple-400 font-mono">
               {stats.overall_avg_score ? stats.overall_avg_score.toFixed(1) : '0.0'}{' '}
               <span className="text-xs text-[var(--text-muted)] font-normal">pts/student</span>
             </div>
@@ -253,9 +253,9 @@ export default function AdminLeaderboard() {
               <span>
                 {activeTab === 'total_points' ? 'Top Total Points' : 'Top Pts / Interview'}
               </span>
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-purple-500" />
             </div>
-            <div className="text-[22px] font-bold text-amber-500 font-mono truncate">
+            <div className="text-[22px] font-bold text-purple-600 dark:text-purple-400 font-mono truncate">
               {activeTab === 'total_points'
                 ? stats.top_scorer_by_total?.total_score != null
                   ? `${stats.top_scorer_by_total.total_score.toFixed(0)} pts`
@@ -266,7 +266,7 @@ export default function AdminLeaderboard() {
                 ? `${stats.top_scorer_by_avg.points_per_interview.toFixed(1)} pts/int`
                 : '—'}
             </div>
-            <div className="text-[11px] text-amber-600 dark:text-amber-400 font-mono truncate">
+            <div className="text-[11px] text-purple-600 dark:text-purple-400 font-mono truncate">
               {activeTab === 'total_points'
                 ? stats.top_scorer_by_total?.name || stats.top_scorer?.name || 'No students evaluated yet'
                 : stats.top_scorer_by_avg?.name || 'No students evaluated yet'}
@@ -278,15 +278,15 @@ export default function AdminLeaderboard() {
       {/* Top 3 Podium Cards */}
       {topThree.length >= 3 && !hasActiveFilters && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-          {/* Rank 2 (Silver) */}
-          <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-slate-500/10 to-[var(--bg-card)] border border-slate-400/30 flex flex-col justify-between relative overflow-hidden shadow-md md:order-1">
-            <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-300 text-slate-900 flex items-center justify-center font-mono font-bold text-xs shadow-sm">
+          {/* Rank 2 (Silver / Purple Light) */}
+          <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-purple-500/5 to-[var(--bg-card)] border border-purple-500/20 flex flex-col justify-between relative overflow-hidden shadow-md md:order-1">
+            <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-purple-100 text-purple-900 dark:bg-purple-900 dark:text-purple-100 flex items-center justify-center font-mono font-bold text-xs shadow-xs border border-purple-300 dark:border-purple-700">
               #2
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-slate-500 font-bold">
-                <Medal className="w-3.5 h-3.5 text-slate-400" />
-                <span>Silver Performer</span>
+              <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-purple-600 dark:text-purple-400 font-bold">
+                <Medal className="w-3.5 h-3.5 text-purple-500" />
+                <span>Rank 2 Leader</span>
               </div>
               <h3 className="text-[17px] font-bold text-[var(--text-primary)] truncate">{topThree[1]?.name}</h3>
               <p className="text-[11px] text-[var(--text-muted)] font-mono">
@@ -309,63 +309,63 @@ export default function AdminLeaderboard() {
                 <span className="text-[10px] font-mono text-[var(--text-muted)] block">
                   {topThree[1]?.interviews_attended || topThree[1]?.matches_count || 0} attended
                 </span>
-                <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-500/10 px-2 py-0.5 rounded border border-slate-500/20">
+                <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {(topThree[1]?.score_percentage || 0).toFixed(0)}%
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Rank 1 (Gold - Center Highlighted) */}
-          <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-[var(--bg-card)] border-2 border-amber-500/40 flex flex-col justify-between relative overflow-hidden shadow-xl scale-102 md:order-2">
-            <div className="absolute top-3 right-3 w-9 h-9 rounded-full bg-gradient-to-tr from-amber-400 to-amber-200 text-amber-950 flex items-center justify-center font-mono font-bold text-sm shadow-md">
+          {/* Rank 1 (Top Purple Highlighted) */}
+          <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-purple-500/15 via-purple-500/5 to-[var(--bg-card)] border-2 border-purple-500/40 flex flex-col justify-between relative overflow-hidden shadow-xl scale-102 md:order-2">
+            <div className="absolute top-3 right-3 w-9 h-9 rounded-full bg-purple-600 text-white flex items-center justify-center font-mono font-bold text-sm shadow-md">
               #1
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-amber-500 font-bold">
-                <Trophy className="w-3.5 h-3.5 text-amber-500" />
-                <span>Gold Leader</span>
+              <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-purple-600 dark:text-purple-400 font-bold">
+                <Trophy className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Top Leader</span>
               </div>
               <h3 className="text-[19px] font-bold text-[var(--text-primary)] flex items-center gap-1.5 truncate">
                 <span>{topThree[0]?.name}</span>
-                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <Sparkles className="w-4 h-4 text-purple-500 shrink-0" />
               </h3>
               <p className="text-[12px] text-[var(--text-muted)] font-mono">
                 {topThree[0]?.roll_no || 'STUDENT'} • {topThree[0]?.department || 'General'}
               </p>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-amber-500/20 flex items-end justify-between">
+            <div className="mt-4 pt-3 border-t border-purple-500/20 flex items-end justify-between">
               <div>
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-mono font-bold block">
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 uppercase font-mono font-bold block">
                   {activeTab === 'total_points' ? 'Top Total Points' : 'Top Points / Interview'}
                 </span>
-                <span className="text-[24px] font-bold text-amber-500 font-mono">
+                <span className="text-[24px] font-bold text-purple-600 dark:text-purple-400 font-mono">
                   {activeTab === 'total_points'
                     ? `${(topThree[0]?.total_score || 0).toFixed(0)} pts`
                     : `${(topThree[0]?.points_per_interview || topThree[0]?.avg_score_per_match || 0).toFixed(1)} pts/int`}
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 block font-semibold">
+                <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 block font-semibold">
                   {topThree[0]?.interviews_attended || topThree[0]?.matches_count || 0} attended
                 </span>
-                <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded border border-amber-500/30">
+                <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-200 bg-purple-500/20 px-2.5 py-1 rounded border border-purple-500/30">
                   {(topThree[0]?.score_percentage || 0).toFixed(0)}%
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Rank 3 (Bronze) */}
-          <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-amber-700/10 to-[var(--bg-card)] border border-amber-700/30 flex flex-col justify-between relative overflow-hidden shadow-md md:order-3">
-            <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-amber-700 text-amber-100 flex items-center justify-center font-mono font-bold text-xs shadow-sm">
+          {/* Rank 3 (Purple Subtle) */}
+          <div className="panel-card p-5 rounded-[var(--radius-lg)] bg-gradient-to-b from-purple-950/10 to-[var(--bg-card)] border border-purple-500/20 flex flex-col justify-between relative overflow-hidden shadow-md md:order-3">
+            <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-200 flex items-center justify-center font-mono font-bold text-xs shadow-xs border border-purple-200 dark:border-purple-800">
               #3
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-amber-700 dark:text-amber-400 font-bold">
-                <Medal className="w-3.5 h-3.5 text-amber-600" />
-                <span>Bronze Performer</span>
+              <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-purple-600 dark:text-purple-400 font-bold">
+                <Medal className="w-3.5 h-3.5 text-purple-500" />
+                <span>Rank 3 Performer</span>
               </div>
               <h3 className="text-[17px] font-bold text-[var(--text-primary)] truncate">{topThree[2]?.name}</h3>
               <p className="text-[11px] text-[var(--text-muted)] font-mono">
@@ -388,7 +388,7 @@ export default function AdminLeaderboard() {
                 <span className="text-[10px] font-mono text-[var(--text-muted)] block">
                   {topThree[2]?.interviews_attended || topThree[2]?.matches_count || 0} attended
                 </span>
-                <span className="text-xs font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-700/15 px-2 py-0.5 rounded border border-amber-700/25">
+                <span className="text-xs font-mono font-bold text-purple-800 dark:text-purple-300 bg-purple-500/15 px-2 py-0.5 rounded border border-purple-500/25">
                   {(topThree[2]?.score_percentage || 0).toFixed(0)}%
                 </span>
               </div>
@@ -582,22 +582,22 @@ export default function AdminLeaderboard() {
                       key={student.student_id}
                       className={`hover:bg-[var(--bg-hover)] transition-colors ${
                         student.rank === 1 && (attended > 0 || totalScore > 0)
-                          ? 'bg-amber-500/5 dark:bg-amber-500/5'
+                          ? 'bg-purple-500/5 dark:bg-purple-500/5'
                           : ''
                       }`}
                     >
                       {/* Rank */}
                       <td className="py-3 px-4 text-center font-mono">
                         {student.rank === 1 && (attended > 0 || totalScore > 0) ? (
-                          <span className="w-6 h-6 rounded-full bg-amber-400 text-amber-950 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                          <span className="w-6 h-6 rounded-full bg-purple-600 text-white font-bold inline-flex items-center justify-center text-xs shadow-xs">
                             1
                           </span>
                         ) : student.rank === 2 && (attended > 0 || totalScore > 0) ? (
-                          <span className="w-6 h-6 rounded-full bg-slate-300 text-slate-900 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200 border border-purple-300 dark:border-purple-700 font-bold inline-flex items-center justify-center text-xs shadow-xs">
                             2
                           </span>
                         ) : student.rank === 3 && (attended > 0 || totalScore > 0) ? (
-                          <span className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                          <span className="w-6 h-6 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold inline-flex items-center justify-center text-xs shadow-xs">
                             3
                           </span>
                         ) : (
@@ -614,7 +614,7 @@ export default function AdminLeaderboard() {
                           <div>
                             <div className="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                               <span>{student.name}</span>
-                              {isTop3 && <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />}
+                              {isTop3 && <Sparkles className="w-3 h-3 text-purple-500 shrink-0" />}
                             </div>
                             <div className="text-[11px] text-[var(--text-muted)] font-mono">
                               {student.roll_no || 'NO ROLL'} • {student.email}
@@ -698,7 +698,7 @@ export default function AdminLeaderboard() {
                     </div>
                   </th>
                   <th
-                    className="py-3 px-4 cursor-pointer text-amber-500 font-bold hover:opacity-80 transition-opacity"
+                    className="py-3 px-4 cursor-pointer text-[var(--accent)] font-bold hover:opacity-80 transition-opacity"
                     onClick={() => {
                       setSortField('points_per_interview');
                       setSortOrder(sortField === 'points_per_interview' && sortOrder === 'desc' ? 'asc' : 'desc');
@@ -724,22 +724,22 @@ export default function AdminLeaderboard() {
                       key={student.student_id}
                       className={`hover:bg-[var(--bg-hover)] transition-colors ${
                         student.rank === 1 && (attended > 0 || totalScore > 0)
-                          ? 'bg-amber-500/5 dark:bg-amber-500/5'
+                          ? 'bg-purple-500/5 dark:bg-purple-500/5'
                           : ''
                       }`}
                     >
                       {/* Rank */}
                       <td className="py-3 px-4 text-center font-mono">
                         {student.rank === 1 && (attended > 0 || totalScore > 0) ? (
-                          <span className="w-6 h-6 rounded-full bg-amber-400 text-amber-950 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                          <span className="w-6 h-6 rounded-full bg-purple-600 text-white font-bold inline-flex items-center justify-center text-xs shadow-xs">
                             1
                           </span>
                         ) : student.rank === 2 && (attended > 0 || totalScore > 0) ? (
-                          <span className="w-6 h-6 rounded-full bg-slate-300 text-slate-900 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200 border border-purple-300 dark:border-purple-700 font-bold inline-flex items-center justify-center text-xs shadow-xs">
                             2
                           </span>
                         ) : student.rank === 3 && (attended > 0 || totalScore > 0) ? (
-                          <span className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 font-bold inline-flex items-center justify-center text-xs shadow-sm">
+                          <span className="w-6 h-6 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold inline-flex items-center justify-center text-xs shadow-xs">
                             3
                           </span>
                         ) : (
@@ -756,7 +756,7 @@ export default function AdminLeaderboard() {
                           <div>
                             <div className="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                               <span>{student.name}</span>
-                              {isTop3 && <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />}
+                              {isTop3 && <Sparkles className="w-3 h-3 text-purple-500 shrink-0" />}
                             </div>
                             <div className="text-[11px] text-[var(--text-muted)] font-mono">
                               {student.roll_no || 'NO ROLL'} • {student.email}
@@ -781,7 +781,7 @@ export default function AdminLeaderboard() {
                       {/* Points / Interview Attended */}
                       <td className="py-3 px-4 font-mono">
                         <div className="space-y-0.5">
-                          <span className="text-[14px] font-extrabold text-amber-500">
+                          <span className="text-[14px] font-extrabold text-[var(--accent)]">
                             {pointsPerInt.toFixed(1)} pts
                           </span>
                           <span className="text-[10px] text-[var(--text-muted)] block">
@@ -807,60 +807,60 @@ export default function AdminLeaderboard() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
 
-            {/* Pagination Footer */}
-            {pagination.total_records > 0 && (
-              <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--bg-raised)]/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
-                <div className="flex items-center gap-2">
-                  <span>
-                    Showing <strong className="text-[var(--text-primary)] font-mono">{((page - 1) * limit) + 1}</strong> to{' '}
-                    <strong className="text-[var(--text-primary)] font-mono">
-                      {Math.min(page * limit, pagination.total_records)}
-                    </strong>{' '}
-                    of <strong className="text-[var(--text-primary)] font-mono">{pagination.total_records}</strong> ranked students
-                  </span>
-                  <span className="text-[var(--text-muted)]">•</span>
-                  <div className="flex items-center gap-1.5">
-                    <span>Per page:</span>
-                    <select
-                      value={limit}
-                      onChange={(e) => {
-                        setLimit(Number(e.target.value));
-                        setPage(1);
-                      }}
-                      className="bg-[var(--bg-card)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] font-mono focus:outline-hidden focus:border-[var(--accent)]"
-                    >
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 font-mono">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!pagination.has_prev || loading}
-                    className="px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    <span>Prev</span>
-                  </button>
-                  <span className="px-2 py-1 bg-[var(--bg-card)] border border-[var(--border)] rounded font-semibold text-[var(--text-primary)]">
-                    {page} / {pagination.total_pages || 1}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(pagination.total_pages || 1, p + 1))}
-                    disabled={!pagination.has_next || loading}
-                    className="px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
-                  >
-                    <span>Next</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+        {/* Pagination Footer */}
+        {pagination.total_records > 0 && (
+          <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--bg-raised)]/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
+            <div className="flex items-center gap-2">
+              <span>
+                Showing <strong className="text-[var(--text-primary)] font-mono">{((page - 1) * limit) + 1}</strong> to{' '}
+                <strong className="text-[var(--text-primary)] font-mono">
+                  {Math.min(page * limit, pagination.total_records)}
+                </strong>{' '}
+                of <strong className="text-[var(--text-primary)] font-mono">{pagination.total_records}</strong> ranked students
+              </span>
+              <span className="text-[var(--text-muted)]">•</span>
+              <div className="flex items-center gap-1.5">
+                <span>Per page:</span>
+                <select
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="bg-[var(--bg-card)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] font-mono focus:outline-hidden focus:border-[var(--accent)]"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
               </div>
-            )}
+            </div>
+
+            <div className="flex items-center gap-1.5 font-mono">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={!pagination.has_prev || loading}
+                className="px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Prev</span>
+              </button>
+              <span className="px-2 py-1 bg-[var(--bg-card)] border border-[var(--border)] rounded font-semibold text-[var(--text-primary)]">
+                {page} / {pagination.total_pages || 1}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(pagination.total_pages || 1, p + 1))}
+                disabled={!pagination.has_next || loading}
+                className="px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -922,7 +922,7 @@ export default function AdminLeaderboard() {
 
               <div className="p-2.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] space-y-0.5">
                 <span className="text-[10px] text-[var(--text-muted)] uppercase block">Points / Interview</span>
-                <span className="text-[17px] font-bold text-amber-500">
+                <span className="text-[17px] font-bold text-purple-600 dark:text-purple-400">
                   {(selectedStudent.points_per_interview || selectedStudent.avg_score_per_match || 0).toFixed(1)}
                 </span>
                 <span className="text-[10px] text-[var(--text-muted)] block">
@@ -932,10 +932,10 @@ export default function AdminLeaderboard() {
 
               <div className="p-2.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] space-y-0.5">
                 <span className="text-[10px] text-[var(--text-muted)] uppercase block">Percentage</span>
-                <span className="text-[17px] font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="text-[17px] font-bold text-purple-600 dark:text-purple-400">
                   {(selectedStudent.score_percentage || 0).toFixed(0)}%
                 </span>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-bold">
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 block font-bold">
                   {selectedStudent.grade}
                 </span>
               </div>
@@ -970,7 +970,7 @@ export default function AdminLeaderboard() {
                       <div className="text-[14px] font-bold text-[var(--accent)]">
                         +{rec.total_score} / {rec.max_score} pts
                       </div>
-                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                      <div className="text-[11px] text-purple-600 dark:text-purple-400 font-bold">
                         {rec.score_percentage.toFixed(0)}%
                       </div>
                     </div>
