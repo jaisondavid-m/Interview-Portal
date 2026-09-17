@@ -10,14 +10,11 @@ ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV GOPROXY="https://goproxy.io,https://proxy.golang.org,direct"
 
-# Copy source and dependency files
-COPY go.mod go.sum ./
+# Copy all source files and vendored dependencies
 COPY . .
 
-# Build lightweight static binary using Go compiler cache and fast module proxy
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go build -ldflags="-w -s" -o /app/server main.go
+# Build lightweight static binary instantly from vendor directory (zero network dependencies)
+RUN go build -mod=vendor -ldflags="-w -s" -o /app/server main.go
 
 # ==========================================
 # Production Stage (Node.js + Python3 Runtime)
