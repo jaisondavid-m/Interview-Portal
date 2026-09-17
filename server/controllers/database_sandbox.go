@@ -127,6 +127,85 @@ func getSandboxDSN(dbName string) string {
 	return dsn
 }
 
+// GetSandboxCredentials returns structured database credentials and formatted DSNs for the session
+func GetSandboxCredentials(c *gin.Context) {
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Session ID required"})
+		return
+	}
+
+	_, ok := checkSandboxAccess(c, sessionID)
+	if !ok {
+		return
+	}
+
+	defaultDBName := sanitizeSessionDBName(sessionID)
+
+	// Ensure sandbox database is created if it does not exist yet
+	rootDSN := getSandboxDSN("")
+	db, err := sql.Open("mysql", rootDSN)
+	if err == nil {
+		defer db.Close()
+		_, _ = db.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", defaultDBName))
+	}
+
+	host := os.Getenv("SANDBOX_DB_HOST")
+	if host == "" {
+		host = os.Getenv("DB_HOST")
+	}
+	if host == "" {
+		host = "127.0.0.1"
+	}
+
+	port := os.Getenv("SANDBOX_DB_PORT")
+	if port == "" {
+		port = os.Getenv("DB_PORT")
+	}
+	if port == "" {
+		port = "3306"
+	}
+
+	user := os.Getenv("SANDBOX_DB_USER")
+	if user == "" {
+		user = os.Getenv("DB_USER")
+	}
+	if user == "" {
+		user = "root"
+	}
+
+	pass := os.Getenv("SANDBOX_DB_PASSWORD")
+	if pass == "" {
+		pass = os.Getenv("DB_PASSWORD")
+	}
+
+	goDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true", user, pass, host, port, defaultDBName)
+	nodeDSN := fmt.Sprintf("mysql://%s:%s@%s:%s/%s", user, pass, host, port, defaultDBName)
+	pythonDSN := fmt.Sprintf("mysql+pymysql://%s:%s@%s:%s/%s", user, pass, host, port, defaultDBName)
+	javaJDBC := fmt.Sprintf("jdbc:mysql://%s:%s/%s?useSSL=false&allowPublicKeyRetrieval=true", host, port, defaultDBName)
+	cliCmd := fmt.Sprintf("mysql -h %s -P %s -u %s -p%s %s", host, port, user, pass, defaultDBName)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"host":         host,
+			"port":         port,
+			"user":         user,
+			"password":     pass,
+			"database":     defaultDBName,
+			"dsn":          goDSN,
+			"database_url": nodeDSN,
+			"snippets": gin.H{
+				"go":     goDSN,
+				"node":   nodeDSN,
+				"python": pythonDSN,
+				"java":   javaJDBC,
+				"cli":    cliCmd,
+			},
+		},
+	})
+}
+
 // splitSQLStatements splits a multi-statement SQL script while respecting quotes, backticks, and comments
 func splitSQLStatements(sqlText string) []string {
 	var statements []string
@@ -731,6 +810,25 @@ func GetSandboxSchema(c *gin.Context) {
 	})
 }
 
+// TeardownSessionSandboxDatabase drops all sandbox databases for this session
+func TeardownSessionSandboxDatabase(sessionID string) error {
+	defaultDBName := sanitizeSessionDBName(sessionID)
+	rootDSN := getSandboxDSN("")
+
+	db, err := sql.Open("mysql", rootDSN)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	allDBs := getAvailableDatabases(db, defaultDBName)
+	for _, dbName := range allDBs {
+		_, _ = db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", dbName))
+	}
+	_, err = db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", defaultDBName))
+	return err
+}
+
 // TeardownSandboxDatabase drops the isolated session database when interview finishes
 func TeardownSandboxDatabase(c *gin.Context) {
 	sessionID := c.Param("id")
@@ -744,21 +842,7 @@ func TeardownSandboxDatabase(c *gin.Context) {
 		return
 	}
 
-	defaultDBName := sanitizeSessionDBName(sessionID)
-	rootDSN := getSandboxDSN("")
-
-	db, err := sql.Open("mysql", rootDSN)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to connect to sandbox database server: " + err.Error()})
-		return
-	}
-	defer db.Close()
-
-	allDBs := getAvailableDatabases(db, defaultDBName)
-	for _, dbName := range allDBs {
-		query := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", dbName)
-		_, _ = db.Exec(query)
-	}
+	_ = TeardownSessionSandboxDatabase(sessionID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -915,3 +999,4 @@ func introspectSandboxSchema(dbName string) (SandboxSchemaPayload, error) {
 		Relationships: relationships,
 	}, nil
 }
+

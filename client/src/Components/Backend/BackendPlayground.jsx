@@ -21,11 +21,13 @@ import {
   RotateCcw,
   Copy,
   Check,
-  Columns
+  Columns,
+  Database
 } from 'lucide-react';
 import CodeEditor from '../CodeEditor';
 import PostmanWorkspace from './PostmanWorkspace';
 import InstalledBackendLibrariesModal from './InstalledBackendLibrariesModal';
+import DatabaseCredentialsModal from './DatabaseCredentialsModal';
 
 export default function BackendPlayground({
   code = '',
@@ -51,6 +53,7 @@ export default function BackendPlayground({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showRequirements, setShowRequirements] = useState(false);
   const [showPackagesModal, setShowPackagesModal] = useState(false);
+  const [showDatabaseModal, setShowDatabaseModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Server Log Streamer State
@@ -114,6 +117,12 @@ export default function BackendPlayground({
           onClose={() => setShowPackagesModal(false)}
           activeLang={language}
         />
+        <DatabaseCredentialsModal
+          isOpen={showDatabaseModal}
+          onClose={() => setShowDatabaseModal(false)}
+          sessionId={sessionId}
+          activeLang={language}
+        />
 
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -171,18 +180,32 @@ export default function BackendPlayground({
 
           {/* Sandbox & Status Info */}
           <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 text-xs font-mono flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <Server className="w-3.5 h-3.5 text-purple-500" />
-              <span>Runtime Port:</span>
-              <strong className="text-purple-600 dark:text-purple-400">:8080 (http://localhost:8080)</strong>
+            <div className="flex items-center gap-3 text-[var(--text-secondary)] flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <Server className="w-3.5 h-3.5 text-purple-500" />
+                <span>Port: <strong className="text-purple-600 dark:text-purple-400">:8080</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Isolated DB: <strong className="text-emerald-600 dark:text-emerald-400">MySQL Live</strong></span>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowPackagesModal(true)}
-              className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-bold cursor-pointer"
-            >
-              <Package className="w-3 h-3" /> View Installed Libraries
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDatabaseModal(true)}
+                className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-bold cursor-pointer"
+              >
+                <Database className="w-3 h-3 text-emerald-500" /> DB Credentials & Snippets
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPackagesModal(true)}
+                className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-bold cursor-pointer"
+              >
+                <Package className="w-3 h-3" /> View Libraries
+              </button>
+            </div>
           </div>
         </div>
 
@@ -213,10 +236,16 @@ export default function BackendPlayground({
   // =========================================================================
   return (
     <div className="fixed inset-0 z-50 rounded-none w-screen h-screen flex flex-col bg-[var(--bg-card)] border-none overflow-hidden transition-all">
-      {/* Installed Libraries Modal */}
+      {/* Installed Libraries & Database Modals */}
       <InstalledBackendLibrariesModal
         isOpen={showPackagesModal}
         onClose={() => setShowPackagesModal(false)}
+        activeLang={language}
+      />
+      <DatabaseCredentialsModal
+        isOpen={showDatabaseModal}
+        onClose={() => setShowDatabaseModal(false)}
+        sessionId={sessionId}
         activeLang={language}
       />
 
@@ -273,6 +302,20 @@ export default function BackendPlayground({
 
         {/* Right Toolbar Actions */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Isolated Database Credentials Button */}
+          <button
+            type="button"
+            onClick={() => setShowDatabaseModal(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-emerald-500 hover:border-emerald-500 border border-[var(--border)] flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+            title="View isolated database sandbox connection credentials and code snippets"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Database Sandbox</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-600 text-white font-mono font-bold">
+              Live
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowPackagesModal(true)}

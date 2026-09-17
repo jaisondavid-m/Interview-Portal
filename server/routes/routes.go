@@ -63,6 +63,7 @@ func SetupRouter() *gin.Engine {
 			interviews.POST("/sessions/:id/submit", controllers.SubmitSessionCode)
 
 			// Database Sandbox Playground Endpoints
+			interviews.GET("/sessions/:id/database/credentials", controllers.GetSandboxCredentials)
 			interviews.POST("/sessions/:id/database/provision", controllers.ProvisionSandboxDatabase)
 			interviews.POST("/sessions/:id/database/reset", controllers.ResetSandboxDatabase)
 			interviews.POST("/sessions/:id/database/execute", controllers.ExecuteSandboxQuery)

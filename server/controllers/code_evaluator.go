@@ -1478,6 +1478,47 @@ func runCommandPerTestCase(execPath string, baseArgs []string, testCases []EvalT
 			cmd.Dir = filepath.Dir(execPath)
 		}
 
+		// Inject sandbox database connection environment variables for backend runtime
+		if len(cmd.Env) == 0 {
+			cmd.Env = os.Environ()
+		}
+		sbHost := os.Getenv("SANDBOX_DB_HOST")
+		if sbHost == "" {
+			sbHost = os.Getenv("DB_HOST")
+		}
+		if sbHost == "" {
+			sbHost = "127.0.0.1"
+		}
+		sbPort := os.Getenv("SANDBOX_DB_PORT")
+		if sbPort == "" {
+			sbPort = os.Getenv("DB_PORT")
+		}
+		if sbPort == "" {
+			sbPort = "3306"
+		}
+		sbUser := os.Getenv("SANDBOX_DB_USER")
+		if sbUser == "" {
+			sbUser = os.Getenv("DB_USER")
+		}
+		if sbUser == "" {
+			sbUser = "root"
+		}
+		sbPass := os.Getenv("SANDBOX_DB_PASSWORD")
+		if sbPass == "" {
+			sbPass = os.Getenv("DB_PASSWORD")
+		}
+		cmd.Env = append(cmd.Env,
+			"DB_HOST="+sbHost,
+			"DB_PORT="+sbPort,
+			"DB_USER="+sbUser,
+			"DB_PASSWORD="+sbPass,
+			"DB_PASS="+sbPass,
+			"MYSQL_HOST="+sbHost,
+			"MYSQL_PORT="+sbPort,
+			"MYSQL_USER="+sbUser,
+			"MYSQL_PASSWORD="+sbPass,
+		)
+
 		// Pipe test case input to Standard Input (stdin)
 		cmd.Stdin = strings.NewReader(tc.Input)
 
