@@ -12,6 +12,7 @@ import MockInterview from '../Pages/MockInterview';
 import History from '../Pages/History';
 import Login from '../Pages/Login';
 import AdminUsers from '../Pages/AdminUsers';
+import AdminRoles from '../Pages/AdminRoles';
 import AdminInterviewConfig from '../Pages/AdminInterviewConfig';
 import AdminInterviewHistory from '../Pages/AdminInterviewHistory';
 import AdminInterviewSessionDetail from '../Pages/AdminInterviewSessionDetail';
@@ -97,6 +98,10 @@ export const router = createBrowserRouter([
           {
             path: 'admin/users',
             element: <AdminUsers />,
+          },
+          {
+            path: 'admin/roles',
+            element: <AdminRoles />,
           },
           {
             path: 'admin/interviews',

@@ -28,6 +28,7 @@ func SetupRouter() *gin.Engine {
 			auth.POST("/login", controllers.Login)
 			auth.POST("/logout", controllers.Logout)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.GetMe)
+			auth.GET("/permissions", middlewares.AuthMiddleware(), controllers.GetUserPagePermissions)
 		}
 
 		// Developer Protected Routes (Require JWT + Developer or Admin Role)
@@ -122,6 +123,19 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/users/bulk-delete", controllers.AdminBulkDeleteUsers)
 			admin.PUT("/users/:id", controllers.AdminUpdateUser)
 			admin.DELETE("/users/:id", controllers.AdminDeleteUser)
+
+			// Role & Page Access Management
+			admin.GET("/roles", controllers.AdminGetRoles)
+			admin.POST("/roles", controllers.AdminCreateRole)
+			admin.PUT("/roles/:id", controllers.AdminUpdateRole)
+			admin.DELETE("/roles/:id", controllers.AdminDeleteRole)
+			admin.GET("/roles/pages", controllers.AdminGetAppPages)
+			admin.POST("/roles/pages", controllers.AdminCreateAppPage)
+			admin.PUT("/roles/pages/:id", controllers.AdminUpdateAppPage)
+			admin.DELETE("/roles/pages/:id", controllers.AdminDeleteAppPage)
+			admin.GET("/roles/mappings", controllers.AdminGetRoleMappings)
+			admin.POST("/roles/mappings", controllers.AdminUpdateRolePermissions)
+			admin.POST("/roles/reset-defaults", controllers.AdminResetRoleDefaults)
 
 			// Interview Configuration: Tracks
 			admin.GET("/interviews/tracks", controllers.AdminGetTracks)

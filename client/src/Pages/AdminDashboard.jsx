@@ -695,7 +695,17 @@ export default function AdminDashboard() {
           </div>
 
           {loading && !data ? (
-            <SkeletonTableRows count={3} />
+            <div className="space-y-3.5">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <Skeleton className="h-2 w-full rounded-full" />
+                </div>
+              ))}
+            </div>
           ) : trackDistribution.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)] font-mono py-6 text-center">
               No interview tracks configured yet.
@@ -765,7 +775,17 @@ export default function AdminDashboard() {
           </div>
 
           {loading && !data ? (
-            <SkeletonTableRows count={4} />
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)]">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="w-3 h-3 rounded-full" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                  <Skeleton className="h-4 w-12" />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="space-y-3">
               {/* Outstanding (A+) */}
@@ -871,7 +891,22 @@ export default function AdminDashboard() {
           </div>
 
           {loading && !data ? (
-            <SkeletonTableRows count={4} />
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-[var(--text-muted)] font-mono uppercase text-[10px]">
+                    <th className="pb-2.5 font-semibold">Session & Track</th>
+                    <th className="pb-2.5 font-semibold">Participants</th>
+                    <th className="pb-2.5 font-semibold">Duration</th>
+                    <th className="pb-2.5 font-semibold">Status</th>
+                    <th className="pb-2.5 font-semibold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]/50">
+                  <SkeletonTableRows rows={4} cols={5} />
+                </tbody>
+              </table>
+            </div>
           ) : recentSessions.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)] font-mono py-8 text-center">
               No interview sessions conducted yet.
@@ -980,7 +1015,20 @@ export default function AdminDashboard() {
           </div>
 
           {loading && !data ? (
-            <SkeletonTableRows count={4} />
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)]">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="w-6 h-6 rounded-full" />
+                    <div className="space-y-1">
+                      <Skeleton className="h-3.5 w-32" />
+                      <Skeleton className="h-2.5 w-24" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded" />
+                </div>
+              ))}
+            </div>
           ) : topPerformers.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)] font-mono py-8 text-center">
               No ranked student evaluations recorded yet.

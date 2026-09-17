@@ -19,7 +19,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import api from '../api/axios';
-import { Skeleton, SkeletonStatsGrid, SkeletonTableRows } from '../Components/Skeleton';
+import { Skeleton, SkeletonStatsGrid } from '../Components/Skeleton';
 import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {

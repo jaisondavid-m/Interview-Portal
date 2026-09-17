@@ -32,6 +32,7 @@ export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
   const [roleFilter, setRoleFilter] = useState('ALL');
+  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
 
   // Multi-Selection State
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -70,6 +71,22 @@ export default function AdminUsers() {
   });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
+
+  // Fetch Roles
+  const fetchRoles = async () => {
+    try {
+      const res = await api.get('/admin/roles');
+      if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+        const dynamicOpts = [
+          { value: 'ALL', label: 'All Roles' },
+          ...res.data.map(r => ({ value: r.name, label: r.display_name }))
+        ];
+        setRoleOptions(dynamicOpts);
+      }
+    } catch (e) {
+      // Retain fallback options
+    }
+  };
 
   // Fetch Users
   const fetchUsers = async () => {
@@ -127,6 +144,7 @@ export default function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
+    fetchRoles();
   }, []);
 
   // Handle Create User Submit
@@ -591,7 +609,7 @@ export default function AdminUsers() {
 
             {/* Role Searchable Select */}
             <SearchableSelect
-              options={ROLE_OPTIONS}
+              options={roleOptions}
               value={roleFilter}
               onChange={setRoleFilter}
               placeholder="All Roles"
@@ -1028,9 +1046,9 @@ export default function AdminUsers() {
                         onChange={(e) => setBulkDefaultRole(e.target.value)}
                         className="custom-input py-1.5 text-xs bg-[var(--bg-input)]"
                       >
-                        <option value="student">Student</option>
-                        <option value="admin">Administrator</option>
-                        <option value="developer">Developer</option>
+                        {roleOptions.filter(r => r.value !== 'ALL').map(r => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -1340,9 +1358,9 @@ export default function AdminUsers() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="custom-input bg-[var(--bg-input)]"
                   >
-                    <option value="student">Student</option>
-                    <option value="admin">Administrator</option>
-                    <option value="developer">Developer</option>
+                    {roleOptions.filter(r => r.value !== 'ALL').map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
                   </select>
                 </label>
               </div>
@@ -1477,9 +1495,9 @@ export default function AdminUsers() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="custom-input bg-[var(--bg-input)]"
                   >
-                    <option value="student">Student</option>
-                    <option value="admin">Administrator</option>
-                    <option value="developer">Developer</option>
+                    {roleOptions.filter(r => r.value !== 'ALL').map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
                   </select>
                 </label>
               </div>

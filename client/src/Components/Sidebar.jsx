@@ -1,11 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, SlidersHorizontal, Video, History, MessageSquareCheck, Trophy, Terminal } from 'lucide-react';
+import { 
+  LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
+  Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2 
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
+
+const ICON_MAP = {
+  LayoutDashboard,
+  Users,
+  ShieldCheck,
+  SlidersHorizontal,
+  MessageSquareCheck,
+  Trophy,
+  History,
+  Terminal,
+  Video,
+};
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [permittedPages, setPermittedPages] = useState(null);
 
   const handleLogout = async () => {
     await logout();
@@ -16,7 +33,37 @@ export default function Sidebar() {
   const isAdmin = userRole === 'admin';
   const isDeveloper = userRole === 'developer';
 
-  const menuItems = isDeveloper
+  // Fetch permitted pages dynamically from backend
+  const fetchPermissions = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await api.get('/auth/permissions');
+      if (res && res.data && Array.isArray(res.data.pages)) {
+        // Filter out parameterized routes (e.g. /interviews/room/:sessionId)
+        const navPages = res.data.pages.filter(p => !p.path.includes(':'));
+        setPermittedPages(navPages);
+      }
+    } catch (err) {
+      console.warn('Failed to load user permissions for sidebar:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchPermissions();
+
+    // Listen for live permission updates from Role Management
+    const handlePermissionsUpdated = () => {
+      fetchPermissions();
+    };
+
+    window.addEventListener('permissionsUpdated', handlePermissionsUpdated);
+    return () => {
+      window.removeEventListener('permissionsUpdated', handlePermissionsUpdated);
+    };
+  }, [fetchPermissions]);
+
+  // Fallback static items
+  const fallbackMenuItems = isDeveloper
     ? [
         { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
       ]
@@ -24,6 +71,7 @@ export default function Sidebar() {
     ? [
         { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'User Management', path: '/admin/users', icon: Users },
+        { name: 'Role Management', path: '/admin/roles', icon: ShieldCheck },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
         { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
         { name: 'Leaderboard', path: '/admin/leaderboard', icon: Trophy },
@@ -35,6 +83,14 @@ export default function Sidebar() {
         { name: 'Interviews', path: '/interviews', icon: Video },
         { name: 'Interview History', path: '/history', icon: History },
       ];
+
+  const menuItems = permittedPages && permittedPages.length > 0
+    ? permittedPages.map(page => ({
+        name: page.name,
+        path: page.path,
+        icon: ICON_MAP[page.icon] || FileCode2,
+      }))
+    : fallbackMenuItems;
 
   return (
     <aside className="w-64 h-full shrink-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col justify-between p-4 shadow-[var(--shadow-sm)] overflow-y-auto custom-scrollbar">
