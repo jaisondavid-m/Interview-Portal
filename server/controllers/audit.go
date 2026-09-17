@@ -101,14 +101,27 @@ func GetAuditLogs(c *gin.Context) {
 	}
 
 	totalPages := (int(totalCount) + limit - 1) / limit
+	hasNext := page < totalPages
+	hasPrev := page > 1
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":      "success",
 		"logs":        logs,
+		"data":        logs,
 		"total":       totalCount,
 		"page":        page,
 		"limit":       limit,
 		"total_pages": totalPages,
+		"has_next":    hasNext,
+		"has_prev":    hasPrev,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
+		},
 	})
 }
 

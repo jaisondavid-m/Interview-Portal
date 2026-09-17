@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1837,23 +1838,103 @@ func EndInterviewSession(c *gin.Context) {
 	})
 }
 
-// AdminGetInterviewSessions returns all interview history with full participant identities
+// AdminGetInterviewSessions returns interview history with full participant identities, query filtering, and fast pagination
 func AdminGetInterviewSessions(c *gin.Context) {
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "20"))
+	statusFilter := strings.TrimSpace(c.Query("status"))
+	trackFilter := strings.TrimSpace(c.Query("track_id"))
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	fromDate := strings.TrimSpace(c.Query("from_date"))
+	toDate := strings.TrimSpace(c.Query("to_date"))
+
+	query := database.DB.Model(&models.InterviewSession{})
+
+	if statusFilter != "" && !strings.EqualFold(statusFilter, "all") {
+		query = query.Where("status = ?", statusFilter)
+	}
+
+	if trackFilter != "" && !strings.EqualFold(trackFilter, "all") {
+		var parsedTrackID uint64
+		if _, err := fmt.Sscanf(trackFilter, "%d", &parsedTrackID); err == nil && parsedTrackID > 0 {
+			query = query.Where("track_id = ?", parsedTrackID)
+		}
+	}
+
+	if fromDate != "" {
+		if t, err := time.Parse(time.RFC3339, fromDate); err == nil {
+			query = query.Where("created_at >= ?", t)
+		} else if t, err := time.Parse("2006-01-02", fromDate); err == nil {
+			query = query.Where("created_at >= ?", t)
+		}
+	}
+	if toDate != "" {
+		if t, err := time.Parse(time.RFC3339, toDate); err == nil {
+			query = query.Where("created_at <= ?", t)
+		} else if t, err := time.Parse("2006-01-02", toDate); err == nil {
+			query = query.Where("created_at <= ?", t.Add(24*time.Hour))
+		}
+	}
+
+	if search != "" {
+		s := "%" + search + "%"
+		query = query.Joins("LEFT JOIN users AS interviewer ON interviewer.id = interview_sessions.interviewer_id").
+			Joins("LEFT JOIN users AS interviewee ON interviewee.id = interview_sessions.interviewee_id").
+			Joins("LEFT JOIN interview_tracks ON interview_tracks.id = interview_sessions.track_id").
+			Where("LOWER(interviewer.name) LIKE ? OR LOWER(interviewer.email) LIKE ? OR LOWER(interviewer.roll_no) LIKE ? OR LOWER(interviewee.name) LIKE ? OR LOWER(interviewee.email) LIKE ? OR LOWER(interviewee.roll_no) LIKE ? OR LOWER(interview_tracks.title) LIKE ?", s, s, s, s, s, s, s)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to count interview sessions",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	page := 1
+	limit := 20
 	var sessions []models.InterviewSession
-	err := database.DB.
+
+	dbQuery := query.
 		Preload("Track").
 		Preload("Level").
 		Preload("Interviewer").
 		Preload("Interviewee").
-		Order("created_at desc").
-		Find(&sessions).Error
+		Order("interview_sessions.created_at desc")
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to fetch interview session history",
-		})
-		return
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		limit = int(totalCount)
+		if limit == 0 {
+			limit = 1
+		}
+		if err := dbQuery.Find(&sessions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch interview session history",
+			})
+			return
+		}
+	} else {
+		if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+			page = p
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+			limit = l
+			if limit > 200 {
+				limit = 200
+			}
+		}
+		offset := (page - 1) * limit
+		if err := dbQuery.Limit(limit).Offset(offset).Find(&sessions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch interview session history",
+			})
+			return
+		}
 	}
 
 	type UserSummary struct {
@@ -1886,6 +1967,40 @@ func AdminGetInterviewSessions(c *gin.Context) {
 		StartedAt         time.Time                  `json:"started_at"`
 		EndedAt           *time.Time                 `json:"ended_at"`
 		CreatedAt         time.Time                  `json:"created_at"`
+	}
+
+	// Batch fetch recordings and security reports for page sessions to eliminate N+1 latency
+	sessionIDs := make([]uint, len(sessions))
+	for i, s := range sessions {
+		sessionIDs[i] = s.ID
+	}
+
+	recordingMap := make(map[uint]models.InterviewRecording)
+	if len(sessionIDs) > 0 {
+		var recordings []models.InterviewRecording
+		database.DB.Where("session_id IN (?)", sessionIDs).Find(&recordings)
+		for _, r := range recordings {
+			recordingMap[r.SessionID] = r
+		}
+	}
+
+	secReportMap := make(map[uint]bool)
+	if len(sessionIDs) > 0 {
+		type SecCount struct {
+			SessionID uint  `gorm:"column:session_id"`
+			Count     int64 `gorm:"column:count"`
+		}
+		var secCounts []SecCount
+		database.DB.Model(&models.SessionSecurityReport{}).
+			Select("session_id, count(*) as count").
+			Where("session_id IN (?) AND asked_credentials = true", sessionIDs).
+			Group("session_id").
+			Scan(&secCounts)
+		for _, sc := range secCounts {
+			if sc.Count > 0 {
+				secReportMap[sc.SessionID] = true
+			}
+		}
 	}
 
 	result := make([]SessionDTO, len(sessions))
@@ -1935,16 +2050,9 @@ func AdminGetInterviewSessions(c *gin.Context) {
 			round = 1
 		}
 
-		var secReportCount int64
-		database.DB.Model(&models.SessionSecurityReport{}).
-			Where("session_id = ? AND asked_credentials = true", s.ID).
-			Count(&secReportCount)
-
-		var rec models.InterviewRecording
+		rec, hasRec := recordingMap[s.ID]
 		var recPtr *models.InterviewRecording
-		hasRec := false
-		if err := database.DB.Where("session_id = ?", s.ID).First(&rec).Error; err == nil {
-			hasRec = true
+		if hasRec {
 			recPtr = &rec
 		}
 
@@ -1963,7 +2071,7 @@ func AdminGetInterviewSessions(c *gin.Context) {
 			Round:             round,
 			RolesSwitched:     s.RolesSwitched,
 			SwitchCount:       s.SwitchCount,
-			HasSecurityReport: secReportCount > 0,
+			HasSecurityReport: secReportMap[s.ID],
 			HasRecording:      hasRec,
 			Recording:         recPtr,
 			StartedAt:         s.StartedAt,
@@ -1972,9 +2080,24 @@ func AdminGetInterviewSessions(c *gin.Context) {
 		}
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   result,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
+		},
 	})
 }
 

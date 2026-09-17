@@ -18,7 +18,9 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquare,
-  BookOpen
+  BookOpen,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import api from '../api/axios';
 import { Skeleton } from '../Components/Skeleton';
@@ -29,14 +31,29 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedSessions, setExpandedSessions] = useState({});
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total_records: 0,
+    total_pages: 1,
+    has_next: false,
+    has_prev: false
+  });
 
   const fetchHistory = async () => {
     try {
       setLoading(true);
       setError('');
-      const res = await api.get('/interviews/history');
-      const list = Array.isArray(res) ? res : (res?.data || []);
+      const res = await api.get('/interviews/history', {
+        params: { page, limit }
+      });
+      const list = res?.data || (Array.isArray(res) ? res : []);
       setHistory(list);
+      if (res?.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       console.warn('Failed to load live interview history:', err);
       setError('Could not load real-time interview history archive.');
@@ -47,7 +64,7 @@ export default function History() {
 
   useEffect(() => {
     fetchHistory();
-  }, []);
+  }, [page, limit]);
 
   const toggleExpand = (sessionId) => {
     setExpandedSessions((prev) => ({
@@ -307,6 +324,43 @@ export default function History() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {pagination.total_records > 0 && (
+        <div className="panel-card px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="text-[var(--text-primary)] font-mono">{((page - 1) * limit) + 1}</strong> to{' '}
+              <strong className="text-[var(--text-primary)] font-mono">
+                {Math.min(page * limit, pagination.total_records)}
+              </strong>{' '}
+              of <strong className="text-[var(--text-primary)] font-mono">{pagination.total_records}</strong> sessions
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 font-mono">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={!pagination.has_prev || loading}
+              className="px-3 py-1.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition shadow-xs"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Previous</span>
+            </button>
+            <span className="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border)] rounded font-semibold text-[var(--text-primary)]">
+              Page {page} of {pagination.total_pages || 1}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(pagination.total_pages || 1, p + 1))}
+              disabled={!pagination.has_next || loading}
+              className="px-3 py-1.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition shadow-xs"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
     </div>

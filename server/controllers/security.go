@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"server/database"
@@ -134,26 +136,88 @@ func GetSessionSecurityReportStatus(c *gin.Context) {
 	})
 }
 
-// AdminGetSecurityReports retrieves all security and credential solicitation reports for Admin audit
+// AdminGetSecurityReports retrieves security and credential solicitation reports for Admin audit with pagination
 func AdminGetSecurityReports(c *gin.Context) {
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "20"))
+	statusFilter := strings.TrimSpace(c.Query("status"))
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+
+	query := database.DB.Model(&models.SessionSecurityReport{})
+
+	if statusFilter != "" && !strings.EqualFold(statusFilter, "all") {
+		query = query.Where("status = ?", statusFilter)
+	}
+	if search != "" {
+		s := "%" + search + "%"
+		query = query.Joins("LEFT JOIN users AS rep ON rep.id = session_security_reports.reporter_id").
+			Joins("LEFT JOIN users AS rpt ON rpt.id = session_security_reports.reported_user_id").
+			Where("LOWER(rep.name) LIKE ? OR LOWER(rep.email) LIKE ? OR LOWER(rep.roll_no) LIKE ? OR LOWER(rpt.name) LIKE ? OR LOWER(rpt.email) LIKE ? OR LOWER(rpt.roll_no) LIKE ? OR LOWER(session_security_reports.details) LIKE ?", s, s, s, s, s, s, s)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to count security reports"})
+		return
+	}
+
+	page := 1
+	limit := 20
 	var reports []models.SessionSecurityReport
-	err := database.DB.
+
+	dbQuery := query.
 		Preload("Reporter").
 		Preload("ReportedUser").
 		Preload("Session").
 		Preload("Session.Track").
 		Preload("Session.Level").
-		Order("created_at desc").
-		Find(&reports).Error
+		Order("session_security_reports.created_at desc")
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch security reports"})
-		return
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		limit = int(totalCount)
+		if limit == 0 {
+			limit = 1
+		}
+		if err := dbQuery.Find(&reports).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch security reports"})
+			return
+		}
+	} else {
+		if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+			page = p
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+			limit = l
+			if limit > 200 {
+				limit = 200
+			}
+		}
+		offset := (page - 1) * limit
+		if err := dbQuery.Limit(limit).Offset(offset).Find(&reports).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch security reports"})
+			return
+		}
 	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+	hasNext := page < totalPages
+	hasPrev := page > 1
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"reports": reports,
+		"data":    reports,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
+		},
 	})
 }
 

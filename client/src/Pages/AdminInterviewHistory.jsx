@@ -11,7 +11,9 @@ import {
   AlertCircle,
   Loader2,
   Calendar,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import api from '../api/axios';
 import { SkeletonTableRows } from '../Components/Skeleton';
@@ -23,14 +25,34 @@ export default function AdminInterviewHistory() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'in_progress' | 'completed'
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total_records: 0,
+    total_pages: 1,
+    has_next: false,
+    has_prev: false
+  });
 
   const fetchSessions = async () => {
     try {
       setLoading(true);
       setError('');
-      const res = await api.get('/admin/interviews/sessions');
-      const list = Array.isArray(res) ? res : (res?.data || []);
+      const res = await api.get('/admin/interviews/sessions', {
+        params: {
+          page,
+          limit,
+          status: statusFilter !== 'ALL' ? statusFilter : undefined,
+          search: searchQuery.trim() || undefined,
+        }
+      });
+      const list = res?.data || (Array.isArray(res) ? res : []);
       setSessions(list);
+      if (res?.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to fetch interview history.');
     } finally {
@@ -40,7 +62,16 @@ export default function AdminInterviewHistory() {
 
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [page, limit, statusFilter]);
+
+  // Handle Search Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      fetchSessions();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleRowClick = (sessionId) => {
     navigate(`/admin/history/${sessionId}`);
@@ -331,6 +362,60 @@ export default function AdminInterviewHistory() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {pagination.total_records > 0 && (
+            <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--bg-raised)]/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
+              <div className="flex items-center gap-2">
+                <span>
+                  Showing <strong className="text-[var(--text-primary)] font-mono">{((page - 1) * limit) + 1}</strong> to{' '}
+                  <strong className="text-[var(--text-primary)] font-mono">
+                    {Math.min(page * limit, pagination.total_records)}
+                  </strong>{' '}
+                  of <strong className="text-[var(--text-primary)] font-mono">{pagination.total_records}</strong> sessions
+                </span>
+                <span className="text-[var(--text-muted)]">•</span>
+                <div className="flex items-center gap-1.5">
+                  <span>Per page:</span>
+                  <select
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="bg-[var(--bg-card)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] font-mono focus:outline-hidden focus:border-[var(--accent)]"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 font-mono">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={!pagination.has_prev || loading}
+                  className="px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Prev</span>
+                </button>
+                <span className="px-2 py-1 bg-[var(--bg-card)] border border-[var(--border)] rounded font-semibold text-[var(--text-primary)]">
+                  {page} / {pagination.total_pages || 1}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(pagination.total_pages || 1, p + 1))}
+                  disabled={!pagination.has_next || loading}
+                  className="px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

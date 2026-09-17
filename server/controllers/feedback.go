@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -439,20 +440,14 @@ func AdminDeleteFeedbackQuestion(c *gin.Context) {
 
 // AdminGetFeedbackSubmissions lists submitted peer evaluations for review and analytics
 func AdminGetFeedbackSubmissions(c *gin.Context) {
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "20"))
 	sessionID := c.Query("session_id")
 	reviewerID := c.Query("reviewer_id")
 	revieweeID := c.Query("reviewee_id")
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
 
-	query := database.DB.Model(&models.InterviewFeedback{}).
-		Preload("Reviewer").
-		Preload("Reviewee").
-		Preload("Session").
-		Preload("Session.Track").
-		Preload("Session.Level").
-		Preload("Responses").
-		Preload("Responses.Question").
-		Preload("Responses.SelectedOption").
-		Order("created_at desc")
+	query := database.DB.Model(&models.InterviewFeedback{})
 
 	if sessionID != "" {
 		query = query.Where("session_id = ?", sessionID)
@@ -463,20 +458,90 @@ func AdminGetFeedbackSubmissions(c *gin.Context) {
 	if revieweeID != "" {
 		query = query.Where("reviewee_id = ?", revieweeID)
 	}
+	if search != "" {
+		s := "%" + search + "%"
+		query = query.Joins("LEFT JOIN users AS rev ON rev.id = interview_feedbacks.reviewer_id").
+			Joins("LEFT JOIN users AS ree ON ree.id = interview_feedbacks.reviewee_id").
+			Where("LOWER(rev.name) LIKE ? OR LOWER(rev.email) LIKE ? OR LOWER(rev.roll_no) LIKE ? OR LOWER(ree.name) LIKE ? OR LOWER(ree.email) LIKE ? OR LOWER(ree.roll_no) LIKE ?", s, s, s, s, s, s)
+	}
 
-	var feedbacks []models.InterviewFeedback
-	if err := query.Find(&feedbacks).Error; err != nil {
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
-			"message": "Failed to fetch feedback submissions",
+			"message": "Failed to count feedback submissions",
 			"error":   err.Error(),
 		})
 		return
 	}
 
+	page := 1
+	limit := 20
+	var feedbacks []models.InterviewFeedback
+
+	dbQuery := query.
+		Preload("Reviewer").
+		Preload("Reviewee").
+		Preload("Session").
+		Preload("Session.Track").
+		Preload("Session.Level").
+		Preload("Responses").
+		Preload("Responses.Question").
+		Preload("Responses.SelectedOption").
+		Order("interview_feedbacks.created_at desc")
+
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		limit = int(totalCount)
+		if limit == 0 {
+			limit = 1
+		}
+		if err := dbQuery.Find(&feedbacks).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch feedback submissions",
+				"error":   err.Error(),
+			})
+			return
+		}
+	} else {
+		if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+			page = p
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+			limit = l
+			if limit > 200 {
+				limit = 200
+			}
+		}
+		offset := (page - 1) * limit
+		if err := dbQuery.Limit(limit).Offset(offset).Find(&feedbacks).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch feedback submissions",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   feedbacks,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
+		},
 	})
 }
 
@@ -819,7 +884,7 @@ type StudentInterviewItem struct {
 	Responses       []models.InterviewFeedbackResponse  `json:"responses"`
 }
 
-// GetStudentInterviewHistory retrieves all interview sessions attended by the logged-in student with track, level, date, and scorecard
+// GetStudentInterviewHistory retrieves interview sessions attended by the logged-in student with track, level, date, scorecard, and pagination
 func GetStudentInterviewHistory(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -828,39 +893,99 @@ func GetStudentInterviewHistory(c *gin.Context) {
 	}
 	currentUserID := rawUserID.(uint)
 
-	// Fetch all sessions where student was either Interviewer or Interviewee
-	var sessions []models.InterviewSession
-	err := database.DB.
-		Where("(interviewer_id = ? OR interviewee_id = ?) AND status != ?", currentUserID, currentUserID, "cancelled").
-		Preload("Track").
-		Preload("Level").
-		Preload("Interviewer").
-		Preload("Interviewee").
-		Order("created_at desc").
-		Find(&sessions).Error
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "15"))
+	statusFilter := strings.TrimSpace(c.Query("status"))
+	trackFilter := strings.TrimSpace(c.Query("track_id"))
 
-	if err != nil {
+	query := database.DB.Model(&models.InterviewSession{}).
+		Where("(interviewer_id = ? OR interviewee_id = ?) AND status != ?", currentUserID, currentUserID, "cancelled")
+
+	if statusFilter != "" && !strings.EqualFold(statusFilter, "all") {
+		query = query.Where("status = ?", statusFilter)
+	}
+	if trackFilter != "" && !strings.EqualFold(trackFilter, "all") {
+		var parsedTrackID uint64
+		if _, err := fmt.Sscanf(trackFilter, "%d", &parsedTrackID); err == nil && parsedTrackID > 0 {
+			query = query.Where("track_id = ?", parsedTrackID)
+		}
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
-			"message": "Failed to fetch student interview history",
+			"message": "Failed to count student interview history",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	// Fetch all feedbacks received by this student
-	var feedbacks []models.InterviewFeedback
-	database.DB.
-		Where("reviewee_id = ?", currentUserID).
-		Preload("Reviewer").
-		Preload("Responses").
-		Preload("Responses.Question").
-		Preload("Responses.SelectedOption").
-		Find(&feedbacks)
+	page := 1
+	limit := 15
+	var sessions []models.InterviewSession
+
+	dbQuery := query.
+		Preload("Track").
+		Preload("Level").
+		Preload("Interviewer").
+		Preload("Interviewee").
+		Order("created_at desc")
+
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		limit = int(totalCount)
+		if limit == 0 {
+			limit = 1
+		}
+		if err := dbQuery.Find(&sessions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch student interview history",
+				"error":   err.Error(),
+			})
+			return
+		}
+	} else {
+		if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+			page = p
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+			limit = l
+			if limit > 100 {
+				limit = 100
+			}
+		}
+		offset := (page - 1) * limit
+		if err := dbQuery.Limit(limit).Offset(offset).Find(&sessions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch student interview history",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	// Fetch feedbacks ONLY for the current page sessions to optimize speed and memory
+	sessionIDs := make([]uint, len(sessions))
+	for i, s := range sessions {
+		sessionIDs[i] = s.ID
+	}
 
 	feedbackMap := make(map[uint]models.InterviewFeedback)
-	for _, fb := range feedbacks {
-		feedbackMap[fb.SessionID] = fb
+	if len(sessionIDs) > 0 {
+		var feedbacks []models.InterviewFeedback
+		database.DB.
+			Where("reviewee_id = ? AND session_id IN (?)", currentUserID, sessionIDs).
+			Preload("Reviewer").
+			Preload("Responses").
+			Preload("Responses.Question").
+			Preload("Responses.SelectedOption").
+			Find(&feedbacks)
+
+		for _, fb := range feedbacks {
+			feedbackMap[fb.SessionID] = fb
+		}
 	}
 
 	var items []StudentInterviewItem
@@ -942,9 +1067,24 @@ func GetStudentInterviewHistory(c *gin.Context) {
 		})
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   items,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
+		},
 	})
 }
 
@@ -1135,7 +1275,7 @@ func GetStudentDashboardStats(c *gin.Context) {
 	})
 }
 
-// GetStudentFeedbackHistory retrieves all past peer evaluations received and given by the logged in student
+// GetStudentFeedbackHistory retrieves past peer evaluations received and given by the logged in student with pagination
 func GetStudentFeedbackHistory(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -1144,9 +1284,36 @@ func GetStudentFeedbackHistory(c *gin.Context) {
 	}
 	currentUserID := rawUserID.(uint)
 
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "15"))
+	typeFilter := strings.ToLower(strings.TrimSpace(c.DefaultQuery("type", "all"))) // "all", "received", "given"
+
+	query := database.DB.Model(&models.InterviewFeedback{})
+
+	switch typeFilter {
+	case "received":
+		query = query.Where("reviewee_id = ?", currentUserID)
+	case "given":
+		query = query.Where("reviewer_id = ?", currentUserID)
+	default:
+		query = query.Where("reviewee_id = ? OR reviewer_id = ?", currentUserID, currentUserID)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to count student feedback history",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	page := 1
+	limit := 15
 	var feedbacks []models.InterviewFeedback
-	err := database.DB.
-		Where("reviewee_id = ? OR reviewer_id = ?", currentUserID, currentUserID).
+
+	dbQuery := query.
 		Preload("Reviewer").
 		Preload("Reviewee").
 		Preload("Session").
@@ -1155,16 +1322,40 @@ func GetStudentFeedbackHistory(c *gin.Context) {
 		Preload("Responses").
 		Preload("Responses.Question").
 		Preload("Responses.SelectedOption").
-		Order("created_at desc").
-		Find(&feedbacks).Error
+		Order("created_at desc")
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to fetch student feedback history",
-			"error":   err.Error(),
-		})
-		return
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		limit = int(totalCount)
+		if limit == 0 {
+			limit = 1
+		}
+		if err := dbQuery.Find(&feedbacks).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch student feedback history",
+				"error":   err.Error(),
+			})
+			return
+		}
+	} else {
+		if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+			page = p
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+			limit = l
+			if limit > 100 {
+				limit = 100
+			}
+		}
+		offset := (page - 1) * limit
+		if err := dbQuery.Limit(limit).Offset(offset).Find(&feedbacks).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch student feedback history",
+				"error":   err.Error(),
+			})
+			return
+		}
 	}
 
 	// Anonymize peer details
@@ -1183,9 +1374,24 @@ func GetStudentFeedbackHistory(c *gin.Context) {
 		}
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   feedbacks,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
+		},
 	})
 }
 
@@ -1558,10 +1764,50 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 		primaryLeader = &entries[0]
 	}
 
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "25"))
+	totalCount := len(entries)
+	paginatedEntries := entries
+	page := 1
+	limit := 25
+
+	if limitStr != "all" && limitStr != "0" && limitStr != "-1" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+			page = p
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+			limit = l
+			if limit > 200 {
+				limit = 200
+			}
+		}
+		start := (page - 1) * limit
+		if start > totalCount {
+			start = totalCount
+		}
+		end := start + limit
+		if end > totalCount {
+			end = totalCount
+		}
+		paginatedEntries = entries[start:end]
+	} else {
+		limit = totalCount
+		if limit == 0 {
+			limit = 1
+		}
+	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = (totalCount + limit - 1) / limit
+	}
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"leaderboard": entries,
+			"leaderboard": paginatedEntries,
 			"stats": gin.H{
 				"total_students":            len(students),
 				"active_students":           activeStudentsCount,
@@ -1576,8 +1822,24 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 				"top_scorer_by_avg":         topScorerByAvg,
 				"most_active_student":       mostActiveStudent,
 			},
+			"pagination": gin.H{
+				"page":          page,
+				"limit":         limit,
+				"total_records": totalCount,
+				"total_pages":   totalPages,
+				"has_next":      hasNext,
+				"has_prev":      hasPrev,
+			},
 			"sort_by": sortBy,
 			"order":   order,
+		},
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
 		},
 	})
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,25 +14,120 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AdminGetUsers retrieves all registered students and administrators
+// AdminGetUsers retrieves registered students and administrators with fast database pagination & search filters
 func AdminGetUsers(c *gin.Context) {
-	var users []models.User
-	if err := database.DB.Order("created_at desc").Find(&users).Error; err != nil {
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "25"))
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	role := strings.TrimSpace(c.Query("role"))
+	department := strings.TrimSpace(c.Query("department"))
+	sortBy := strings.ToLower(strings.TrimSpace(c.DefaultQuery("sort_by", "created_at")))
+	order := strings.ToLower(strings.TrimSpace(c.DefaultQuery("order", "desc")))
+
+	query := database.DB.Model(&models.User{})
+
+	if role != "" && !strings.EqualFold(role, "all") {
+		query = query.Where("role = ?", role)
+	}
+	if department != "" && !strings.EqualFold(department, "all") {
+		query = query.Where("LOWER(department) = ?", strings.ToLower(department))
+	}
+	if search != "" {
+		s := "%" + search + "%"
+		query = query.Where("LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(roll_no) LIKE ?", s, s, s)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
-			"message": "Failed to fetch users",
+			"message": "Failed to count users",
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	// Determine ordering
+	orderClause := "created_at desc"
+	validSortColumns := map[string]string{
+		"created_at": "created_at",
+		"name":       "name",
+		"email":      "email",
+		"roll_no":    "roll_no",
+		"department": "department",
+		"role":       "role",
+	}
+	if col, ok := validSortColumns[sortBy]; ok {
+		if order == "asc" {
+			orderClause = col + " asc"
+		} else {
+			orderClause = col + " desc"
+		}
+	}
+
+	dbQuery := query.Order(orderClause)
+
+	var users []models.User
+	page := 1
+	limit := 25
+
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		// Return all records for unbounded export/processing
+		limit = int(totalCount)
+		if limit == 0 {
+			limit = 1
+		}
+		if err := dbQuery.Find(&users).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch users",
+				"error":   err.Error(),
+			})
+			return
+		}
+	} else {
+		if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+			page = p
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+			limit = l
+			if limit > 200 {
+				limit = 200
+			}
+		}
+		offset := (page - 1) * limit
+		if err := dbQuery.Limit(limit).Offset(offset).Find(&users).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to fetch users",
+				"error":   err.Error(),
+			})
+			return
+		}
 	}
 
 	for i := range users {
 		users[i].HasActiveSession = strings.TrimSpace(users[i].ActiveToken) != ""
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   users,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_prev":      hasPrev,
+		},
 	})
 }
 
