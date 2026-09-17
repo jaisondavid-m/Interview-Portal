@@ -348,14 +348,14 @@ export default function MCQPlayground({
   if (safeQuestions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-8 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] text-center space-y-3 shadow-xs min-h-[380px]">
-        <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400 flex items-center justify-center border border-purple-200 dark:border-purple-800/40">
+        <div className="w-12 h-12 rounded-xl bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center border border-[var(--border-accent)]">
           <ListOrdered className="w-6 h-6" />
         </div>
         <div className="space-y-1 max-w-sm">
           <h3 className="text-sm font-bold text-[var(--text-primary)]">
             Loading Assessment Questions...
           </h3>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs text-[var(--text-secondary)]">
             Preparing multiple-choice questions for Round {round}.
           </p>
         </div>
@@ -364,19 +364,19 @@ export default function MCQPlayground({
   }
 
   return (
-    <div className="flex flex-col bg-[var(--bg-card)] rounded-xl border border-[var(--border)] overflow-hidden shadow-xs max-w-5xl mx-auto">
+    <div className="flex flex-col bg-[var(--bg-card)] rounded-2xl border-2 border-[var(--border-strong)] overflow-hidden shadow-md max-w-5xl mx-auto animate-fadeIn">
       {/* ============================================================ */}
       {/* TOP HEADER: Progress, Question Navigator & Role Banner */}
       {/* ============================================================ */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-3 flex-wrap select-none">
+      <div className="flex items-center justify-between px-5 py-3 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-3 flex-wrap select-none">
         {/* Left: Round Pill & Progress */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-800/40 font-mono text-xs">
-            <ListOrdered className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)] font-mono text-xs shadow-2xs">
+            <ListOrdered className="w-4 h-4 text-[var(--accent)]" />
             <span>MCQ Assessment • Round {round}</span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-[var(--text-muted)]">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-[var(--text-secondary)]">
             <span>Progress:</span>
             <span className="font-bold text-[var(--text-primary)]">{answeredCount}/{totalQuestions}</span>
             <span>({progressPercent}%)</span>
@@ -387,29 +387,29 @@ export default function MCQPlayground({
         <div className="flex items-center gap-2">
           {!isEditable ? (
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40 text-xs font-mono font-bold">
-                <Award className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30 text-xs font-mono font-bold shadow-2xs">
+                <Award className="w-4 h-4 text-[var(--green)]" />
                 <span>Score: {interviewerStats.correct}/{interviewerStats.answered} ({interviewerStats.scorePct}%)</span>
               </div>
 
               <button
                 type="button"
                 onClick={() => setFollowCandidate((prev) => !prev)}
-                className={`px-2.5 py-0.5 rounded-md text-xs font-mono font-bold border transition flex items-center gap-1 cursor-pointer ${
+                className={`px-3 py-1 rounded-lg text-xs font-mono font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
                   followCandidate
-                    ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                    : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                    : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                 }`}
                 title="Automatically follow candidate's active question"
               >
-                <Eye className="w-3 h-3" />
+                <Eye className="w-3.5 h-3.5" />
                 <span>{followCandidate ? 'Following Live' : 'Free Browse'}</span>
               </button>
             </div>
           ) : (
             submitted && (
-              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 font-mono font-bold text-xs border border-emerald-200 dark:border-emerald-800/40">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--green-bg)] text-[var(--green)] font-mono font-bold text-xs border border-[var(--green)]/30 shadow-2xs">
+                <CheckCircle2 className="w-4 h-4 text-[var(--green)]" />
                 <span>Submitted</span>
               </div>
             )
@@ -417,10 +417,10 @@ export default function MCQPlayground({
         </div>
       </div>
 
-      {/* Thin Purple Progress Line */}
-      <div className="w-full bg-[var(--border)] h-1 overflow-hidden">
+      {/* Thin Signature Purple Progress Line */}
+      <div className="w-full bg-[var(--border)] h-1.5 overflow-hidden">
         <div
-          className="h-full bg-purple-600 transition-all duration-300"
+          className="h-full bg-[var(--accent)] transition-all duration-300"
           style={{ width: `${progressPercent}%` }}
         />
       </div>
@@ -428,11 +428,11 @@ export default function MCQPlayground({
       {/* ============================================================ */}
       {/* QUESTION NUMBERS PALETTE (1, 2, 3... 10) */}
       {/* ============================================================ */}
-      <div className="px-4 py-2 bg-[var(--bg-card)] border-b border-[var(--border)] flex items-center gap-2 overflow-x-auto select-none">
-        <span className="text-[11px] font-mono font-bold text-[var(--text-muted)] uppercase shrink-0 mr-1 hidden md:inline">
+      <div className="px-5 py-2.5 bg-[var(--bg-card)] border-b border-[var(--border)] flex items-center gap-3 overflow-x-auto select-none">
+        <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider shrink-0 mr-1 hidden md:inline">
           Questions:
         </span>
-        <div className="flex items-center gap-1.5 flex-1 overflow-x-auto py-0.5">
+        <div className="flex items-center gap-2 flex-1 overflow-x-auto py-0.5">
           {safeQuestions.map((q, idx) => {
             const qId = String(q.id || idx);
             const isAnswered = !!answers[qId];
@@ -444,18 +444,18 @@ export default function MCQPlayground({
                 key={q.id || idx}
                 type="button"
                 onClick={() => handleJumpToQuestion(idx)}
-                className={`relative min-w-[32px] h-8 px-2 rounded-md font-mono text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                className={`relative min-w-[36px] h-9 px-2 rounded-lg font-mono text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
                   isCurrent
-                    ? 'bg-purple-600 text-white border-purple-600 shadow-xs scale-105 z-10'
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-md scale-105 z-10'
                     : isAnswered
-                    ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/50 hover:bg-purple-100'
-                    : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border-[var(--border)] hover:border-purple-300 hover:text-[var(--text-primary)]'
+                    ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)] hover:bg-[var(--bg-hover)]'
+                    : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
                 }`}
                 title={`Question ${idx + 1}${isAnswered ? ` (Answered: ${chosenKey})` : ' (Unanswered)'}`}
               >
                 <span>{idx + 1}</span>
                 {isAnswered && !isCurrent && (
-                  <span className="text-[10px] opacity-80 uppercase font-black">
+                  <span className="text-[10px] opacity-90 uppercase font-black">
                     {chosenKey}
                   </span>
                 )}
@@ -468,33 +468,37 @@ export default function MCQPlayground({
       {/* ============================================================ */}
       {/* MAIN QUESTION DISPLAY & OPTIONS */}
       {/* ============================================================ */}
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-5 sm:p-6 space-y-5">
         {/* Question Header Card */}
-        <div className="space-y-2 p-3.5 sm:p-4 rounded-lg bg-[var(--bg-raised)]/60 border border-[var(--border)]">
+        <div className="space-y-3 p-4 sm:p-5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border-strong)] shadow-2xs">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40">
+              <span className="px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
                 Question {currentIndex + 1} of {totalQuestions}
               </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border)]">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
                 {currentQuestion.difficulty || 'Easy'}
               </span>
             </div>
 
             {isEditable && !submitted && (
-              <span className="text-[11px] font-mono text-[var(--text-muted)] hidden sm:inline">
-                Press <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">A</kbd> <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">B</kbd> <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">C</kbd> <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">D</kbd>
+              <span className="text-xs font-medium text-[var(--text-secondary)] hidden sm:flex items-center gap-1">
+                <span>Press keys:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">A</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">B</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">C</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">D</kbd>
               </span>
             )}
           </div>
 
           {/* Question Title */}
-          <h2 className="text-sm sm:text-base font-bold text-[var(--text-primary)] leading-snug">
+          <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)] leading-snug">
             {currentQuestion.title || `Assessment Question #${currentIndex + 1}`}
           </h2>
 
           {/* Question Prompt */}
-          <div className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-line font-normal">
+          <div className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line font-normal">
             {currentQuestion.prompt}
           </div>
         </div>
@@ -502,23 +506,23 @@ export default function MCQPlayground({
         {/* ============================================================ */}
         {/* OPTIONS LIST */}
         {/* ============================================================ */}
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] tracking-wider">
+            <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
               {isEditable ? 'Select One Option:' : 'Assessment Options & Candidate Response:'}
             </span>
             {isEditable && currentSelectedKey && !submitted && (
               <button
                 type="button"
                 onClick={handleClearOption}
-                className="text-xs text-rose-500 hover:underline cursor-pointer font-semibold"
+                className="text-xs text-[var(--red)] hover:underline cursor-pointer font-bold"
               >
                 Clear Selection
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-2">
+          <div className="grid grid-cols-1 gap-2.5">
             {currentOptions.map((opt, optIdx) => {
               const optKey = getOptionKey(opt, optIdx);
               const optText = getOptionText(opt);
@@ -529,33 +533,33 @@ export default function MCQPlayground({
               const isCandidateChoice = isSelected;
 
               // Clean white & purple styling computation
-              let cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] hover:border-purple-300 hover:bg-purple-50/30 dark:hover:bg-purple-950/10 text-[var(--text-primary)]';
-              let badgeStyle = 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border-[var(--border)] font-bold';
-              let textStyle = 'text-[var(--text-primary)] font-medium';
+              let cardStyle = 'border-2 border-[var(--border-strong)] bg-[var(--bg-card)] hover:border-[var(--accent)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)]';
+              let badgeStyle = 'bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-strong)] font-bold';
+              let textStyle = 'text-[var(--text-primary)] font-semibold';
 
               if (isEditable) {
                 if (isSelected) {
-                  cardStyle = 'border-purple-600 bg-purple-50/70 dark:bg-purple-950/30 ring-1 ring-purple-500/40 shadow-xs';
-                  badgeStyle = 'bg-purple-600 text-white border-purple-600 font-bold';
-                  textStyle = 'text-[var(--text-primary)] font-bold';
+                  cardStyle = 'border-2 border-[var(--accent)] bg-[var(--accent-dim)] shadow-sm';
+                  badgeStyle = 'bg-[var(--accent)] text-white border-[var(--accent)] font-bold';
+                  textStyle = 'text-[var(--accent)] font-bold';
                 }
               } else {
                 // Interviewer Mode Styles
                 if (isCorrectOption && isCandidateChoice) {
-                  cardStyle = 'border-purple-600 bg-purple-50/80 dark:bg-purple-950/40 ring-1 ring-purple-500/50 shadow-xs';
-                  badgeStyle = 'bg-purple-600 text-white border-purple-600 font-bold';
+                  cardStyle = 'border-2 border-[var(--green)] bg-[var(--green-bg)] shadow-sm';
+                  badgeStyle = 'bg-[var(--green)] text-white border-[var(--green)] font-bold';
                   textStyle = 'text-[var(--text-primary)] font-bold';
                 } else if (isCorrectOption) {
-                  cardStyle = 'border-purple-400 bg-purple-50/50 dark:bg-purple-950/20 ring-1 ring-purple-400/40 shadow-xs';
-                  badgeStyle = 'bg-purple-600 text-white border-purple-600 font-bold';
+                  cardStyle = 'border-2 border-[var(--green)] bg-[var(--green-bg)]/60 shadow-sm';
+                  badgeStyle = 'bg-[var(--green)] text-white border-[var(--green)] font-bold';
                   textStyle = 'text-[var(--text-primary)] font-bold';
                 } else if (isCandidateChoice && !isCorrectOption) {
-                  cardStyle = 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/20 ring-1 ring-rose-400/40 shadow-xs';
-                  badgeStyle = 'bg-rose-600 text-white border-rose-600 font-bold';
+                  cardStyle = 'border-2 border-[var(--red)] bg-[var(--red-bg)] shadow-sm';
+                  badgeStyle = 'bg-[var(--red)] text-white border-[var(--red)] font-bold';
                   textStyle = 'text-[var(--text-primary)] font-bold';
                 } else {
-                  cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] opacity-90';
-                  badgeStyle = 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border-[var(--border)] font-bold';
+                  cardStyle = 'border border-[var(--border)] bg-[var(--bg-card)] opacity-90';
+                  badgeStyle = 'bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)] font-bold';
                   textStyle = 'text-[var(--text-secondary)] font-normal';
                 }
               }
@@ -564,20 +568,20 @@ export default function MCQPlayground({
                 <div
                   key={optKey}
                   onClick={() => handleSelectOption(optKey)}
-                  className={`group relative py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-lg border transition-all flex items-center gap-3 select-none ${
+                  className={`group relative py-3 px-4 rounded-xl border transition-all flex items-center gap-3.5 select-none ${
                     isEditable && !submitted ? 'cursor-pointer' : 'cursor-default'
                   } ${cardStyle}`}
                 >
                   {/* Option Letter Badge (A, B, C, D) */}
                   <div
-                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-xs font-mono border shrink-0 transition-transform ${badgeStyle}`}
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-mono shrink-0 transition-transform ${badgeStyle}`}
                   >
                     {optKey}
                   </div>
 
                   {/* Option Text */}
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs sm:text-sm leading-relaxed ${textStyle}`}>
+                    <p className={`text-sm leading-relaxed ${textStyle}`}>
                       {optText || <span className="italic text-[var(--text-muted)] font-normal">Option {optKey}</span>}
                     </p>
                   </div>
@@ -586,24 +590,24 @@ export default function MCQPlayground({
                   <div className="shrink-0 flex items-center gap-2">
                     {/* Candidate View Selected Badge */}
                     {isEditable && isSelected && (
-                      <div className="flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white shadow-xs">
-                        <Check className="w-3 h-3" />
+                      <div className="flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1 rounded-full bg-[var(--accent)] text-white shadow-xs">
+                        <Check className="w-3.5 h-3.5" />
                         <span>Selected</span>
                       </div>
                     )}
 
                     {/* Interviewer Assessor Tags */}
                     {!isEditable && (
-                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                      <div className="flex items-center gap-1.5 font-mono text-xs">
                         {isCorrectOption && (
-                          <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white font-bold flex items-center gap-1 shadow-xs">
-                            <Check className="w-3 h-3" />
+                          <span className="px-2.5 py-1 rounded-full bg-[var(--green)] text-white font-bold flex items-center gap-1 shadow-xs">
+                            <Check className="w-3.5 h-3.5" />
                             <span>Correct Benchmark</span>
                           </span>
                         )}
                         {isCandidateChoice && !isCorrectOption && (
-                          <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white font-bold flex items-center gap-1 shadow-xs">
-                            <XCircle className="w-3 h-3" />
+                          <span className="px-2.5 py-1 rounded-full bg-[var(--red)] text-white font-bold flex items-center gap-1 shadow-xs">
+                            <XCircle className="w-3.5 h-3.5" />
                             <span>Candidate Choice (Incorrect)</span>
                           </span>
                         )}
@@ -620,78 +624,78 @@ export default function MCQPlayground({
         {/* INTERVIEWER ONLY: Selected Answer & Correct Benchmark Summary */}
         {/* ============================================================ */}
         {!isEditable && (
-          <div className="mt-4 p-3.5 rounded-lg bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/30 space-y-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap pb-1.5 border-b border-purple-200/60 dark:border-purple-800/30">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 font-mono uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          <div className="mt-4 p-4 rounded-xl bg-[var(--bg-raised)] border border-[var(--border-strong)] space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-[var(--border)]">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
+                <Sparkles className="w-4 h-4 text-[var(--accent)]" />
                 <span>Interviewer Scoring Guide</span>
               </div>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+              <span className="text-[11px] font-mono text-[var(--text-secondary)]">
                 Live candidate synchronization active
               </span>
             </div>
 
             {/* Side-by-side Candidate Choice vs Correct Benchmark */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Candidate Selected Option Card */}
-              <div className="p-2.5 rounded-md bg-[var(--bg-card)] border border-[var(--border)] space-y-1.5">
+              <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-strong)] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono font-bold uppercase text-[var(--text-muted)] flex items-center gap-1">
-                    <UserCheck className="w-3 h-3 text-purple-600" />
+                  <span className="text-xs font-bold uppercase text-[var(--text-secondary)] flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
                     <span>Candidate Selected:</span>
                   </span>
                   {currentSelectedKey ? (
                     currentCorrectKey && currentSelectedKey === currentCorrectKey ? (
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+                      <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
                         ✓ Correct (+1 Mark)
                       </span>
                     ) : (
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40">
+                      <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30">
                         ✕ Incorrect (0 Marks)
                       </span>
                     )
                   ) : (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-raised)]">
+                    <span className="px-2 py-0.5 rounded text-xs font-mono text-[var(--text-secondary)] bg-[var(--bg-input)]">
                       Not answered yet
                     </span>
                   )}
                 </div>
 
                 {currentSelectedKey ? (
-                  <div className="text-xs text-[var(--text-primary)] font-medium leading-relaxed">
-                    <span className="font-mono font-bold text-purple-600 dark:text-purple-400 mr-1">
+                  <div className="text-sm text-[var(--text-primary)] font-semibold leading-relaxed">
+                    <span className="font-mono font-bold text-[var(--accent)] mr-1">
                       Option {currentSelectedKey}:
                     </span>
                     <span>{selectedOptText || `Option ${currentSelectedKey}`}</span>
                   </div>
                 ) : (
-                  <p className="text-xs text-[var(--text-muted)] italic">
+                  <p className="text-xs text-[var(--text-secondary)] italic">
                     Waiting for {candidateName} to select an option...
                   </p>
                 )}
               </div>
 
               {/* Correct Benchmark Option Card */}
-              <div className="p-2.5 rounded-md bg-[var(--bg-card)] border border-purple-200 dark:border-purple-800/40 space-y-1.5">
+              <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-strong)] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono font-bold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                    <Target className="w-3 h-3 text-purple-600" />
+                  <span className="text-xs font-bold uppercase text-[var(--accent)] flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-[var(--accent)]" />
                     <span>Target Answer:</span>
                   </span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-purple-600 text-white">
-                    Correct Option
+                  <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[var(--green)] text-white">
+                    Correct Benchmark
                   </span>
                 </div>
 
                 {currentCorrectKey ? (
-                  <div className="text-xs text-[var(--text-primary)] font-medium leading-relaxed">
-                    <span className="font-mono font-bold text-purple-600 dark:text-purple-400 mr-1">
+                  <div className="text-sm text-[var(--text-primary)] font-bold leading-relaxed">
+                    <span className="font-mono font-bold text-[var(--accent)] mr-1">
                       Option {currentCorrectKey}:
                     </span>
-                    <span className="font-semibold">{correctOptText || `Option ${currentCorrectKey}`}</span>
+                    <span>{correctOptText || `Option ${currentCorrectKey}`}</span>
                   </div>
                 ) : (
-                  <p className="text-xs text-[var(--text-muted)] italic">
+                  <p className="text-xs text-[var(--text-secondary)] italic">
                     Correct option specified in problem criteria.
                   </p>
                 )}
@@ -700,11 +704,11 @@ export default function MCQPlayground({
 
             {/* Explanation text */}
             {explanationText && (
-              <div className="space-y-1">
-                <span className="text-[10px] font-mono font-bold uppercase text-[var(--text-secondary)] block">
+              <div className="space-y-1.5 pt-1">
+                <span className="text-xs font-bold uppercase text-[var(--text-secondary)] block">
                   Solution Rationale:
                 </span>
-                <p className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-2.5 rounded-md border border-[var(--border)] font-normal">
+                <p className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-3 rounded-lg border border-[var(--border)] font-normal">
                   {explanationText}
                 </p>
               </div>
@@ -716,21 +720,21 @@ export default function MCQPlayground({
       {/* ============================================================ */}
       {/* BOTTOM ACTION BAR: Previous, Next, Submit */}
       {/* ============================================================ */}
-      <div className="px-4 py-2.5 bg-[var(--bg-raised)] border-t border-[var(--border)] flex items-center justify-between gap-2 flex-wrap">
+      <div className="px-5 py-3 bg-[var(--bg-raised)] border-t border-[var(--border)] flex items-center justify-between gap-3 flex-wrap">
         {/* Prev Button */}
         <button
           type="button"
           onClick={handlePrevQuestion}
           disabled={currentIndex === 0}
-          className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 font-bold cursor-pointer disabled:opacity-40"
+          className="btn btn-secondary text-xs py-2 px-4 flex items-center gap-1.5 font-bold cursor-pointer disabled:opacity-40"
         >
-          <ChevronLeft className="w-3.5 h-3.5" />
+          <ChevronLeft className="w-4 h-4" />
           <span>Previous</span>
         </button>
 
         {/* Center Progress Text */}
-        <div className="text-xs font-mono text-[var(--text-muted)] text-center hidden sm:block">
-          Question <strong>{currentIndex + 1}</strong> of <strong>{totalQuestions}</strong>
+        <div className="text-xs font-bold text-[var(--text-secondary)] text-center hidden sm:block">
+          Question <span className="text-[var(--text-primary)] font-extrabold">{currentIndex + 1}</span> of <span className="text-[var(--text-primary)] font-extrabold">{totalQuestions}</span>
         </div>
 
         {/* Next / Submit Button */}
@@ -739,19 +743,19 @@ export default function MCQPlayground({
             <button
               type="button"
               onClick={handleNextQuestion}
-              className="btn btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1 font-bold cursor-pointer bg-purple-600 hover:bg-purple-700 text-white border-none shadow-xs"
+              className="btn btn-primary text-xs py-2 px-5 flex items-center gap-1.5 font-bold cursor-pointer bg-[var(--accent)] hover:bg-[#5c46b5] text-white border-none shadow-sm"
             >
               <span>Next Question</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             isEditable && !submitted && (
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(true)}
-                className="btn btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 font-bold cursor-pointer bg-purple-600 hover:bg-purple-700 text-white border-none shadow-xs"
+                className="btn text-xs py-2 px-5 flex items-center gap-1.5 font-bold cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-sm"
               >
-                <Send className="w-3 h-3" />
+                <Send className="w-3.5 h-3.5" />
                 <span>Finish MCQ Round</span>
               </button>
             )
@@ -769,38 +773,38 @@ export default function MCQPlayground({
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 space-y-4 animate-scaleUp"
+            className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 space-y-4 animate-scaleUp"
           >
             <div className="flex items-center gap-2.5 border-b border-[var(--border)] pb-3">
-              <Award className="w-5 h-5 text-purple-600" />
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">
+              <Award className="w-5 h-5 text-[var(--accent)]" />
+              <h3 className="text-base font-bold text-[var(--text-primary)]">
                 Submit MCQ Assessment Round {round}?
               </h3>
             </div>
 
             <div className="space-y-2 text-xs text-[var(--text-secondary)]">
               <p>
-                You have answered <strong>{answeredCount}</strong> out of <strong>{totalQuestions}</strong> questions ({progressPercent}% complete).
+                You have answered <strong className="text-[var(--text-primary)]">{answeredCount}</strong> out of <strong className="text-[var(--text-primary)]">{totalQuestions}</strong> questions ({progressPercent}% complete).
               </p>
               {answeredCount < totalQuestions && (
-                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-700 dark:text-amber-300">
+                <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber)]/30 rounded-lg text-[var(--amber)] font-medium">
                   ⚠️ You still have <strong>{totalQuestions - answeredCount} unanswered</strong> questions. Are you sure you want to finish now?
                 </div>
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(false)}
-                className="btn btn-secondary text-xs py-1.5 px-3 cursor-pointer"
+                className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
               >
                 Review Answers
               </button>
               <button
                 type="button"
                 onClick={handleConfirmSubmit}
-                className="btn btn-primary text-xs py-1.5 px-3.5 font-bold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer border-none"
+                className="btn btn-primary text-xs py-2 px-5 font-bold bg-[var(--accent)] hover:bg-[#5c46b5] text-white cursor-pointer border-none shadow-sm"
               >
                 Confirm & Submit
               </button>
