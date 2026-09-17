@@ -16,7 +16,6 @@ import {
   Clock,
   CheckSquare,
   Square,
-  Flame,
   Info,
   UserCheck,
   Target
@@ -153,100 +152,116 @@ export default function MCQPlayground({
     }
   };
 
-  // Submit assessment round
+  // Confirm Final Submission
   const handleConfirmSubmit = () => {
     setSubmitted(true);
     setShowSubmitModal(false);
-    emitChange(answers, currentIndex, true);
-  };
-
-  // Helper to extract clean text from any option format
-  const getOptionText = (opt) => {
-    if (typeof opt === 'string') return opt;
-    if (opt && typeof opt === 'object') {
-      return opt.text || opt.option_text || opt.option || opt.label || opt.value || opt.title || opt.content || '';
+    if (isEditable) {
+      emitChange(answers, currentIndex, true);
     }
-    return '';
   };
 
-  const getOptionKey = (opt, optIdx) => {
-    if (opt && typeof opt === 'object') {
-      return (opt.id || opt.option_key || opt.key || String.fromCharCode(65 + optIdx)).toUpperCase();
-    }
-    return String.fromCharCode(65 + optIdx);
-  };
-
-  // Keyboard Navigation: A, B, C, D to select; Arrow keys to navigate
+  // Keyboard Shortcuts (A, B, C, D to pick option, Arrow Left/Right to navigate)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-        return;
-      }
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
+      const key = e.key.toUpperCase();
+      if (['A', 'B', 'C', 'D', 'E', 'F'].includes(key)) {
+        if (isEditable && !submitted) {
+          handleSelectOption(key);
+        }
+      } else if (e.key === 'ArrowRight') {
         handleNextQuestion();
       } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
         handlePrevQuestion();
-      } else if (isEditable && !submitted) {
-        const keyUpper = e.key.toUpperCase();
-        if (['A', 'B', 'C', 'D', 'E', 'F'].includes(keyUpper)) {
-          const currentQ = safeQuestions[currentIndex];
-          const opts = currentQ?.options || currentQ?.mcq_options || currentQ?.payload?.options || [];
-          const matched = opts.find((o, idx) => getOptionKey(o, idx) === keyUpper);
-          if (matched) {
-            e.preventDefault();
-            handleSelectOption(getOptionKey(matched, 0));
-          }
-        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, safeQuestions, isEditable, submitted, answers]);
+  });
 
+  // Current Question Object
+  const currentQuestion = safeQuestions[currentIndex] || null;
+
+  // Normalized options for current question
+  const currentOptions = useMemo(() => {
+    if (!currentQuestion) return [];
+
+    let rawOptions =
+      currentQuestion.options ||
+      currentQuestion.detail?.options ||
+      currentQuestion.payload?.options ||
+      [];
+
+    // If options is a stringified JSON
+    if (typeof rawOptions === 'string') {
+      try {
+        rawOptions = JSON.parse(rawOptions);
+      } catch (e) {
+        rawOptions = [];
+      }
+    }
+
+    if (Array.isArray(rawOptions) && rawOptions.length > 0) {
+      return rawOptions;
+    }
+
+    // Check payload fields
+    const p = currentQuestion.payload || currentQuestion.detail || {};
+    if (p.option_a || p.option_b || p.option_c || p.option_d) {
+      return [
+        { key: 'A', text: p.option_a },
+        { key: 'B', text: p.option_b },
+        { key: 'C', text: p.option_c },
+        { key: 'D', text: p.option_d },
+      ].filter((o) => o.text);
+    }
+
+    return [
+      { key: 'A', text: 'Option A' },
+      { key: 'B', text: 'Option B' },
+      { key: 'C', text: 'Option C' },
+      { key: 'D', text: 'Option D' },
+    ];
+  }, [currentQuestion]);
+
+  // Helper to extract option identifier (A, B, C, D)
+  const getOptionKey = (opt, idx) => {
+    if (typeof opt === 'string') {
+      return String.fromCharCode(65 + idx);
+    }
+    return String(opt.key || opt.option_key || opt.id || String.fromCharCode(65 + idx)).toUpperCase();
+  };
+
+  // Helper to extract option label text
+  const getOptionText = (opt) => {
+    if (typeof opt === 'string') return opt;
+    return opt.text || opt.option_text || opt.label || opt.value || '';
+  };
+
+  // Progress calculations
   const totalQuestions = safeQuestions.length;
-  const currentQuestion = safeQuestions[currentIndex] || safeQuestions[0];
   const answeredCount = Object.keys(answers).length;
   const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
 
-  // Extract options for the current question
-  const currentOptions = useMemo(() => {
-    if (!currentQuestion) return [];
-    if (Array.isArray(currentQuestion.options) && currentQuestion.options.length > 0) {
-      return currentQuestion.options;
-    }
-    if (Array.isArray(currentQuestion.mcq_options) && currentQuestion.mcq_options.length > 0) {
-      return currentQuestion.mcq_options;
-    }
-    if (Array.isArray(currentQuestion.payload?.options) && currentQuestion.payload.options.length > 0) {
-      return currentQuestion.payload.options;
-    }
-    if (Array.isArray(currentQuestion.payload?.mcq_options) && currentQuestion.payload.mcq_options.length > 0) {
-      return currentQuestion.payload.mcq_options;
-    }
-    if (Array.isArray(currentQuestion.detail?.options) && currentQuestion.detail.options.length > 0) {
-      return currentQuestion.detail.options;
-    }
-    return [];
-  }, [currentQuestion]);
-
-  // Compute Interviewer Metrics (Correct vs Incorrect)
+  // Interviewer live scoring summary
   const interviewerStats = useMemo(() => {
-    let correct = 0;
     let answered = 0;
+    let correct = 0;
 
     safeQuestions.forEach((q, idx) => {
       const qId = String(q.id || idx);
       const chosen = answers[qId];
       if (chosen) {
         answered++;
-        const opts = q.options || q.mcq_options || q.payload?.options || [];
-        const correctOpt = q.correct_option || q.detail?.correct_option || q.payload?.correct_option || '';
-        const correctFromList = opts.find((o) => o.is_correct)?.id || opts.find((o) => o.is_correct)?.option_key || '';
-        const targetCorrect = correctOpt || correctFromList;
+        const targetCorrect =
+          q.correct_option ||
+          q.detail?.correct_option ||
+          q.payload?.correct_option ||
+          (Array.isArray(q.options) && q.options.find((o) => o.is_correct)?.key);
+
         if (targetCorrect && (chosen.toUpperCase() === String(targetCorrect).toUpperCase())) {
           correct++;
         }
@@ -273,7 +288,7 @@ export default function MCQPlayground({
     return null;
   }, [currentQuestion, currentOptions]);
 
-  // Find full selected option object & text
+  // Full selected option text
   const selectedOptObj = useMemo(() => {
     if (!currentSelectedKey || !currentOptions.length) return null;
     return currentOptions.find((o, idx) => getOptionKey(o, idx) === currentSelectedKey.toUpperCase());
@@ -281,24 +296,23 @@ export default function MCQPlayground({
 
   const selectedOptText = selectedOptObj ? getOptionText(selectedOptObj) : '';
 
-  // Find full correct option object & text
+  // Full correct option text
   const correctOptObj = useMemo(() => {
     if (!currentCorrectKey || !currentOptions.length) return null;
     return currentOptions.find((o, idx) => getOptionKey(o, idx) === currentCorrectKey.toUpperCase());
   }, [currentCorrectKey, currentOptions]);
 
   const correctOptText = correctOptObj ? getOptionText(correctOptObj) : '';
-
   const explanationText = currentQuestion?.explanation || currentQuestion?.detail?.explanation || currentQuestion?.payload?.explanation || '';
 
   if (safeQuestions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-[var(--bg-card)] rounded-[var(--radius-md)] border border-[var(--border)] text-center space-y-4 shadow-sm min-h-[460px]">
-        <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500">
-          <ListOrdered className="w-8 h-8" />
+      <div className="flex flex-col items-center justify-center p-8 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] text-center space-y-3 shadow-xs min-h-[380px]">
+        <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400 flex items-center justify-center border border-purple-200 dark:border-purple-800/40">
+          <ListOrdered className="w-6 h-6" />
         </div>
         <div className="space-y-1 max-w-sm">
-          <h3 className="text-base font-bold text-[var(--text-primary)]">
+          <h3 className="text-sm font-bold text-[var(--text-primary)]">
             Loading Assessment Questions...
           </h3>
           <p className="text-xs text-[var(--text-muted)]">
@@ -310,63 +324,63 @@ export default function MCQPlayground({
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-card)] rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden shadow-lg min-h-[620px]">
+    <div className="flex flex-col bg-[var(--bg-card)] rounded-xl border border-[var(--border)] overflow-hidden shadow-xs max-w-5xl mx-auto">
       {/* ============================================================ */}
       {/* TOP HEADER: Progress, Question Navigator & Role Banner */}
       {/* ============================================================ */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-3 flex-wrap">
-        {/* Left: Round & Progress Pill */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20 font-mono text-xs shadow-xs">
-            <ListOrdered className="w-3.5 h-3.5" />
-            <span>Multiple Choice Assessment • Round {round}</span>
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-3 flex-wrap select-none">
+        {/* Left: Round Pill & Progress */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-800/40 font-mono text-xs">
+            <ListOrdered className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            <span>MCQ Assessment • Round {round}</span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-[var(--text-muted)]">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-[var(--text-muted)]">
             <span>Progress:</span>
-            <span className="font-bold text-[var(--text-primary)]">{answeredCount}/{totalQuestions} Answered</span>
+            <span className="font-bold text-[var(--text-primary)]">{answeredCount}/{totalQuestions}</span>
             <span>({progressPercent}%)</span>
           </div>
         </div>
 
-        {/* Right: Interviewer Scorecard or Candidate Timer/Actions */}
+        {/* Right: Interviewer Scorecard or Candidate Status */}
         <div className="flex items-center gap-2">
           {!isEditable ? (
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold">
-                <Award className="w-3.5 h-3.5" />
-                <span>Live Score: {interviewerStats.correct}/{interviewerStats.answered} ({interviewerStats.scorePct}%)</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40 text-xs font-mono font-bold">
+                <Award className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Score: {interviewerStats.correct}/{interviewerStats.answered} ({interviewerStats.scorePct}%)</span>
               </div>
 
               <button
                 type="button"
                 onClick={() => setFollowCandidate((prev) => !prev)}
-                className={`px-2.5 py-1 rounded text-xs font-mono font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-md text-xs font-mono font-bold border transition flex items-center gap-1 cursor-pointer ${
                   followCandidate
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                     : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'
                 }`}
                 title="Automatically follow candidate's active question"
               >
-                <Eye className="w-3.5 h-3.5" />
+                <Eye className="w-3 h-3" />
                 <span>{followCandidate ? 'Following Live' : 'Free Browse'}</span>
               </button>
             </div>
           ) : (
             submitted && (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded bg-green-500/10 text-green-600 dark:text-green-400 font-mono font-bold text-xs border border-green-500/30">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Assessment Submitted</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 font-mono font-bold text-xs border border-emerald-200 dark:border-emerald-800/40">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Submitted</span>
               </div>
             )
           )}
         </div>
       </div>
 
-      {/* Progress Bar Line */}
-      <div className="w-full bg-[var(--border)] h-1.5 overflow-hidden">
+      {/* Thin Purple Progress Line */}
+      <div className="w-full bg-[var(--border)] h-1 overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-300"
+          className="h-full bg-purple-600 transition-all duration-300"
           style={{ width: `${progressPercent}%` }}
         />
       </div>
@@ -374,7 +388,7 @@ export default function MCQPlayground({
       {/* ============================================================ */}
       {/* QUESTION NUMBERS PALETTE (1, 2, 3... 10) */}
       {/* ============================================================ */}
-      <div className="px-4 py-2.5 bg-[var(--bg-card)] border-b border-[var(--border)] flex items-center gap-2 overflow-x-auto select-none">
+      <div className="px-4 py-2 bg-[var(--bg-card)] border-b border-[var(--border)] flex items-center gap-2 overflow-x-auto select-none">
         <span className="text-[11px] font-mono font-bold text-[var(--text-muted)] uppercase shrink-0 mr-1 hidden md:inline">
           Questions:
         </span>
@@ -390,12 +404,12 @@ export default function MCQPlayground({
                 key={q.id || idx}
                 type="button"
                 onClick={() => handleJumpToQuestion(idx)}
-                className={`relative min-w-[36px] h-9 px-2 rounded-lg font-mono text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                className={`relative min-w-[32px] h-8 px-2 rounded-md font-mono text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
                   isCurrent
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-500/30 scale-105 z-10'
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-xs scale-105 z-10'
                     : isAnswered
-                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
-                    : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)]'
+                    ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/50 hover:bg-purple-100'
+                    : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border-[var(--border)] hover:border-purple-300 hover:text-[var(--text-primary)]'
                 }`}
                 title={`Question ${idx + 1}${isAnswered ? ` (Answered: ${chosenKey})` : ' (Unanswered)'}`}
               >
@@ -414,34 +428,33 @@ export default function MCQPlayground({
       {/* ============================================================ */}
       {/* MAIN QUESTION DISPLAY & OPTIONS */}
       {/* ============================================================ */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+      <div className="p-4 sm:p-5 space-y-4">
         {/* Question Header Card */}
-        <div className="space-y-3 bg-[var(--bg-raised)]/50 p-4 md:p-5 rounded-xl border border-[var(--border)]">
+        <div className="space-y-2 p-3.5 sm:p-4 rounded-lg bg-[var(--bg-raised)]/60 border border-[var(--border)]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40">
                 Question {currentIndex + 1} of {totalQuestions}
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border)]">
-                {currentQuestion.difficulty || 'Medium'}
+                {currentQuestion.difficulty || 'Easy'}
               </span>
             </div>
 
-            {/* Quick Helper Shortcut indicator */}
             {isEditable && !submitted && (
               <span className="text-[11px] font-mono text-[var(--text-muted)] hidden sm:inline">
-                💡 Tip: Press <kbd className="px-1 py-0.5 rounded bg-[var(--bg-card)] border text-[10px] font-bold">A</kbd> <kbd className="px-1 py-0.5 rounded bg-[var(--bg-card)] border text-[10px] font-bold">B</kbd> <kbd className="px-1 py-0.5 rounded bg-[var(--bg-card)] border text-[10px] font-bold">C</kbd> <kbd className="px-1 py-0.5 rounded bg-[var(--bg-card)] border text-[10px] font-bold">D</kbd> or use Arrow keys
+                Press <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">A</kbd> <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">B</kbd> <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">C</kbd> <kbd className="px-1 py-0.2 rounded bg-[var(--bg-card)] border text-[10px] font-bold">D</kbd>
               </span>
             )}
           </div>
 
           {/* Question Title */}
-          <h2 className="text-base md:text-lg font-bold text-[var(--text-primary)] leading-snug">
+          <h2 className="text-sm sm:text-base font-bold text-[var(--text-primary)] leading-snug">
             {currentQuestion.title || `Assessment Question #${currentIndex + 1}`}
           </h2>
 
           {/* Question Prompt */}
-          <div className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line font-normal">
+          <div className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-line font-normal">
             {currentQuestion.prompt}
           </div>
         </div>
@@ -449,9 +462,9 @@ export default function MCQPlayground({
         {/* ============================================================ */}
         {/* OPTIONS LIST */}
         {/* ============================================================ */}
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-bold uppercase text-[var(--text-muted)] tracking-wider">
+            <span className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] tracking-wider">
               {isEditable ? 'Select One Option:' : 'Assessment Options & Candidate Response:'}
             </span>
             {isEditable && currentSelectedKey && !submitted && (
@@ -465,7 +478,7 @@ export default function MCQPlayground({
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-2">
             {currentOptions.map((opt, optIdx) => {
               const optKey = getOptionKey(opt, optIdx);
               const optText = getOptionText(opt);
@@ -475,30 +488,30 @@ export default function MCQPlayground({
               const isCorrectOption = currentCorrectKey && currentCorrectKey === optKey;
               const isCandidateChoice = isSelected;
 
-              // High-contrast, theme-safe styling computation
-              let cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] hover:border-blue-400 hover:bg-[var(--bg-raised)]/70 text-[var(--text-primary)]';
+              // Clean white & purple styling computation
+              let cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] hover:border-purple-300 hover:bg-purple-50/30 dark:hover:bg-purple-950/10 text-[var(--text-primary)]';
               let badgeStyle = 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border-[var(--border)] font-bold';
               let textStyle = 'text-[var(--text-primary)] font-medium';
 
               if (isEditable) {
                 if (isSelected) {
-                  cardStyle = 'border-blue-600 bg-blue-500/15 ring-2 ring-blue-500/40 shadow-md';
-                  badgeStyle = 'bg-blue-600 text-white border-blue-600 font-black';
+                  cardStyle = 'border-purple-600 bg-purple-50/70 dark:bg-purple-950/30 ring-1 ring-purple-500/40 shadow-xs';
+                  badgeStyle = 'bg-purple-600 text-white border-purple-600 font-bold';
                   textStyle = 'text-[var(--text-primary)] font-bold';
                 }
               } else {
                 // Interviewer Mode Styles
                 if (isCorrectOption && isCandidateChoice) {
-                  cardStyle = 'border-emerald-500 bg-emerald-500/20 ring-2 ring-emerald-500/50 shadow-md';
-                  badgeStyle = 'bg-emerald-600 text-white border-emerald-600 font-black';
+                  cardStyle = 'border-purple-600 bg-purple-50/80 dark:bg-purple-950/40 ring-1 ring-purple-500/50 shadow-xs';
+                  badgeStyle = 'bg-purple-600 text-white border-purple-600 font-bold';
                   textStyle = 'text-[var(--text-primary)] font-bold';
                 } else if (isCorrectOption) {
-                  cardStyle = 'border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/40 shadow-sm';
-                  badgeStyle = 'bg-emerald-600 text-white border-emerald-600 font-black';
+                  cardStyle = 'border-purple-400 bg-purple-50/50 dark:bg-purple-950/20 ring-1 ring-purple-400/40 shadow-xs';
+                  badgeStyle = 'bg-purple-600 text-white border-purple-600 font-bold';
                   textStyle = 'text-[var(--text-primary)] font-bold';
                 } else if (isCandidateChoice && !isCorrectOption) {
-                  cardStyle = 'border-rose-500 bg-rose-500/15 ring-2 ring-rose-500/40 shadow-sm';
-                  badgeStyle = 'bg-rose-600 text-white border-rose-600 font-black';
+                  cardStyle = 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/20 ring-1 ring-rose-400/40 shadow-xs';
+                  badgeStyle = 'bg-rose-600 text-white border-rose-600 font-bold';
                   textStyle = 'text-[var(--text-primary)] font-bold';
                 } else {
                   cardStyle = 'border-[var(--border)] bg-[var(--bg-card)] opacity-90';
@@ -511,53 +524,47 @@ export default function MCQPlayground({
                 <div
                   key={optKey}
                   onClick={() => handleSelectOption(optKey)}
-                  className={`group relative p-4 rounded-xl border-2 transition-all flex items-start gap-3.5 select-none ${
-                    isEditable && !submitted ? 'cursor-pointer hover:scale-[1.006]' : 'cursor-default'
+                  className={`group relative py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-lg border transition-all flex items-center gap-3 select-none ${
+                    isEditable && !submitted ? 'cursor-pointer' : 'cursor-default'
                   } ${cardStyle}`}
                 >
-                  {/* Option Key Badge (A, B, C, D) */}
+                  {/* Option Letter Badge (A, B, C, D) */}
                   <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-mono border shrink-0 transition-transform shadow-xs ${badgeStyle}`}
+                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-xs font-mono border shrink-0 transition-transform ${badgeStyle}`}
                   >
                     {optKey}
                   </div>
 
-                  {/* Option Text (Guaranteed Visible and High Contrast) */}
-                  <div className="flex-1 min-w-0 pt-0.5">
-                    <p className={`text-sm leading-relaxed ${textStyle}`}>
+                  {/* Option Text */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs sm:text-sm leading-relaxed ${textStyle}`}>
                       {optText || <span className="italic text-[var(--text-muted)] font-normal">Option {optKey}</span>}
                     </p>
                   </div>
 
                   {/* Right Status Indicators */}
-                  <div className="shrink-0 flex items-center gap-2 pt-0.5">
+                  <div className="shrink-0 flex items-center gap-2">
                     {/* Candidate View Selected Badge */}
                     {isEditable && isSelected && (
-                      <div className="flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-blue-600 text-white shadow-xs">
-                        <CheckCircle2 className="w-4 h-4" />
+                      <div className="flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white shadow-xs">
+                        <Check className="w-3 h-3" />
                         <span>Selected</span>
                       </div>
                     )}
 
                     {/* Interviewer Assessor Tags */}
                     {!isEditable && (
-                      <div className="flex flex-col items-end gap-1 font-mono text-xs">
-                        {isCorrectOption && isCandidateChoice && (
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-bold flex items-center gap-1.5 shadow-xs">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Correct Benchmark & Candidate Selected</span>
-                          </span>
-                        )}
-                        {isCorrectOption && !isCandidateChoice && (
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-bold flex items-center gap-1.5 shadow-xs">
-                            <Check className="w-3.5 h-3.5" />
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        {isCorrectOption && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white font-bold flex items-center gap-1 shadow-xs">
+                            <Check className="w-3 h-3" />
                             <span>Correct Benchmark</span>
                           </span>
                         )}
                         {isCandidateChoice && !isCorrectOption && (
-                          <span className="px-2.5 py-1 rounded-full bg-rose-600 text-white font-bold flex items-center gap-1.5 shadow-xs">
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Candidate Selected (Incorrect)</span>
+                          <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white font-bold flex items-center gap-1 shadow-xs">
+                            <XCircle className="w-3 h-3" />
+                            <span>Candidate Choice (Incorrect)</span>
                           </span>
                         )}
                       </div>
@@ -573,38 +580,38 @@ export default function MCQPlayground({
         {/* INTERVIEWER ONLY: Selected Answer & Correct Benchmark Summary */}
         {/* ============================================================ */}
         {!isEditable && (
-          <div className="mt-6 p-4 md:p-5 rounded-xl bg-blue-500/10 border border-blue-500/25 space-y-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-blue-500/20">
-              <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 font-mono uppercase tracking-wider">
-                <Sparkles className="w-4 h-4" />
-                <span>Interviewer Solution & Scoring Guide</span>
+          <div className="mt-4 p-3.5 rounded-lg bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/30 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap pb-1.5 border-b border-purple-200/60 dark:border-purple-800/30">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 font-mono uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Interviewer Scoring Guide</span>
               </div>
-              <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                Live sync active with candidate responses
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                Live candidate synchronization active
               </span>
             </div>
 
             {/* Side-by-side Candidate Choice vs Correct Benchmark */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               {/* Candidate Selected Option Card */}
-              <div className="p-3.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+              <div className="p-2.5 rounded-md bg-[var(--bg-card)] border border-[var(--border)] space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] flex items-center gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="text-[10px] font-mono font-bold uppercase text-[var(--text-muted)] flex items-center gap-1">
+                    <UserCheck className="w-3 h-3 text-purple-600" />
                     <span>Candidate Selected:</span>
                   </span>
                   {currentSelectedKey ? (
                     currentCorrectKey && currentSelectedKey === currentCorrectKey ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
                         ✓ Correct (+1 Mark)
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40">
                         ✕ Incorrect (0 Marks)
                       </span>
                     )
                   ) : (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)]">
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-raised)]">
                       Not answered yet
                     </span>
                   )}
@@ -612,7 +619,7 @@ export default function MCQPlayground({
 
                 {currentSelectedKey ? (
                   <div className="text-xs text-[var(--text-primary)] font-medium leading-relaxed">
-                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400 mr-1.5">
+                    <span className="font-mono font-bold text-purple-600 dark:text-purple-400 mr-1">
                       Option {currentSelectedKey}:
                     </span>
                     <span>{selectedOptText || `Option ${currentSelectedKey}`}</span>
@@ -625,20 +632,20 @@ export default function MCQPlayground({
               </div>
 
               {/* Correct Benchmark Option Card */}
-              <div className="p-3.5 rounded-lg bg-[var(--bg-card)] border border-emerald-500/30 space-y-2">
+              <div className="p-2.5 rounded-md bg-[var(--bg-card)] border border-purple-200 dark:border-purple-800/40 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    <Target className="w-3.5 h-3.5" />
-                    <span>Correct Benchmark:</span>
+                  <span className="text-[10px] font-mono font-bold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                    <Target className="w-3 h-3 text-purple-600" />
+                    <span>Target Answer:</span>
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-600 text-white shadow-xs">
-                    Target Answer
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-purple-600 text-white">
+                    Correct Option
                   </span>
                 </div>
 
                 {currentCorrectKey ? (
                   <div className="text-xs text-[var(--text-primary)] font-medium leading-relaxed">
-                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1.5">
+                    <span className="font-mono font-bold text-purple-600 dark:text-purple-400 mr-1">
                       Option {currentCorrectKey}:
                     </span>
                     <span className="font-semibold">{correctOptText || `Option ${currentCorrectKey}`}</span>
@@ -653,11 +660,11 @@ export default function MCQPlayground({
 
             {/* Explanation text */}
             {explanationText && (
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-mono font-bold uppercase text-[var(--text-secondary)] block">
-                  Solution Rationale & Concept Explanation:
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono font-bold uppercase text-[var(--text-secondary)] block">
+                  Solution Rationale:
                 </span>
-                <p className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-3.5 rounded-lg border border-[var(--border)] font-normal">
+                <p className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-2.5 rounded-md border border-[var(--border)] font-normal">
                   {explanationText}
                 </p>
               </div>
@@ -669,19 +676,19 @@ export default function MCQPlayground({
       {/* ============================================================ */}
       {/* BOTTOM ACTION BAR: Previous, Next, Submit */}
       {/* ============================================================ */}
-      <div className="px-4 py-3 bg-[var(--bg-raised)] border-t border-[var(--border)] flex items-center justify-between gap-2 flex-wrap">
+      <div className="px-4 py-2.5 bg-[var(--bg-raised)] border-t border-[var(--border)] flex items-center justify-between gap-2 flex-wrap">
         {/* Prev Button */}
         <button
           type="button"
           onClick={handlePrevQuestion}
           disabled={currentIndex === 0}
-          className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold cursor-pointer disabled:opacity-40"
+          className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 font-bold cursor-pointer disabled:opacity-40"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-3.5 h-3.5" />
           <span>Previous</span>
         </button>
 
-        {/* Center Progress Pill */}
+        {/* Center Progress Text */}
         <div className="text-xs font-mono text-[var(--text-muted)] text-center hidden sm:block">
           Question <strong>{currentIndex + 1}</strong> of <strong>{totalQuestions}</strong>
         </div>
@@ -692,19 +699,19 @@ export default function MCQPlayground({
             <button
               type="button"
               onClick={handleNextQuestion}
-              className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-md"
+              className="btn btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1 font-bold cursor-pointer bg-purple-600 hover:bg-purple-700 text-white border-none shadow-xs"
             >
               <span>Next Question</span>
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           ) : (
             isEditable && !submitted && (
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(true)}
-                className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse"
+                className="btn btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 font-bold cursor-pointer bg-purple-600 hover:bg-purple-700 text-white border-none shadow-xs"
               >
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-3 h-3" />
                 <span>Finish MCQ Round</span>
               </button>
             )
@@ -722,11 +729,11 @@ export default function MCQPlayground({
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 space-y-4 animate-scaleUp"
+            className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 space-y-4 animate-scaleUp"
           >
             <div className="flex items-center gap-2.5 border-b border-[var(--border)] pb-3">
-              <Award className="w-5 h-5 text-emerald-500" />
-              <h3 className="text-base font-bold text-[var(--text-primary)]">
+              <Award className="w-5 h-5 text-purple-600" />
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">
                 Submit MCQ Assessment Round {round}?
               </h3>
             </div>
@@ -736,7 +743,7 @@ export default function MCQPlayground({
                 You have answered <strong>{answeredCount}</strong> out of <strong>{totalQuestions}</strong> questions ({progressPercent}% complete).
               </p>
               {answeredCount < totalQuestions && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-700 dark:text-amber-300">
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-700 dark:text-amber-300">
                   ⚠️ You still have <strong>{totalQuestions - answeredCount} unanswered</strong> questions. Are you sure you want to finish now?
                 </div>
               )}
@@ -746,14 +753,14 @@ export default function MCQPlayground({
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(false)}
-                className="btn btn-secondary text-xs py-2 px-3 cursor-pointer"
+                className="btn btn-secondary text-xs py-1.5 px-3 cursor-pointer"
               >
                 Review Answers
               </button>
               <button
                 type="button"
                 onClick={handleConfirmSubmit}
-                className="btn btn-primary text-xs py-2 px-4 font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                className="btn btn-primary text-xs py-1.5 px-3.5 font-bold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer border-none"
               >
                 Confirm & Submit
               </button>
