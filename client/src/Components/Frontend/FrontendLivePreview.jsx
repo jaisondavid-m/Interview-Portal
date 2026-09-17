@@ -406,82 +406,64 @@ export default function FrontendLivePreview({
 
   return (
     <div
-      className={`flex flex-col bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-md overflow-hidden transition-all duration-200 ${
-        isFullscreen ? 'fixed inset-0 z-[70] w-screen h-screen rounded-none' : 'relative w-full h-full min-h-[460px]'
+      className={`flex flex-col bg-[var(--bg-card)] overflow-hidden transition-all duration-200 ${
+        isFullscreen ? 'fixed inset-0 z-[70] w-screen h-screen' : 'relative w-full h-full'
       }`}
     >
       {/* ============================================================ */}
       {/* TOP RESPONSIVE VIEWPORT TOOLBAR */}
       {/* ============================================================ */}
-      <div className="h-12 px-3 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-2 shrink-0 z-10 flex-wrap">
-        {/* Device Switcher Chips */}
+      <div className="h-11 px-3.5 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-2 shrink-0 z-10 select-none">
+        {/* Left: Device Switcher Chips */}
         <div className="flex items-center gap-1">
-          {DEVICE_PRESETS.map((device) => {
-            const IconComponent = device.icon;
-            const isSelected = activeDevice === device.id;
-            return (
-              <button
-                key={device.id}
-                type="button"
-                onClick={() => {
-                  setActiveDevice(device.id);
-                  setCustomWidth(null);
-                }}
-                className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                  isSelected
-                    ? 'bg-[var(--accent)] text-white shadow-xs font-bold'
-                    : 'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border border-[var(--border)]'
-                }`}
-                title={`Test in ${device.label} (${device.tag})`}
-              >
-                <IconComponent className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{device.label}</span>
-                <span className="text-[10px] opacity-75 font-normal">({device.tag})</span>
-              </button>
-            );
-          })}
+          <div className="flex items-center bg-[var(--bg-card)] p-0.5 rounded-lg border border-[var(--border)] shadow-xs">
+            {DEVICE_PRESETS.map((device) => {
+              const IconComponent = device.icon;
+              const isSelected = activeDevice === device.id;
+              return (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveDevice(device.id);
+                    setCustomWidth(null);
+                  }}
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-medium transition flex items-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-[var(--accent)] text-white shadow-xs font-bold'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]'
+                  }`}
+                  title={`Test in ${device.label} (${device.tag})`}
+                >
+                  <IconComponent className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{device.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
           {/* Orientation Toggle (if fixed mobile/tablet) */}
           {activeDevice !== 'responsive' && (
             <button
               type="button"
               onClick={() => setOrientation((o) => (o === 'portrait' ? 'landscape' : 'portrait'))}
-              className="p-1.5 rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer ml-1"
+              className="h-7.5 px-2 rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1 text-xs font-mono font-semibold shadow-xs"
               title={`Rotate to ${orientation === 'portrait' ? 'Landscape' : 'Portrait'}`}
             >
-              <RotateCw className="w-3.5 h-3.5" />
+              <RotateCw className="w-3 h-3" />
+              <span className="capitalize">{orientation}</span>
             </button>
           )}
         </div>
 
-        {/* Right Tools: Packages, Dimension Pill, Reload, Console & Fullscreen */}
-        <div className="flex items-center gap-1.5 ml-auto text-xs">
-          {/* Packages Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (onOpenPackages) {
-                onOpenPackages();
-              } else {
-                setShowPackagesModal(true);
-              }
-            }}
-            className="px-2 py-1 rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-cyan-600 dark:text-cyan-400 hover:border-cyan-500/40 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-            title="View pre-installed npm packages"
-          >
-            <Package className="w-3.5 h-3.5 text-cyan-500" />
-            <span className="hidden sm:inline">Packages</span>
-            <span className="text-[10px] px-1 rounded-full bg-cyan-500/10 text-cyan-500">
-              {INSTALLED_FRONTEND_PACKAGES.length}
-            </span>
-          </button>
-
+        {/* Right: Viewport Dimension Pill, Reload & Console Logs Toggle */}
+        <div className="flex items-center gap-2 text-xs">
           {/* Active Viewport Dimension Pill */}
-          <div className="px-2 py-0.5 rounded font-mono text-[11px] font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border)] hidden md:inline-block">
+          <div className="px-2.5 py-1 rounded-md font-mono text-[11px] font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border)] shadow-xs hidden lg:inline-block">
             {activeDevice === 'custom'
               ? `${customWidth}px × Fluid`
               : activePreset?.id === 'responsive'
-              ? '100% Fluid'
+              ? '100% Fluid View'
               : `${frameWidth} × ${orientation}`}
           </div>
 
@@ -489,7 +471,7 @@ export default function FrontendLivePreview({
           <button
             type="button"
             onClick={() => setReloadKey((k) => k + 1)}
-            className="p-1.5 rounded-md hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+            className="w-7.5 h-7.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer flex items-center justify-center shadow-xs"
             title="Reload live preview"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -499,30 +481,20 @@ export default function FrontendLivePreview({
           <button
             type="button"
             onClick={() => setShowConsole((c) => !c)}
-            className={`px-2 py-1 rounded-md text-xs font-mono transition flex items-center gap-1 cursor-pointer border ${
+            className={`h-7.5 px-2.5 rounded-lg text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer border shadow-xs ${
               showConsole
                 ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
-                : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
             title="Toggle Console Log Output"
           >
-            <Terminal className="w-3.5 h-3.5" />
+            <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span className="hidden sm:inline">Logs</span>
             {consoleLogs.length > 0 && (
-              <span className="text-[10px] px-1 rounded-full bg-[var(--accent)] text-white font-bold">
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--accent)] text-white font-bold">
                 {consoleLogs.length}
               </span>
             )}
-          </button>
-
-          {/* Fullscreen Preview Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsFullscreen((f) => !f)}
-            className="p-1.5 rounded-md hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
-            title={isFullscreen ? 'Exit Fullscreen Preview (Esc)' : 'Expand Fullscreen Preview'}
-          >
-            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>

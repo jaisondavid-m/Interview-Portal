@@ -216,31 +216,59 @@ export default function FrontendPlayground({
       {/* ============================================================ */}
       {/* MAIN PLAYGROUND HEADER TOOLBAR */}
       {/* ============================================================ */}
-      <div className="h-14 px-3 sm:px-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-2.5 shrink-0 z-20 flex-wrap">
-        {/* Left: Role & Mode Indicator + Tab Switcher + Packages Pill */}
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="h-14 px-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0 z-20 select-none overflow-x-auto">
+        {/* Left Section: Studio Brand & Requirements */}
+        <div className="flex items-center gap-2 shrink-0">
           {/* Role Status Badge */}
           {isEditable ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] text-xs font-mono font-bold shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              <span>React Frontend Editor</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold shadow-xs">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)] animate-pulse" />
+              <span className="text-[var(--text-primary)]">Frontend</span>
+              <span className="text-[10px] bg-[var(--accent-dim)] text-[var(--accent)] px-1.5 py-0.5 rounded font-bold uppercase border border-[var(--border-accent)]">
+                Studio
+              </span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30 text-xs font-mono font-bold shadow-xs">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold shadow-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Live Observer • {candidateName}</span>
+              <span className="text-[var(--text-primary)]">Live Observer</span>
+              <span className="text-[10px] bg-[var(--green-bg)] text-[var(--green)] px-1.5 py-0.5 rounded font-bold uppercase border border-[var(--green)]/30">
+                {candidateName}
+              </span>
             </div>
           )}
 
-          {/* View Mode Layout Switcher (Split, Code Only, Preview Only) */}
-          <div className="flex items-center gap-1 bg-[var(--bg-card)] p-0.5 rounded-lg border border-[var(--border)] text-xs font-mono">
+          {/* Requirements Drawer Toggle */}
+          {question && (
+            <button
+              type="button"
+              onClick={() => setShowRequirements((prev) => !prev)}
+              className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border shadow-xs ${
+                showRequirements
+                  ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                  : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+              }`}
+              title="View Challenge Guidelines & Specifications"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden sm:inline">Requirements</span>
+              {payload?.scenario && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Center Section: View Mode Segmented Switcher & Packages Dock */}
+        <div className="flex items-center gap-1.5 bg-[var(--bg-card)] p-1 rounded-lg border border-[var(--border)] shadow-xs shrink-0">
+          <div className="flex items-center p-0.5 bg-[var(--bg-raised)] rounded-md">
             <button
               type="button"
               onClick={() => setActiveTab('split')}
-              className={`px-2 py-1 rounded font-medium transition cursor-pointer ${
+              className={`px-3 py-1 rounded text-xs font-mono font-bold transition cursor-pointer ${
                 activeTab === 'split'
-                  ? 'bg-[var(--accent)] text-white font-bold shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  ? 'bg-[var(--accent)] text-white shadow-xs'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               Split View
@@ -248,86 +276,82 @@ export default function FrontendPlayground({
             <button
               type="button"
               onClick={() => setActiveTab('code')}
-              className={`px-2 py-1 rounded font-medium transition cursor-pointer ${
+              className={`px-3 py-1 rounded text-xs font-mono font-bold transition cursor-pointer ${
                 activeTab === 'code'
-                  ? 'bg-[var(--accent)] text-white font-bold shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  ? 'bg-[var(--accent)] text-white shadow-xs'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              Code
+              Code Only
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('preview')}
-              className={`px-2 py-1 rounded font-medium transition cursor-pointer ${
+              className={`px-3 py-1 rounded text-xs font-mono font-bold transition cursor-pointer ${
                 activeTab === 'preview'
-                  ? 'bg-[var(--accent)] text-white font-bold shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  ? 'bg-[var(--accent)] text-white shadow-xs'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               Live Preview
             </button>
           </div>
 
+          <div className="w-[1px] h-4 bg-[var(--border)] mx-0.5" />
+
           {/* Installed Packages Button */}
           <button
             type="button"
             onClick={() => setShowPackagesModal(true)}
-            className="px-2.5 py-1 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border-accent)] text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-            title="View all installed packages (Tailwind, Lucide, Framer Motion, Lodash, Axios, etc.)"
+            className="h-7.5 px-2.5 rounded-md hover:bg-[var(--bg-raised)] text-[var(--accent)] text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+            title="View pre-installed npm packages (Tailwind, Lucide, Framer Motion, Lodash, Axios...)"
           >
-            <Package className="w-3.5 h-3.5 text-[var(--accent)]" />
+            <Package className="w-3.5 h-3.5" />
             <span>Packages</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)]">
               {INSTALLED_FRONTEND_PACKAGES.length}
             </span>
           </button>
-
-          {/* Requirements & Challenge Drawer Toggle */}
-          {question && (
-            <button
-              type="button"
-              onClick={() => setShowRequirements((prev) => !prev)}
-              className={`btn text-xs py-1 px-2.5 flex items-center gap-1.5 font-medium transition cursor-pointer ${
-                showRequirements
-                  ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
-                  : 'btn-secondary text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-              title="View Challenge Guidelines & Responsive Criteria"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Requirements</span>
-            </button>
-          )}
         </div>
 
-        {/* Right Tools: Reset, Copy, and Fullscreen */}
-        <div className="flex items-center gap-1.5 ml-auto text-xs">
+        {/* Right Section: Code Actions & Exit Studio */}
+        <div className="flex items-center gap-2 shrink-0">
           {isEditable && (
             <button
               type="button"
               onClick={handleResetCode}
-              className="p-1.5 rounded-md hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+              className="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow-xs"
               title="Reset to Starter Code"
             >
               <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Reset</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={handleCopy}
-            className="p-1.5 rounded-md hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+            className="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow-xs"
             title="Copy Code"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-[var(--green)]" />
+                <span className="text-[var(--green)] font-bold hidden sm:inline">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Copy</span>
+              </>
+            )}
           </button>
 
-          {/* Exit Studio Fullscreen Toggle */}
+          {/* Exit Studio Fullscreen Button */}
           <button
             type="button"
             onClick={() => setIsFullscreen(false)}
-            className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:bg-cyan-700 transition cursor-pointer"
+            className="h-8 px-3 rounded-lg bg-[var(--accent)] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:opacity-95 transition cursor-pointer border border-[var(--accent)]"
             title="Exit Fullscreen Mode (Press Esc or F)"
           >
             <Minimize2 className="w-3.5 h-3.5" />
@@ -352,19 +376,19 @@ export default function FrontendPlayground({
               }`}
             >
               {/* Editor Tab Header */}
-              <div className="flex items-center justify-between px-3 py-1.5 bg-[#21252b] border-b border-[#181a1f] text-xs font-mono">
-                <div className="flex items-center gap-2">
-                  <div className="px-2.5 py-0.5 rounded bg-[#282c34] text-cyan-400 border border-[#3e4451] flex items-center gap-1.5 font-bold">
+              <div className="h-11 px-4 bg-[#1e2227] border-b border-[#181a1f] flex items-center justify-between text-xs font-mono shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="px-2.5 py-1 rounded-md bg-[#282c34] text-[var(--accent)] border border-[var(--accent)]/30 flex items-center gap-1.5 font-bold shadow-xs">
                     <FileCode className="w-3.5 h-3.5" />
                     <span>App.jsx</span>
                   </div>
-                  <span className="text-gray-400 text-[10px] hidden sm:inline flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-cyan-400" />
-                    React 18 • Tailwind • Lucide • Framer Motion • Lodash • Axios
+                  <span className="text-gray-400 text-[11px] hidden sm:flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Live JSX • React 18</span>
                   </span>
                 </div>
                 {!isEditable && (
-                  <span className="text-amber-400 text-[10px] bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/30">
+                  <span className="text-amber-400 text-[10px] bg-amber-950/40 px-2.5 py-1 rounded-md border border-amber-500/30 font-bold">
                     Live Observer View
                   </span>
                 )}
