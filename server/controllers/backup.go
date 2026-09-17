@@ -37,60 +37,62 @@ type DatabaseStatsResponse struct {
 
 // AdminGetDatabaseStats fetches live metrics and table statistics for the database
 func AdminGetDatabaseStats(c *gin.Context) {
-	dbName := config.AppConfig.DBName
+	// 1. Detect dynamic database name directly from active connection
+	var dbName string
+	_ = database.DB.Raw("SELECT DATABASE()").Scan(&dbName)
 	if dbName == "" {
-		dbName = "mock_mate"
-	}
-
-	// 1. Fetch table names
-	var tableNames []string
-	rows, err := database.DB.Raw("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'").Rows()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to inspect database tables",
-			"error":   err.Error(),
-		})
-		return
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var name, tableType string
-		if err := rows.Scan(&name, &tableType); err == nil {
-			tableNames = append(tableNames, name)
+		if config.AppConfig != nil && config.AppConfig.DBName != "" {
+			dbName = config.AppConfig.DBName
+		} else {
+			dbName = "mock_mate"
 		}
 	}
 
-	// 2. Fetch information_schema sizing
+	// 2. Fetch table names from information_schema
+	var tableNames []string
+	_ = database.DB.Raw(`
+		SELECT TABLE_NAME 
+		FROM information_schema.TABLES 
+		WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'
+		ORDER BY TABLE_NAME ASC
+	`, dbName).Pluck("TABLE_NAME", &tableNames)
+
+	// Fallback to active DATABASE() schema if dbName had different casing
+	if len(tableNames) == 0 {
+		_ = database.DB.Raw(`
+			SELECT TABLE_NAME 
+			FROM information_schema.TABLES 
+			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
+			ORDER BY TABLE_NAME ASC
+		`).Pluck("TABLE_NAME", &tableNames)
+	}
+
+	// 3. Fetch data length and index length for each table
 	type TableSizeInfo struct {
 		TableName string `gorm:"column:TABLE_NAME"`
-		DataBytes int64  `gorm:"column:DATA_LENGTH"`
-		IndexBytes int64 `gorm:"column:INDEX_LENGTH"`
-		RowsEst   int64  `gorm:"column:TABLE_ROWS"`
+		DataBytes int64  `gorm:"column:DATA_BYTES"`
 	}
 	var sizeInfos []TableSizeInfo
-	database.DB.Raw(`
-		SELECT TABLE_NAME, DATA_LENGTH, INDEX_LENGTH, TABLE_ROWS 
+	_ = database.DB.Raw(`
+		SELECT TABLE_NAME, (COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)) AS DATA_BYTES 
 		FROM information_schema.TABLES 
-		WHERE TABLE_SCHEMA = ?
+		WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE'
 	`, dbName).Scan(&sizeInfos)
 
 	sizeMap := make(map[string]int64)
 	for _, s := range sizeInfos {
-		sizeMap[s.TableName] = s.DataBytes + s.IndexBytes
+		sizeMap[s.TableName] = s.DataBytes
 	}
 
-	// 3. Count exact rows per table
+	// 4. Count exact rows per table
 	var tableStats []TableStat
 	var totalRows int64
 	var totalSizeBytes int64
 
 	for _, tbl := range tableNames {
 		var count int64
-		// Using Raw count for exact table count
-		_ = database.DB.Raw(fmt.Sprintf("SELECT COUNT(*) FROM `%s`", tbl)).Scan(&count)
-		
+		_ = database.DB.Table(tbl).Count(&count).Error
+
 		sz := sizeMap[tbl]
 		totalRows += count
 		totalSizeBytes += sz
@@ -102,7 +104,6 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		})
 	}
 
-	// Format human size
 	humanSize := formatBytes(totalSizeBytes)
 
 	res := DatabaseStatsResponse{
@@ -113,8 +114,11 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		DataSizeHuman: humanSize,
 		Tables:        tableStats,
 	}
-	res.Cluster.PrimaryHost = fmt.Sprintf("%s:%s", config.AppConfig.DBHost, config.AppConfig.DBPort)
-	res.Cluster.ReplicaHosts = config.AppConfig.DBReplicaHosts
+	
+	if config.AppConfig != nil {
+		res.Cluster.PrimaryHost = fmt.Sprintf("%s:%s", config.AppConfig.DBHost, config.AppConfig.DBPort)
+		res.Cluster.ReplicaHosts = config.AppConfig.DBReplicaHosts
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
@@ -124,9 +128,14 @@ func AdminGetDatabaseStats(c *gin.Context) {
 
 // AdminExportDatabaseDump creates and streams a complete or selective MySQL .sql dump
 func AdminExportDatabaseDump(c *gin.Context) {
-	dbName := config.AppConfig.DBName
+	var dbName string
+	_ = database.DB.Raw("SELECT DATABASE()").Scan(&dbName)
 	if dbName == "" {
-		dbName = "mock_mate"
+		if config.AppConfig != nil && config.AppConfig.DBName != "" {
+			dbName = config.AppConfig.DBName
+		} else {
+			dbName = "mock_mate"
+		}
 	}
 
 	selectedTablesParam := strings.TrimSpace(c.Query("tables"))
@@ -143,22 +152,12 @@ func AdminExportDatabaseDump(c *gin.Context) {
 
 	// If no specific tables selected, fetch all base tables
 	if len(targetTables) == 0 {
-		rows, err := database.DB.Raw("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'").Rows()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to list tables for export",
-				"error":   err.Error(),
-			})
-			return
-		}
-		for rows.Next() {
-			var name, tableType string
-			if err := rows.Scan(&name, &tableType); err == nil {
-				targetTables = append(targetTables, name)
-			}
-		}
-		_ = rows.Close()
+		_ = database.DB.Raw(`
+			SELECT TABLE_NAME 
+			FROM information_schema.TABLES 
+			WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE'
+			ORDER BY TABLE_NAME ASC
+		`, dbName).Pluck("TABLE_NAME", &targetTables)
 	}
 
 	var buf bytes.Buffer
@@ -169,7 +168,9 @@ func AdminExportDatabaseDump(c *gin.Context) {
 	buf.WriteString(fmt.Sprintf("-- MockMate Platform SQL Database Backup\n"))
 	buf.WriteString(fmt.Sprintf("-- Export Date (UTC): %s\n", now.Format("2006-01-02 15:04:05")))
 	buf.WriteString(fmt.Sprintf("-- Database: %s\n", dbName))
-	buf.WriteString(fmt.Sprintf("-- Host: %s:%s\n", config.AppConfig.DBHost, config.AppConfig.DBPort))
+	if config.AppConfig != nil {
+		buf.WriteString(fmt.Sprintf("-- Host: %s:%s\n", config.AppConfig.DBHost, config.AppConfig.DBPort))
+	}
 	buf.WriteString("-- ============================================================\n\n")
 	buf.WriteString("SET NAMES utf8mb4;\n")
 	buf.WriteString("SET FOREIGN_KEY_CHECKS = 0;\n")
@@ -178,7 +179,6 @@ func AdminExportDatabaseDump(c *gin.Context) {
 
 	// 2. Iterate through tables
 	for _, tableName := range targetTables {
-		// Verify table name format to prevent SQL injection
 		cleanTable := strings.ReplaceAll(tableName, "`", "")
 
 		// Table Structure
@@ -210,9 +210,8 @@ func AdminExportDatabaseDump(c *gin.Context) {
 
 		colCount := len(cols)
 		var insertValues []string
-		batchSize := 200
+		batchSize := 100
 
-		// Write columns in header
 		colHeaders := make([]string, colCount)
 		for i, col := range cols {
 			colHeaders[i] = fmt.Sprintf("`%s`", col)

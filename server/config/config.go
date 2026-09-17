@@ -49,13 +49,13 @@ func LoadConfig() *Config {
 	maxOpen, _ := strconv.Atoi(getEnv("DB_MAX_OPEN_CONNS", "100"))
 
 	AppConfig = &Config{
-		Port:              getEnv("PORT", "8080"),
+		Port:              getEnv("PORT", getEnv("SERVER_PORT", "8080")),
 		GinMode:           getEnv("GIN_MODE", "debug"),
 		DBHost:            getEnv("DB_HOST", "localhost"),
-		DBPort:            getEnv("DB_PORT", "3306"),
-		DBUser:            getEnv("DB_USER", "root"),
-		DBPassword:        getEnv("DB_PASSWORD", "jaison"),
-		DBName:            getEnv("DB_NAME", "mock_mate"),
+		DBPort:            getEnv("DB_PORT", getEnv("DB_EXTERNAL_PORT", "3306")),
+		DBUser:            getEnv("DB_USER", getEnv("MYSQL_USER", "root")),
+		DBPassword:        getEnv("DB_PASSWORD", getEnv("MYSQL_PASSWORD", getEnv("MYSQL_ROOT_PASSWORD", "jaison"))),
+		DBName:            getEnv("DB_NAME", getEnv("MYSQL_DATABASE", "mock_mate")),
 		DBReplicaHosts:    replicaHosts,
 		DBMaxIdleConns:    maxIdle,
 		DBMaxOpenConns:    maxOpen,
