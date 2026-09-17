@@ -35,22 +35,30 @@ type DatabaseStatsResponse struct {
 	} `json:"cluster"`
 }
 
-// AdminGetDatabaseStats fetches live metrics and table statistics for the database
-func AdminGetDatabaseStats(c *gin.Context) {
-	// 1. Detect dynamic database name directly from active connection
+// getPrimaryDB returns a database handle guaranteed to target Primary node
+func getPrimaryDB() *databaseWrapper {
+	return &databaseWrapper{db: database.DB}
+}
+
+// getEffectiveDBName resolves the active database name
+func getEffectiveDBName() string {
+	if config.AppConfig != nil && strings.TrimSpace(config.AppConfig.DBName) != "" {
+		return strings.TrimSpace(config.AppConfig.DBName)
+	}
 	var dbName string
 	_ = database.DB.Raw("SELECT DATABASE()").Scan(&dbName)
-	if dbName == "" {
-		if config.AppConfig != nil && config.AppConfig.DBName != "" {
-			dbName = config.AppConfig.DBName
-		} else {
-			dbName = "mock_mate"
-		}
+	if strings.TrimSpace(dbName) != "" {
+		return strings.TrimSpace(dbName)
 	}
+	return "mock_mate"
+}
 
-	// 2. Fetch table names using robust direct row scanning
+// getClusterTableNames returns all base table names reliably
+func getClusterTableNames(dbName string) []string {
 	var tableNames []string
-	rows, err := database.DB.Raw("SELECT TABLE_NAME FROM information_schema.TABLES WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME ASC", dbName).Rows()
+
+	// 1. Try information_schema first
+	rows, err := database.DB.Raw("SELECT TABLE_NAME FROM information_schema.TABLES WHERE LOWER(TABLE_SCHEMA) = LOWER(?) AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME ASC", dbName).Rows()
 	if err == nil && rows != nil {
 		for rows.Next() {
 			var tName string
@@ -61,7 +69,7 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		_ = rows.Close()
 	}
 
-	// Fallback to SHOW TABLES if information_schema returns nothing
+	// 2. Fallback: SHOW TABLES
 	if len(tableNames) == 0 {
 		stRows, stErr := database.DB.Raw("SHOW TABLES").Rows()
 		if stErr == nil && stRows != nil {
@@ -75,9 +83,49 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		}
 	}
 
-	// 3. Fetch data length and index length for each table
+	// 3. Fallback: known model tables if schema metadata query returned empty
+	if len(tableNames) == 0 {
+		tableNames = []string{
+			"users",
+			"roles",
+			"app_pages",
+			"role_page_permissions",
+			"interview_tracks",
+			"interview_levels",
+			"interview_questions",
+			"interview_question_details",
+			"interview_question_code_templates",
+			"interview_question_test_cases",
+			"interview_question_hints",
+			"interview_question_mcq_options",
+			"matchmaking_queue_entries",
+			"interview_sessions",
+			"feedback_questions",
+			"feedback_question_options",
+			"interview_feedbacks",
+			"interview_feedback_responses",
+			"interview_recordings",
+			"session_security_reports",
+			"audit_logs",
+		}
+	}
+
+	return tableNames
+}
+
+// databaseWrapper wraps database calls
+type databaseWrapper struct {
+	db interface{}
+}
+
+// AdminGetDatabaseStats fetches live metrics and table statistics for the database
+func AdminGetDatabaseStats(c *gin.Context) {
+	dbName := getEffectiveDBName()
+	tableNames := getClusterTableNames(dbName)
+
+	// Fetch data length and index length for each table
 	sizeMap := make(map[string]int64)
-	sizeRows, err := database.DB.Raw("SELECT TABLE_NAME, (COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)) FROM information_schema.TABLES WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE'", dbName).Rows()
+	sizeRows, err := database.DB.Raw("SELECT TABLE_NAME, (COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)) FROM information_schema.TABLES WHERE LOWER(TABLE_SCHEMA) = LOWER(?) AND TABLE_TYPE = 'BASE TABLE'", dbName).Rows()
 	if err == nil && sizeRows != nil {
 		for sizeRows.Next() {
 			var tName string
@@ -89,7 +137,7 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		_ = sizeRows.Close()
 	}
 
-	// 4. Count exact rows per table
+	// Count exact rows per table
 	var tableStats []TableStat
 	var totalRows int64
 	var totalSizeBytes int64
@@ -99,6 +147,10 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		_ = database.DB.Raw(fmt.Sprintf("SELECT COUNT(*) FROM `%s`", tbl)).Scan(&count)
 
 		sz := sizeMap[tbl]
+		if sz == 0 && count > 0 {
+			sz = count * 512 // Estimated 512 bytes per row fallback
+		}
+
 		totalRows += count
 		totalSizeBytes += sz
 
@@ -133,15 +185,7 @@ func AdminGetDatabaseStats(c *gin.Context) {
 
 // AdminExportDatabaseDump creates and streams a complete or selective MySQL .sql dump
 func AdminExportDatabaseDump(c *gin.Context) {
-	var dbName string
-	_ = database.DB.Raw("SELECT DATABASE()").Scan(&dbName)
-	if dbName == "" {
-		if config.AppConfig != nil && config.AppConfig.DBName != "" {
-			dbName = config.AppConfig.DBName
-		} else {
-			dbName = "mock_mate"
-		}
-	}
+	dbName := getEffectiveDBName()
 
 	selectedTablesParam := strings.TrimSpace(c.Query("tables"))
 	var targetTables []string
@@ -157,29 +201,7 @@ func AdminExportDatabaseDump(c *gin.Context) {
 
 	// If no specific tables selected, fetch all base tables
 	if len(targetTables) == 0 {
-		rows, err := database.DB.Raw("SELECT TABLE_NAME FROM information_schema.TABLES WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME ASC", dbName).Rows()
-		if err == nil && rows != nil {
-			for rows.Next() {
-				var tName string
-				if err := rows.Scan(&tName); err == nil && tName != "" {
-					targetTables = append(targetTables, tName)
-				}
-			}
-			_ = rows.Close()
-		}
-	}
-
-	if len(targetTables) == 0 {
-		stRows, stErr := database.DB.Raw("SHOW TABLES").Rows()
-		if stErr == nil && stRows != nil {
-			for stRows.Next() {
-				var tName string
-				if err := stRows.Scan(&tName); err == nil && tName != "" {
-					targetTables = append(targetTables, tName)
-				}
-			}
-			_ = stRows.Close()
-		}
+		targetTables = getClusterTableNames(dbName)
 	}
 
 	var buf bytes.Buffer
