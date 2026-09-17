@@ -457,8 +457,14 @@ export default function StudentInterviews() {
       {/* MATCHMAKING RADAR MODAL OVERLAY */}
       {/* ============================================================ */}
       {matchStatus !== 'idle' && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="panel-card w-full max-w-md p-8 bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] rounded-[var(--radius-lg)] text-center space-y-6 relative animate-fadeIn">
+        <div 
+          onClick={() => { if (matchStatus !== 'matched') handleCancelMatchmaking(); }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="panel-card w-full max-w-md p-8 bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] rounded-[var(--radius-lg)] text-center space-y-6 relative animate-fadeIn"
+          >
             {/* Close / Cancel Button */}
             {matchStatus !== 'matched' && (
               <button

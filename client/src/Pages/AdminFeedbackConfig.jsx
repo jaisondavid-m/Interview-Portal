@@ -674,8 +674,14 @@ export default function AdminFeedbackConfig() {
       {/* ADD / EDIT QUESTION MODAL */}
       {/* ============================================================ */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="panel-card w-full max-w-xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-scaleUp max-h-[90vh] flex flex-col">
+        <div 
+          onClick={() => setShowModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="panel-card w-full max-w-xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-scaleUp max-h-[90vh] flex flex-col"
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -996,8 +1002,14 @@ export default function AdminFeedbackConfig() {
       {/* DELETE CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="panel-card w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 space-y-4 shadow-2xl animate-scaleUp text-center">
+        <div 
+          onClick={() => setShowDeleteModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="panel-card w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 space-y-4 shadow-2xl animate-scaleUp text-center"
+          >
             <div className="w-12 h-12 rounded-full bg-red-500/10 text-[var(--red)] flex items-center justify-center mx-auto border border-red-500/20">
               <Trash2 className="w-6 h-6" />
             </div>

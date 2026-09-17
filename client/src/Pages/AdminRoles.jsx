@@ -893,7 +893,10 @@ export default function AdminRoles() {
 
       {/* CREATE PAGE MODAL */}
       {showCreatePageModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+        <div 
+          onClick={() => setShowCreatePageModal(false)}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+        >
           <div
             className="w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
@@ -1013,7 +1016,10 @@ export default function AdminRoles() {
 
       {/* EDIT PAGE MODAL */}
       {showEditPageModal && pageToEdit && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+        <div 
+          onClick={() => setShowEditPageModal(false)}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+        >
           <div
             className="w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
@@ -1137,7 +1143,10 @@ export default function AdminRoles() {
 
       {/* CREATE ROLE MODAL */}
       {showCreateRoleModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+        <div 
+          onClick={() => setShowCreateRoleModal(false)}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+        >
           <div
             className="w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
@@ -1240,7 +1249,10 @@ export default function AdminRoles() {
 
       {/* EDIT ROLE MODAL */}
       {showEditRoleModal && roleToEdit && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+        <div 
+          onClick={() => setShowEditRoleModal(false)}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+        >
           <div
             className="w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}

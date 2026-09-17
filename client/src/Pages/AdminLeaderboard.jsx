@@ -796,8 +796,14 @@ export default function AdminLeaderboard() {
 
       {/* Modal: Comprehensive Student Scorecard & Performance Breakdown */}
       {selectedStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="panel-card w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-scaleUp flex flex-col max-h-[85vh]">
+        <div 
+          onClick={() => setSelectedStudent(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="panel-card w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-scaleUp flex flex-col max-h-[85vh]"
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">

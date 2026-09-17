@@ -673,8 +673,14 @@ export default function DeveloperAuditLogs() {
       {/* 5. SLIDE-OVER INSPECTION DRAWER (REQUEST & RESPONSE PAYLOADS) */}
       {/* ============================================================ */}
       {drawerOpen && selectedLog && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-2xl bg-[var(--bg-card)] border-l border-[var(--border)] h-full flex flex-col shadow-2xl overflow-hidden">
+        <div 
+          onClick={() => setDrawerOpen(false)}
+          className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl bg-[var(--bg-card)] border-l border-[var(--border)] h-full flex flex-col shadow-2xl overflow-hidden"
+          >
             {/* Drawer Header */}
             <div className="p-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -850,8 +856,14 @@ export default function DeveloperAuditLogs() {
       {/* 6. PURGE LOGS MODAL */}
       {/* ============================================================ */}
       {showClearModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 font-sans">
+        <div 
+          onClick={() => setShowClearModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 font-sans"
+          >
             <div className="flex items-center gap-3 text-rose-500">
               <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
                 <Trash2 className="w-5 h-5" />

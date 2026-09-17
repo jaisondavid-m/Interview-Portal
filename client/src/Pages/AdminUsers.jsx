@@ -910,8 +910,14 @@ export default function AdminUsers() {
       {/* BULK UPLOAD MODAL */}
       {/* ============================================================ */}
       {showBulkModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-4xl shadow-[var(--shadow-lg)] animate-scaleUp max-h-[92vh] flex flex-col space-y-4">
+        <div 
+          onClick={() => setShowBulkModal(false)}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-4xl shadow-[var(--shadow-lg)] animate-scaleUp max-h-[92vh] flex flex-col space-y-4"
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-3">
@@ -1276,8 +1282,14 @@ export default function AdminUsers() {
       {/* BULK DELETE CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showBulkDeleteModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4">
+        <div 
+          onClick={() => setShowBulkDeleteModal(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[var(--red-bg)] text-[var(--red)] flex items-center justify-center shrink-0">
                 <Trash2 className="w-5 h-5" />
@@ -1331,8 +1343,14 @@ export default function AdminUsers() {
       {/* CREATE USER MODAL */}
       {/* ============================================================ */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5">
+        <div 
+          onClick={() => setShowCreateModal(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
               <div>
                 <span className="badge-kicker">Admin Action</span>
@@ -1473,8 +1491,14 @@ export default function AdminUsers() {
       {/* EDIT USER MODAL */}
       {/* ============================================================ */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5">
+        <div 
+          onClick={() => setShowEditModal(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
               <div>
                 <span className="badge-kicker">Edit Account</span>
@@ -1610,8 +1634,14 @@ export default function AdminUsers() {
       {/* DELETE CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-slide-up space-y-4">
+        <div 
+          onClick={() => setShowDeleteModal(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-slide-up space-y-4"
+          >
             <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
               Confirm Account Deletion
             </h3>
@@ -1641,8 +1671,17 @@ export default function AdminUsers() {
       {/* SINGLE USER FORCE LOGOUT CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showForceLogoutModal && userToLogout && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4">
+        <div 
+          onClick={() => {
+            setShowForceLogoutModal(false);
+            setUserToLogout(null);
+          }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <LogOut className="w-5 h-5" />
@@ -1699,8 +1738,14 @@ export default function AdminUsers() {
       {/* BULK FORCE LOGOUT CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showBulkForceLogoutModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4">
+        <div 
+          onClick={() => setShowBulkForceLogoutModal(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <LogOut className="w-5 h-5" />

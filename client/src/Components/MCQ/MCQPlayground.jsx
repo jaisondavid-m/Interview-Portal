@@ -716,8 +716,14 @@ export default function MCQPlayground({
       {/* CONFIRMATION MODAL ON SUBMIT */}
       {/* ============================================================ */}
       {showSubmitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 space-y-4 animate-scaleUp">
+        <div 
+          onClick={() => setShowSubmitModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 space-y-4 animate-scaleUp"
+          >
             <div className="flex items-center gap-2.5 border-b border-[var(--border)] pb-3">
               <Award className="w-5 h-5 text-emerald-500" />
               <h3 className="text-base font-bold text-[var(--text-primary)]">

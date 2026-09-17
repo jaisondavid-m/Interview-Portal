@@ -1381,8 +1381,14 @@ export default function WhiteboardCanvas({
 
       {/* COMPONENT CATALOG MODAL */}
       {showCatalogModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+        <div 
+          onClick={() => setShowCatalogModal(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+          >
             {/* Modal Header */}
             <div className="p-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1461,8 +1467,14 @@ export default function WhiteboardCanvas({
 
       {/* EDIT COMPONENT MODAL / PROPERTIES */}
       {editingNode && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-md w-full p-5 space-y-4">
+        <div 
+          onClick={() => setEditingNode(null)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-md w-full p-5 space-y-4"
+          >
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-blue-500" />

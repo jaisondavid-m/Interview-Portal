@@ -1101,8 +1101,14 @@ export default function InterviewRoom() {
 
       {/* ROLE SWITCH PROMPT MODAL (MUTUAL CONSENT) */}
       {isSwitchRequestedByPeer && switchCount === 0 && !isCompleted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="panel-card w-full max-w-md bg-[var(--bg-card)] border-2 border-[var(--border-accent)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden p-6 space-y-4 animate-scaleUp">
+        <div 
+          onClick={handleDeclineSwitch}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="panel-card w-full max-w-md bg-[var(--bg-card)] border-2 border-[var(--border-accent)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden p-6 space-y-4 animate-scaleUp"
+          >
             <div className="flex items-start gap-3.5">
               <div className="w-10 h-10 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shrink-0">
                 <Repeat className="w-5 h-5 animate-spin" />
@@ -1147,8 +1153,14 @@ export default function InterviewRoom() {
 
       {/* END INTERVIEW PROMPT MODAL (MUTUAL CONSENT) */}
       {isEndRequestedByPeer && !isCompleted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="panel-card w-full max-w-md bg-[var(--bg-card)] border-2 border-red-500/50 rounded-[var(--radius-lg)] shadow-2xl overflow-hidden p-6 space-y-4 animate-scaleUp">
+        <div 
+          onClick={handleDeclineEnd}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="panel-card w-full max-w-md bg-[var(--bg-card)] border-2 border-red-500/50 rounded-[var(--radius-lg)] shadow-2xl overflow-hidden p-6 space-y-4 animate-scaleUp"
+          >
             <div className="flex items-start gap-3.5">
               <div className="w-10 h-10 rounded-full bg-[var(--red)] text-white flex items-center justify-center shrink-0">
                 <LogOut className="w-5 h-5" />

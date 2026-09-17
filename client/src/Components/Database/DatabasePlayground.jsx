@@ -312,8 +312,14 @@ export default function DatabasePlayground({
 
       {/* REQUIREMENTS & SCENARIO DRAWER (Slide-over) */}
       {showGuideDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs animate-fadeIn">
-          <div className="w-full max-w-lg bg-[var(--bg-card)] border-l border-[var(--border)] h-full p-6 space-y-5 overflow-y-auto shadow-2xl animate-slideLeft">
+        <div 
+          onClick={() => setShowGuideDrawer(false)}
+          className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-[var(--bg-card)] border-l border-[var(--border)] h-full p-6 space-y-5 overflow-y-auto shadow-2xl animate-slideLeft"
+          >
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
               <div className="flex items-center gap-2">
                 <Database className="w-5 h-5 text-blue-500" />

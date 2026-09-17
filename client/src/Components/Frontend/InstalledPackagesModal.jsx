@@ -198,8 +198,14 @@ export default function InstalledPackagesModal({ isOpen, onClose }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+    <div 
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+      >
         {/* Modal Header */}
         <div className="p-4 sm:p-5 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">

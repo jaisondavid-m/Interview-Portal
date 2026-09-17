@@ -94,8 +94,14 @@ export default function CredentialAuditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-[var(--radius-lg)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] overflow-hidden flex flex-col">
+    <div 
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-[var(--radius-lg)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-[var(--shadow-xl)] overflow-hidden flex flex-col"
+      >
         {/* Header */}
         <div className="p-5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--bg-raised)]">
           <div className="flex items-center gap-3">
