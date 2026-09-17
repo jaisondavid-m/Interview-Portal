@@ -463,7 +463,7 @@ export default function AdminInterviewConfig() {
               {questionId && currentQuestion && (
                 <>
                   <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
-                  <span className="font-bold text-[var(--accent)] truncate max-w-[250px]">
+                  <span className="font-bold text-[var(--accent)] truncate max-w-[150px] sm:max-w-[250px]">
                     {currentQuestion.title}
                   </span>
                 </>
@@ -473,14 +473,14 @@ export default function AdminInterviewConfig() {
 
           {!questionId && (
             <>
-              <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
+              <h1 className="text-[18px] sm:text-[22px] md:text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
                 {!trackId
                   ? 'Interview Domains & Tracks'
                   : !levelId
                     ? `${currentTrack?.title || 'Loading...'} — Levels`
                     : formatFullLevelTitle(currentLevel)}
               </h1>
-              <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+              <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
                 {!trackId
                   ? 'Configure campus interview domains, progression tiers, and mode-specific assessments.'
                   : !levelId

@@ -254,11 +254,11 @@ export default function DeveloperAuditLogs() {
               <Terminal className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)] tracking-tight">
                   Developer Audit Logs & API Telemetry
                 </h1>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] sm:text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1 shrink-0">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   Live Stream
                 </span>
@@ -462,8 +462,8 @@ export default function DeveloperAuditLogs() {
 
         {/* Row 2: Method Filter Chips */}
         <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-[var(--border)]">
-          <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-mono">
-            <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase mr-1">Method:</span>
+          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 text-xs font-mono max-w-full">
+            <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase mr-1 shrink-0">Method:</span>
             {HTTP_METHODS.map((method) => {
               const isSelected = selectedMethod === method;
               return (
@@ -499,8 +499,8 @@ export default function DeveloperAuditLogs() {
       {/* 4. AUDIT LOGS INTERACTIVE TABLE */}
       {/* ============================================================ */}
       <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse text-xs min-w-[760px]">
             <thead>
               <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
                 <th className="py-3 px-4 font-bold">Timestamp</th>
@@ -850,8 +850,8 @@ export default function DeveloperAuditLogs() {
       {/* 6. PURGE LOGS MODAL */}
       {/* ============================================================ */}
       {showClearModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 space-y-4 font-sans">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 font-sans">
             <div className="flex items-center gap-3 text-rose-500">
               <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
                 <Trash2 className="w-5 h-5" />

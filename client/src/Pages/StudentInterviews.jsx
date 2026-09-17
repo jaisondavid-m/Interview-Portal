@@ -193,24 +193,24 @@ export default function StudentInterviews() {
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
-      <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
             Campus Peer Interviews
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             Select an interview domain, choose your target level, and practice live mock sessions with peer students.
           </p>
         </div>
 
         {/* Live Active Stats Banner */}
-        <div className="flex items-center gap-3 bg-[var(--bg-raised)] px-4 py-2.5 rounded-[var(--radius-md)] border border-[var(--border)] self-start md:self-auto">
-          <div className="w-8 h-8 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center shrink-0">
-            <Users className="w-4 h-4" />
+        <div className="flex items-center gap-2.5 bg-[var(--bg-raised)] px-3.5 py-2 rounded-[var(--radius-md)] border border-[var(--border)] self-start sm:self-auto">
+          <div className="w-7 h-7 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center shrink-0">
+            <Users className="w-3.5 h-3.5" />
           </div>
           <div>
-            <p className="text-[11px] font-mono uppercase text-[var(--text-muted)]">Active Peer Pool</p>
-            <p className="text-[13px] font-bold text-[var(--text-primary)]">Open for Matchmaking</p>
+            <p className="text-[10px] font-mono uppercase text-[var(--text-muted)]">Active Peer Pool</p>
+            <p className="text-[12px] font-bold text-[var(--text-primary)]">Open for Matchmaking</p>
           </div>
         </div>
       </div>

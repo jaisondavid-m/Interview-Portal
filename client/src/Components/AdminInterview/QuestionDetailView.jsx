@@ -69,45 +69,45 @@ export default function QuestionDetailView({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       {/* Question Overview Header Card */}
-      <div className="panel-card p-6 bg-[var(--bg-raised)] space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className={`inline-flex items-center gap-1.5 text-[12px] font-bold px-3 py-1 rounded-full border ${modeMeta.bg} ${modeMeta.color} ${modeMeta.border}`}>
+      <div className="panel-card p-4 sm:p-6 bg-[var(--bg-raised)] space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 text-[11px] sm:text-[12px] font-bold px-2.5 sm:px-3 py-1 rounded-full border ${modeMeta.bg} ${modeMeta.color} ${modeMeta.border}`}>
               <ModeIcon className="w-3.5 h-3.5" />
               <span>{modeMeta.label} Assessment</span>
             </span>
-            <span className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded ${
+            <span className={`text-[10px] sm:text-[11px] font-mono font-bold px-2 sm:px-2.5 py-1 rounded ${
               currentQuestion.difficulty === 'Easy' ? 'bg-[var(--green-bg)] text-[var(--green)]' :
               currentQuestion.difficulty === 'Hard' ? 'bg-[var(--red-bg)] text-[var(--red)]' :
               'bg-[var(--amber-bg)] text-[var(--amber)]'
             }`}>
               {currentQuestion.difficulty} Difficulty
             </span>
-            <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-2.5 py-1 rounded border border-[var(--border)]">
+            <span className="text-[10px] sm:text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-2 sm:px-2.5 py-1 rounded border border-[var(--border)]">
               Level {currentLevel?.level_number}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
             <button
               onClick={onBack}
-              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 flex-1 sm:flex-initial justify-center"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to Questions</span>
             </button>
             <button
               onClick={onEdit}
-              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 flex-1 sm:flex-initial justify-center"
             >
               <Edit2 className="w-3.5 h-3.5" />
               <span>Edit Question</span>
             </button>
             <button
               onClick={onDelete}
-              className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
+              className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5 flex-1 sm:flex-initial justify-center"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete</span>
@@ -116,7 +116,7 @@ export default function QuestionDetailView({
         </div>
 
         <div>
-          <h2 className="text-[20px] font-bold text-[var(--text-primary)]">
+          <h2 className="text-[17px] sm:text-[20px] font-bold text-[var(--text-primary)] leading-snug">
             {currentQuestion.title}
           </h2>
         </div>

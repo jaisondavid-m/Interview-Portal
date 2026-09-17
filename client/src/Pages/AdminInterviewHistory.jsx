@@ -90,19 +90,19 @@ export default function AdminInterviewHistory() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
             Interview History & Pairing Records
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             View all peer-to-peer interview sessions, student participant identities, durations, and role switch history. Click any row to view full details.
           </p>
         </div>
 
         <button
           onClick={fetchSessions}
-          className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 self-start md:self-auto cursor-pointer"
+          className="btn btn-secondary text-xs py-1.5 sm:py-2 px-3 sm:px-3.5 flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
         >
           <Clock className="w-3.5 h-3.5" />
           <span>Refresh History</span>
@@ -209,8 +209,8 @@ export default function AdminInterviewHistory() {
         </div>
       ) : (
         <div className="panel-card overflow-hidden border border-[var(--border)]">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[680px]">
               <thead>
                 <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
                   <th className="py-3 px-4">Room #</th>

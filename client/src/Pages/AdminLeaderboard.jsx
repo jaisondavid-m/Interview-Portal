@@ -146,45 +146,42 @@ export default function AdminLeaderboard() {
   return (
     <div className="space-y-6 animate-fadeIn pb-12 max-w-7xl mx-auto">
       {/* Header Banner */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
         <div>
-          <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
             Leaderboard
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             {activeTab === 'total_points'
               ? 'Ranked student leaderboard by cumulative total points gained across all mock interviews.'
               : 'Ranked student leaderboard by average points scored per completed mock interview.'}
           </p>
         </div>
 
-        {/* 2 Dedicated Leaderboard Tabs: Total Points Gained vs Points / Interview */}
-        <div className="inline-flex items-center p-1 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] shadow-xs self-start lg:self-auto">
+        {/* 2 Dedicated Leaderboard Tabs */}
+        <div className="inline-flex items-center p-1 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] shadow-xs self-start sm:self-auto w-full sm:w-auto">
           <button
             type="button"
             onClick={() => handleTabChange('total_points')}
-            className={`px-4 py-2 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'total_points'
-                ? 'bg-[var(--accent)] text-white shadow-sm ring-1 ring-[var(--accent)]/40'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                ? 'bg-[var(--accent)] text-white shadow-xs'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
-            title="Leaderboard ranked by overall total points gained"
           >
-            <Award className="w-4 h-4" />
+            <Trophy className="w-3.5 h-3.5" />
             <span>Total Points Gained</span>
           </button>
-
           <button
             type="button"
             onClick={() => handleTabChange('points_per_interview')}
-            className={`px-4 py-2 rounded-[var(--radius-sm)] text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'points_per_interview'
-                ? 'bg-[var(--accent)] text-white shadow-sm ring-1 ring-[var(--accent)]/40'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                ? 'bg-[var(--accent)] text-white shadow-xs'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
-            title="Leaderboard ranked by points per interview session"
           >
-            <Zap className="w-4 h-4 text-amber-300" />
+            <Zap className="w-3.5 h-3.5" />
             <span>Points / Interview</span>
           </button>
         </div>
@@ -512,9 +509,8 @@ export default function AdminLeaderboard() {
             )}
           </div>
         ) : activeTab === 'total_points' ? (
-          /* TAB 1: TOTAL POINTS GAINED LEADERBOARD TABLE */
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse min-w-[640px]">
               <thead>
                 <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[var(--text-muted)] font-mono text-[11px] uppercase tracking-wider">
                   <th className="py-3 px-4 w-14 text-center">Rank</th>
@@ -654,9 +650,8 @@ export default function AdminLeaderboard() {
             </table>
           </div>
         ) : (
-          /* TAB 2: POINTS / INTERVIEW LEADERBOARD TABLE */
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse min-w-[640px]">
               <thead>
                 <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[var(--text-muted)] font-mono text-[11px] uppercase tracking-wider">
                   <th className="py-3 px-4 w-14 text-center">Rank</th>

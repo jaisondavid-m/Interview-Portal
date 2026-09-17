@@ -506,23 +506,23 @@ export default function AdminRoles() {
       )}
 
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[var(--border)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
         <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)]">
-              <ShieldCheck className="w-5 h-5" />
+          <div className="flex items-center gap-2 mb-1">
+            <div className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)]">
+              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h1 className="text-2xl font-bold font-heading text-[var(--text-primary)]">
+            <h1 className="text-[20px] sm:text-2xl font-bold font-heading text-[var(--text-primary)]">
               Role Management
             </h1>
           </div>
-          <p className="text-[13px] text-[var(--text-secondary)]">
+          <p className="text-xs sm:text-[13px] text-[var(--text-secondary)]">
             Configure roles, add or edit platform pages, and toggle access permissions directly per card.
           </p>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap w-full sm:w-auto">
           <button
             onClick={() => {
               setPageForm({ name: '', path: '', key: '', icon: 'FileCode2', category: 'General', description: '' });
@@ -893,9 +893,9 @@ export default function AdminRoles() {
 
       {/* CREATE PAGE MODAL */}
       {showCreatePageModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
           <div
-            className="w-full max-w-lg rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-2xl space-y-5 animate-scaleUp"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
@@ -1013,9 +1013,9 @@ export default function AdminRoles() {
 
       {/* EDIT PAGE MODAL */}
       {showEditPageModal && pageToEdit && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
           <div
-            className="w-full max-w-lg rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-2xl space-y-5 animate-scaleUp"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
@@ -1137,9 +1137,9 @@ export default function AdminRoles() {
 
       {/* CREATE ROLE MODAL */}
       {showCreateRoleModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
           <div
-            className="w-full max-w-lg rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-2xl space-y-5 animate-scaleUp"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
@@ -1240,9 +1240,9 @@ export default function AdminRoles() {
 
       {/* EDIT ROLE MODAL */}
       {showEditRoleModal && roleToEdit && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
           <div
-            className="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-2xl space-y-5 animate-scaleUp"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">

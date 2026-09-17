@@ -250,27 +250,27 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fadeIn pb-12">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[var(--border)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-[20px] sm:text-[24px] md:text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
               Admin Analytics Dashboard
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+            <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0">
               Live Overview
             </span>
           </div>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             Overall student feedback evaluation score averages, domain competencies, and mock interview performance.
           </p>
         </div>
 
         {/* Header Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <button
             onClick={() => fetchAnalytics(true)}
             disabled={loading || refreshing}
-            className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-mono shadow-xs cursor-pointer"
+            className="btn btn-secondary text-xs py-1.5 sm:py-2 px-3 sm:px-3.5 flex items-center gap-1.5 font-mono shadow-xs cursor-pointer"
             title="Refresh analytics data"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-[var(--accent)]' : ''}`} />
@@ -279,7 +279,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={() => navigate('/admin/leaderboard')}
-            className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold shadow-xs cursor-pointer"
+            className="btn btn-secondary text-xs py-1.5 sm:py-2 px-3 sm:px-3.5 flex items-center gap-1.5 font-bold shadow-xs cursor-pointer"
           >
             <Trophy className="w-3.5 h-3.5 text-amber-500" />
             <span>Leaderboard</span>
@@ -287,7 +287,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={() => navigate('/admin/users')}
-            className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
+            className="btn btn-primary text-xs py-1.5 sm:py-2 px-3.5 sm:px-4 flex items-center gap-1.5 font-bold shadow-sm cursor-pointer"
           >
             <Users className="w-4 h-4" />
             <span>Manage Users</span>
@@ -441,25 +441,25 @@ export default function AdminDashboard() {
       )}
 
       {/* 2. Feedback Questions & Rubric Performance (X-Y Bar Chart with Dept & Domain Filter) */}
-      <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-6 shadow-xs">
-        {/* Section Header & Filters (Single Row) */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0 mt-0.5">
-              <BarChart3 className="w-5 h-5" />
+      <div className="panel-card p-4 sm:p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-5 shadow-xs overflow-hidden">
+        {/* Section Header & Filters */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+          <div className="flex items-start gap-2.5">
+            <div className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0 mt-0.5">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 className="text-[18px] font-bold text-[var(--text-primary)] tracking-tight leading-tight">
+              <h2 className="text-[16px] sm:text-[18px] font-bold text-[var(--text-primary)] tracking-tight leading-tight">
                 Feedback Questions & Rubric Performance
               </h2>
-              <p className="text-[13px] text-[var(--text-secondary)] mt-1 leading-normal">
+              <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5 leading-normal">
                 Overall score percentage and mark averages across all students. Filter dynamically by department and domain.
               </p>
             </div>
           </div>
 
-          {/* Department & Domain Searchable Selectors in Single Row */}
-          <div className="flex items-center gap-2.5 flex-nowrap shrink-0">
+          {/* Department & Domain Searchable Selectors */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full xl:w-auto">
             <SearchSelect
               icon={GraduationCap}
               options={deptOptions}
@@ -467,7 +467,7 @@ export default function AdminDashboard() {
               onChange={setSelectedDept}
               placeholder="Search department..."
               allLabel="All Departments"
-              className="w-48 sm:w-52"
+              className="w-full sm:w-48 md:w-52"
             />
 
             <SearchSelect
@@ -477,7 +477,7 @@ export default function AdminDashboard() {
               onChange={setSelectedDomain}
               placeholder="Search track/domain..."
               allLabel="All Tracks / Domains"
-              className="w-56 sm:w-60"
+              className="w-full sm:w-56 md:w-60"
             />
 
             {/* Reset Filters Button */}
@@ -548,95 +548,97 @@ export default function AdminDashboard() {
 
           return (
             <div className="space-y-6">
-              {/* Interactive X-Y Bar Chart */}
-              <div className="relative pt-6 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)]">
-                {/* Y-Axis Grid Lines & Background */}
-                <div className="relative h-64 flex items-end">
-                  {/* Horizontal grid guide lines */}
-                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8">
-                    {[100, 75, 50, 25, 0].map((pct) => (
-                      <div key={pct} className="flex items-center gap-2 w-full text-[10px] font-mono text-[var(--text-muted)]">
-                        <span className="w-8 text-right shrink-0">{pct}%</span>
-                        <div className="h-[1px] flex-1 bg-[var(--border)]/60 border-t border-dashed border-[var(--border)]" />
-                      </div>
-                    ))}
-                  </div>
+              {/* Interactive X-Y Bar Chart with horizontal scroll wrapper on mobile */}
+              <div className="relative pt-6 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)] overflow-x-auto custom-scrollbar">
+                <div className="min-w-[480px] sm:min-w-0">
+                  {/* Y-Axis Grid Lines & Background */}
+                  <div className="relative h-64 flex items-end">
+                    {/* Horizontal grid guide lines */}
+                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8">
+                      {[100, 75, 50, 25, 0].map((pct) => (
+                        <div key={pct} className="flex items-center gap-2 w-full text-[10px] font-mono text-[var(--text-muted)]">
+                          <span className="w-8 text-right shrink-0">{pct}%</span>
+                          <div className="h-[1px] flex-1 bg-[var(--border)]/60 border-t border-dashed border-[var(--border)]" />
+                        </div>
+                      ))}
+                    </div>
 
-                  {/* X-Y Bars Container */}
-                  <div className="relative z-10 w-full pl-10 pr-2 h-full flex items-end justify-around gap-2 sm:gap-4 pb-8">
-                    {feedbackList.map((item, idx) => {
-                      const pct = Math.max(0, Math.min(100, item.score_percentage || item.avg_score_pct || 0));
-                      const avgScore = item.average_score ?? item.avg_awarded_marks ?? 0;
-                      const hasResponses = (item.responses_count || 0) > 0;
+                    {/* X-Y Bars Container */}
+                    <div className="relative z-10 w-full pl-10 pr-2 h-full flex items-end justify-around gap-2 sm:gap-4 pb-8">
+                      {feedbackList.map((item, idx) => {
+                        const pct = Math.max(0, Math.min(100, item.score_percentage || item.avg_score_pct || 0));
+                        const avgScore = item.average_score ?? item.avg_awarded_marks ?? 0;
+                        const hasResponses = (item.responses_count || 0) > 0;
 
-                      // Purple brand color bar palette
-                      const barGradient = hasResponses
-                        ? 'from-[#6e56cf] to-[#9065f0]'
-                        : 'from-slate-400/30 to-slate-500/30';
-                      const barTextColor = hasResponses
-                        ? 'text-purple-600 dark:text-purple-400'
-                        : 'text-[var(--text-muted)]';
-                      const barBorder = hasResponses
-                        ? 'border-purple-500/40'
-                        : 'border-[var(--border)]';
+                        // Purple brand color bar palette
+                        const barGradient = hasResponses
+                          ? 'from-[#6e56cf] to-[#9065f0]'
+                          : 'from-slate-400/30 to-slate-500/30';
+                        const barTextColor = hasResponses
+                          ? 'text-purple-600 dark:text-purple-400'
+                          : 'text-[var(--text-muted)]';
+                        const barBorder = hasResponses
+                          ? 'border-purple-500/40'
+                          : 'border-[var(--border)]';
 
-                      return (
-                        <div
-                          key={item.question_id || idx}
-                          className="group relative flex-1 h-full flex flex-col justify-end items-center max-w-[90px]"
-                        >
-                          {/* Hover Tooltip Popover */}
-                          <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 transform -translate-y-1 group-hover:translate-y-0 w-48 text-center">
-                            <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-xl text-left space-y-1 text-xs">
-                              <div className="font-bold text-[var(--text-primary)] flex items-center justify-between">
-                                <span className="truncate">{item.short_label || `Question ${idx + 1}`}</span>
-                                <span className={`font-mono ${barTextColor} font-extrabold`}>{pct.toFixed(0)}%</span>
-                              </div>
-                              <p className="text-[10px] text-[var(--text-secondary)] line-clamp-2 leading-tight">
-                                {item.question_text}
-                              </p>
-                              <div className="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)]">
-                                <span>
-                                  Avg: <strong className="text-[var(--text-primary)]">{avgScore.toFixed(1)} / {item.max_marks}</strong>
-                                </span>
-                                <span>{item.responses_count} {item.responses_count === 1 ? 'eval' : 'evals'}</span>
+                        return (
+                          <div
+                            key={item.question_id || idx}
+                            className="group relative flex-1 h-full flex flex-col justify-end items-center max-w-[90px]"
+                          >
+                            {/* Hover Tooltip Popover */}
+                            <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 transform -translate-y-1 group-hover:translate-y-0 w-48 text-center">
+                              <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-xl text-left space-y-1 text-xs">
+                                <div className="font-bold text-[var(--text-primary)] flex items-center justify-between">
+                                  <span className="truncate">{item.short_label || `Question ${idx + 1}`}</span>
+                                  <span className={`font-mono ${barTextColor} font-extrabold`}>{pct.toFixed(0)}%</span>
+                                </div>
+                                <p className="text-[10px] text-[var(--text-secondary)] line-clamp-2 leading-tight">
+                                  {item.question_text}
+                                </p>
+                                <div className="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)]">
+                                  <span>
+                                    Avg: <strong className="text-[var(--text-primary)]">{avgScore.toFixed(1)} / {item.max_marks}</strong>
+                                  </span>
+                                  <span>{item.responses_count} {item.responses_count === 1 ? 'eval' : 'evals'}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Value Label above Bar */}
-                          <div className="mb-1 text-center font-mono">
-                            <span className={`text-[11px] font-bold ${barTextColor} transition-all group-hover:scale-110 block`}>
-                              {hasResponses ? `${pct.toFixed(0)}%` : '0%'}
-                            </span>
-                            <span className="text-[9px] text-[var(--text-muted)] hidden sm:block">
-                              {hasResponses ? `${avgScore.toFixed(1)} pts` : '—'}
-                            </span>
-                          </div>
+                            {/* Value Label above Bar */}
+                            <div className="mb-1 text-center font-mono">
+                              <span className={`text-[11px] font-bold ${barTextColor} transition-all group-hover:scale-110 block`}>
+                                {hasResponses ? `${pct.toFixed(0)}%` : '0%'}
+                              </span>
+                              <span className="text-[9px] text-[var(--text-muted)] hidden sm:block">
+                                {hasResponses ? `${avgScore.toFixed(1)} pts` : '—'}
+                              </span>
+                            </div>
 
-                          {/* Bar Pillar */}
-                          <div className="w-full bg-[var(--bg-card)] rounded-t-[var(--radius-xs)] overflow-hidden border-t border-x border-[var(--border)] flex flex-col justify-end h-full max-h-[160px]">
-                            <div
-                              style={{ height: hasResponses ? `${Math.max(pct, 6)}%` : '4%' }}
-                              className={`w-full bg-gradient-to-t ${barGradient} border-t ${barBorder} rounded-t-[var(--radius-xs)] shadow-sm transition-all duration-500 ease-out group-hover:brightness-110 group-hover:shadow-[0_0_12px_rgba(110,86,207,0.35)]`}
-                            />
-                          </div>
+                            {/* Bar Pillar */}
+                            <div className="w-full bg-[var(--bg-card)] rounded-t-[var(--radius-xs)] overflow-hidden border-t border-x border-[var(--border)] flex flex-col justify-end h-full max-h-[160px]">
+                              <div
+                                style={{ height: hasResponses ? `${Math.max(pct, 6)}%` : '4%' }}
+                                className={`w-full bg-gradient-to-t ${barGradient} border-t ${barBorder} rounded-t-[var(--radius-xs)] shadow-sm transition-all duration-500 ease-out group-hover:brightness-110 group-hover:shadow-[0_0_12px_rgba(110,86,207,0.35)]`}
+                              />
+                            </div>
 
-                          {/* X-Axis Label */}
-                          <div className="w-full mt-2 text-center">
-                            <span
-                              className="text-[11px] font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-ui block truncate max-w-full px-0.5 transition-colors cursor-default"
-                              title={`${item.short_label || item.question_text} (${item.question_text})`}
-                            >
-                              {item.short_label || item.question_text}
-                            </span>
-                            <span className="text-[9px] font-mono text-[var(--text-muted)] block truncate uppercase">
-                              {item.question_type}
-                            </span>
+                            {/* X-Axis Label */}
+                            <div className="w-full mt-2 text-center">
+                              <span
+                                className="text-[11px] font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-ui block truncate max-w-full px-0.5 transition-colors cursor-default"
+                                title={`${item.short_label || item.question_text} (${item.question_text})`}
+                              >
+                                {item.short_label || item.question_text}
+                              </span>
+                              <span className="text-[9px] font-mono text-[var(--text-muted)] block truncate uppercase">
+                                {item.question_type}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 

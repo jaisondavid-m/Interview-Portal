@@ -363,18 +363,18 @@ export default function AdminFeedbackConfig() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header Banner */}
-      <div className="pb-5 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-[18px] sm:text-[22px] md:text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
             Peer Feedback Questions & Mark Weightage
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             Set up evaluation questions, mark weightage per option, and review mutual scorecards calculated for students.
           </p>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <button
             onClick={() => navigate('/admin/leaderboard')}
             className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold shadow-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"

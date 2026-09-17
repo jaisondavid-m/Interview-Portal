@@ -514,19 +514,22 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header with Action Buttons */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[var(--border)]">
+      {/* Top Banner & Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="badge-kicker">User Management</span>
+          </div>
+          <h1 className="text-[22px] sm:text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
             User Management Portal
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-[12px] sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             Create, provision, batch import, and export student and administrator accounts for campus mock interviews.
           </p>
         </div>
 
         {/* Header Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
           {/* Download / Export CSV Button */}
           <button
             onClick={() => handleExportCSV(filteredUsers, deptFilter !== 'ALL' || roleFilter !== 'ALL' || searchTerm ? 'filtered' : 'all')}
@@ -710,8 +713,8 @@ export default function AdminUsers() {
 
       {/* Users Data List / Table */}
       <div className="panel-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[680px]">
             <thead>
               <tr className="bg-[var(--bg-input)] border-b border-[var(--border)] text-[11px] font-mono uppercase text-[var(--text-muted)] tracking-wider">
                 <th className="py-3 px-3 w-10 text-center">
@@ -827,8 +830,8 @@ export default function AdminUsers() {
       {/* BULK UPLOAD MODAL */}
       {/* ============================================================ */}
       {showBulkModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 sm:p-8 w-full max-w-4xl shadow-[var(--shadow-lg)] animate-scaleUp max-h-[92vh] flex flex-col space-y-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-4xl shadow-[var(--shadow-lg)] animate-scaleUp max-h-[92vh] flex flex-col space-y-4">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-3">
@@ -1248,8 +1251,8 @@ export default function AdminUsers() {
       {/* CREATE USER MODAL */}
       {/* ============================================================ */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 sm:p-8 w-full max-w-lg shadow-[var(--shadow-lg)] animate-slide-up space-y-5">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
               <div>
                 <span className="badge-kicker">Admin Action</span>
@@ -1390,8 +1393,8 @@ export default function AdminUsers() {
       {/* EDIT USER MODAL */}
       {/* ============================================================ */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 sm:p-8 w-full max-w-lg shadow-[var(--shadow-lg)] animate-slide-up space-y-5">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
               <div>
                 <span className="badge-kicker">Edit Account</span>

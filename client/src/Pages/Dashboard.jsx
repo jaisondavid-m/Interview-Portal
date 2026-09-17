@@ -124,20 +124,20 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto animate-fadeIn pb-10">
       {/* Page Header */}
-      <div className="pb-5 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-[20px] sm:text-[24px] md:text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
             Dashboard
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
+          <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             Welcome back{user?.name ? `, ${user.name}` : ''}. Here is your live mock interview performance summary.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <button
             onClick={() => navigate('/history')}
-            className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-mono shadow-xs"
+            className="btn btn-secondary text-xs py-1.5 sm:py-2 px-3 sm:px-3.5 flex items-center gap-1.5 font-mono shadow-xs"
           >
             <History className="w-3.5 h-3.5" />
             <span>Interview History</span>
@@ -145,7 +145,7 @@ export default function Dashboard() {
 
           <button
             onClick={() => navigate('/interviews')}
-            className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-sm"
+            className="btn btn-primary text-xs py-1.5 sm:py-2 px-3.5 sm:px-4 flex items-center gap-1.5 font-bold shadow-sm"
           >
             <Video className="w-4 h-4" />
             <span>Join Mock Interview</span>
@@ -204,19 +204,19 @@ export default function Dashboard() {
       )}
 
       {/* Feedback Questions Performance (X-Y Bar Chart) */}
-      <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-6 shadow-xs">
+      <div className="panel-card p-4 sm:p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] space-y-5 shadow-xs overflow-hidden">
         {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
-          <div className="space-y-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+          <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-[var(--radius-xs)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
                 <BarChart3 className="w-4 h-4" />
               </div>
-              <h2 className="text-[17px] font-bold text-[var(--text-primary)] tracking-tight">
+              <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--text-primary)] tracking-tight">
                 Feedback Questions & Rubric Performance
               </h2>
             </div>
-            <p className="text-[12px] text-[var(--text-secondary)]">
+            <p className="text-xs sm:text-[12px] text-[var(--text-secondary)]">
               Average score percentage for each peer evaluation question across all attended mock interviews.
             </p>
           </div>
@@ -275,22 +275,23 @@ export default function Dashboard() {
 
           return (
             <div className="space-y-6">
-              {/* Interactive X-Y Bar Chart */}
-              <div className="relative pt-6 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)]">
-                {/* Y-Axis Grid Lines & Background */}
-                <div className="relative h-64 flex items-end">
-                  {/* Horizontal grid guide lines */}
-                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8">
-                    {[100, 75, 50, 25, 0].map((pct) => (
-                      <div key={pct} className="flex items-center gap-2 w-full text-[10px] font-mono text-[var(--text-muted)]">
-                        <span className="w-8 text-right shrink-0">{pct}%</span>
-                        <div className="h-[1px] flex-1 bg-[var(--border)]/60 border-t border-dashed border-[var(--border)]" />
-                      </div>
-                    ))}
-                  </div>
+              {/* Interactive X-Y Bar Chart with horizontal scroll on mobile */}
+              <div className="relative pt-6 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)] overflow-x-auto custom-scrollbar">
+                <div className="min-w-[440px] sm:min-w-0">
+                  {/* Y-Axis Grid Lines & Background */}
+                  <div className="relative h-64 flex items-end">
+                    {/* Horizontal grid guide lines */}
+                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8">
+                      {[100, 75, 50, 25, 0].map((pct) => (
+                        <div key={pct} className="flex items-center gap-2 w-full text-[10px] font-mono text-[var(--text-muted)]">
+                          <span className="w-8 text-right shrink-0">{pct}%</span>
+                          <div className="h-[1px] flex-1 bg-[var(--border)]/60 border-t border-dashed border-[var(--border)]" />
+                        </div>
+                      ))}
+                    </div>
 
-                  {/* X-Y Bars Container */}
-                  <div className="relative z-10 w-full pl-10 pr-2 h-full flex items-end justify-around gap-2 sm:gap-4 pb-8">
+                    {/* X-Y Bars Container */}
+                    <div className="relative z-10 w-full pl-10 pr-2 h-full flex items-end justify-around gap-2 sm:gap-4 pb-8">
                     {feedbackList.map((item, idx) => {
                       const pct = Math.max(0, Math.min(100, item.score_percentage || 0));
                       const hasResponses = item.responses_count > 0;
@@ -363,8 +364,9 @@ export default function Dashboard() {
                     })}
                   </div>
                 </div>
+              </div>
 
-                {/* Chart Footer Indicator */}
+              {/* Chart Footer Indicator */}
                 <div className="mt-4 pt-3 border-t border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-[var(--text-muted)] gap-2">
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="font-mono text-[10px] uppercase font-bold text-[var(--text-secondary)]">
