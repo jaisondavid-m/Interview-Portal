@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 MockMate MySQL High-Availability Failover & Topology Self-Healing Daemon
-- Heartbeat probes Primary (3306), Replica 1 (3307), Replica 2 (3308)
+- Initializes replication for Replica 1 & Replica 2 on cluster bootstrap
+- Heartbeat probes Primary (3306), Replica 1 (3307), Replica 2 (3308) every 3 seconds
 - If Primary crashes:
     1. Elects surviving replica with most advanced GTID position.
     2. Promotes chosen replica to NEW PRIMARY (read_only = OFF, super_read_only = OFF, STOP REPLICA).
@@ -76,9 +77,10 @@ def promote_to_primary(host, port):
     return True
 
 def repoint_replica(replica_host, replica_port, new_primary_host, new_primary_port):
-    logging.info(f"Repointing {replica_host}:{replica_port} to new primary {new_primary_host}:{new_primary_port}...")
+    logging.info(f"Setting up replication on {replica_host}:{replica_port} -> source: {new_primary_host}:{new_primary_port}...")
     sql = f"""
     STOP REPLICA;
+    RESET REPLICA;
     CHANGE REPLICATION SOURCE TO
       SOURCE_HOST='{new_primary_host}',
       SOURCE_PORT={new_primary_port},
@@ -92,10 +94,23 @@ def repoint_replica(replica_host, replica_port, new_primary_host, new_primary_po
     """
     out, err = exec_sql(replica_host, replica_port, sql)
     if err:
-        logging.error(f"Failed to repoint {replica_host}:{replica_port}: {err}")
+        logging.error(f"Failed to set replication on {replica_host}:{replica_port}: {err}")
         return False
-    logging.info(f"Replica {replica_host}:{replica_port} successfully replicating from {new_primary_host}:{new_primary_port}!")
+    logging.info(f"Replica {replica_host}:{replica_port} is now replicating from {new_primary_host}:{new_primary_port}!")
     return True
+
+def check_and_setup_initial_replication():
+    p = NODES["primary"]
+    if not is_node_alive(p["host"], p["port"]):
+        return
+
+    for name in ["replica1", "replica2"]:
+        node = NODES[name]
+        if is_node_alive(node["host"], node["port"]):
+            out, _ = exec_sql(node["host"], node["port"], "SHOW REPLICA STATUS\\G")
+            if not out or "Replica_IO_Running: Yes" not in out:
+                logging.info(f"Setting up replication connection for {name} ({node['host']}:{node['port']})...")
+                repoint_replica(node["host"], node["port"], p["host"], p["port"])
 
 def trigger_new_replica_provisioning(new_primary_host, new_primary_port):
     """
@@ -103,16 +118,19 @@ def trigger_new_replica_provisioning(new_primary_host, new_primary_port):
     """
     logging.info("Provisioning fresh replacement replica container to maintain 2-replica policy...")
     try:
-        # Spin up standby replica or execute clone script if docker environment is present
-        subprocess.run(["docker", "compose", "-f", "docker-compose.db-cluster.yml", "up", "-d", "mysql-replica-standby"], check=False)
+        subprocess.run(["docker", "compose", "up", "-d", "mysql-replica-2"], check=False)
         logging.info("Replacement standby replica initiated.")
     except Exception as e:
-        logging.warn(f"Auto-provisioning notification: {e}")
+        logging.warning(f"Auto-provisioning notification: {e}")
 
 def monitor_loop():
     logging.info("Starting MockMate Database HA Cluster Monitor daemon...")
     fail_count = 0
     current_primary = "primary"
+
+    # Initial replication check
+    time.sleep(5)
+    check_and_setup_initial_replication()
 
     while True:
         p_cfg = NODES[current_primary]
@@ -120,6 +138,8 @@ def monitor_loop():
 
         if alive:
             fail_count = 0
+            # Ensure replicas are continuously replicating
+            check_and_setup_initial_replication()
         else:
             fail_count += 1
             logging.warning(f"Primary {p_cfg['host']}:{p_cfg['port']} unreachable! Consecutive failure count: {fail_count}/3")
@@ -135,11 +155,9 @@ def monitor_loop():
                 follower = None
 
                 if r1_alive and r2_alive:
-                    # Compare GTID positions
                     gtid1 = get_gtid_executed(NODES["replica1"]["host"], NODES["replica1"]["port"])
                     gtid2 = get_gtid_executed(NODES["replica2"]["host"], NODES["replica2"]["port"])
                     logging.info(f"GTID 1: {gtid1} | GTID 2: {gtid2}")
-                    # Replica 1 elected
                     candidate = "replica1"
                     follower = "replica2"
                 elif r1_alive:
