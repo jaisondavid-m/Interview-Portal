@@ -16,6 +16,7 @@ import { getSafeUserMedia, checkMicrophoneSupport } from '../utils/mediaUtils';
 export default function MicPermissionModal({
   isOpen,
   onPermissionGranted,
+  onClose,
 }) {
   const [permissionState, setPermissionState] = useState('checking'); // 'checking' | 'prompt' | 'granted' | 'denied'
   const [audioLevel, setAudioLevel] = useState(0); // 0 to 100
@@ -176,7 +177,7 @@ export default function MicPermissionModal({
 
   return (
     <div 
-      onClick={onClose}
+      onClick={() => { if (onClose) onClose(); }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-fadeIn"
     >
       <div 

@@ -1746,6 +1746,7 @@ export default function InterviewRoom() {
       <MicPermissionModal
         isOpen={micModalOpen && !isCompleted}
         onPermissionGranted={() => setMicModalOpen(false)}
+        onClose={() => setMicModalOpen(false)}
       />
     </div>
   );
