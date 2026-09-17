@@ -22,6 +22,7 @@ import AdminQuestionEditor from '../Pages/AdminQuestionEditor';
 import StudentInterviews from '../Pages/StudentInterviews';
 import InterviewRoom from '../Pages/InterviewRoom';
 import DeveloperAuditLogs from '../Pages/DeveloperAuditLogs';
+import AdminBackup from '../Pages/AdminBackup';
 import NotFound from '../Pages/NotFound';
 
 // Route Guards & Error Boundary
@@ -213,6 +214,14 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="audit_logs">
                 <DeveloperAuditLogs />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/backup',
+            element: (
+              <DynamicPageRoute pageKey="admin_backup">
+                <AdminBackup />
               </DynamicPageRoute>
             ),
           },

@@ -210,6 +210,14 @@ func SetupRouter() *gin.Engine {
 				adminSecurity.PUT("/:id", controllers.AdminUpdateSecurityReportStatus)
 			}
 
+			// Database Backup & SQL Dump Management
+			adminBackup := admin.Group("/backup")
+			adminBackup.Use(middlewares.RequirePermission("admin_backup", "audit_logs"))
+			{
+				adminBackup.GET("/stats", controllers.AdminGetDatabaseStats)
+				adminBackup.GET("/dump", controllers.AdminExportDatabaseDump)
+			}
+
 			// Interview History Dedicated Route
 			admin.GET("/history", middlewares.RequirePermission("admin_history"), controllers.AdminGetInterviewSessions)
 		}

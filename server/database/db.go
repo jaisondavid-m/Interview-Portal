@@ -152,8 +152,32 @@ func runMigrations(db *gorm.DB) error {
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)
 		seedDefaultDeveloperUser(db)
+		seedDefaultAppPages(db)
 	}
 	return err
+}
+
+// seedDefaultAppPages ensures essential system app pages like admin_backup exist
+func seedDefaultAppPages(db *gorm.DB) {
+	var count int64
+	db.Model(&models.AppPage{}).Where("`key` = ?", "admin_backup").Count(&count)
+	if count == 0 {
+		backupPage := models.AppPage{
+			Key:         "admin_backup",
+			Name:        "Database Backup & Export",
+			Path:        "/admin/backup",
+			Category:    "Admin",
+			Icon:        "Database",
+			Description: "Download SQL database backup dump, inspect table sizes, and view cluster status",
+			OrderIndex:  9,
+		}
+		db.Create(&backupPage)
+		log.Println("[INFO] Seeded AppPage: admin_backup (/admin/backup)")
+
+		// Assign access to admin and developer
+		db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: "admin_backup", CanAccess: true})
+		db.Create(&models.RolePagePermission{RoleName: "developer", PageKey: "admin_backup", CanAccess: true})
+	}
 }
 
 // seedDefaultDeveloperUser seeds a developer account if none exists

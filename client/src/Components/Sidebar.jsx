@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
-  Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2 
+  Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, Database 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,6 +16,7 @@ const ICON_MAP = {
   History,
   Terminal,
   Video,
+  Database,
 };
 
 export default function Sidebar() {
@@ -43,6 +44,7 @@ export default function Sidebar() {
   const fallbackMenuItems = isDeveloper
     ? [
         { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
+        { name: 'Database Backup', path: '/admin/backup', icon: Database },
       ]
     : isAdmin
     ? [
@@ -54,6 +56,7 @@ export default function Sidebar() {
         { name: 'Leaderboard', path: '/admin/leaderboard', icon: Trophy },
         { name: 'Interview History', path: '/admin/history', icon: History },
         { name: 'Audit Logs', path: '/admin/audit-logs', icon: Terminal },
+        { name: 'Database Backup', path: '/admin/backup', icon: Database },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
