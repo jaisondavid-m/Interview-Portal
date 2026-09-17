@@ -1640,6 +1640,7 @@ export default function InterviewRoom() {
               payload={payload}
               currentUserRole={currentUserRole}
               sessionId={sessionId}
+              round={currentRound}
             />
           ) : isBackendMode ? (
             <BackendPlayground

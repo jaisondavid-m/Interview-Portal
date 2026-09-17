@@ -1381,6 +1381,15 @@ func performRoleSwitchInternal(session *models.InterviewSession) error {
 		session.CandidateCode = extractStarterCode(nextQ, "")
 	}
 
+	// 3. Clear isolated database sandbox for Round 2 so candidate starts with a brand new fresh database
+	starterDDL := ""
+	if nextQ.ID > 0 {
+		starterDDL = extractStarterCode(nextQ, "")
+	}
+	sessionIDStr := fmt.Sprintf("%d", session.ID)
+	// Wipes old Round 1 tables/queries and provisions fresh Round 2 database
+	_, _, _ = ResetSessionSandboxDatabase(sessionIDStr, starterDDL)
+
 	return database.DB.Save(session).Error
 }
 

@@ -55,12 +55,23 @@ export default function SQLEditorConsole({
   const [statusMessage, setStatusMessage] = useState(null);
   const [tableSearch, setTableSearch] = useState('');
 
-  // Sync external code changes when interviewer is observing
+  // Sync external code changes when interviewer is observing or when round/schema changes
   useEffect(() => {
     if (code !== undefined && code !== null && code !== queryCode) {
       setQueryCode(code);
+      setQueryResults(null);
+      setErrorMsg(null);
     }
   }, [code]);
+
+  // Sync starter schema DDL when switching questions/rounds
+  useEffect(() => {
+    if (!code && schemaDDL && schemaDDL !== queryCode) {
+      setQueryCode(schemaDDL);
+      setQueryResults(null);
+      setErrorMsg(null);
+    }
+  }, [schemaDDL]);
 
   // Sync external execution result if interviewer receives update
   useEffect(() => {
@@ -234,14 +245,17 @@ export default function SQLEditorConsole({
     if (!sessionId || !isEditable) return;
     try {
       setIsRunning(true);
-      const res = await api.post(`/interviews/sessions/${sessionId}/database/provision`);
+      const res = await api.post(`/interviews/sessions/${sessionId}/database/reset`, {
+        initial_ddl: schemaDDL,
+      });
       const data = res?.data || res;
       if (data?.schema && onSchemaUpdate) {
         onSchemaUpdate(data.schema, data.database, data.databases);
       }
       setQueryResults(null);
       setErrorMsg(null);
-      setStatusMessage('Database sandbox reset to clean state.');
+      setQueryHistory([]);
+      setStatusMessage('Database sandbox wiped and reset to clean state.');
     } catch (e) {
       console.warn('DB reset notice:', e);
     } finally {

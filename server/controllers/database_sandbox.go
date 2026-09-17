@@ -265,7 +265,95 @@ func getAvailableDatabases(db *sql.DB, defaultDBName string) []string {
 	return databases
 }
 
-// ProvisionSandboxDatabase creates an isolated database for the interview session
+// ResetSessionSandboxDatabase drops and wipes all databases created for this session and provisions a clean fresh database with optional initial DDL
+func ResetSessionSandboxDatabase(sessionID string, initialDDL string) (SandboxSchemaPayload, []string, error) {
+	defaultDBName := sanitizeSessionDBName(sessionID)
+	rootDSN := getSandboxDSN("")
+
+	db, err := sql.Open("mysql", rootDSN)
+	if err != nil {
+		return SandboxSchemaPayload{}, nil, fmt.Errorf("failed to connect to sandbox database server: %w", err)
+	}
+	defer db.Close()
+
+	// 1. Drop any extra databases created during the session
+	allDBs := getAvailableDatabases(db, defaultDBName)
+	for _, dbName := range allDBs {
+		query := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", dbName)
+		_, _ = db.Exec(query)
+	}
+
+	// 2. Drop the primary session sandbox database completely to clear all tables, indexes, and queries
+	dropQuery := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", defaultDBName)
+	_, _ = db.Exec(dropQuery)
+
+	// 3. Create fresh, clean sandbox database
+	createQuery := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", defaultDBName)
+	if _, err := db.Exec(createQuery); err != nil {
+		return SandboxSchemaPayload{}, nil, fmt.Errorf("failed to create fresh sandbox database: %w", err)
+	}
+
+	// 4. Execute starter DDL if provided for the new round/question
+	if strings.TrimSpace(initialDDL) != "" {
+		sessionDBDSN := getSandboxDSN(defaultDBName)
+		sessionDB, err := sql.Open("mysql", sessionDBDSN)
+		if err == nil {
+			defer sessionDB.Close()
+			stmts := splitSQLStatements(initialDDL)
+			for _, stmt := range stmts {
+				_, _ = sessionDB.Exec(stmt)
+			}
+		}
+	}
+
+	freshDBs := getAvailableDatabases(db, defaultDBName)
+	schema, _ := introspectSandboxSchema(defaultDBName)
+	schema.Database = defaultDBName
+	schema.Databases = freshDBs
+
+	return schema, freshDBs, nil
+}
+
+// ResetSandboxDatabase drops the current session sandbox and provisions a brand-new clean database
+func ResetSandboxDatabase(c *gin.Context) {
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Session ID required"})
+		return
+	}
+
+	session, ok := checkSandboxAccess(c, sessionID)
+	if !ok {
+		return
+	}
+
+	if session.Status == "completed" || session.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Interview session is already completed"})
+		return
+	}
+
+	var reqBody struct {
+		InitialDDL string `json:"initial_ddl"`
+	}
+	_ = c.ShouldBindJSON(&reqBody)
+
+	schema, freshDBs, err := ResetSessionSandboxDatabase(sessionID, reqBody.InitialDDL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	defaultDBName := sanitizeSessionDBName(sessionID)
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"database":  defaultDBName,
+		"databases": freshDBs,
+		"message":   "Sandbox database completely wiped and reset to clean state",
+		"schema":    schema,
+	})
+}
+
+// ProvisionSandboxDatabase creates or resets an isolated database for the interview session
 func ProvisionSandboxDatabase(c *gin.Context) {
 	sessionID := c.Param("id")
 	if sessionID == "" {
@@ -280,6 +368,30 @@ func ProvisionSandboxDatabase(c *gin.Context) {
 
 	if session.Status == "completed" || session.Status == "cancelled" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Interview session is already completed"})
+		return
+	}
+
+	var reqBody struct {
+		InitialDDL string `json:"initial_ddl"`
+		Database   string `json:"database"`
+		ForceReset bool   `json:"force_reset"`
+	}
+	_ = c.ShouldBindJSON(&reqBody)
+
+	if reqBody.ForceReset {
+		schema, freshDBs, err := ResetSessionSandboxDatabase(sessionID, reqBody.InitialDDL)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		defaultDBName := sanitizeSessionDBName(sessionID)
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"database":  defaultDBName,
+			"databases": freshDBs,
+			"message":   "Isolated database sandbox wiped and ready for new round",
+			"schema":    schema,
+		})
 		return
 	}
 
@@ -301,24 +413,18 @@ func ProvisionSandboxDatabase(c *gin.Context) {
 	}
 
 	// 2. Execute any optional initial DDL if provided
-	var reqBody struct {
-		InitialDDL string `json:"initial_ddl"`
-		Database   string `json:"database"`
-	}
 	activeDB := defaultDBName
-	if err := c.ShouldBindJSON(&reqBody); err == nil {
-		if reqBody.Database != "" {
-			activeDB = reqBody.Database
-		}
-		if strings.TrimSpace(reqBody.InitialDDL) != "" {
-			sessionDBDSN := getSandboxDSN(activeDB)
-			sessionDB, err := sql.Open("mysql", sessionDBDSN)
-			if err == nil {
-				defer sessionDB.Close()
-				stmts := splitSQLStatements(reqBody.InitialDDL)
-				for _, stmt := range stmts {
-					_, _ = sessionDB.Exec(stmt)
-				}
+	if reqBody.Database != "" {
+		activeDB = reqBody.Database
+	}
+	if strings.TrimSpace(reqBody.InitialDDL) != "" {
+		sessionDBDSN := getSandboxDSN(activeDB)
+		sessionDB, err := sql.Open("mysql", sessionDBDSN)
+		if err == nil {
+			defer sessionDB.Close()
+			stmts := splitSQLStatements(reqBody.InitialDDL)
+			for _, stmt := range stmts {
+				_, _ = sessionDB.Exec(stmt)
 			}
 		}
 	}

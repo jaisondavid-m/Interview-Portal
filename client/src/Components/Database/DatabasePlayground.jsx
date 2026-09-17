@@ -25,6 +25,7 @@ export default function DatabasePlayground({
   payload = {},
   currentUserRole = 'interviewee',
   sessionId = null,
+  round = 1,
 }) {
   const [activeTab, setActiveTab] = useState('sql'); // 'sql' | 'er'
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -33,6 +34,10 @@ export default function DatabasePlayground({
   const [provisionError, setProvisionError] = useState(null);
   const [databases, setDatabases] = useState([]);
   const [selectedDatabase, setSelectedDatabase] = useState('');
+
+  // Track round & question changes to ensure clean transition
+  const prevRoundRef = React.useRef(round);
+  const prevQuestionIdRef = React.useRef(question?.id);
 
   // Parse combined state if code holds JSON of { diagram, sql, database }
   const parsedState = useMemo(() => {
@@ -54,6 +59,20 @@ export default function DatabasePlayground({
 
   const [diagramState, setDiagramState] = useState(parsedState.diagram || { tables: [], relationships: [] });
   const [sqlState, setSqlState] = useState(parsedState.sql || payload?.starter_code || payload?.schema_ddl || '');
+
+  // Reset local state when Round or Question changes (Round 1 -> Round 2 transition)
+  useEffect(() => {
+    if (prevRoundRef.current !== round || prevQuestionIdRef.current !== question?.id) {
+      prevRoundRef.current = round;
+      prevQuestionIdRef.current = question?.id;
+
+      const freshStarter = payload?.schema_ddl || payload?.starter_code || '';
+      setSqlState(freshStarter);
+      setDiagramState({ tables: [], relationships: [] });
+      setSelectedDatabase(`mockmate_sandbox_${sessionId || '1'}`);
+      setDatabases([]);
+    }
+  }, [round, question?.id, payload, sessionId]);
 
   // Sync external changes
   useEffect(() => {
@@ -116,7 +135,7 @@ export default function DatabasePlayground({
     }
   };
 
-  // Provision sandbox database on session load
+  // Provision / Sync sandbox database on session load, round transition, or question change
   useEffect(() => {
     let isMounted = true;
     async function initSandbox() {
@@ -129,21 +148,13 @@ export default function DatabasePlayground({
         setIsProvisioning(true);
         setProvisionError(null);
 
-        // First check if schema already exists, otherwise provision
-        const schemaRes = await api.get(`/interviews/sessions/${sessionId}/database/schema`).catch(() => null);
-        const schemaData = schemaRes?.data || schemaRes;
-        if (schemaData?.schema) {
-          if (isMounted) {
-            setDiagramState(schemaData.schema);
-            if (schemaData.database) setSelectedDatabase(schemaData.database);
-            if (Array.isArray(schemaData.databases)) setDatabases(schemaData.databases);
-            setIsProvisioning(false);
-          }
-          return;
-        }
+        const schemaDDL = payload?.schema_ddl || payload?.starter_code || '';
 
-        // Provision fresh sandbox database
-        const provRes = await api.post(`/interviews/sessions/${sessionId}/database/provision`);
+        // Provision fresh sandbox database with new question starter DDL
+        const provRes = await api.post(`/interviews/sessions/${sessionId}/database/provision`, {
+          initial_ddl: schemaDDL,
+          force_reset: round === 2,
+        });
         const data = provRes?.data || provRes;
         if (isMounted) {
           if (data?.schema) {
@@ -166,7 +177,7 @@ export default function DatabasePlayground({
     return () => {
       isMounted = false;
     };
-  }, [sessionId]);
+  }, [sessionId, round, question?.id]);
 
   // Fullscreen keyboard handler
   useEffect(() => {
