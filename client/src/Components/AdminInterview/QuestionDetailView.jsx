@@ -21,7 +21,6 @@ import {
   Terminal,
 } from 'lucide-react';
 import { getModeMeta, formatLevelName } from './constants';
-import { parseTestCaseToHttp, HTTP_METHODS } from './HttpTestCaseEditor';
 
 export default function QuestionDetailView({
   currentQuestion,
@@ -242,8 +241,8 @@ export default function QuestionDetailView({
 
       {/* 3. MODE-SPECIFIC TECHNICAL SPECIFICATIONS */}
 
-      {/* 3A. CODING & BACKEND SPECIFICATIONS */}
-      {(mode === 'coding' || mode === 'backend') && (
+      {/* 3A. CODING SPECIFICATIONS */}
+      {mode === 'coding' && (
         <div className="space-y-6">
           {/* Starter Code Template */}
           {parsed.starter_code && (
@@ -273,7 +272,7 @@ export default function QuestionDetailView({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-[13px] font-bold text-[var(--text-primary)]">
                   <Eye className="w-4 h-4 text-[var(--accent)]" />
-                  <span>{mode === 'backend' ? 'Sample / Open Endpoints' : 'Sample / Open Test Cases'}</span>
+                  <span>Sample / Open Test Cases</span>
                   <span className="text-[10px] font-mono bg-[var(--accent-dim)] text-[var(--accent)] px-2 py-0.5 rounded font-semibold">
                     Visible to Candidate
                   </span>
@@ -284,79 +283,38 @@ export default function QuestionDetailView({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {parsed.open_cases.map((tc, tcIdx) => {
-                  const isHttp = mode === 'backend' || /^(GET|POST|PUT|PATCH|DELETE)\b/i.test(tc.input || '');
-                  const httpTC = isHttp ? parseTestCaseToHttp(tc) : null;
-                  const methodMeta = httpTC ? (HTTP_METHODS.find((m) => m.value === httpTC.http_method) || HTTP_METHODS[0]) : null;
+                {parsed.open_cases.map((tc, tcIdx) => (
+                  <div key={tcIdx} className="panel-card p-4 bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
+                      <span className="text-[11px] font-mono font-bold text-[var(--text-muted)]">
+                        Case #{tcIdx + 1}
+                      </span>
+                    </div>
 
-                  return (
-                    <div key={tcIdx} className="panel-card p-4 bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
-                        <span className="text-[11px] font-mono font-bold text-[var(--text-muted)]">
-                          Case #{tcIdx + 1}
-                        </span>
-                        {isHttp && (
-                          <div className="flex items-center gap-1.5 font-mono text-[10px]">
-                            <span className={`px-2 py-0.5 rounded font-bold border ${methodMeta.color}`}>
-                              {httpTC.http_method}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                              {httpTC.expected_status}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {isHttp ? (
-                        <div className="space-y-2 font-mono text-[12px]">
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Endpoint:</span>
-                            <div className="p-1.5 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold">
-                              {httpTC.path}
-                            </div>
-                          </div>
-                          {httpTC.input_body && (
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Request Body:</span>
-                              <pre className="p-2 bg-[#21252b] rounded border border-[#303642] text-cyan-300 text-[11px] overflow-x-auto whitespace-pre-wrap">
-                                {httpTC.input_body}
-                              </pre>
-                            </div>
-                          )}
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--accent)] block">Expected Response ({httpTC.expected_status}):</span>
-                            <pre className="p-2 bg-[#21252b] rounded border border-[#303642] text-emerald-300 text-[11px] overflow-x-auto whitespace-pre-wrap font-bold">
-                              {httpTC.expected_body || '(empty body)'}
-                            </pre>
-                          </div>
+                    <div className="space-y-1.5 font-mono text-[12px]">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Input (stdin):</span>
+                        <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] overflow-x-auto">
+                          {tc.input || '(empty)'}
                         </div>
-                      ) : (
-                        <div className="space-y-1.5 font-mono text-[12px]">
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Input (stdin):</span>
-                            <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] overflow-x-auto">
-                              {tc.input || '(empty)'}
-                            </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[var(--accent)] block">Expected Output (stdout):</span>
+                        <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold overflow-x-auto">
+                          {tc.output || '(empty)'}
+                        </div>
+                      </div>
+                      {tc.explanation && (
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Explanation:</span>
+                          <div className="p-1.5 bg-[var(--bg-raised)] rounded text-[11px] text-[var(--text-secondary)]">
+                            {tc.explanation}
                           </div>
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--accent)] block">Expected Output (stdout):</span>
-                            <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold overflow-x-auto">
-                              {tc.output || '(empty)'}
-                            </div>
-                          </div>
-                          {tc.explanation && (
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Explanation:</span>
-                              <div className="p-1.5 bg-[var(--bg-raised)] rounded text-[11px] text-[var(--text-secondary)]">
-                                {tc.explanation}
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -367,7 +325,7 @@ export default function QuestionDetailView({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-[13px] font-bold text-[var(--text-primary)]">
                   <Lock className="w-4 h-4 text-[var(--amber)]" />
-                  <span>{mode === 'backend' ? 'Hidden Grading Endpoints' : 'Hidden Grading Test Cases'}</span>
+                  <span>Hidden Grading Test Cases</span>
                   <span className="text-[10px] font-mono bg-[var(--amber-bg)] text-[var(--amber)] px-2 py-0.5 rounded font-semibold">
                     Private / Evaluation Only
                   </span>
@@ -378,79 +336,83 @@ export default function QuestionDetailView({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {parsed.hidden_cases.map((tc, tcIdx) => {
-                  const isHttp = mode === 'backend' || /^(GET|POST|PUT|PATCH|DELETE)\b/i.test(tc.input || '');
-                  const httpTC = isHttp ? parseTestCaseToHttp(tc) : null;
-                  const methodMeta = httpTC ? (HTTP_METHODS.find((m) => m.value === httpTC.http_method) || HTTP_METHODS[0]) : null;
+                {parsed.hidden_cases.map((tc, tcIdx) => (
+                  <div key={tcIdx} className="panel-card p-4 bg-[var(--amber-bg)]/15 border border-[var(--amber)]/30 space-y-2">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-[var(--amber)]/20">
+                      <span className="text-[11px] font-mono font-bold text-[var(--amber)]">
+                        Hidden Case #{tcIdx + 1}
+                      </span>
+                    </div>
 
-                  return (
-                    <div key={tcIdx} className="panel-card p-4 bg-[var(--amber-bg)]/15 border border-[var(--amber)]/30 space-y-2">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-[var(--amber)]/20">
-                        <span className="text-[11px] font-mono font-bold text-[var(--amber)]">
-                          Hidden Case #{tcIdx + 1}
-                        </span>
-                        {isHttp && (
-                          <div className="flex items-center gap-1.5 font-mono text-[10px]">
-                            <span className={`px-2 py-0.5 rounded font-bold border ${methodMeta.color}`}>
-                              {httpTC.http_method}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                              {httpTC.expected_status}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {isHttp ? (
-                        <div className="space-y-2 font-mono text-[12px]">
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Endpoint:</span>
-                            <div className="p-1.5 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold">
-                              {httpTC.path}
-                            </div>
-                          </div>
-                          {httpTC.input_body && (
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Request Body:</span>
-                              <pre className="p-2 bg-[#21252b] rounded border border-[#303642] text-cyan-300 text-[11px] overflow-x-auto whitespace-pre-wrap">
-                                {httpTC.input_body}
-                              </pre>
-                            </div>
-                          )}
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--amber)] block">Expected Response ({httpTC.expected_status}):</span>
-                            <pre className="p-2 bg-[#21252b] rounded border border-[#303642] text-emerald-300 text-[11px] overflow-x-auto whitespace-pre-wrap font-bold">
-                              {httpTC.expected_body || '(empty body)'}
-                            </pre>
-                          </div>
+                    <div className="space-y-1.5 font-mono text-[12px]">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Hidden Input (stdin):</span>
+                        <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-secondary)] overflow-x-auto">
+                          {tc.input || '(empty)'}
                         </div>
-                      ) : (
-                        <div className="space-y-1.5 font-mono text-[12px]">
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Hidden Input (stdin):</span>
-                            <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-secondary)] overflow-x-auto">
-                              {tc.input || '(empty)'}
-                            </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[var(--amber)] block">Expected Output (stdout):</span>
+                        <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold overflow-x-auto">
+                          {tc.output || '(empty)'}
+                        </div>
+                      </div>
+                      {tc.explanation && (
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Explanation:</span>
+                          <div className="p-1.5 bg-[var(--bg-raised)] rounded text-[11px] text-[var(--text-secondary)]">
+                            {tc.explanation}
                           </div>
-                          <div>
-                            <span className="text-[10px] uppercase font-bold text-[var(--amber)] block">Expected Output (stdout):</span>
-                            <div className="p-2 bg-[var(--bg-input)] rounded border border-[var(--border)] text-[var(--text-primary)] font-bold overflow-x-auto">
-                              {tc.output || '(empty)'}
-                            </div>
-                          </div>
-                          {tc.explanation && (
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Explanation:</span>
-                              <div className="p-1.5 bg-[var(--bg-raised)] rounded text-[11px] text-[var(--text-secondary)]">
-                                {tc.explanation}
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3B. BACKEND MICROSERVICE SPECIFICATIONS */}
+      {mode === 'backend' && (
+        <div className="space-y-6">
+          {/* Interactive Testing Mode Banner */}
+          <div className="panel-card p-4 bg-[var(--accent)]/10 border border-[var(--accent)]/30 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <Server className="w-5 h-5 text-[var(--accent)]" />
+              <div>
+                <span className="text-[13px] font-bold text-[var(--text-primary)] block">
+                  Interactive API Assessment (Postman Runner)
+                </span>
+                <span className="text-[11px] text-[var(--text-secondary)]">
+                  Interviewer evaluates live endpoints and HTTP responses interactively using the built-in Mini API Tester.
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--accent)]/30">
+              Manual API Evaluation
+            </span>
+          </div>
+
+          {/* Starter Code Template */}
+          {parsed.starter_code && (
+            <div className="panel-card overflow-hidden border border-[var(--border)]">
+              <div className="p-3 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--accent)] flex items-center gap-1.5">
+                  <Code className="w-3.5 h-3.5" />
+                  <span>Microservice Server Boilerplate ({parsed.starter_language})</span>
+                </span>
+                <button
+                  onClick={() => handleCopy(parsed.starter_code, 'starter_code')}
+                  className="flex items-center gap-1 text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+                >
+                  {copiedKey === 'starter_code' ? <Check className="w-3.5 h-3.5 text-[var(--green)]" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedKey === 'starter_code' ? 'Copied' : 'Copy Code'}</span>
+                </button>
+              </div>
+              <div className="p-4 bg-[var(--bg-input)] font-mono text-[12px] text-[var(--text-primary)] overflow-x-auto">
+                <pre className="leading-relaxed">{parsed.starter_code}</pre>
               </div>
             </div>
           )}

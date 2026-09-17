@@ -209,6 +209,7 @@ export const getModeSampleJSON = (mode = 'coding') => {
           difficulty: "Medium",
           type: "backend",
           detail: {
+            scenario: "Build a microservice handler with endpoints: POST /tasks (create task with title), GET /tasks (list all tasks), GET /tasks/:id (fetch single task), PATCH /tasks/:id (update completion status). Interviewer will test endpoints live using the Mini API Tester.",
             constraints: "Task title must be 3-100 characters. Return HTTP 400 for empty or invalid titles, 404 for nonexistent task IDs, and 201 for successful creation.",
             expected_approach: "1. Route HTTP request by method and URL path.\n2. Parse JSON body safely and validate title length constraints.\n3. Maintain in-memory task map or storage keyed by numeric ID.\n4. Return standard JSON payloads with appropriate HTTP status codes (200, 201, 400, 404).",
             expected_complexity: "Time: O(1) CRUD lookups by ID, Space: O(N) memory."
@@ -219,30 +220,10 @@ export const getModeSampleJSON = (mode = 'coding') => {
               starter_code: "const tasks = new Map();\nlet nextId = 1;\n\n// Handle incoming HTTP request payloads\nmodule.exports = async function handle(req) {\n  const { method, path, body } = req;\n  if (method === 'POST' && path === '/tasks') {\n    const title = (body?.title || '').trim();\n    if (!title || title.length < 3) {\n      return { status: 400, body: { error: 'Title must be at least 3 characters' } };\n    }\n    const task = { id: nextId++, title, completed: false };\n    tasks.set(task.id, task);\n    return { status: 201, body: task };\n  }\n  if (method === 'GET' && path === '/tasks') {\n    return { status: 200, body: Array.from(tasks.values()) };\n  }\n  return { status: 404, body: { error: 'Not found' } };\n};"
             }
           ],
-          test_cases: [
-            {
-              input: "POST /tasks {\"title\":\"Build REST API\"}",
-              expected_output: "201 {\"id\":1,\"title\":\"Build REST API\",\"completed\":false}",
-              is_hidden: false,
-              explanation: "Creates a new task and returns 201 Created with initial completed=false."
-            },
-            {
-              input: "POST /tasks {\"title\":\"\"}",
-              expected_output: "400 {\"error\":\"Title must be at least 3 characters\"}",
-              is_hidden: false,
-              explanation: "Rejects empty title with 400 Bad Request."
-            },
-            {
-              input: "GET /tasks/999",
-              expected_output: "404 {\"error\":\"Not found\"}",
-              is_hidden: true,
-              explanation: "Returns 404 for nonexistent task ID."
-            }
-          ],
           hints: [
             { type: "hint", content: "Make sure status code is placed at the start of the output line or returned in the response object." },
             { type: "hint", content: "Trim incoming title strings and check both existence and character length before creating entries." },
-            { type: "interview_tip", content: "Evaluate whether candidate validates request body and handles non-integer path IDs gracefully." },
+            { type: "interview_tip", content: "Evaluate whether candidate validates request body and handles non-integer path IDs gracefully in the Mini API Tester." },
             { type: "interview_tip", content: "Ask candidate how they would implement idempotency for network retries on POST endpoints." }
           ]
         }
@@ -369,8 +350,8 @@ export const getModeSampleCSV = (mode = 'coding') => {
 
     case 'backend':
       return [
-        'title,prompt,difficulty,constraints,starter_code,expected_approach,expected_complexity,open_testcase_1_in,open_testcase_1_out,hidden_testcase_1_in,hidden_testcase_1_out,hint_1,hint_2,interview_tip_1,interview_tip_2',
-        '"Task Management REST API","Implement a RESTful task management service supporting creation, listing, and patching.","Medium","Title 3-100 chars. Return 400 for empty title, 404 for missing ID.","const tasks = new Map();\nlet nextId = 1;\nmodule.exports = async function handle(req) {\n  const { method, path, body } = req;\n  if (method === \'POST\' && path === \'/tasks\') {\n    const title = (body?.title || \'\').trim();\n    if (!title || title.length < 3) return { status: 400, body: { error: \'Title required\' } };\n    const task = { id: nextId++, title, completed: false };\n    tasks.set(task.id, task);\n    return { status: 201, body: task };\n  }\n  return { status: 404, body: { error: \'Not found\' } };\n};","1. Route HTTP method and URL path.\n2. Validate body constraints.\n3. Maintain in-memory task map.\n4. Return proper HTTP status codes.","Time: O(1), Space: O(N)","POST /tasks {\"title\":\"Build API\"}","201 {\"id\":1,\"title\":\"Build API\",\"completed\":false}","GET /tasks/999","404 {\"error\":\"Not found\"}","Place status code at start of response or in output object.","Trim incoming title strings and check length constraints before creating entries.","Verify how candidate handles empty strings or non-integer IDs.","Ask candidate how they would implement idempotency for network retries."'
+        'title,prompt,difficulty,scenario,constraints,starter_code,expected_approach,expected_complexity,hint_1,hint_2,interview_tip_1,interview_tip_2',
+        '"Task Management REST API","Implement a RESTful task management service supporting task creation, listing, and patching.","Medium","Microservice endpoints: POST /tasks (create), GET /tasks (list all), GET /tasks/:id, PATCH /tasks/:id. Manual testing via Mini API Tester.","Title 3-100 chars. Return 400 for empty title, 404 for missing ID.","const tasks = new Map();\nlet nextId = 1;\nmodule.exports = async function handle(req) {\n  const { method, path, body } = req;\n  if (method === \'POST\' && path === \'/tasks\') {\n    const title = (body?.title || \'\').trim();\n    if (!title || title.length < 3) return { status: 400, body: { error: \'Title required\' } };\n    const task = { id: nextId++, title, completed: false };\n    tasks.set(task.id, task);\n    return { status: 201, body: task };\n  }\n  if (method === \'GET\' && path === \'/tasks\') {\n    return { status: 200, body: Array.from(tasks.values()) };\n  }\n  return { status: 404, body: { error: \'Not found\' } };\n};","1. Route HTTP method and URL path.\n2. Validate body constraints.\n3. Maintain in-memory task map.\n4. Return proper HTTP status codes.","Time: O(1), Space: O(N)","Place status code at start of response or in output object.","Trim incoming title strings and check length constraints before creating entries.","Verify how candidate handles empty strings or non-integer IDs in the Mini API Tester.","Ask candidate how they would implement idempotency for network retries."'
       ].join('\n');
 
     case 'coding':

@@ -1,6 +1,5 @@
 import React from 'react';
 import { X, AlertCircle, Plus, Eye, Lock } from 'lucide-react';
-import HttpTestCaseEditor from './HttpTestCaseEditor';
 
 export default function QuestionFormModal({
   isOpen,
@@ -84,8 +83,8 @@ export default function QuestionFormModal({
 
           {/* DYNAMIC FORM FIELDS BY LEVEL MODE */}
 
-          {/* 1. CODING & BACKEND MODE */}
-          {(currentLevel.mode === 'coding' || currentLevel.mode === 'backend') && (
+          {/* 1. CODING MODE */}
+          {currentLevel.mode === 'coding' && (
             <div className="space-y-4 pt-2 border-t border-[var(--border)]">
               <div className="flex items-center justify-between">
                 <h4 className="text-[13px] font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
@@ -228,157 +227,299 @@ export default function QuestionFormModal({
                 ))}
               </div>
 
-              {/* Test Cases: Backend HTTP Editor vs Coding STDIN/STDOUT */}
-              {currentLevel.mode === 'backend' ? (
-                <div className="space-y-4">
-                  <HttpTestCaseEditor
-                    title="Sample / Open Endpoints"
-                    testCases={questionForm.open_test_cases}
-                    onChange={(updated) => setQuestionForm({ ...questionForm, open_test_cases: updated })}
-                    isHidden={false}
-                  />
-                  <HttpTestCaseEditor
-                    title="Hidden Grading Endpoints"
-                    testCases={questionForm.hidden_test_cases}
-                    onChange={(updated) => setQuestionForm({ ...questionForm, hidden_test_cases: updated })}
-                    isHidden={true}
-                  />
+              {/* Open / Sample Test Cases */}
+              <div className="p-3.5 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Eye className="w-4 h-4 text-[var(--accent)]" />
+                    <span className="text-[12px] font-bold text-[var(--text-primary)] font-ui">
+                      Open Test Cases
+                    </span>
+                    <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                      Visible to candidate
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQuestionForm({ ...questionForm, open_test_cases: [...questionForm.open_test_cases, { input: '', output: '' }] })}
+                    className="text-[11px] text-[var(--accent)] hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <Plus className="w-3 h-3" /> Add Open Case
+                  </button>
                 </div>
-              ) : (
-                <>
-                  {/* Open / Sample Test Cases */}
-                  <div className="p-3.5 bg-[var(--bg-input)] rounded-[var(--radius-sm)] border border-[var(--border)] space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Eye className="w-4 h-4 text-[var(--accent)]" />
-                        <span className="text-[12px] font-bold text-[var(--text-primary)] font-ui">
-                          Open Test Cases
-                        </span>
-                        <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-1.5 py-0.5 rounded border border-[var(--border)]">
-                          Visible to candidate
-                        </span>
-                      </div>
+
+                <div className="space-y-2">
+                  {questionForm.open_test_cases.map((tc, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={`Open Input ${idx + 1} (e.g. nums = [2,7,11], target = 9)`}
+                        value={tc.input}
+                        onChange={(e) => {
+                          const updated = [...questionForm.open_test_cases];
+                          updated[idx].input = e.target.value;
+                          setQuestionForm({ ...questionForm, open_test_cases: updated });
+                        }}
+                        className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Expected Output (e.g. [0,1])"
+                        value={tc.output}
+                        onChange={(e) => {
+                          const updated = [...questionForm.open_test_cases];
+                          updated[idx].output = e.target.value;
+                          setQuestionForm({ ...questionForm, open_test_cases: updated });
+                        }}
+                        className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                      />
+                      {questionForm.open_test_cases.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = questionForm.open_test_cases.filter((_, i) => i !== idx);
+                            setQuestionForm({ ...questionForm, open_test_cases: updated });
+                          }}
+                          className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          title="Remove Test Case"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hidden Test Cases */}
+              <div className="p-3.5 bg-[var(--amber-bg)]/20 rounded-[var(--radius-sm)] border border-[var(--amber)]/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-4 h-4 text-[var(--amber)]" />
+                    <span className="text-[12px] font-bold text-[var(--text-primary)] font-ui">
+                      Hidden Test Cases
+                    </span>
+                    <span className="text-[10px] font-mono text-[var(--amber)] bg-[var(--bg-card)] px-1.5 py-0.5 rounded border border-[var(--amber)]/30 font-semibold">
+                      Private / Evaluation only
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQuestionForm({ ...questionForm, hidden_test_cases: [...questionForm.hidden_test_cases, { input: '', output: '' }] })}
+                    className="text-[11px] text-[var(--amber)] hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <Plus className="w-3 h-3" /> Add Hidden Case
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  Hidden test cases are not revealed to students during the interview. They evaluate edge cases, boundary conditions, and large inputs during final test runs.
+                </p>
+
+                <div className="space-y-2">
+                  {questionForm.hidden_test_cases.map((tc, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={`Hidden Input ${idx + 1} (e.g. nums = [-1,-2], target = -3)`}
+                        value={tc.input}
+                        onChange={(e) => {
+                          const updated = [...questionForm.hidden_test_cases];
+                          updated[idx].input = e.target.value;
+                          setQuestionForm({ ...questionForm, hidden_test_cases: updated });
+                        }}
+                        className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Expected Output (e.g. [0,1])"
+                        value={tc.output}
+                        onChange={(e) => {
+                          const updated = [...questionForm.hidden_test_cases];
+                          updated[idx].output = e.target.value;
+                          setQuestionForm({ ...questionForm, hidden_test_cases: updated });
+                        }}
+                        className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
+                      />
+                      {questionForm.hidden_test_cases.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = questionForm.hidden_test_cases.filter((_, i) => i !== idx);
+                            setQuestionForm({ ...questionForm, hidden_test_cases: updated });
+                          }}
+                          className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
+                          title="Remove Test Case"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. BACKEND MODE (Microservice & API Architecture, Evaluated via Mini API Tester / Postman) */}
+          {currentLevel.mode === 'backend' && (
+            <div className="space-y-4 pt-2 border-t border-[var(--border)]">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[13px] font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
+                  Backend Microservice Specifications
+                </h4>
+              </div>
+
+              <div className="p-3 bg-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-[var(--radius-sm)] text-[12px] text-[var(--text-secondary)]">
+                <span className="font-bold text-[var(--accent)] block mb-0.5">Interactive Mini API Tester Enabled</span>
+                Interviewers evaluate backend microservice endpoints interactively via the built-in Mini API Tester (Postman). Automated test cases are omitted for backend mode.
+              </div>
+
+              <label>
+                <span>Microservice Scenario & Requirements</span>
+                <textarea
+                  rows="3"
+                  value={questionForm.scenario}
+                  onChange={(e) => setQuestionForm({ ...questionForm, scenario: e.target.value })}
+                  placeholder="Describe the backend microservice scenario, expected endpoints (e.g., GET /tasks, POST /tasks), database models, and concurrency goals..."
+                  className="custom-input font-ui text-[12px]"
+                />
+              </label>
+
+              <label>
+                <span>Starter Server Code Boilerplate</span>
+                <textarea
+                  rows="5"
+                  value={questionForm.starter_code}
+                  onChange={(e) => setQuestionForm({ ...questionForm, starter_code: e.target.value })}
+                  placeholder="package main\n\nimport (\n    &quot;net/http&quot;\n    &quot;github.com/gin-gonic/gin&quot;\n)\n\nfunc main() {\n    r := gin.Default()\n    r.GET(&quot;/api/health&quot;, func(c *gin.Context) {\n        c.JSON(200, gin.H{&quot;status&quot;: &quot;ok&quot;})\n    })\n    r.Run(&quot;:8080&quot;)\n}"
+                  className="custom-input font-mono text-[12px]"
+                />
+              </label>
+
+              <label>
+                <span>API Endpoints & Operational Constraints</span>
+                <input
+                  type="text"
+                  value={questionForm.constraints}
+                  onChange={(e) => setQuestionForm({ ...questionForm, constraints: e.target.value })}
+                  placeholder="e.g. Endpoints: GET /items, POST /items. Concurrency: thread-safe in-memory store. Max latency < 50ms."
+                  className="custom-input font-mono text-[12px]"
+                />
+              </label>
+
+              <label>
+                <span>Expected Approach & Architecture</span>
+                <textarea
+                  rows="3"
+                  value={questionForm.expected_approach}
+                  onChange={(e) => setQuestionForm({ ...questionForm, expected_approach: e.target.value })}
+                  placeholder="Explain optimal handler routing, middleware auth, error response formatting, and mutex locking..."
+                  className="custom-input font-ui text-[12px]"
+                />
+              </label>
+
+              <label>
+                <span>Target Complexity & Latency Target</span>
+                <input
+                  type="text"
+                  value={questionForm.expected_complexity}
+                  onChange={(e) => setQuestionForm({ ...questionForm, expected_complexity: e.target.value })}
+                  placeholder="e.g. O(1) route lookup, O(log N) DB query, P99 latency < 25ms"
+                  className="custom-input font-mono text-[12px]"
+                />
+              </label>
+
+              {/* Progressive Hints */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">
+                    Progressive Hints (Hint 1, Hint 2, ...):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQuestionForm({ ...questionForm, hints: [...questionForm.hints, ''] })}
+                    className="text-[11px] text-[var(--accent)] hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <Plus className="w-3 h-3" /> Add Hint
+                  </button>
+                </div>
+
+                {questionForm.hints.map((hint, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono text-[var(--text-muted)] font-bold w-14 shrink-0">
+                      Hint #{idx + 1}:
+                    </span>
+                    <input
+                      type="text"
+                      placeholder={`Hint ${idx + 1} (e.g. Use sync.RWMutex for concurrent read/write protection)`}
+                      value={hint}
+                      onChange={(e) => {
+                        const updated = [...questionForm.hints];
+                        updated[idx] = e.target.value;
+                        setQuestionForm({ ...questionForm, hints: updated });
+                      }}
+                      className="custom-input text-[12px] py-1.5 flex-1"
+                    />
+                    {questionForm.hints.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => setQuestionForm({ ...questionForm, open_test_cases: [...questionForm.open_test_cases, { input: '', output: '' }] })}
-                        className="text-[11px] text-[var(--accent)] hover:underline flex items-center gap-1 font-semibold"
+                        onClick={() => {
+                          const updated = questionForm.hints.filter((_, i) => i !== idx);
+                          setQuestionForm({ ...questionForm, hints: updated });
+                        }}
+                        className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
                       >
-                        <Plus className="w-3 h-3" /> Add Open Case
+                        <X className="w-3.5 h-3.5" />
                       </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      {questionForm.open_test_cases.map((tc, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            placeholder={`Open Input ${idx + 1} (e.g. nums = [2,7,11], target = 9)`}
-                            value={tc.input}
-                            onChange={(e) => {
-                              const updated = [...questionForm.open_test_cases];
-                              updated[idx].input = e.target.value;
-                              setQuestionForm({ ...questionForm, open_test_cases: updated });
-                            }}
-                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Expected Output (e.g. [0,1])"
-                            value={tc.output}
-                            onChange={(e) => {
-                              const updated = [...questionForm.open_test_cases];
-                              updated[idx].output = e.target.value;
-                              setQuestionForm({ ...questionForm, open_test_cases: updated });
-                            }}
-                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
-                          />
-                          {questionForm.open_test_cases.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = questionForm.open_test_cases.filter((_, i) => i !== idx);
-                                setQuestionForm({ ...questionForm, open_test_cases: updated });
-                              }}
-                              className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
-                              title="Remove Test Case"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    )}
                   </div>
+                ))}
+              </div>
 
-                  {/* Hidden Test Cases */}
-                  <div className="p-3.5 bg-[var(--amber-bg)]/20 rounded-[var(--radius-sm)] border border-[var(--amber)]/30 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Lock className="w-4 h-4 text-[var(--amber)]" />
-                        <span className="text-[12px] font-bold text-[var(--text-primary)] font-ui">
-                          Hidden Test Cases
-                        </span>
-                        <span className="text-[10px] font-mono text-[var(--amber)] bg-[var(--bg-card)] px-1.5 py-0.5 rounded border border-[var(--amber)]/30 font-semibold">
-                          Private / Evaluation only
-                        </span>
-                      </div>
+              {/* Interview Tips for Backend Mode */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">
+                    Interview Tips & Evaluator Rubrics:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQuestionForm({ ...questionForm, interview_tips: [...questionForm.interview_tips, ''] })}
+                    className="text-[11px] text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <Plus className="w-3 h-3" /> Add Tip
+                  </button>
+                </div>
+
+                {questionForm.interview_tips.map((tip, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder={`Tip ${idx + 1} (e.g. Probe candidate on status code semantics 201 vs 200 vs 400)`}
+                      value={tip}
+                      onChange={(e) => {
+                        const updated = [...questionForm.interview_tips];
+                        updated[idx] = e.target.value;
+                        setQuestionForm({ ...questionForm, interview_tips: updated });
+                      }}
+                      className="custom-input text-[12px] py-1.5 flex-1"
+                    />
+                    {questionForm.interview_tips.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => setQuestionForm({ ...questionForm, hidden_test_cases: [...questionForm.hidden_test_cases, { input: '', output: '' }] })}
-                        className="text-[11px] text-[var(--amber)] hover:underline flex items-center gap-1 font-semibold"
+                        onClick={() => {
+                          const updated = questionForm.interview_tips.filter((_, i) => i !== idx);
+                          setQuestionForm({ ...questionForm, interview_tips: updated });
+                        }}
+                        className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
                       >
-                        <Plus className="w-3 h-3" /> Add Hidden Case
+                        <X className="w-3.5 h-3.5" />
                       </button>
-                    </div>
-
-                    <p className="text-[11px] text-[var(--text-secondary)]">
-                      Hidden test cases are not revealed to students during the interview. They evaluate edge cases, boundary conditions, and large inputs during final test runs.
-                    </p>
-
-                    <div className="space-y-2">
-                      {questionForm.hidden_test_cases.map((tc, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            placeholder={`Hidden Input ${idx + 1} (e.g. nums = [-1,-2], target = -3)`}
-                            value={tc.input}
-                            onChange={(e) => {
-                              const updated = [...questionForm.hidden_test_cases];
-                              updated[idx].input = e.target.value;
-                              setQuestionForm({ ...questionForm, hidden_test_cases: updated });
-                            }}
-                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Expected Output (e.g. [0,1])"
-                            value={tc.output}
-                            onChange={(e) => {
-                              const updated = [...questionForm.hidden_test_cases];
-                              updated[idx].output = e.target.value;
-                              setQuestionForm({ ...questionForm, hidden_test_cases: updated });
-                            }}
-                            className="custom-input font-mono text-[11px] py-1.5 flex-1 bg-[var(--bg-card)]"
-                          />
-                          {questionForm.hidden_test_cases.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = questionForm.hidden_test_cases.filter((_, i) => i !== idx);
-                                setQuestionForm({ ...questionForm, hidden_test_cases: updated });
-                              }}
-                              className="p-1 text-[var(--text-muted)] hover:text-[var(--red)]"
-                              title="Remove Test Case"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    )}
                   </div>
-                </>
-              )}
+                ))}
+              </div>
             </div>
           )}
 

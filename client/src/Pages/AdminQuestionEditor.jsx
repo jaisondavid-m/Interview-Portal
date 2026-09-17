@@ -22,7 +22,6 @@ import {
 
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
-import HttpTestCaseEditor from '../Components/AdminInterview/HttpTestCaseEditor';
 
 export default function AdminQuestionEditor() {
   const { trackId, levelId, questionId } = useParams();
@@ -869,21 +868,18 @@ export default function AdminQuestionEditor() {
         {/* RIGHT COLUMN: STDIN/STDOUT Test Cases & Solution Benchmark */}
         {/* ============================================================ */}
         <div className="lg:col-span-6 space-y-6">
-          {/* BACKEND MODE: Structured HTTP API Test Case Editors */}
+          {/* BACKEND MODE: Interactive Mini API Tester Notice */}
           {type === 'backend' && (
-            <div className="space-y-6">
-              <HttpTestCaseEditor
-                title="Sample / Open Endpoints"
-                testCases={openTestCases}
-                onChange={setOpenTestCases}
-                isHidden={false}
-              />
-              <HttpTestCaseEditor
-                title="Hidden Grading Endpoints"
-                testCases={hiddenTestCases}
-                onChange={setHiddenTestCases}
-                isHidden={true}
-              />
+            <div className="panel-card p-5 border border-[var(--border)] space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <h4 className="text-[14px] font-bold text-[var(--text-primary)]">
+                  Interactive API Assessment Enabled
+                </h4>
+              </div>
+              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                In Backend mode, questions run as live microservice servers. Interviewers test HTTP routes and examine response payloads manually using the built-in <strong>Mini API Tester (Postman)</strong> during the interview. Automated test cases are not required.
+              </p>
             </div>
           )}
 

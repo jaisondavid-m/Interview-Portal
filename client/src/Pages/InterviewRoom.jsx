@@ -1380,7 +1380,7 @@ export default function InterviewRoom() {
                 >
                   {isWhiteboardMode ? 'Tradeoffs & Rubrics' : 'Approach & Rubrics'}
                 </button>
-                {!isWhiteboardMode && (
+                {!isWhiteboardMode && !isBackendMode && (
                   <button
                     type="button"
                     onClick={() => setInterviewerTab('testcases')}
@@ -1524,7 +1524,7 @@ export default function InterviewRoom() {
                 )}
 
                 {/* 4. Sample Test Cases (Coding mode only) */}
-                {!isWhiteboardMode && interviewerTab === 'testcases' && (
+                {!isWhiteboardMode && !isBackendMode && interviewerTab === 'testcases' && (
                   <div className="space-y-3 font-mono text-[12px]">
                     {openCases.length > 0 ? (
                       <div>
@@ -1588,7 +1588,7 @@ export default function InterviewRoom() {
               )}
 
               {/* Open Sample Cases (Only shown in coding mode if test cases exist) */}
-              {!isWhiteboardMode && openCases.length > 0 && (
+              {!isWhiteboardMode && !isBackendMode && openCases.length > 0 && (
                 <div className="space-y-2">
                   <span className="text-[11px] font-mono uppercase font-bold text-[var(--text-muted)] block">
                     Sample Test Cases:
