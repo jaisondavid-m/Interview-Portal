@@ -466,253 +466,323 @@ export default function MCQPlayground({
       </div>
 
       {/* ============================================================ */}
-      {/* MAIN QUESTION DISPLAY & OPTIONS */}
+      {/* MAIN MCQ WORKSPACE: Split Layout for Single Screen View */}
       {/* ============================================================ */}
-      <div className="p-5 sm:p-6 space-y-5">
-        {/* Question Header Card */}
-        <div className="space-y-3 p-4 sm:p-5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border-strong)] shadow-2xs">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                Question {currentIndex + 1} of {totalQuestions}
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
-                {currentQuestion.difficulty || 'Easy'}
-              </span>
+      <div className="p-4 sm:p-5 flex-1 overflow-y-auto">
+        {!isEditable ? (
+          /* ============================================================ */
+          /* INTERVIEWER PERSPECTIVE: Split Question/Options & Scoring Guide */
+          /* ============================================================ */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            {/* LEFT COLUMN: Question & Multiple Choice Options */}
+            <div className="lg:col-span-7 flex flex-col space-y-4">
+              {/* Question Header Card */}
+              <div className="space-y-3 p-4 sm:p-5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border-strong)] shadow-2xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                      Question {currentIndex + 1} of {totalQuestions}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
+                      {currentQuestion.difficulty || 'Assessment'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-[var(--text-secondary)]">
+                    Observing Candidate Live
+                  </span>
+                </div>
+
+                {/* Question Title */}
+                <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)] leading-snug">
+                  {currentQuestion.title || `Assessment Question #${currentIndex + 1}`}
+                </h2>
+
+                {/* Question Prompt */}
+                <div className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line font-normal">
+                  {currentQuestion.prompt}
+                </div>
+              </div>
+
+              {/* Options List */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                    Multiple Choice Options:
+                  </span>
+                  <span className="text-[11px] font-mono text-[var(--text-secondary)]">
+                    Candidate: <strong className="text-[var(--text-primary)]">{currentSelectedKey ? `Option ${currentSelectedKey}` : 'None'}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {currentOptions.map((opt, optIdx) => {
+                    const optKey = getOptionKey(opt, optIdx);
+                    const optText = getOptionText(opt);
+                    const isCandidateChoice = currentSelectedKey && currentSelectedKey.toUpperCase() === optKey;
+                    const isCorrectOption = currentCorrectKey && currentCorrectKey === optKey;
+
+                    let cardStyle = 'border border-[var(--border)] bg-[var(--bg-card)] opacity-90';
+                    let badgeStyle = 'bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)] font-bold';
+                    let textStyle = 'text-[var(--text-secondary)] font-normal';
+
+                    if (isCorrectOption && isCandidateChoice) {
+                      cardStyle = 'border-2 border-[var(--green)] bg-[var(--green-bg)] shadow-sm';
+                      badgeStyle = 'bg-[var(--green)] text-white border-[var(--green)] font-bold';
+                      textStyle = 'text-[var(--text-primary)] font-bold';
+                    } else if (isCorrectOption) {
+                      cardStyle = 'border-2 border-[var(--green)] bg-[var(--green-bg)]/60 shadow-sm';
+                      badgeStyle = 'bg-[var(--green)] text-white border-[var(--green)] font-bold';
+                      textStyle = 'text-[var(--text-primary)] font-bold';
+                    } else if (isCandidateChoice && !isCorrectOption) {
+                      cardStyle = 'border-2 border-[var(--red)] bg-[var(--red-bg)] shadow-sm';
+                      badgeStyle = 'bg-[var(--red)] text-white border-[var(--red)] font-bold';
+                      textStyle = 'text-[var(--text-primary)] font-bold';
+                    }
+
+                    return (
+                      <div
+                        key={optKey}
+                        className={`group relative py-2.5 px-3.5 rounded-xl border transition-all flex items-center gap-3 select-none ${cardStyle}`}
+                      >
+                        {/* Option Letter Badge (A, B, C, D) */}
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono shrink-0 transition-transform ${badgeStyle}`}
+                        >
+                          {optKey}
+                        </div>
+
+                        {/* Option Text */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs sm:text-sm leading-relaxed ${textStyle}`}>
+                            {optText || <span className="italic text-[var(--text-muted)] font-normal">Option {optKey}</span>}
+                          </p>
+                        </div>
+
+                        {/* Right Status Indicators */}
+                        <div className="shrink-0 flex items-center gap-1.5 font-mono text-[11px]">
+                          {isCorrectOption && (
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--green)] text-white font-bold flex items-center gap-1 shadow-xs text-[10px]">
+                              <Check className="w-3 h-3" />
+                              <span>Benchmark</span>
+                            </span>
+                          )}
+                          {isCandidateChoice && !isCorrectOption && (
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--red)] text-white font-bold flex items-center gap-1 shadow-xs text-[10px]">
+                              <XCircle className="w-3 h-3" />
+                              <span>Candidate Pick</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            {isEditable && !submitted && (
-              <span className="text-xs font-medium text-[var(--text-secondary)] hidden sm:flex items-center gap-1">
-                <span>Press keys:</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">A</kbd>
-                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">B</kbd>
-                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">C</kbd>
-                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)] shadow-2xs">D</kbd>
-              </span>
-            )}
-          </div>
-
-          {/* Question Title */}
-          <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)] leading-snug">
-            {currentQuestion.title || `Assessment Question #${currentIndex + 1}`}
-          </h2>
-
-          {/* Question Prompt */}
-          <div className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line font-normal">
-            {currentQuestion.prompt}
-          </div>
-        </div>
-
-        {/* ============================================================ */}
-        {/* OPTIONS LIST */}
-        {/* ============================================================ */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-              {isEditable ? 'Select One Option:' : 'Assessment Options & Candidate Response:'}
-            </span>
-            {isEditable && currentSelectedKey && !submitted && (
-              <button
-                type="button"
-                onClick={handleClearOption}
-                className="text-xs text-[var(--red)] hover:underline cursor-pointer font-bold"
-              >
-                Clear Selection
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-2.5">
-            {currentOptions.map((opt, optIdx) => {
-              const optKey = getOptionKey(opt, optIdx);
-              const optText = getOptionText(opt);
-              const isSelected = currentSelectedKey && currentSelectedKey.toUpperCase() === optKey;
-
-              // Interviewer Analysis
-              const isCorrectOption = currentCorrectKey && currentCorrectKey === optKey;
-              const isCandidateChoice = isSelected;
-
-              // Clean white & purple styling computation
-              let cardStyle = 'border-2 border-[var(--border-strong)] bg-[var(--bg-card)] hover:border-[var(--accent)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)]';
-              let badgeStyle = 'bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-strong)] font-bold';
-              let textStyle = 'text-[var(--text-primary)] font-semibold';
-
-              if (isEditable) {
-                if (isSelected) {
-                  cardStyle = 'border-2 border-[var(--accent)] bg-[var(--accent-dim)] shadow-sm';
-                  badgeStyle = 'bg-[var(--accent)] text-white border-[var(--accent)] font-bold';
-                  textStyle = 'text-[var(--accent)] font-bold';
-                }
-              } else {
-                // Interviewer Mode Styles
-                if (isCorrectOption && isCandidateChoice) {
-                  cardStyle = 'border-2 border-[var(--green)] bg-[var(--green-bg)] shadow-sm';
-                  badgeStyle = 'bg-[var(--green)] text-white border-[var(--green)] font-bold';
-                  textStyle = 'text-[var(--text-primary)] font-bold';
-                } else if (isCorrectOption) {
-                  cardStyle = 'border-2 border-[var(--green)] bg-[var(--green-bg)]/60 shadow-sm';
-                  badgeStyle = 'bg-[var(--green)] text-white border-[var(--green)] font-bold';
-                  textStyle = 'text-[var(--text-primary)] font-bold';
-                } else if (isCandidateChoice && !isCorrectOption) {
-                  cardStyle = 'border-2 border-[var(--red)] bg-[var(--red-bg)] shadow-sm';
-                  badgeStyle = 'bg-[var(--red)] text-white border-[var(--red)] font-bold';
-                  textStyle = 'text-[var(--text-primary)] font-bold';
-                } else {
-                  cardStyle = 'border border-[var(--border)] bg-[var(--bg-card)] opacity-90';
-                  badgeStyle = 'bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)] font-bold';
-                  textStyle = 'text-[var(--text-secondary)] font-normal';
-                }
-              }
-
-              return (
-                <div
-                  key={optKey}
-                  onClick={() => handleSelectOption(optKey)}
-                  className={`group relative py-3 px-4 rounded-xl border transition-all flex items-center gap-3.5 select-none ${
-                    isEditable && !submitted ? 'cursor-pointer' : 'cursor-default'
-                  } ${cardStyle}`}
-                >
-                  {/* Option Letter Badge (A, B, C, D) */}
-                  <div
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-mono shrink-0 transition-transform ${badgeStyle}`}
-                  >
-                    {optKey}
+            {/* RIGHT COLUMN: Interviewer Scoring Guide & Benchmark Rationale */}
+            <div className="lg:col-span-5 flex flex-col space-y-3.5">
+              <div className="p-4 rounded-xl bg-[var(--bg-raised)] border border-[var(--border-strong)] space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-[var(--border)]">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
+                    <Sparkles className="w-4 h-4 text-[var(--accent)]" />
+                    <span>Interviewer Scoring Guide</span>
                   </div>
-
-                  {/* Option Text */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm leading-relaxed ${textStyle}`}>
-                      {optText || <span className="italic text-[var(--text-muted)] font-normal">Option {optKey}</span>}
-                    </p>
+                  <div className="px-2.5 py-0.5 rounded bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30 font-mono text-[11px] font-bold">
+                    Score: {interviewerStats.correct}/{interviewerStats.answered}
                   </div>
+                </div>
 
-                  {/* Right Status Indicators */}
-                  <div className="shrink-0 flex items-center gap-2">
-                    {/* Candidate View Selected Badge */}
-                    {isEditable && isSelected && (
-                      <div className="flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1 rounded-full bg-[var(--accent)] text-white shadow-xs">
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Selected</span>
-                      </div>
-                    )}
-
-                    {/* Interviewer Assessor Tags */}
-                    {!isEditable && (
-                      <div className="flex items-center gap-1.5 font-mono text-xs">
-                        {isCorrectOption && (
-                          <span className="px-2.5 py-1 rounded-full bg-[var(--green)] text-white font-bold flex items-center gap-1 shadow-xs">
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Correct Benchmark</span>
-                          </span>
-                        )}
-                        {isCandidateChoice && !isCorrectOption && (
-                          <span className="px-2.5 py-1 rounded-full bg-[var(--red)] text-white font-bold flex items-center gap-1 shadow-xs">
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Candidate Choice (Incorrect)</span>
-                          </span>
-                        )}
-                      </div>
+                {/* Candidate Selection Evaluation Banner */}
+                <div className={`p-3 rounded-lg border flex items-start gap-2.5 ${
+                  currentSelectedKey
+                    ? currentCorrectKey && currentSelectedKey === currentCorrectKey
+                      ? 'bg-[var(--green-bg)] border-[var(--green)]/40 text-[var(--text-primary)]'
+                      : 'bg-[var(--red-bg)] border-[var(--red)]/40 text-[var(--text-primary)]'
+                    : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)]'
+                }`}>
+                  <UserCheck className={`w-4 h-4 shrink-0 mt-0.5 ${
+                    currentSelectedKey
+                      ? currentCorrectKey && currentSelectedKey === currentCorrectKey
+                        ? 'text-[var(--green)]'
+                        : 'text-[var(--red)]'
+                      : 'text-[var(--text-secondary)]'
+                  }`} />
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-bold uppercase">Candidate Response</span>
+                      {currentSelectedKey && (
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          currentCorrectKey && currentSelectedKey === currentCorrectKey
+                            ? 'bg-[var(--green)] text-white'
+                            : 'bg-[var(--red)] text-white'
+                        }`}>
+                          {currentCorrectKey && currentSelectedKey === currentCorrectKey ? '+1 Mark (Correct)' : '0 Marks (Incorrect)'}
+                        </span>
+                      )}
+                    </div>
+                    {currentSelectedKey ? (
+                      <p className="text-xs font-semibold leading-relaxed">
+                        <span className="font-mono font-bold text-[var(--accent)] mr-1">
+                          Option {currentSelectedKey}:
+                        </span>
+                        <span>{selectedOptText || `Option ${currentSelectedKey}`}</span>
+                      </p>
+                    ) : (
+                      <p className="text-xs italic text-[var(--text-secondary)]">
+                        Candidate has not picked an answer for this question yet.
+                      </p>
                     )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* ============================================================ */}
-        {/* INTERVIEWER ONLY: Selected Answer & Correct Benchmark Summary */}
-        {/* ============================================================ */}
-        {!isEditable && (
-          <div className="mt-4 p-4 rounded-xl bg-[var(--bg-raised)] border border-[var(--border-strong)] space-y-3 shadow-2xs">
-            <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-[var(--border)]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent)] font-mono uppercase tracking-wider">
-                <Sparkles className="w-4 h-4 text-[var(--accent)]" />
-                <span>Interviewer Scoring Guide</span>
-              </div>
-              <span className="text-[11px] font-mono text-[var(--text-secondary)]">
-                Live candidate synchronization active
-              </span>
-            </div>
+                {/* Target Benchmark Answer Card */}
+                <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-strong)] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase text-[var(--accent)] flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5 text-[var(--accent)]" />
+                      <span>Target Benchmark:</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--green)] text-white">
+                      Verified Answer
+                    </span>
+                  </div>
 
-            {/* Side-by-side Candidate Choice vs Correct Benchmark */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Candidate Selected Option Card */}
-              <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-strong)] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase text-[var(--text-secondary)] flex items-center gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
-                    <span>Candidate Selected:</span>
-                  </span>
-                  {currentSelectedKey ? (
-                    currentCorrectKey && currentSelectedKey === currentCorrectKey ? (
-                      <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
-                        ✓ Correct (+1 Mark)
+                  {currentCorrectKey ? (
+                    <div className="text-xs sm:text-sm text-[var(--text-primary)] font-bold leading-relaxed">
+                      <span className="font-mono font-bold text-[var(--accent)] mr-1">
+                        Option {currentCorrectKey}:
                       </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30">
-                        ✕ Incorrect (0 Marks)
-                      </span>
-                    )
+                      <span>{correctOptText || `Option ${currentCorrectKey}`}</span>
+                    </div>
                   ) : (
-                    <span className="px-2 py-0.5 rounded text-xs font-mono text-[var(--text-secondary)] bg-[var(--bg-input)]">
-                      Not answered yet
+                    <p className="text-xs text-[var(--text-secondary)] italic">
+                      Correct option specified in problem criteria.
+                    </p>
+                  )}
+                </div>
+
+                {/* Solution Rationale / Explanation */}
+                {explanationText && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] block">
+                      Solution Rationale:
+                    </span>
+                    <div className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-3 rounded-lg border border-[var(--border)] font-normal max-h-48 overflow-y-auto">
+                      {explanationText}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ============================================================ */
+          /* CANDIDATE PERSPECTIVE: Split Question & Option Chooser */
+          /* ============================================================ */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            {/* LEFT COLUMN: Question Details & Prompt */}
+            <div className="lg:col-span-6 flex flex-col space-y-3">
+              <div className="space-y-3 p-4 sm:p-5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border-strong)] shadow-2xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                      Question {currentIndex + 1} of {totalQuestions}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
+                      {currentQuestion.difficulty || 'Assessment'}
+                    </span>
+                  </div>
+                  {!submitted && (
+                    <span className="text-xs font-medium text-[var(--text-secondary)] hidden sm:flex items-center gap-1">
+                      <span>Keys:</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)]">A</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)]">B</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)]">C</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-strong)] text-[10px] font-mono font-bold text-[var(--text-primary)]">D</kbd>
                     </span>
                   )}
                 </div>
 
-                {currentSelectedKey ? (
-                  <div className="text-sm text-[var(--text-primary)] font-semibold leading-relaxed">
-                    <span className="font-mono font-bold text-[var(--accent)] mr-1">
-                      Option {currentSelectedKey}:
-                    </span>
-                    <span>{selectedOptText || `Option ${currentSelectedKey}`}</span>
-                  </div>
-                ) : (
-                  <p className="text-xs text-[var(--text-secondary)] italic">
-                    Waiting for {candidateName} to select an option...
-                  </p>
-                )}
-              </div>
+                {/* Question Title */}
+                <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)] leading-snug">
+                  {currentQuestion.title || `Assessment Question #${currentIndex + 1}`}
+                </h2>
 
-              {/* Correct Benchmark Option Card */}
-              <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-strong)] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase text-[var(--accent)] flex items-center gap-1.5">
-                    <Target className="w-3.5 h-3.5 text-[var(--accent)]" />
-                    <span>Target Answer:</span>
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[var(--green)] text-white">
-                    Correct Benchmark
-                  </span>
+                {/* Question Prompt */}
+                <div className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line font-normal">
+                  {currentQuestion.prompt}
                 </div>
-
-                {currentCorrectKey ? (
-                  <div className="text-sm text-[var(--text-primary)] font-bold leading-relaxed">
-                    <span className="font-mono font-bold text-[var(--accent)] mr-1">
-                      Option {currentCorrectKey}:
-                    </span>
-                    <span>{correctOptText || `Option ${currentCorrectKey}`}</span>
-                  </div>
-                ) : (
-                  <p className="text-xs text-[var(--text-secondary)] italic">
-                    Correct option specified in problem criteria.
-                  </p>
-                )}
               </div>
             </div>
 
-            {/* Explanation text */}
-            {explanationText && (
-              <div className="space-y-1.5 pt-1">
-                <span className="text-xs font-bold uppercase text-[var(--text-secondary)] block">
-                  Solution Rationale:
+            {/* RIGHT COLUMN: Interactive Options Chooser */}
+            <div className="lg:col-span-6 flex flex-col space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                  Select One Option:
                 </span>
-                <p className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-line bg-[var(--bg-card)] p-3 rounded-lg border border-[var(--border)] font-normal">
-                  {explanationText}
-                </p>
+                {currentSelectedKey && !submitted && (
+                  <button
+                    type="button"
+                    onClick={handleClearOption}
+                    className="text-xs text-[var(--red)] hover:underline cursor-pointer font-bold"
+                  >
+                    Clear Selection
+                  </button>
+                )}
               </div>
-            )}
+
+              <div className="grid grid-cols-1 gap-2.5">
+                {currentOptions.map((opt, optIdx) => {
+                  const optKey = getOptionKey(opt, optIdx);
+                  const optText = getOptionText(opt);
+                  const isSelected = currentSelectedKey && currentSelectedKey.toUpperCase() === optKey;
+
+                  let cardStyle = 'border-2 border-[var(--border-strong)] bg-[var(--bg-card)] hover:border-[var(--accent)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)]';
+                  let badgeStyle = 'bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-strong)] font-bold';
+                  let textStyle = 'text-[var(--text-primary)] font-semibold';
+
+                  if (isSelected) {
+                    cardStyle = 'border-2 border-[var(--accent)] bg-[var(--accent-dim)] shadow-sm';
+                    badgeStyle = 'bg-[var(--accent)] text-white border-[var(--accent)] font-bold';
+                    textStyle = 'text-[var(--accent)] font-bold';
+                  }
+
+                  return (
+                    <div
+                      key={optKey}
+                      onClick={() => handleSelectOption(optKey)}
+                      className={`group relative py-3 px-4 rounded-xl border transition-all flex items-center gap-3.5 select-none ${
+                        !submitted ? 'cursor-pointer' : 'cursor-default'
+                      } ${cardStyle}`}
+                    >
+                      {/* Option Letter Badge (A, B, C, D) */}
+                      <div
+                        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-mono shrink-0 transition-transform ${badgeStyle}`}
+                      >
+                        {optKey}
+                      </div>
+
+                      {/* Option Text */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs sm:text-sm leading-relaxed ${textStyle}`}>
+                          {optText || <span className="italic text-[var(--text-muted)] font-normal">Option {optKey}</span>}
+                        </p>
+                      </div>
+
+                      {/* Right Selected Pill */}
+                      {isSelected && (
+                        <div className="shrink-0 flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1 rounded-full bg-[var(--accent)] text-white shadow-xs">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Selected</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
