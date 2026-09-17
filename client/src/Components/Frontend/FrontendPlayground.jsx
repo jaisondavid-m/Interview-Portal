@@ -106,13 +106,112 @@ export default function FrontendPlayground({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen, showRequirements, showPackagesModal]);
 
+  // Compact Room View Launcher Card (When not in Fullscreen)
+  if (!isFullscreen) {
+    return (
+      <div className="panel-card p-6 border-2 border-[var(--border)] bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-md flex flex-col justify-between space-y-6 animate-fadeIn min-h-[460px]">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shadow-xs">
+                <Code2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <span>Frontend Studio</span>
+                  <span className="text-[10px] bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 px-2 py-0.5 rounded-full font-mono font-bold uppercase border border-cyan-500/30">
+                    Studio Mode
+                  </span>
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] font-mono">
+                  React 19 & Tailwind CSS Component Studio
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-md font-mono text-[11px] font-bold border bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                <span>Live Hot Reload</span>
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+            Build, iterate, and test modern React components in real-time with responsive viewport rendering across Mobile, Tablet, and Desktop screen sizes.
+          </p>
+
+          {/* Feature Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+                <Code2 className="w-4 h-4 text-cyan-500" />
+                <span>Interactive JSX Editor</span>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                Full ES6+ React editor with instant compilation and syntax highlight.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+                <Layout className="w-4 h-4 text-blue-500" />
+                <span>Responsive Viewports</span>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                Live sandbox iframe preview with preset device breakpoints and console logs.
+              </p>
+            </div>
+          </div>
+
+          {/* Package Info */}
+          <div className="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20 text-xs font-mono flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+              <Package className="w-3.5 h-3.5 text-cyan-500" />
+              <span>Installed Packages:</span>
+              <strong className="text-cyan-600 dark:text-cyan-400">TailwindCSS, Lucide Icons, Framer Motion, Lodash, Axios</strong>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPackagesModal(true)}
+              className="text-[11px] text-cyan-600 dark:text-cyan-400 font-bold hover:underline cursor-pointer"
+            >
+              View Packages ({INSTALLED_FRONTEND_PACKAGES.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Action Dock */}
+        <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-500" />
+            <span>Click below or press <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] text-[10px] font-bold text-[var(--text-primary)]">F</kbd> for full screen</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(true)}
+            className="h-10 px-5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
+            title="Open Frontend Studio in Full Screen (Shortcut: F)"
+          >
+            <Play className="w-4 h-4 fill-white" />
+            <span>Open Frontend Studio</span>
+            <Maximize2 className="w-3.5 h-3.5 opacity-80 ml-0.5" />
+          </button>
+        </div>
+
+        {/* Installed Packages Modal */}
+        <InstalledPackagesModal
+          isOpen={showPackagesModal}
+          onClose={() => setShowPackagesModal(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`flex flex-col bg-[var(--bg-card)] transition-all duration-200 ${
-        isFullscreen
-          ? 'fixed inset-0 z-[60] w-screen h-screen bg-[var(--bg-card)] overflow-hidden shadow-2xl'
-          : 'relative w-full h-[650px] rounded-[var(--radius-lg)] border border-[var(--border)] overflow-hidden shadow-md'
-      }`}
+      className="fixed inset-0 z-[60] w-screen h-screen bg-[var(--bg-card)] overflow-hidden shadow-2xl flex flex-col transition-all duration-200"
     >
       {/* ============================================================ */}
       {/* MAIN PLAYGROUND HEADER TOOLBAR */}
@@ -125,21 +224,11 @@ export default function FrontendPlayground({
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-xs font-mono font-bold shadow-xs">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               <span>React Frontend Editor</span>
-              {isFullscreen && (
-                <span className="text-[10px] bg-cyan-500 text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
-                  Fullscreen
-                </span>
-              )}
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30 text-xs font-mono font-bold shadow-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Live Observer • {candidateName}</span>
-              {isFullscreen && (
-                <span className="text-[10px] bg-[var(--green)] text-white px-1.5 py-0.2 rounded ml-1 uppercase font-semibold">
-                  Fullscreen
-                </span>
-              )}
             </div>
           )}
 
@@ -234,23 +323,17 @@ export default function FrontendPlayground({
             {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
 
-          {/* Fullscreen Toggle */}
+          {/* Exit Studio Fullscreen Toggle */}
           <button
             type="button"
-            onClick={() => setIsFullscreen((f) => !f)}
-            className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ml-1 border font-bold text-xs cursor-pointer shadow-xs ${
-              isFullscreen
-                ? 'bg-cyan-600 text-white border-cyan-600 shadow-md hover:opacity-90'
-                : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-primary)] hover:border-cyan-500 hover:text-cyan-500'
-            }`}
-            title={isFullscreen ? 'Exit Fullscreen (Esc or F)' : 'Expand Fullscreen (F)'}
+            onClick={() => setIsFullscreen(false)}
+            className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:bg-cyan-700 transition cursor-pointer"
+            title="Exit Fullscreen Mode (Press Esc or F)"
           >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            <span className="font-mono">
-              {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-            </span>
-            <kbd className="hidden sm:inline-block text-[9px] font-mono px-1 py-0.5 rounded bg-black/10 dark:bg-white/10 uppercase ml-0.5">
-              {isFullscreen ? 'Esc' : 'F'}
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span className="font-mono">Exit Studio</span>
+            <kbd className="hidden sm:inline-block text-[9px] font-mono px-1 py-0.2 rounded bg-black/20 uppercase ml-0.5">
+              Esc
             </kbd>
           </button>
         </div>
