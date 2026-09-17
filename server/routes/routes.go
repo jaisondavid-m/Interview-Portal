@@ -130,6 +130,8 @@ func SetupRouter() *gin.Engine {
 				adminUsers.POST("", controllers.AdminCreateUser)
 				adminUsers.POST("/bulk", controllers.AdminBulkCreateUsers)
 				adminUsers.POST("/bulk-delete", controllers.AdminBulkDeleteUsers)
+				adminUsers.POST("/bulk-force-logout", controllers.AdminBulkForceLogoutUsers)
+				adminUsers.POST("/:id/force-logout", controllers.AdminForceLogoutUser)
 				adminUsers.PUT("/:id", controllers.AdminUpdateUser)
 				adminUsers.DELETE("/:id", controllers.AdminDeleteUser)
 			}

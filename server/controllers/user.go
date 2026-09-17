@@ -25,6 +25,10 @@ func AdminGetUsers(c *gin.Context) {
 		return
 	}
 
+	for i := range users {
+		users[i].HasActiveSession = strings.TrimSpace(users[i].ActiveToken) != ""
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   users,
@@ -43,6 +47,8 @@ func AdminGetUserByID(c *gin.Context) {
 		})
 		return
 	}
+
+	user.HasActiveSession = strings.TrimSpace(user.ActiveToken) != ""
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
@@ -441,4 +447,62 @@ func AdminExportUsersCSV(c *gin.Context) {
 			u.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
+}
+
+// AdminForceLogoutUser terminates the active session for a specific user
+func AdminForceLogoutUser(c *gin.Context) {
+	id := c.Param("id")
+	var user models.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":  "error",
+			"message": "User not found",
+		})
+		return
+	}
+
+	if err := database.DB.Model(&user).Update("active_token", "").Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to force logout user",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": fmt.Sprintf("Successfully logged out %s from active session", user.Name),
+	})
+}
+
+// AdminBulkForceLogoutUsers terminates active sessions for multiple selected users
+func AdminBulkForceLogoutUsers(c *gin.Context) {
+	var input struct {
+		UserIDs []uint `json:"user_ids" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil || len(input.UserIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "No user IDs provided for force logout",
+		})
+		return
+	}
+
+	res := database.DB.Model(&models.User{}).Where("id IN ?", input.UserIDs).Update("active_token", "")
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to force logout selected users",
+			"error":   res.Error.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":        "success",
+		"message":       fmt.Sprintf("Successfully terminated %d active user sessions", res.RowsAffected),
+		"updated_count": res.RowsAffected,
+	})
 }

@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"server/config"
 	"server/database"
@@ -62,6 +63,13 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// Update active token and last login timestamp in DB (Enforce single-device session)
+	now := time.Now()
+	database.DB.Model(&user).Updates(map[string]interface{}{
+		"active_token":  token,
+		"last_login_at": &now,
+	})
+
 	// Set HttpOnly JWT Cookie (valid for 3 days = 259200 seconds)
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", token, 72*3600, "/", "", false, true)
@@ -81,10 +89,30 @@ func Login(c *gin.Context) {
 	})
 }
 
-// Logout clears the JWT authentication cookie
+// Logout clears the JWT authentication cookie and invalidates the database session token
 func Logout(c *gin.Context) {
+	// Clear cookie
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", "", -1, "/", "", false, true)
+
+	// Extract token if present and clear active_token in DB
+	var tokenString string
+	if cookieToken, err := c.Cookie("token"); err == nil && cookieToken != "" {
+		tokenString = cookieToken
+	} else {
+		authHeader := c.GetHeader("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+
+	if tokenString != "" {
+		claims := &middlewares.JWTClaims{}
+		token, err := middlewares.ParseJWTToken(tokenString, config.AppConfig.JWTSecret, claims)
+		if err == nil && token.Valid && claims.UserID > 0 {
+			database.DB.Model(&models.User{}).Where("id = ?", claims.UserID).Update("active_token", "")
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",

@@ -64,9 +64,19 @@ export function AuthProvider({ children }) {
       fetchPermissions(true);
     };
 
+    const handleSessionInvalidated = (e) => {
+      setUser(null);
+      setPermissions({ allowedKeys: [], pages: [] });
+      if (e.detail?.message) {
+        sessionStorage.setItem('logoutNotice', e.detail.message);
+      }
+    };
+
     window.addEventListener('permissionsUpdated', handlePermissionsUpdated);
+    window.addEventListener('sessionInvalidated', handleSessionInvalidated);
     return () => {
       window.removeEventListener('permissionsUpdated', handlePermissionsUpdated);
+      window.removeEventListener('sessionInvalidated', handleSessionInvalidated);
     };
   }, [fetchPermissions]);
 

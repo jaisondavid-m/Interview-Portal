@@ -45,6 +45,16 @@ func GenerateJWT(user *models.User, secret string) (string, error) {
 	return token.SignedString([]byte(secret))
 }
 
+// ParseJWTToken parses and validates a signed JWT token string
+func ParseJWTToken(tokenString string, secret string, claims *JWTClaims) (*jwt.Token, error) {
+	return jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+}
+
 // AuthMiddleware validates the JWT token from HTTP Cookie or Authorization Header
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -80,17 +90,27 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		claims := &JWTClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-			}
-			return []byte(config.AppConfig.JWTSecret), nil
-		})
+		token, err := ParseJWTToken(tokenString, config.AppConfig.JWTSecret, claims)
 
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"status":  "error",
 				"message": "Invalid or expired session token",
+			})
+			c.Abort()
+			return
+		}
+
+		// Verify that user exists and their active_token matches the current session token (single-device enforcement)
+		var dbUser models.User
+		if err := database.DB.Select("id, active_token").First(&dbUser, claims.UserID).Error; err != nil || dbUser.ActiveToken == "" || dbUser.ActiveToken != tokenString {
+			// Clear cookie on invalid session
+			c.SetSameSite(http.SameSiteLaxMode)
+			c.SetCookie("token", "", -1, "/", "", false, true)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  "error",
+				"message": "Session invalidated. You have logged in from another device or were logged out by an administrator.",
+				"code":    "SESSION_INVALIDATED",
 			})
 			c.Abort()
 			return

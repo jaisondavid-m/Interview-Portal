@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Search, Filter, Edit2, Trash2, Shield, 
   GraduationCap, Check, X, AlertCircle, RefreshCw, KeyRound, SlidersHorizontal, RotateCcw,
   Eye, EyeOff, Upload, Download, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle,
-  Info, CheckSquare, Square, MinusSquare
+  Info, CheckSquare, Square, MinusSquare, LogOut
 } from 'lucide-react';
 import api from '../api/axios';
 import SearchableSelect from '../Components/SearchableSelect';
@@ -42,8 +42,12 @@ export default function AdminUsers() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showForceLogoutModal, setShowForceLogoutModal] = useState(false);
+  const [showBulkForceLogoutModal, setShowBulkForceLogoutModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [userToLogout, setUserToLogout] = useState(null);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
 
@@ -224,6 +228,44 @@ export default function AdminUsers() {
     } finally {
       setFormLoading(false);
     }
+  };
+
+  // Handle Single User Force Logout
+  const handleForceLogoutSubmit = async () => {
+    if (!userToLogout) return;
+    setLogoutLoading(true);
+    try {
+      await api.post(`/admin/users/${userToLogout.id}/force-logout`);
+      setShowForceLogoutModal(false);
+      setUserToLogout(null);
+      fetchUsers();
+    } catch (err) {
+      alert(err.message || 'Failed to force logout user');
+    } finally {
+      setLogoutLoading(false);
+    }
+  };
+
+  // Handle Bulk Force Logout
+  const handleBulkForceLogoutSubmit = async () => {
+    if (selectedIds.size === 0) return;
+    setLogoutLoading(true);
+    try {
+      const userIds = Array.from(selectedIds);
+      await api.post('/admin/users/bulk-force-logout', { user_ids: userIds });
+      setShowBulkForceLogoutModal(false);
+      setSelectedIds(new Set());
+      fetchUsers();
+    } catch (err) {
+      alert(err.message || 'Failed to force logout selected users');
+    } finally {
+      setLogoutLoading(false);
+    }
+  };
+
+  const openForceLogoutModal = (user) => {
+    setUserToLogout(user);
+    setShowForceLogoutModal(true);
   };
 
   const openEditModal = (user) => {
@@ -694,6 +736,15 @@ export default function AdminUsers() {
             </button>
 
             <button
+              onClick={() => setShowBulkForceLogoutModal(true)}
+              className="btn btn-secondary text-[11px] py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              title="Force logout active sessions on selected accounts"
+            >
+              <LogOut className="w-3 h-3" />
+              <span>Force Logout Selected ({selectedIds.size})</span>
+            </button>
+
+            <button
               onClick={() => setShowBulkDeleteModal(true)}
               className="btn btn-danger text-[11px] py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium"
             >
@@ -737,15 +788,16 @@ export default function AdminUsers() {
                 <th className="py-3 px-4">Roll / Reg No</th>
                 <th className="py-3 px-4">Department</th>
                 <th className="py-3 px-4">Role</th>
+                <th className="py-3 px-4">Session Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)] text-[13px]">
               {loading ? (
-                <SkeletonTableRows rows={8} cols={6} />
+                <SkeletonTableRows rows={8} cols={7} />
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-[var(--text-muted)]">
+                  <td colSpan="7" className="py-8 text-center text-[var(--text-muted)]">
                     No matching users found.
                   </td>
                 </tr>
@@ -801,7 +853,35 @@ export default function AdminUsers() {
                           {user.role === 'admin' ? 'Administrator' : user.role === 'developer' ? 'Developer' : 'Student'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right space-x-2">
+                      <td className="py-3 px-4">
+                        {user.has_active_session ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span>Active</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] border border-[var(--border)]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]/50"></span>
+                            <span>Offline</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        <button
+                          onClick={() => openForceLogoutModal(user)}
+                          disabled={!user.has_active_session}
+                          className={`p-1.5 rounded-[var(--radius-sm)] transition cursor-pointer ${
+                            user.has_active_session
+                              ? 'hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 text-amber-500/80'
+                              : 'opacity-25 cursor-not-allowed text-[var(--text-muted)]'
+                          }`}
+                          title={user.has_active_session ? `Force Logout ${user.name}` : 'User is not currently logged in'}
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => openEditModal(user)}
                           className="p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-card)] hover:text-[var(--accent)] text-[var(--text-secondary)] transition cursor-pointer"
@@ -1551,6 +1631,119 @@ export default function AdminUsers() {
                 className="btn btn-danger text-xs py-2 px-4 cursor-pointer"
               >
                 <span>{formLoading ? 'Deleting...' : 'Confirm Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* SINGLE USER FORCE LOGOUT CONFIRMATION MODAL */}
+      {/* ============================================================ */}
+      {showForceLogoutModal && userToLogout && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
+                  Force Logout Active Session?
+                </h3>
+                <p className="text-[12px] text-[var(--text-muted)]">
+                  Single-device session termination
+                </p>
+              </div>
+            </div>
+
+            <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+              Are you sure you want to terminate the active session for <strong className="text-[var(--text-primary)]">{userToLogout.name}</strong> ({userToLogout.email})? They will be immediately logged out on any active device and will need to sign in again.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForceLogoutModal(false);
+                  setUserToLogout(null);
+                }}
+                className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleForceLogoutSubmit}
+                disabled={logoutLoading}
+                className="btn text-xs py-2 px-4 flex items-center gap-1.5 cursor-pointer bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs"
+              >
+                {logoutLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Logging out...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Confirm Force Logout</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* BULK FORCE LOGOUT CONFIRMATION MODAL */}
+      {/* ============================================================ */}
+      {showBulkForceLogoutModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
+                  Force Logout {selectedIds.size} Accounts?
+                </h3>
+                <p className="text-[12px] text-[var(--text-muted)]">
+                  Batch session termination
+                </p>
+              </div>
+            </div>
+
+            <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+              Are you sure you want to terminate active sessions for <strong className="text-[var(--text-primary)]">{selectedIds.size} selected accounts</strong>? All active devices will be immediately disconnected.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => setShowBulkForceLogoutModal(false)}
+                className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkForceLogoutSubmit}
+                disabled={logoutLoading}
+                className="btn text-xs py-2 px-4 flex items-center gap-1.5 cursor-pointer bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs"
+              >
+                {logoutLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Logging out...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Confirm Force Logout ({selectedIds.size})</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -9,16 +9,19 @@ import (
 
 // User represents a student or admin user in the system
 type User struct {
-	ID         uint           `gorm:"primaryKey" json:"id"`
-	Name       string         `gorm:"size:100;not null" json:"name" binding:"required"`
-	Email      string         `gorm:"size:100;uniqueIndex;not null" json:"email" binding:"required,email"`
-	RollNo     string         `gorm:"size:50;index" json:"roll_no"`
-	Department string         `gorm:"size:100" json:"department"`
-	Password   string         `gorm:"size:255;not null" json:"-"`
-	Role       string         `gorm:"size:20;default:'student';not null" json:"role"` // 'admin' or 'student'
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
+	ID               uint           `gorm:"primaryKey" json:"id"`
+	Name             string         `gorm:"size:100;not null" json:"name" binding:"required"`
+	Email            string         `gorm:"size:100;uniqueIndex;not null" json:"email" binding:"required,email"`
+	RollNo           string         `gorm:"size:50;index" json:"roll_no"`
+	Department       string         `gorm:"size:100" json:"department"`
+	Password         string         `gorm:"size:255;not null" json:"-"`
+	Role             string         `gorm:"size:20;default:'student';not null" json:"role"` // 'admin' or 'student'
+	ActiveToken      string         `gorm:"type:text" json:"-"`                             // Current active session JWT token for single-device enforcement
+	LastLoginAt      *time.Time     `json:"last_login_at"`
+	HasActiveSession bool           `gorm:"-" json:"has_active_session"` // Virtual field populated for UI
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // HashPassword hashes a raw password string using bcrypt

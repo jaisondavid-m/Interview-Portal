@@ -46,8 +46,17 @@ export default function Login() {
   const [activeQuickLogging, setActiveQuickLogging] = useState(null);
   const [error, setError] = useState('');
   const [selectedQuick, setSelectedQuick] = useState(null);
+  const [notice, setNotice] = useState('');
   const { user, login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const savedNotice = sessionStorage.getItem('logoutNotice');
+    if (savedNotice) {
+      setNotice(savedNotice);
+      sessionStorage.removeItem('logoutNotice');
+    }
+  }, []);
 
   // If already authenticated, direct immediately to respective dashboard
   useEffect(() => {
@@ -115,6 +124,13 @@ export default function Login() {
           Access the internal student & admin mock interview system.
         </p>
       </div>
+
+      {notice && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-[var(--radius-sm)] flex items-start gap-2.5 text-[12px] text-amber-700 dark:text-amber-300 font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{notice}</span>
+        </div>
+      )}
 
       {error && (
         <div className="p-3 bg-[var(--red-bg)] border border-[var(--red)]/20 rounded-[var(--radius-sm)] flex items-center gap-2.5 text-[12px] text-[var(--red)] font-medium">
