@@ -5,11 +5,11 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Copy all source files including vendored modules
+# Copy all source files including modules
 COPY . .
 
-# Build lightweight static binary offline using local vendor directory
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /app/server main.go
+# Build lightweight static binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server main.go
 
 # ==========================================
 # Production Stage (Node.js + Python3 Runtime)
