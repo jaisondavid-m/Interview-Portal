@@ -59,27 +59,14 @@ export default function MCQPlayground({
     return { answers: {}, currentIndex: 0, submitted: false };
   }, [code]);
 
+  const activeRoundRef = useRef(round);
+  const activeRoleRef = useRef(currentUserRole);
+
   const [currentIndex, setCurrentIndex] = useState(parsedState.currentIndex || 0);
   const [answers, setAnswers] = useState(parsedState.answers || {});
   const [submitted, setSubmitted] = useState(parsedState.submitted || false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [followCandidate, setFollowCandidate] = useState(true);
-
-  // Sync external changes (e.g. interviewer receiving updates from candidate)
-  useEffect(() => {
-    if (parsedState.answers) {
-      setAnswers(parsedState.answers);
-    }
-    if (parsedState.submitted !== undefined) {
-      setSubmitted(parsedState.submitted);
-    }
-    // If interviewer has "followCandidate" enabled, sync active question index
-    if (!isEditable && followCandidate && typeof parsedState.currentIndex === 'number') {
-      if (parsedState.currentIndex >= 0 && parsedState.currentIndex < (safeQuestions.length || 1)) {
-        setCurrentIndex(parsedState.currentIndex);
-      }
-    }
-  }, [parsedState, isEditable, followCandidate, safeQuestions.length]);
 
   // Combined change emitter
   const emitChange = useCallback((newAnswers, newIndex, isSub = false) => {
@@ -88,11 +75,64 @@ export default function MCQPlayground({
         answers: newAnswers,
         currentIndex: newIndex,
         submitted: isSub,
+        round,
         updatedAt: new Date().toISOString(),
       });
       onCodeChange(payload);
     }
-  }, [onCodeChange, isEditable]);
+  }, [onCodeChange, isEditable, round]);
+
+  // When round changes (e.g. from Round 1 to Round 2) or role switches, reset tracking to Question 1
+  useEffect(() => {
+    const isRoundChanged = activeRoundRef.current !== round;
+    const isRoleChanged = activeRoleRef.current !== currentUserRole;
+
+    if (isRoundChanged || isRoleChanged) {
+      activeRoundRef.current = round;
+      activeRoleRef.current = currentUserRole;
+
+      // Always reset to Question 1 (index 0), empty answers, and unsubmitted state for new round
+      setCurrentIndex(0);
+      setAnswers({});
+      setSubmitted(false);
+      setShowSubmitModal(false);
+
+      if (isEditable && onCodeChange) {
+        const freshPayload = JSON.stringify({
+          answers: {},
+          currentIndex: 0,
+          submitted: false,
+          round,
+          updatedAt: new Date().toISOString(),
+        });
+        onCodeChange(freshPayload);
+      }
+    }
+  }, [round, currentUserRole, isEditable, onCodeChange]);
+
+  // Sync external changes (e.g. interviewer receiving updates from candidate, or candidate receiving reset)
+  useEffect(() => {
+    if (parsedState.answers) {
+      setAnswers(parsedState.answers);
+    }
+    if (parsedState.submitted !== undefined) {
+      setSubmitted(parsedState.submitted);
+    }
+
+    // If interviewer has "followCandidate" enabled, sync active question index
+    if (!isEditable && followCandidate && typeof parsedState.currentIndex === 'number') {
+      if (parsedState.currentIndex >= 0 && parsedState.currentIndex < (safeQuestions.length || 1)) {
+        setCurrentIndex(parsedState.currentIndex);
+      }
+    } else if (isEditable && (!code || !code.trim() || Object.keys(parsedState.answers || {}).length === 0)) {
+      // If code was cleared / reset on round switch, reset to Question 1
+      if (typeof parsedState.currentIndex === 'number') {
+        setCurrentIndex(parsedState.currentIndex);
+      } else {
+        setCurrentIndex(0);
+      }
+    }
+  }, [parsedState, isEditable, followCandidate, safeQuestions.length, code]);
 
   // Select Option for Current Question
   const handleSelectOption = (optionKey) => {
