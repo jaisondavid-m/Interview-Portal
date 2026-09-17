@@ -1,32 +1,119 @@
 services:
-  # ==========================================
-  # MySQL Database Service
-  # ==========================================
-  db:
+  # ============================================================
+  # 1. MySQL Primary Node (Leader / RW on Port 3306)
+  # ============================================================
+  mysql-primary:
     image: mysql:8.0
-    container_name: mockmate-db
+    container_name: mockmate-mysql-primary
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-mock_mate}
-      MYSQL_USER: ${MYSQL_USER:-mockmate_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-mockmate_password}
-    volumes:
-      - mysql_data:/var/lib/mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
     ports:
-      - "${DB_EXTERNAL_PORT:-3306}:3306"
+      - "${DB_PRIMARY_PORT:-3306}:3306"
+    volumes:
+      - ./infrastructure/mysql/primary/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./infrastructure/mysql/init-scripts:/docker-entrypoint-initdb.d:ro
+      - mysql-primary-data:/var/lib/mysql
+      - mysql-primary-logs:/var/log/mysql
     networks:
       - mockmate-network
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD:-jaison}"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 10
       start_period: 15s
 
-  # ==========================================
-  # Isolated Sandbox MySQL (Interview Database Playground)
-  # ==========================================
+  # ============================================================
+  # 2. MySQL Read Replica 1 (Follower on Port 3307)
+  # ============================================================
+  mysql-replica-1:
+    image: mysql:8.0
+    container_name: mockmate-mysql-replica-1
+    restart: unless-stopped
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
+    ports:
+      - "${DB_REPLICA1_PORT:-3307}:3306"
+    volumes:
+      - ./infrastructure/mysql/replica/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - mysql-replica1-data:/var/lib/mysql
+      - mysql-replica1-logs:/var/log/mysql
+    networks:
+      - mockmate-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD:-jaison}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  # ============================================================
+  # 3. MySQL Read Replica 2 (Follower on Port 3308)
+  # ============================================================
+  mysql-replica-2:
+    image: mysql:8.0
+    container_name: mockmate-mysql-replica-2
+    restart: unless-stopped
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
+    ports:
+      - "${DB_REPLICA2_PORT:-3308}:3306"
+    volumes:
+      - ./infrastructure/mysql/replica/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - mysql-replica2-data:/var/lib/mysql
+      - mysql-replica2-logs:/var/log/mysql
+    networks:
+      - mockmate-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD:-jaison}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  # ============================================================
+  # 4. Failover & Topology Health Daemon
+  # ============================================================
+  db-failover-manager:
+    image: python:3.10-slim
+    container_name: mockmate-failover-manager
+    restart: unless-stopped
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+      mysql-replica-1:
+        condition: service_healthy
+      mysql-replica-2:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/scripts:/scripts:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /scripts
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
+      PRIMARY_HOST: mysql-primary
+      PRIMARY_PORT: 3306
+      REPLICA1_HOST: mysql-replica-1
+      REPLICA1_PORT: 3306
+      REPLICA2_HOST: mysql-replica-2
+      REPLICA2_PORT: 3306
+    entrypoint: ["bash", "-c", "apt-get update && apt-get install -y default-mysql-client && python /scripts/failover_manager.py"]
+    networks:
+      - mockmate-network
+
+  # ============================================================
+  # 5. Isolated Sandbox MySQL (Interview Database Playground on Port 3309)
+  # ============================================================
   sandbox-db:
     image: mysql:8.0
     container_name: mockmate-sandbox-db
@@ -35,7 +122,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${SANDBOX_DB_PASSWORD:-sandbox_root_pass_2026}
       MYSQL_DATABASE: sandbox_default
     ports:
-      - "${SANDBOX_DB_EXTERNAL_PORT:-3307}:3306"
+      - "${SANDBOX_DB_EXTERNAL_PORT:-3309}:3306"
     networks:
       - mockmate-network
     healthcheck:
@@ -45,9 +132,9 @@ services:
       retries: 10
       start_period: 15s
 
-  # ==========================================
-  # Go Backend API Service
-  # ==========================================
+  # ============================================================
+  # 6. Go Backend API Service (Read/Write Splitting with GORM)
+  # ============================================================
   server:
     build:
       context: ./server
@@ -57,11 +144,12 @@ services:
     environment:
       PORT: 8080
       GIN_MODE: ${GIN_MODE:-release}
-      DB_HOST: db
+      DB_HOST: mysql-primary
       DB_PORT: 3306
       DB_USER: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
       DB_NAME: ${MYSQL_DATABASE:-mock_mate}
+      DB_REPLICA_HOSTS: mysql-replica-1:3306,mysql-replica-2:3306
       SANDBOX_DB_HOST: ${SANDBOX_DB_HOST:-sandbox-db}
       SANDBOX_DB_PORT: ${SANDBOX_DB_PORT:-3306}
       SANDBOX_DB_USER: ${SANDBOX_DB_USER:-root}
@@ -72,14 +160,18 @@ services:
     volumes:
       - audio_recordings:/app/uploads
     depends_on:
-      db:
+      mysql-primary:
+        condition: service_healthy
+      mysql-replica-1:
+        condition: service_healthy
+      mysql-replica-2:
         condition: service_healthy
     networks:
       - mockmate-network
 
-  # ==========================================
-  # React Frontend (Nginx SPA + Reverse Proxy)
-  # ==========================================
+  # ============================================================
+  # 7. React Frontend (Nginx SPA + Reverse Proxy on Port 80)
+  # ============================================================
   client:
     build:
       context: ./client
@@ -95,10 +187,9 @@ services:
     networks:
       - mockmate-network
 
-  # ==========================================
-  # Cloudflare Tunnel (Optional / Automated)
-  # ==========================================
-  # To use: Set TUNNEL_TOKEN in your .env file and run: docker compose --profile tunnel up -d
+  # ============================================================
+  # 8. Cloudflare Tunnel (Optional)
+  # ============================================================
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: mockmate-cloudflare-tunnel
@@ -115,8 +206,12 @@ services:
       - server
 
 volumes:
-  mysql_data:
-    driver: local
+  mysql-primary-data:
+  mysql-primary-logs:
+  mysql-replica1-data:
+  mysql-replica1-logs:
+  mysql-replica2-data:
+  mysql-replica2-logs:
   audio_recordings:
     driver: local
 
