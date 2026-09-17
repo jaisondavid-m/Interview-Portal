@@ -5,8 +5,30 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState({ allowedKeys: [], pages: [] });
+  const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Fetch permitted pages and keys from backend
+  const fetchPermissions = useCallback(async (isSilent = false) => {
+    try {
+      if (!isSilent) setPermissionsLoading(true);
+      const res = await api.get('/auth/permissions');
+      if (res && res.data) {
+        setPermissions({
+          allowedKeys: res.data.allowed_keys || [],
+          pages: res.data.pages || [],
+        });
+        return res.data;
+      }
+    } catch (err) {
+      console.warn('Failed to load user permissions:', err);
+    } finally {
+      if (!isSilent) setPermissionsLoading(false);
+    }
+    return null;
+  }, []);
 
   // Check current session from /auth/me using HTTP-only cookie
   const checkAuth = useCallback(async () => {
@@ -16,21 +38,49 @@ export function AuthProvider({ children }) {
       const res = await api.get('/auth/me');
       if (res && res.user) {
         setUser(res.user);
+        await fetchPermissions(true);
         return res.user;
       }
       setUser(null);
+      setPermissions({ allowedKeys: [], pages: [] });
       return null;
     } catch (err) {
       setUser(null);
+      setPermissions({ allowedKeys: [], pages: [] });
       return null;
     } finally {
       setLoading(false);
+      setPermissionsLoading(false);
     }
-  }, []);
+  }, [fetchPermissions]);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Listen for live permission updates from Role Management across components
+  useEffect(() => {
+    const handlePermissionsUpdated = () => {
+      fetchPermissions(true);
+    };
+
+    window.addEventListener('permissionsUpdated', handlePermissionsUpdated);
+    return () => {
+      window.removeEventListener('permissionsUpdated', handlePermissionsUpdated);
+    };
+  }, [fetchPermissions]);
+
+  // Check if current user has permission for a specific page key (or list of keys)
+  const hasPermission = useCallback((pageKeys) => {
+    if (!user) return false;
+    const role = user.role?.toLowerCase();
+    if (role === 'admin') return true; // Superadmin bypass
+
+    if (!pageKeys) return true;
+
+    const keysToCheck = Array.isArray(pageKeys) ? pageKeys : [pageKeys];
+    return keysToCheck.some(key => permissions.allowedKeys.includes(key));
+  }, [user, permissions.allowedKeys]);
 
   // Login handler
   const login = async (identifier, password) => {
@@ -44,6 +94,7 @@ export function AuthProvider({ children }) {
 
       if (res && res.user) {
         setUser(res.user);
+        await fetchPermissions();
         return { success: true, user: res.user };
       }
       return { success: false, error: 'Invalid response from server' };
@@ -64,12 +115,17 @@ export function AuthProvider({ children }) {
       console.warn('Logout API error:', e);
     } finally {
       setUser(null);
+      setPermissions({ allowedKeys: [], pages: [] });
     }
   };
 
   const value = {
     user,
     setUser,
+    permissions,
+    permissionsLoading,
+    hasPermission,
+    fetchPermissions,
     loading,
     error,
     login,

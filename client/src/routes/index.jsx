@@ -26,17 +26,16 @@ import NotFound from '../Pages/NotFound';
 
 // Route Guards & Error Boundary
 import ProtectedRoute from '../Components/ProtectedRoute';
-import AdminRoute from '../Components/AdminRoute';
-import DeveloperRoute from '../Components/DeveloperRoute';
+import DynamicPageRoute from '../Components/DynamicPageRoute';
 import { RouteErrorBoundary } from '../Components/ErrorBoundary';
 import { useAuth } from '../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
-// Helper component for root redirect
+// Dynamic helper component for root redirect
 function RootRedirect() {
-  const { user, loading } = useAuth();
+  const { user, loading, permissionsLoading, permissions } = useAuth();
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[var(--bg)] text-[var(--text-primary)]">
         <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
@@ -49,6 +48,15 @@ function RootRedirect() {
     if (role === 'admin') {
       return <Navigate to="/admin/dashboard" replace />;
     }
+
+    // Dynamic landing: navigate to first permitted page if available
+    if (permissions?.pages && permissions.pages.length > 0) {
+      const firstPage = permissions.pages.find(p => !p.path.includes(':'));
+      if (firstPage && firstPage.path) {
+        return <Navigate to={firstPage.path} replace />;
+      }
+    }
+
     if (role === 'developer') {
       return <Navigate to="/developer/audit-logs" replace />;
     }
@@ -59,7 +67,7 @@ function RootRedirect() {
 }
 
 export const router = createBrowserRouter([
-  // Root Redirect -> Directly go to login or appropriate dashboard
+  // Root Redirect -> Directly go to login or first permitted dashboard page
   {
     path: '/',
     element: <RootRedirect />,
@@ -78,107 +86,7 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Protected Admin Routes
-  {
-    element: <AdminRoute />,
-    errorElement: <RouteErrorBoundary />,
-    children: [
-      {
-        element: <DashboardLayout />,
-        errorElement: <RouteErrorBoundary />,
-        children: [
-          {
-            path: 'admin',
-            element: <Navigate to="/admin/dashboard" replace />,
-          },
-          {
-            path: 'admin/dashboard',
-            element: <AdminDashboard />,
-          },
-          {
-            path: 'admin/users',
-            element: <AdminUsers />,
-          },
-          {
-            path: 'admin/roles',
-            element: <AdminRoles />,
-          },
-          {
-            path: 'admin/interviews',
-            element: <AdminInterviewConfig />,
-          },
-          {
-            path: 'admin/interviews/config',
-            element: <Navigate to="/admin/interviews" replace />,
-          },
-          {
-            path: 'admin/feedback',
-            element: <AdminFeedbackConfig />,
-          },
-          {
-            path: 'admin/leaderboard',
-            element: <AdminLeaderboard />,
-          },
-          {
-            path: 'admin/history',
-            element: <AdminInterviewHistory />,
-          },
-          {
-            path: 'admin/history/:sessionId',
-            element: <AdminInterviewSessionDetail />,
-          },
-          {
-            path: 'admin/interviews/:trackId/levels',
-            element: <AdminInterviewConfig />,
-          },
-          {
-            path: 'admin/interviews/:trackId/levels/:levelId/questions',
-            element: <AdminInterviewConfig />,
-          },
-          {
-            path: 'admin/interviews/:trackId/levels/:levelId/questions/new',
-            element: <AdminQuestionEditor />,
-          },
-          {
-            path: 'admin/interviews/:trackId/levels/:levelId/questions/:questionId/edit',
-            element: <AdminQuestionEditor />,
-          },
-          {
-            path: 'admin/interviews/:trackId/levels/:levelId/questions/:questionId',
-            element: <AdminInterviewConfig />,
-          },
-          {
-            path: 'admin/audit-logs',
-            element: <DeveloperAuditLogs />,
-          },
-        ],
-      },
-    ],
-  },
-
-  // Protected Developer Routes (Dedicated Audit Logs Portal)
-  {
-    element: <DeveloperRoute />,
-    errorElement: <RouteErrorBoundary />,
-    children: [
-      {
-        element: <DashboardLayout />,
-        errorElement: <RouteErrorBoundary />,
-        children: [
-          {
-            path: 'developer/audit-logs',
-            element: <DeveloperAuditLogs />,
-          },
-          {
-            path: 'developer',
-            element: <Navigate to="/developer/audit-logs" replace />,
-          },
-        ],
-      },
-    ],
-  },
-
-  // Protected Student & Campus Workspace Routes
+  // Protected Routes (Wrapped in ProtectedRoute -> DashboardLayout -> DynamicPageRoute)
   {
     element: <ProtectedRoute />,
     errorElement: <RouteErrorBoundary />,
@@ -187,29 +95,190 @@ export const router = createBrowserRouter([
         element: <DashboardLayout />,
         errorElement: <RouteErrorBoundary />,
         children: [
+          // Admin & Core Portal Routes
+          {
+            path: 'admin',
+            element: <Navigate to="/admin/dashboard" replace />,
+          },
+          {
+            path: 'admin/dashboard',
+            element: (
+              <DynamicPageRoute pageKey="admin_dashboard">
+                <AdminDashboard />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/users',
+            element: (
+              <DynamicPageRoute pageKey="admin_users">
+                <AdminUsers />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/roles',
+            element: (
+              <DynamicPageRoute requiredRole="admin">
+                <AdminRoles />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/interviews',
+            element: (
+              <DynamicPageRoute pageKey={['admin_interviews', 'admin_history']}>
+                <AdminInterviewConfig />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/interviews/config',
+            element: <Navigate to="/admin/interviews" replace />,
+          },
+          {
+            path: 'admin/interviews/:trackId/levels',
+            element: (
+              <DynamicPageRoute pageKey="admin_interviews">
+                <AdminInterviewConfig />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/interviews/:trackId/levels/:levelId/questions',
+            element: (
+              <DynamicPageRoute pageKey="admin_interviews">
+                <AdminInterviewConfig />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/interviews/:trackId/levels/:levelId/questions/new',
+            element: (
+              <DynamicPageRoute pageKey="admin_interviews">
+                <AdminQuestionEditor />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/interviews/:trackId/levels/:levelId/questions/:questionId/edit',
+            element: (
+              <DynamicPageRoute pageKey="admin_interviews">
+                <AdminQuestionEditor />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/interviews/:trackId/levels/:levelId/questions/:questionId',
+            element: (
+              <DynamicPageRoute pageKey="admin_interviews">
+                <AdminInterviewConfig />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/feedback',
+            element: (
+              <DynamicPageRoute pageKey="admin_feedback">
+                <AdminFeedbackConfig />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/leaderboard',
+            element: (
+              <DynamicPageRoute pageKey="admin_leaderboard">
+                <AdminLeaderboard />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/history',
+            element: (
+              <DynamicPageRoute pageKey="admin_history">
+                <AdminInterviewHistory />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/history/:sessionId',
+            element: (
+              <DynamicPageRoute pageKey="admin_history">
+                <AdminInterviewSessionDetail />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/audit-logs',
+            element: (
+              <DynamicPageRoute pageKey="audit_logs">
+                <DeveloperAuditLogs />
+              </DynamicPageRoute>
+            ),
+          },
+
+          // Developer Portal Routes
+          {
+            path: 'developer/audit-logs',
+            element: (
+              <DynamicPageRoute pageKey="audit_logs">
+                <DeveloperAuditLogs />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'developer',
+            element: <Navigate to="/developer/audit-logs" replace />,
+          },
+
+          // Student & Collaborative Workspace Routes
           {
             path: 'dashboard',
-            element: <Dashboard />,
+            element: (
+              <DynamicPageRoute pageKey="student_dashboard">
+                <Dashboard />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'interviews',
-            element: <StudentInterviews />,
+            element: (
+              <DynamicPageRoute pageKey="student_interviews">
+                <StudentInterviews />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'interviews/room/:sessionId',
-            element: <InterviewRoom />,
+            element: (
+              <DynamicPageRoute pageKey={['interview_room', 'student_interviews']}>
+                <InterviewRoom />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'interview/room/:sessionId',
-            element: <InterviewRoom />,
+            element: (
+              <DynamicPageRoute pageKey={['interview_room', 'student_interviews']}>
+                <InterviewRoom />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'interview',
-            element: <MockInterview />,
+            element: (
+              <DynamicPageRoute pageKey="student_interviews">
+                <MockInterview />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'history',
-            element: <History />,
+            element: (
+              <DynamicPageRoute pageKey="student_history">
+                <History />
+              </DynamicPageRoute>
+            ),
           },
         ],
       },
@@ -228,3 +297,4 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+

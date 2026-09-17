@@ -11,7 +11,6 @@ import {
   Terminal,
   Video,
   Plus,
-  RotateCcw,
   Check,
   X,
   Search,
@@ -25,7 +24,9 @@ import {
   Square,
   Globe,
   Settings,
-  Sparkles
+  Sparkles,
+  ArrowLeft,
+  ChevronRight
 } from 'lucide-react';
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
@@ -62,51 +63,12 @@ const ICON_OPTIONS = [
   { value: 'FileCode2', label: 'Code / Page', icon: FileCode2 },
 ];
 
-const DEFAULT_PAGES_FALLBACK = [
-  { id: 1, key: 'admin_dashboard', name: 'Dashboard', path: '/admin/dashboard', category: 'Admin', icon: 'LayoutDashboard', order_index: 1, description: 'Administrative overview metrics and platform engagement telemetry' },
-  { id: 2, key: 'admin_users', name: 'User Management', path: '/admin/users', category: 'Admin', icon: 'Users', order_index: 2, description: 'Manage candidate and administrator credentials and department profiles' },
-  { id: 3, key: 'admin_roles', name: 'Role Management', path: '/admin/roles', category: 'Admin', icon: 'ShieldCheck', order_index: 3, description: 'Configure role definitions and page access permissions matrix' },
-  { id: 4, key: 'admin_interviews', name: 'Interview Configuration', path: '/admin/interviews', category: 'Admin', icon: 'SlidersHorizontal', order_index: 4, description: 'Manage domain tracks, experience levels, and question bank editor' },
-  { id: 5, key: 'admin_feedback', name: 'Peer Feedback Config', path: '/admin/feedback', category: 'Admin', icon: 'MessageSquareCheck', order_index: 5, description: 'Configure peer evaluation questionnaires and rating rubrics' },
-  { id: 6, key: 'admin_leaderboard', name: 'Leaderboard', path: '/admin/leaderboard', category: 'Admin', icon: 'Trophy', order_index: 6, description: 'Global performance rankings and peer mock score leaderboard' },
-  { id: 7, key: 'admin_history', name: 'Interview History', path: '/admin/history', category: 'Admin', icon: 'History', order_index: 7, description: 'Review completed sessions, peer scorecards, and session audio recordings' },
-  { id: 8, key: 'audit_logs', name: 'Audit Logs', path: '/admin/audit-logs', category: 'Admin', icon: 'Terminal', order_index: 8, description: 'Platform-wide administrative activity, developer diagnostics, and security audit trail' },
-  { id: 9, key: 'student_dashboard', name: 'Student Dashboard', path: '/dashboard', category: 'Student', icon: 'LayoutDashboard', order_index: 9, description: 'Candidate dashboard with upcoming sessions, readiness stats, and tracks' },
-  { id: 10, key: 'student_interviews', name: 'Interviews Portal', path: '/interviews', category: 'Student', icon: 'Video', order_index: 10, description: 'Interview track selection and automated peer matchmaking queue' },
-  { id: 11, key: 'student_history', name: 'Student Interview History', path: '/history', category: 'Student', icon: 'History', order_index: 11, description: 'Personal candidate mock interview history, recordings, and peer feedback' },
-  { id: 12, key: 'interview_room', name: 'Live Interview Room', path: '/interviews/room/:sessionId', category: 'Student', icon: 'Video', order_index: 12, description: 'Live dual-candidate collaborative coding, whiteboard, and sandbox room' },
-];
-
-const DEFAULT_ROLES_FALLBACK = [
-  { id: 1, name: 'admin', display_name: 'Administrator', description: 'Full administrative access to manage users, tracks, roles, and platform settings', is_system: true, user_count: 1 },
-  { id: 2, name: 'developer', display_name: 'Developer', description: 'Technical developer diagnostics and audit log telemetry portal', is_system: true, user_count: 1 },
-  { id: 3, name: 'student', display_name: 'Student Candidate', description: 'Standard candidate access for peer mock interviews, history, and feedback', is_system: true, user_count: 5 },
-];
-
-const DEFAULT_SEED_MATRIX = {
-  admin: {
-    admin_dashboard: true, admin_users: true, admin_roles: true, admin_interviews: true,
-    admin_feedback: true, admin_leaderboard: true, admin_history: true, audit_logs: true,
-    student_dashboard: true, student_interviews: true, student_history: true, interview_room: true
-  },
-  developer: {
-    admin_dashboard: false, admin_users: false, admin_roles: false, admin_interviews: false,
-    admin_feedback: false, admin_leaderboard: false, admin_history: false, audit_logs: true,
-    student_dashboard: false, student_interviews: false, student_history: false, interview_room: false
-  },
-  student: {
-    admin_dashboard: false, admin_users: false, admin_roles: false, admin_interviews: false,
-    admin_feedback: false, admin_leaderboard: false, admin_history: false, audit_logs: false,
-    student_dashboard: true, student_interviews: true, student_history: true, interview_room: true
-  }
-};
-
 export default function AdminRoles() {
   const [roles, setRoles] = useState([]);
   const [pages, setPages] = useState([]);
   const [matrix, setMatrix] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selectedRole, setSelectedRole] = useState('admin');
+  const [selectedRole, setSelectedRole] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [savingMap, setSavingMap] = useState({});
   const [toastMessage, setToastMessage] = useState(null);
@@ -115,7 +77,6 @@ export default function AdminRoles() {
   const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
   const [showEditRoleModal, setShowEditRoleModal] = useState(false);
   const [showDeleteRoleModal, setShowDeleteRoleModal] = useState(false);
-  const [showResetModal, setShowResetModal] = useState(false);
   const [roleToEdit, setRoleToEdit] = useState(null);
   const [roleToDelete, setRoleToDelete] = useState(null);
 
@@ -147,6 +108,21 @@ export default function AdminRoles() {
     description: '',
   });
 
+  // Toggle & Bulk Confirm Modals
+  const [toggleConfirmModal, setToggleConfirmModal] = useState({
+    isOpen: false,
+    roleName: '',
+    pageKey: '',
+    pageName: '',
+    roleDisplayName: '',
+    isGranting: false,
+  });
+
+  const [bulkToggleModal, setBulkToggleModal] = useState({
+    isOpen: false,
+    grantAll: false,
+  });
+
   // Show Toast
   const showToast = (message, type = 'success') => {
     setToastMessage({ message, type });
@@ -159,18 +135,15 @@ export default function AdminRoles() {
     try {
       const res = await api.get('/admin/roles/mappings');
       if (res && res.data) {
-        setPages(res.data.pages || DEFAULT_PAGES_FALLBACK);
-        setRoles(res.data.roles || DEFAULT_ROLES_FALLBACK);
-        setMatrix(res.data.matrix || DEFAULT_SEED_MATRIX);
-        if (res.data.roles?.length > 0 && !res.data.roles.find(r => r.name === selectedRole)) {
-          setSelectedRole(res.data.roles[0].name);
-        }
+        setPages(res.data.pages || []);
+        setRoles(res.data.roles || []);
+        setMatrix(res.data.matrix || {});
       }
     } catch (err) {
-      console.warn('Backend roles fetch error, using fallback state:', err);
-      setPages(DEFAULT_PAGES_FALLBACK);
-      setRoles(DEFAULT_ROLES_FALLBACK);
-      setMatrix(DEFAULT_SEED_MATRIX);
+      console.warn('Backend roles fetch error:', err);
+      setPages([]);
+      setRoles([]);
+      setMatrix({});
     } finally {
       setLoading(false);
     }
@@ -196,6 +169,45 @@ export default function AdminRoles() {
       );
     });
   }, [pages, searchQuery]);
+
+  // Prompt confirmation for single toggle
+  const promptTogglePermission = (roleName, pageKey, e) => {
+    if (e) e.stopPropagation();
+    const currentVal = !!(matrix[roleName] && matrix[roleName][pageKey]);
+    const pageObj = pages.find(p => p.key === pageKey);
+    const roleObj = roles.find(r => r.name === roleName);
+
+    setToggleConfirmModal({
+      isOpen: true,
+      roleName,
+      pageKey,
+      pageName: pageObj?.name || pageKey,
+      roleDisplayName: roleObj?.display_name || roleName,
+      isGranting: !currentVal,
+    });
+  };
+
+  // Confirm single toggle
+  const confirmTogglePermission = async () => {
+    const { roleName, pageKey } = toggleConfirmModal;
+    setToggleConfirmModal(prev => ({ ...prev, isOpen: false }));
+    await handleTogglePermission(roleName, pageKey);
+  };
+
+  // Prompt confirmation for bulk toggle
+  const promptBulkToggle = (grantAll) => {
+    setBulkToggleModal({
+      isOpen: true,
+      grantAll,
+    });
+  };
+
+  // Confirm bulk toggle
+  const confirmBulkToggle = async () => {
+    const { grantAll } = bulkToggleModal;
+    setBulkToggleModal({ isOpen: false, grantAll: false });
+    await handleBulkToggle(grantAll);
+  };
 
   // Toggle single permission for a role
   const handleTogglePermission = async (roleName, pageKey, e) => {
@@ -445,23 +457,6 @@ export default function AdminRoles() {
     }
   };
 
-  // Reset to Defaults Handler
-  const handleResetDefaults = async () => {
-    setModalLoading(true);
-    try {
-      await api.post('/admin/roles/reset-defaults');
-      showToast('All role mappings reset to system defaults', 'success');
-      setShowResetModal(false);
-      window.dispatchEvent(new Event('permissionsUpdated'));
-      await fetchData();
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Failed to reset mappings';
-      showToast(msg, 'error');
-    } finally {
-      setModalLoading(false);
-    }
-  };
-
   const currentPermittedCount = useMemo(() => {
     return Object.values(matrix[selectedRole] || {}).filter(Boolean).length;
   }, [matrix, selectedRole]);
@@ -529,15 +524,6 @@ export default function AdminRoles() {
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <button
-            onClick={() => setShowResetModal(true)}
-            className="btn btn-secondary text-xs py-2 px-3.5 flex items-center gap-2 cursor-pointer"
-            title="Reset all role mappings to initial seeded defaults"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            <span>Reset Defaults</span>
-          </button>
-
-          <button
             onClick={() => {
               setPageForm({ name: '', path: '', key: '', icon: 'FileCode2', category: 'General', description: '' });
               setFormError('');
@@ -564,92 +550,177 @@ export default function AdminRoles() {
         </div>
       </div>
 
-      {/* Role Selection Bar */}
-      <div className="bg-[var(--bg-card)] p-2 rounded-[var(--radius-md)] border border-[var(--border)]">
-        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
-          <span className="text-[11px] font-mono uppercase text-[var(--text-muted)] px-2 shrink-0">
-            Configure Role:
-          </span>
-          {roles.map((r) => {
-            const isSelected = selectedRole === r.name;
-            const permCount = Object.values(matrix[r.name] || {}).filter(Boolean).length;
-
-            return (
-              <button
-                key={r.name}
-                onClick={() => setSelectedRole(r.name)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-[var(--radius-sm)] text-[13px] font-medium transition-all shrink-0 border cursor-pointer ${
-                  isSelected
-                    ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-semibold border-[var(--border-accent)] shadow-sm ring-1 ring-[var(--accent)]/20'
-                    : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border)] hover:border-[var(--text-muted)]'
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span>{r.display_name}</span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                  isSelected ? 'bg-[var(--accent)]/20 text-[var(--accent)] font-bold' : 'bg-[var(--bg)] text-[var(--text-muted)]'
-                }`}>
-                  {permCount} / {pages.length}
-                </span>
-                {r.is_system ? (
-                  <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                    System
-                  </span>
-                ) : (
-                  <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    Custom
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Active Role Configuration Card */}
-      <div className="p-4 sm:p-5 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">
-              {currentRoleObj.display_name} Access Permissions
+      {/* VIEW 1: ALL ROLES CARDS GRID */}
+      {!selectedRole ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[var(--text-secondary)] font-mono uppercase tracking-wider">
+              Platform Roles ({roles.length})
             </h2>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
-              Role: {currentRoleObj.name}
-            </span>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
-              {currentPermittedCount} of {pages.length} Pages Allowed
+            <span className="text-xs text-[var(--text-muted)]">
+              Click a role card to configure and toggle its accessible pages
             </span>
           </div>
-          <p className="text-[12px] text-[var(--text-secondary)]">
-            {currentRoleObj.description || 'Toggle the cards below to permit or restrict access to any page for this role.'}
-          </p>
+
+          {roles.length === 0 ? (
+            <div className="p-12 text-center rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)]">
+              <Shield className="w-8 h-8 mx-auto opacity-40 mb-2" />
+              <p className="text-sm font-medium">No roles found.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {roles.map((r) => {
+                const lower = r.name?.toLowerCase();
+                const Icon = lower === 'admin' ? ShieldCheck : lower === 'developer' ? Terminal : lower === 'student' ? Users : Shield;
+                const permCount = Object.values(matrix[r.name] || {}).filter(Boolean).length;
+                const percentage = pages.length > 0 ? Math.round((permCount / pages.length) * 100) : 0;
+
+                return (
+                  <div
+                    key={r.name}
+                    onClick={() => { setSelectedRole(r.name); setSearchQuery(''); }}
+                    className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--accent)] rounded-[var(--radius-lg)] p-5 shadow-[var(--shadow-sm)] hover:shadow-md transition-all flex flex-col justify-between gap-5 group cursor-pointer relative"
+                  >
+                    {/* Card Header: Icon + Name + System Badge */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-[var(--radius-md)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] group-hover:scale-105 transition-transform">
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                            {r.display_name}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
+                              role: {r.name}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {r.is_system ? (
+                          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-semibold">
+                            System
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+                            Custom
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Card Body: Description */}
+                    <p className="text-[12.5px] text-[var(--text-secondary)] line-clamp-3 leading-relaxed min-h-[48px]">
+                      {r.description || 'Custom defined role with granular page access rules.'}
+                    </p>
+
+                    {/* Footer: Manage Permissions Button & Edit / Delete Icons */}
+                    <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)] group-hover:translate-x-1 transition-transform">
+                        <span>Manage Permissions</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </div>
+
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRoleToEdit({ ...r });
+                            setFormError('');
+                            setShowEditRoleModal(true);
+                          }}
+                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer"
+                          title="Edit Role Metadata"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {r.name?.toLowerCase() !== 'admin' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRoleToDelete(r);
+                              setShowDeleteRoleModal(true);
+                            }}
+                            className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                            title="Delete Role"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+      ) : (
+        /* VIEW 2: ROLE PAGE PERMISSIONS TOGGLE GRID */
+        <div className="space-y-5 animate-fadeIn">
+          {/* Breadcrumbs & Back Navigation */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <button
+              onClick={() => { setSelectedRole(null); setSearchQuery(''); }}
+              className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer hover:border-[var(--accent)]"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span className="font-semibold">Back to All Roles</span>
+            </button>
 
-        {/* Quick Bulk Actions for this Role */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <button
-            onClick={() => handleBulkToggle(true)}
-            disabled={areAllFilteredGranted}
-            className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Grant permission to all pages"
-          >
-            <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Grant All</span>
-          </button>
+            <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-muted)]">
+              <span>Roles</span>
+              <span>/</span>
+              <span className="text-[var(--accent)] font-bold">{currentRoleObj.display_name} Permissions</span>
+            </div>
+          </div>
 
-          <button
-            onClick={() => handleBulkToggle(false)}
-            disabled={currentPermittedCount === 0}
-            className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Revoke permission from all pages"
-          >
-            <Square className="w-3.5 h-3.5 text-rose-400" />
-            <span>Revoke All</span>
-          </button>
+          {/* Active Role Configuration Card */}
+          <div className="p-4 sm:p-5 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-lg font-bold text-[var(--text-primary)]">
+                  {currentRoleObj.display_name} Access Permissions
+                </h2>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
+                  Role: {currentRoleObj.name}
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+                  {currentPermittedCount} of {pages.length} Pages Allowed
+                </span>
+              </div>
+              <p className="text-[12px] text-[var(--text-secondary)]">
+                {currentRoleObj.description || 'Toggle the cards below to permit or restrict access to any page for this role.'}
+              </p>
+            </div>
 
-          {/* Role Actions (if custom role) */}
-          {!currentRoleObj.is_system && (
-            <>
+            {/* Quick Bulk Actions for this Role */}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button
+                onClick={() => promptBulkToggle(true)}
+                disabled={areAllFilteredGranted}
+                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Grant permission to all pages"
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Grant All</span>
+              </button>
+
+              <button
+                onClick={() => promptBulkToggle(false)}
+                disabled={currentPermittedCount === 0}
+                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Revoke permission from all pages"
+              >
+                <Square className="w-3.5 h-3.5 text-rose-400" />
+                <span>Revoke All</span>
+              </button>
+
+              {/* Role Actions */}
               <button
                 onClick={() => {
                   setRoleToEdit({ ...currentRoleObj });
@@ -661,159 +732,162 @@ export default function AdminRoles() {
                 <Edit2 className="w-3.5 h-3.5" />
                 <span>Edit Role</span>
               </button>
+
+              {currentRoleObj.name?.toLowerCase() !== 'admin' && (
+                <button
+                  onClick={() => {
+                    setRoleToDelete(currentRoleObj);
+                    setShowDeleteRoleModal(true);
+                  }}
+                  className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Role</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="relative w-full sm:w-96">
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search pages by name, path, or key..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="text-xs font-mono text-[var(--text-muted)]">
+              Total Pages: {filteredPages.length}
+            </div>
+          </div>
+
+          {/* ALL PAGE CARDS GRID */}
+          {filteredPages.length === 0 ? (
+            <div className="p-12 text-center rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] space-y-2">
+              <Search className="w-8 h-8 mx-auto opacity-40" />
+              <p className="text-sm font-medium">No pages found matching "{searchQuery}"</p>
               <button
-                onClick={() => {
-                  setRoleToDelete(currentRoleObj);
-                  setShowDeleteRoleModal(true);
-                }}
-                className="btn btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer"
+                onClick={() => setSearchQuery('')}
+                className="btn btn-secondary text-xs py-1 px-3 mt-2 cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
+                Clear Search
               </button>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredPages.map((page) => {
+                const Icon = ICON_COMPONENTS[page.icon] || FileCode2;
+                const isGranted = !!(matrix[selectedRole] && matrix[selectedRole][page.key]);
+                const isSaving = savingMap[`${selectedRole}_${page.key}`];
 
-      {/* Search Bar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search pages by name, path, or key..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        <div className="text-xs font-mono text-[var(--text-muted)]">
-          Total Pages: {filteredPages.length}
-        </div>
-      </div>
-
-      {/* ALL PAGE CARDS GRID */}
-      {filteredPages.length === 0 ? (
-        <div className="p-12 text-center rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] space-y-2">
-          <Search className="w-8 h-8 mx-auto opacity-40" />
-          <p className="text-sm font-medium">No pages found matching "{searchQuery}"</p>
-          <button
-            onClick={() => setSearchQuery('')}
-            className="btn btn-secondary text-xs py-1 px-3 mt-2 cursor-pointer"
-          >
-            Clear Search
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredPages.map((page) => {
-            const Icon = ICON_COMPONENTS[page.icon] || FileCode2;
-            const isGranted = !!(matrix[selectedRole] && matrix[selectedRole][page.key]);
-            const isSaving = savingMap[`${selectedRole}_${page.key}`];
-
-            return (
-              <div
-                key={page.key}
-                onClick={(e) => handleTogglePermission(selectedRole, page.key, e)}
-                className={`p-4 rounded-[var(--radius-md)] border transition-all cursor-pointer select-none flex flex-col justify-between gap-3.5 relative group ${
-                  isGranted
-                    ? 'bg-[var(--bg-card)] border-[var(--border-accent)] shadow-[var(--shadow-sm)] ring-1 ring-[var(--accent)]/15'
-                    : 'bg-[var(--bg-card)]/40 border-[var(--border)] opacity-65 hover:opacity-100 hover:border-[var(--text-muted)]'
-                }`}
-              >
-                {/* Top: Icon + Title + Switch */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-[var(--radius-sm)] border shrink-0 transition-colors ${
+                return (
+                  <div
+                    key={page.key}
+                    onClick={(e) => promptTogglePermission(selectedRole, page.key, e)}
+                    className={`p-4 rounded-[var(--radius-md)] border transition-all cursor-pointer select-none flex flex-col justify-between gap-3.5 relative group ${
                       isGranted
-                        ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--accent)]'
-                        : 'bg-[var(--bg-raised)] border-[var(--border)] text-[var(--text-muted)]'
-                    }`}>
-                      <Icon className="w-5 h-5" />
+                        ? 'bg-[var(--bg-card)] border-[var(--border-accent)] shadow-[var(--shadow-sm)] ring-1 ring-[var(--accent)]/15'
+                        : 'bg-[var(--bg-card)]/40 border-[var(--border)] opacity-65 hover:opacity-100 hover:border-[var(--text-muted)]'
+                    }`}
+                  >
+                    {/* Top: Icon + Title + Switch */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-[var(--radius-sm)] border shrink-0 transition-colors ${
+                          isGranted
+                            ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--accent)]'
+                            : 'bg-[var(--bg-raised)] border-[var(--border)] text-[var(--text-muted)]'
+                        }`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-[14px] font-bold text-[var(--text-primary)] leading-snug">
+                            {page.name}
+                          </h3>
+                          <div className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5">
+                            {page.path}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive Toggle Switch */}
+                      <div className="shrink-0 pt-0.5" onClick={(e) => promptTogglePermission(selectedRole, page.key, e)}>
+                        {isSaving ? (
+                          <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
+                        ) : (
+                          <div
+                            className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 cursor-pointer ${
+                              isGranted ? 'bg-[var(--accent)]' : 'bg-[var(--bg-raised)] border border-[var(--border)]'
+                            }`}
+                          >
+                            <div
+                              className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                                isGranted ? 'translate-x-4 bg-black' : 'translate-x-0'
+                              }`}
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-[14px] font-bold text-[var(--text-primary)] leading-snug">
-                        {page.name}
-                      </h3>
-                      <div className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5">
-                        {page.path}
+
+                    {/* Description */}
+                    <p className="text-[12px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
+                      {page.description || 'Access permission to this application page.'}
+                    </p>
+
+                    {/* Card Footer with Page Actions (Edit / Delete) */}
+                    <div className="flex items-center justify-between text-[11px] font-mono pt-2.5 border-t border-[var(--border)]">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold flex items-center gap-1 ${
+                          isGranted ? 'text-emerald-400' : 'text-[var(--text-muted)]'
+                        }`}>
+                          {isGranted ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Access Granted</span>
+                            </>
+                          ) : (
+                            <span>Access Restricted</span>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Edit / Delete page buttons */}
+                      <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => openEditPageModal(page, e)}
+                          className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer"
+                          title="Edit Page"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => openDeletePageModal(page, e)}
+                          className="p-1 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                          title="Delete Page"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   </div>
-
-                  {/* Interactive Toggle Switch */}
-                  <div className="shrink-0 pt-0.5" onClick={(e) => handleTogglePermission(selectedRole, page.key, e)}>
-                    {isSaving ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
-                    ) : (
-                      <div
-                        className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 cursor-pointer ${
-                          isGranted ? 'bg-[var(--accent)]' : 'bg-[var(--bg-raised)] border border-[var(--border)]'
-                        }`}
-                      >
-                        <div
-                          className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                            isGranted ? 'translate-x-4 bg-black' : 'translate-x-0'
-                          }`}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Description */}
-                <p className="text-[12px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
-                  {page.description || 'Access permission to this application page.'}
-                </p>
-
-                {/* Card Footer with Page Actions (Edit / Delete) */}
-                <div className="flex items-center justify-between text-[11px] font-mono pt-2.5 border-t border-[var(--border)]">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-semibold flex items-center gap-1 ${
-                      isGranted ? 'text-emerald-400' : 'text-[var(--text-muted)]'
-                    }`}>
-                      {isGranted ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Access Granted</span>
-                        </>
-                      ) : (
-                        <span>Access Restricted</span>
-                      )}
-                    </span>
-                  </div>
-
-                  {/* Edit / Delete page buttons */}
-                  <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => openEditPageModal(page, e)}
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition"
-                      title="Edit Page"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => openDeletePageModal(page, e)}
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition"
-                      title="Delete Page"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1244,23 +1318,42 @@ export default function AdminRoles() {
         isOpen={showDeleteRoleModal}
         onClose={() => { setShowDeleteRoleModal(false); setRoleToDelete(null); }}
         onConfirm={handleDeleteRole}
-        title="Delete Custom Role"
+        title="Delete Role"
         message={`Are you sure you want to delete the role "${roleToDelete?.display_name}"? All associated page access mappings will be permanently removed.`}
         confirmText="Delete Role"
         variant="danger"
         loading={modalLoading}
       />
 
-      {/* RESET DEFAULTS CONFIRM MODAL */}
+      {/* TOGGLE PERMISSION CONFIRM MODAL */}
       <ConfirmModal
-        isOpen={showResetModal}
-        onClose={() => setShowResetModal(false)}
-        onConfirm={handleResetDefaults}
-        title="Reset Page Mappings to Defaults"
-        message="This action will restore all standard role permissions (Admin, Developer, Student) to the initial seeded platform defaults. Any custom role mappings will be set to restricted."
-        confirmText="Restore Defaults"
-        variant="warning"
-        icon={RotateCcw}
+        isOpen={toggleConfirmModal.isOpen}
+        onClose={() => setToggleConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmTogglePermission}
+        title={toggleConfirmModal.isGranting ? "Grant Page Access" : "Revoke Page Access"}
+        message={
+          toggleConfirmModal.isGranting
+            ? `Are you sure you want to grant access to "${toggleConfirmModal.pageName}" for the "${toggleConfirmModal.roleDisplayName}" role? Users with this role will be able to view and interact with this page.`
+            : `Are you sure you want to revoke access to "${toggleConfirmModal.pageName}" from the "${toggleConfirmModal.roleDisplayName}" role? Users with this role will no longer be able to access this page.`
+        }
+        confirmText={toggleConfirmModal.isGranting ? "Grant Access" : "Revoke Access"}
+        variant={toggleConfirmModal.isGranting ? "info" : "warning"}
+        loading={modalLoading}
+      />
+
+      {/* BULK TOGGLE CONFIRM MODAL */}
+      <ConfirmModal
+        isOpen={bulkToggleModal.isOpen}
+        onClose={() => setBulkToggleModal({ isOpen: false, grantAll: false })}
+        onConfirm={confirmBulkToggle}
+        title={bulkToggleModal.grantAll ? "Grant All Pages Access" : "Revoke All Pages Access"}
+        message={
+          bulkToggleModal.grantAll
+            ? `Are you sure you want to grant access to all ${filteredPages.length} catalog pages for the "${currentRoleObj.display_name}" role?`
+            : `Are you sure you want to revoke access to all pages from the "${currentRoleObj.display_name}" role?`
+        }
+        confirmText={bulkToggleModal.grantAll ? "Grant All" : "Revoke All"}
+        variant={bulkToggleModal.grantAll ? "info" : "danger"}
         loading={modalLoading}
       />
     </div>

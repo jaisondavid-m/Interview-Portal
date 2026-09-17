@@ -225,7 +225,7 @@ func AdminUpdateRole(c *gin.Context) {
 	})
 }
 
-// AdminDeleteRole removes a custom role (blocks system roles)
+// AdminDeleteRole removes a role (protects primary administrator from lockout)
 func AdminDeleteRole(c *gin.Context) {
 	id := c.Param("id")
 	var role models.Role
@@ -237,26 +237,15 @@ func AdminDeleteRole(c *gin.Context) {
 		return
 	}
 
-	if role.IsSystem {
+	if strings.ToLower(strings.TrimSpace(role.Name)) == "admin" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "System roles (admin, developer, student) cannot be deleted as they are required for core platform stability.",
+			"message": "The primary Administrator role cannot be deleted to prevent platform lockout.",
 		})
 		return
 	}
 
-	// Check if any users are assigned to this role
-	var userCount int64
-	database.DB.Model(&models.User{}).Where("role = ?", role.Name).Count(&userCount)
-	if userCount > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": fmt.Sprintf("Cannot delete role '%s' because %d user(s) are currently assigned to it. Reassign those users first.", role.DisplayName, userCount),
-		})
-		return
-	}
-
-	// Delete permissions
+	// Delete permissions associated with this role
 	database.DB.Where("role_name = ?", role.Name).Delete(&models.RolePagePermission{})
 
 	// Delete role
@@ -271,7 +260,7 @@ func AdminDeleteRole(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
-		"message": "Role deleted successfully",
+		"message": fmt.Sprintf("Role '%s' deleted successfully", role.DisplayName),
 	})
 }
 
@@ -563,48 +552,6 @@ func AdminUpdateRolePermissions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": fmt.Sprintf("Page access permissions for role '%s' updated successfully", role.DisplayName),
-	})
-}
-
-// AdminResetRoleDefaults resets all role-page mappings back to the initial seeded defaults
-func AdminResetRoleDefaults(c *gin.Context) {
-	// Clear all existing permissions
-	database.DB.Exec("DELETE FROM role_page_permissions")
-
-	// Re-populate system seed defaults
-	for roleName, pageKeys := range database.DefaultRoleMappings {
-		for _, page := range database.DefaultPagesCatalog {
-			canAccess := false
-			for _, allowedKey := range pageKeys {
-				if page.Key == allowedKey {
-					canAccess = true
-					break
-				}
-			}
-			database.DB.Create(&models.RolePagePermission{
-				RoleName:  roleName,
-				PageKey:   page.Key,
-				CanAccess: canAccess,
-			})
-		}
-	}
-
-	// For any custom roles, create default disabled permissions
-	var customRoles []models.Role
-	database.DB.Where("is_system = ?", false).Find(&customRoles)
-	for _, cr := range customRoles {
-		for _, page := range database.DefaultPagesCatalog {
-			database.DB.Create(&models.RolePagePermission{
-				RoleName:  cr.Name,
-				PageKey:   page.Key,
-				CanAccess: false,
-			})
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Role page access mappings have been reset to system defaults.",
 	})
 }
 

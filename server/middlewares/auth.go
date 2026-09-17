@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"server/config"
+	"server/database"
 	"server/models"
 
 	"github.com/gin-gonic/gin"
@@ -136,8 +137,54 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	}
 }
 
-// RequireAdmin ensures the authenticated user is strictly an administrator
+// RequireAdmin ensures the authenticated user is strictly a system administrator
 func RequireAdmin() gin.HandlerFunc {
 	return RequireRole("admin")
+}
+
+// CheckUserPermission checks if a role has access to a specific page key (or is superadmin admin)
+func CheckUserPermission(roleName string, pageKeys ...string) bool {
+	cleanRole := strings.ToLower(strings.TrimSpace(roleName))
+	if cleanRole == "admin" {
+		return true // Universal superadmin bypass
+	}
+
+	if database.DB == nil || len(pageKeys) == 0 {
+		return false
+	}
+
+	var count int64
+	database.DB.Model(&models.RolePagePermission{}).
+		Where("role_name = ? AND page_key IN ? AND can_access = ?", cleanRole, pageKeys, true).
+		Count(&count)
+
+	return count > 0
+}
+
+// RequirePermission verifies that the user's role has permission for at least one of the specified page keys
+func RequirePermission(pageKeys ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		roleVal, exists := c.Get("userRole")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{
+				"status":  "error",
+				"message": "Access denied. User role not identified in session.",
+			})
+			c.Abort()
+			return
+		}
+
+		userRole := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", roleVal)))
+		if CheckUserPermission(userRole, pageKeys...) {
+			c.Next()
+			return
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{
+			"status":  "error",
+			"message": fmt.Sprintf("Access restricted. Role '%s' does not have permission for this resource.", userRole),
+		})
+		c.Abort()
+	}
 }
 

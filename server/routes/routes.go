@@ -31,9 +31,9 @@ func SetupRouter() *gin.Engine {
 			auth.GET("/permissions", middlewares.AuthMiddleware(), controllers.GetUserPagePermissions)
 		}
 
-		// Developer Protected Routes (Require JWT + Developer or Admin Role)
+		// Developer & System Audit Logs (Require JWT + audit_logs permission or Admin)
 		developer := g.Group("/developer")
-		developer.Use(middlewares.AuthMiddleware(), middlewares.RequireRole("developer", "admin"))
+		developer.Use(middlewares.AuthMiddleware(), middlewares.RequirePermission("audit_logs"))
 		{
 			developer.GET("/audit-logs", controllers.GetAuditLogs)
 			developer.GET("/audit-logs/stats", controllers.GetAuditStats)
@@ -104,80 +104,112 @@ func SetupRouter() *gin.Engine {
 		// Direct authenticated recording route
 		g.GET("/recordings/:filename", middlewares.AuthMiddleware(), controllers.StreamInterviewRecording)
 
-		// Admin Protected Routes (Require JWT Cookie/Token + Admin Role)
+		// Admin & Dynamic Portal Protected Routes (Require JWT Cookie/Token + Resource Specific Permission)
 		admin := g.Group("/admin")
-		admin.Use(middlewares.AuthMiddleware(), middlewares.RequireAdmin())
+		admin.Use(middlewares.AuthMiddleware())
 		{
 			// Dashboard & Platform Analytics
-			admin.GET("/analytics/dashboard", controllers.AdminGetDashboardAnalytics)
+			admin.GET("/analytics/dashboard", middlewares.RequirePermission("admin_dashboard"), controllers.AdminGetDashboardAnalytics)
 
 			// Admin-Only Audio Recording Streaming Route (Supports HTTP byte-range for players)
-			admin.GET("/recordings/:filename", controllers.StreamInterviewRecording)
+			admin.GET("/recordings/:filename", middlewares.RequirePermission("admin_history", "student_history"), controllers.StreamInterviewRecording)
+
+			// Audit Logs Unified Route
+			admin.GET("/audit-logs", middlewares.RequirePermission("audit_logs"), controllers.GetAuditLogs)
+			admin.GET("/audit-logs/stats", middlewares.RequirePermission("audit_logs"), controllers.GetAuditStats)
+			admin.GET("/audit-logs/:id", middlewares.RequirePermission("audit_logs"), controllers.GetAuditLogByID)
+			admin.DELETE("/audit-logs/clear", middlewares.RequirePermission("audit_logs"), controllers.ClearAuditLogs)
 
 			// User Management
-			admin.GET("/users", controllers.AdminGetUsers)
-			admin.GET("/users/export", controllers.AdminExportUsersCSV)
-			admin.GET("/users/:id", controllers.AdminGetUserByID)
-			admin.POST("/users", controllers.AdminCreateUser)
-			admin.POST("/users/bulk", controllers.AdminBulkCreateUsers)
-			admin.POST("/users/bulk-delete", controllers.AdminBulkDeleteUsers)
-			admin.PUT("/users/:id", controllers.AdminUpdateUser)
-			admin.DELETE("/users/:id", controllers.AdminDeleteUser)
+			adminUsers := admin.Group("/users")
+			adminUsers.Use(middlewares.RequirePermission("admin_users"))
+			{
+				adminUsers.GET("", controllers.AdminGetUsers)
+				adminUsers.GET("/export", controllers.AdminExportUsersCSV)
+				adminUsers.GET("/:id", controllers.AdminGetUserByID)
+				adminUsers.POST("", controllers.AdminCreateUser)
+				adminUsers.POST("/bulk", controllers.AdminBulkCreateUsers)
+				adminUsers.POST("/bulk-delete", controllers.AdminBulkDeleteUsers)
+				adminUsers.PUT("/:id", controllers.AdminUpdateUser)
+				adminUsers.DELETE("/:id", controllers.AdminDeleteUser)
+			}
 
-			// Role & Page Access Management
-			admin.GET("/roles", controllers.AdminGetRoles)
-			admin.POST("/roles", controllers.AdminCreateRole)
-			admin.PUT("/roles/:id", controllers.AdminUpdateRole)
-			admin.DELETE("/roles/:id", controllers.AdminDeleteRole)
-			admin.GET("/roles/pages", controllers.AdminGetAppPages)
-			admin.POST("/roles/pages", controllers.AdminCreateAppPage)
-			admin.PUT("/roles/pages/:id", controllers.AdminUpdateAppPage)
-			admin.DELETE("/roles/pages/:id", controllers.AdminDeleteAppPage)
-			admin.GET("/roles/mappings", controllers.AdminGetRoleMappings)
-			admin.POST("/roles/mappings", controllers.AdminUpdateRolePermissions)
-			admin.POST("/roles/reset-defaults", controllers.AdminResetRoleDefaults)
+			// Role & Page Access Management (Strictly Superadmin Only)
+			adminRoles := admin.Group("/roles")
+			adminRoles.Use(middlewares.RequireAdmin())
+			{
+				adminRoles.GET("", controllers.AdminGetRoles)
+				adminRoles.POST("", controllers.AdminCreateRole)
+				adminRoles.PUT("/:id", controllers.AdminUpdateRole)
+				adminRoles.DELETE("/:id", controllers.AdminDeleteRole)
+				adminRoles.GET("/pages", controllers.AdminGetAppPages)
+				adminRoles.POST("/pages", controllers.AdminCreateAppPage)
+				adminRoles.PUT("/pages/:id", controllers.AdminUpdateAppPage)
+				adminRoles.DELETE("/pages/:id", controllers.AdminDeleteAppPage)
+				adminRoles.GET("/mappings", controllers.AdminGetRoleMappings)
+				adminRoles.POST("/mappings", controllers.AdminUpdateRolePermissions)
+			}
 
-			// Interview Configuration: Tracks
-			admin.GET("/interviews/tracks", controllers.AdminGetTracks)
-			admin.GET("/interviews/tracks/:id", controllers.AdminGetTrackByID)
-			admin.POST("/interviews/tracks", controllers.AdminCreateTrack)
-			admin.PUT("/interviews/tracks/:id", controllers.AdminUpdateTrack)
-			admin.DELETE("/interviews/tracks/:id", controllers.AdminDeleteTrack)
+			// Interview Configuration: Tracks, Levels, Questions
+			adminInterviews := admin.Group("/interviews")
+			adminInterviews.Use(middlewares.RequirePermission("admin_interviews", "admin_history"))
+			{
+				// Tracks
+				adminInterviews.GET("/tracks", controllers.AdminGetTracks)
+				adminInterviews.GET("/tracks/:id", controllers.AdminGetTrackByID)
+				adminInterviews.POST("/tracks", controllers.AdminCreateTrack)
+				adminInterviews.PUT("/tracks/:id", controllers.AdminUpdateTrack)
+				adminInterviews.DELETE("/tracks/:id", controllers.AdminDeleteTrack)
 
-			// Interview Configuration: Levels
-			admin.GET("/interviews/tracks/:id/levels", controllers.AdminGetLevels)
-			admin.POST("/interviews/tracks/:id/levels", controllers.AdminCreateLevel)
-			admin.GET("/interviews/levels/:id", controllers.AdminGetLevelByID)
-			admin.PUT("/interviews/levels/:id", controllers.AdminUpdateLevel)
-			admin.DELETE("/interviews/levels/:id", controllers.AdminDeleteLevel)
+				// Levels
+				adminInterviews.GET("/tracks/:id/levels", controllers.AdminGetLevels)
+				adminInterviews.POST("/tracks/:id/levels", controllers.AdminCreateLevel)
+				adminInterviews.GET("/levels/:id", controllers.AdminGetLevelByID)
+				adminInterviews.PUT("/levels/:id", controllers.AdminUpdateLevel)
+				adminInterviews.DELETE("/levels/:id", controllers.AdminDeleteLevel)
 
-			// Interview Configuration: Questions
-			admin.GET("/interviews/levels/:id/questions", controllers.AdminGetQuestions)
-			admin.GET("/interviews/levels/:id/questions/export", controllers.AdminExportQuestions)
-			admin.POST("/interviews/levels/:id/questions", controllers.AdminCreateQuestion)
-			admin.POST("/interviews/levels/:id/questions/bulk", controllers.AdminBulkCreateQuestions)
-			admin.POST("/interviews/questions/bulk-delete", controllers.AdminBulkDeleteQuestions)
-			admin.GET("/interviews/questions/:id", controllers.AdminGetQuestionByID)
-			admin.PUT("/interviews/questions/:id", controllers.AdminUpdateQuestion)
-			admin.DELETE("/interviews/questions/:id", controllers.AdminDeleteQuestion)
+				// Questions
+				adminInterviews.GET("/levels/:id/questions", controllers.AdminGetQuestions)
+				adminInterviews.GET("/levels/:id/questions/export", controllers.AdminExportQuestions)
+				adminInterviews.POST("/levels/:id/questions", controllers.AdminCreateQuestion)
+				adminInterviews.POST("/levels/:id/questions/bulk", controllers.AdminBulkCreateQuestions)
+				adminInterviews.POST("/questions/bulk-delete", controllers.AdminBulkDeleteQuestions)
+				adminInterviews.GET("/questions/:id", controllers.AdminGetQuestionByID)
+				adminInterviews.PUT("/questions/:id", controllers.AdminUpdateQuestion)
+				adminInterviews.DELETE("/questions/:id", controllers.AdminDeleteQuestion)
+
+				// History & Sessions
+				adminInterviews.GET("/sessions", controllers.AdminGetInterviewSessions)
+				adminInterviews.GET("/sessions/:id", controllers.AdminGetInterviewSessionByID)
+				adminInterviews.GET("/sessions/:id/recording", controllers.GetSessionRecording)
+				adminInterviews.GET("/sessions/:id/recording/stream", controllers.StreamInterviewRecording)
+			}
 
 			// Peer Feedback Configuration & Submissions
-			admin.GET("/feedback/questions", controllers.AdminGetFeedbackQuestions)
-			admin.POST("/feedback/questions", controllers.AdminCreateFeedbackQuestion)
-			admin.PUT("/feedback/questions/:id", controllers.AdminUpdateFeedbackQuestion)
-			admin.DELETE("/feedback/questions/:id", controllers.AdminDeleteFeedbackQuestion)
-			admin.GET("/feedback/submissions", controllers.AdminGetFeedbackSubmissions)
-			admin.GET("/feedback/leaderboard", controllers.AdminGetFeedbackLeaderboard)
+			adminFeedback := admin.Group("/feedback")
+			adminFeedback.Use(middlewares.RequirePermission("admin_feedback"))
+			{
+				adminFeedback.GET("/questions", controllers.AdminGetFeedbackQuestions)
+				adminFeedback.POST("/questions", controllers.AdminCreateFeedbackQuestion)
+				adminFeedback.PUT("/questions/:id", controllers.AdminUpdateFeedbackQuestion)
+				adminFeedback.DELETE("/questions/:id", controllers.AdminDeleteFeedbackQuestion)
+				adminFeedback.GET("/submissions", controllers.AdminGetFeedbackSubmissions)
+				adminFeedback.GET("/leaderboard", controllers.AdminGetFeedbackLeaderboard)
+			}
+
+			// Leaderboard Dedicated Route
+			admin.GET("/leaderboard", middlewares.RequirePermission("admin_leaderboard"), controllers.AdminGetFeedbackLeaderboard)
 
 			// Security Incident & Credential Solicitation Audits
-			admin.GET("/security-reports", controllers.AdminGetSecurityReports)
-			admin.PUT("/security-reports/:id", controllers.AdminUpdateSecurityReportStatus)
+			adminSecurity := admin.Group("/security-reports")
+			adminSecurity.Use(middlewares.RequirePermission("admin_dashboard", "admin_history"))
+			{
+				adminSecurity.GET("", controllers.AdminGetSecurityReports)
+				adminSecurity.PUT("/:id", controllers.AdminUpdateSecurityReportStatus)
+			}
 
-			// Interview History & Meeting Details
-			admin.GET("/interviews/sessions", controllers.AdminGetInterviewSessions)
-			admin.GET("/interviews/sessions/:id", controllers.AdminGetInterviewSessionByID)
-			admin.GET("/interviews/sessions/:id/recording", controllers.GetSessionRecording)
-			admin.GET("/interviews/sessions/:id/recording/stream", controllers.StreamInterviewRecording)
+			// Interview History Dedicated Route
+			admin.GET("/history", middlewares.RequirePermission("admin_history"), controllers.AdminGetInterviewSessions)
 		}
 	}
 
