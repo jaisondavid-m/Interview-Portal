@@ -17,15 +17,14 @@ services:
       - ./infrastructure/mysql/primary/my.cnf:/etc/mysql/conf.d/my.cnf:ro
       - ./infrastructure/mysql/init-scripts:/docker-entrypoint-initdb.d:ro
       - mysql-primary-data:/var/lib/mysql
-      - mysql-primary-logs:/var/log/mysql
     networks:
       - mockmate-network
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD:-jaison}"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 25s
 
   # ============================================================
   # 2. MySQL Read Replica 1 (Follower on Port 3307)
@@ -44,15 +43,14 @@ services:
     volumes:
       - ./infrastructure/mysql/replica/my.cnf:/etc/mysql/conf.d/my.cnf:ro
       - mysql-replica1-data:/var/lib/mysql
-      - mysql-replica1-logs:/var/log/mysql
     networks:
       - mockmate-network
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD:-jaison}"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 25s
 
   # ============================================================
   # 3. MySQL Read Replica 2 (Follower on Port 3308)
@@ -71,15 +69,14 @@ services:
     volumes:
       - ./infrastructure/mysql/replica/my.cnf:/etc/mysql/conf.d/my.cnf:ro
       - mysql-replica2-data:/var/lib/mysql
-      - mysql-replica2-logs:/var/log/mysql
     networks:
       - mockmate-network
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD:-jaison}"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 25s
 
   # ============================================================
   # 4. Failover & Topology Health Daemon
@@ -129,8 +126,8 @@ services:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${SANDBOX_DB_PASSWORD:-sandbox_root_pass_2026}"]
       interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 15s
+      retries: 15
+      start_period: 20s
 
   # ============================================================
   # 6. Go Backend API Service (Read/Write Splitting with GORM)
@@ -207,11 +204,8 @@ services:
 
 volumes:
   mysql-primary-data:
-  mysql-primary-logs:
   mysql-replica1-data:
-  mysql-replica1-logs:
   mysql-replica2-data:
-  mysql-replica2-logs:
   audio_recordings:
     driver: local
 
