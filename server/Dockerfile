@@ -8,20 +8,16 @@ WORKDIR /app
 ENV GOTOOLCHAIN=auto
 ENV CGO_ENABLED=0
 ENV GOOS=linux
-ENV GOPROXY="https://proxy.golang.org,https://goproxy.io,direct"
+ENV GOPROXY="https://goproxy.io,https://proxy.golang.org,direct"
 
-# Copy dependency manifests and download modules with resilient fallback and retries
+# Copy source and dependency files
 COPY go.mod go.sum ./
-RUN for i in 1 2 3 4 5; do \
-      go mod download && break || \
-      (echo "Module download attempt $i failed, retrying in 3s..." && sleep 3); \
-    done
-
-# Copy source files
 COPY . .
 
-# Build lightweight static binary using downloaded modules
-RUN go build -mod=mod -ldflags="-w -s" -o /app/server main.go
+# Build lightweight static binary using Go compiler cache and fast module proxy
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -ldflags="-w -s" -o /app/server main.go
 
 # ==========================================
 # Production Stage (Node.js + Python3 Runtime)
