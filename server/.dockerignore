@@ -5,6 +5,7 @@
 *.log
 tmp/
 bin/
+vendor/
 uploads/
 *.webm
 *.mp3

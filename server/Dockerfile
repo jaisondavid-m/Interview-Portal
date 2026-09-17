@@ -16,8 +16,8 @@ RUN go mod download
 # Copy source files
 COPY . .
 
-# Build lightweight static binary
-RUN go build -ldflags="-w -s" -o /app/server main.go
+# Build lightweight static binary using downloaded modules
+RUN go build -mod=mod -ldflags="-w -s" -o /app/server main.go
 
 # ==========================================
 # Production Stage (Node.js + Python3 Runtime)
