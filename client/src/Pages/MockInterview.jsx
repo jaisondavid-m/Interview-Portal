@@ -3,6 +3,7 @@ import {
   Users, Mic, MicOff, Volume2, VolumeX, PhoneOff, Send, 
   RotateCw, Play, Clock, MessageSquare, Code, CheckCircle, Shield, Radio 
 } from 'lucide-react';
+import ConfirmModal from '../Components/ConfirmModal';
 import { INTERVIEW_TRACKS } from '../utils/constants';
 
 export default function MockInterview() {
@@ -10,6 +11,7 @@ export default function MockInterview() {
   const [inRoom, setInRoom] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [myRole, setMyRole] = useState('interviewer'); // 'interviewer' | 'candidate'
   const [callDuration, setCallDuration] = useState(0);
   const [sharedNotes, setSharedNotes] = useState(
@@ -180,11 +182,7 @@ export default function MockInterview() {
               </button>
 
               <button
-                onClick={() => {
-                  if (confirm('Leave peer audio session? You will be prompted for peer feedback.')) {
-                    setInRoom(false);
-                  }
-                }}
+                onClick={() => setShowLeaveModal(true)}
                 className="btn btn-danger text-xs py-2 px-3.5"
               >
                 <PhoneOff className="w-3.5 h-3.5" />
@@ -241,6 +239,21 @@ export default function MockInterview() {
           </div>
         </div>
       )}
+
+      {/* Leave Room Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        onConfirm={() => {
+          setShowLeaveModal(false);
+          setInRoom(false);
+        }}
+        title="Leave Interview Session?"
+        message="Are you sure you want to leave the peer audio session? You will be prompted for peer feedback."
+        confirmText="Leave Session"
+        cancelText="Stay in Room"
+        variant="danger"
+      />
     </div>
   );
 }

@@ -25,12 +25,18 @@ export default function DeleteConfirmModal({
 
         <div>
           <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
-            Delete {deleteTarget.type === 'track' ? 'Domain' : deleteTarget.type === 'level' ? 'Level' : 'Question'}?
+            Delete {deleteTarget.type === 'track' ? 'Domain' : deleteTarget.type === 'level' ? 'Level' : deleteTarget.type === 'bulk_questions' ? 'Selected Questions' : 'Question'}?
           </h3>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-            Are you sure you want to delete <span className="font-semibold text-[var(--text-primary)]">"{deleteTarget.data.title || deleteTarget.data.name}"</span>?
-            {deleteTarget.type === 'track' && ' All levels and questions under this domain will also be deleted.'}
-            {deleteTarget.type === 'level' && ' All questions in this level will also be deleted.'}
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1 leading-relaxed">
+            {deleteTarget.type === 'bulk_questions' ? (
+              <>Are you sure you want to delete <span className="font-semibold text-[var(--text-primary)]">{deleteTarget.data.count || 'these'} selected questions</span>? This action cannot be undone.</>
+            ) : (
+              <>
+                Are you sure you want to delete <span className="font-semibold text-[var(--text-primary)]">"{deleteTarget.data.title || deleteTarget.data.name}"</span>?
+                {deleteTarget.type === 'track' && ' All levels and questions under this domain will also be deleted.'}
+                {deleteTarget.type === 'level' && ' All questions in this level will also be deleted.'}
+              </>
+            )}
           </p>
         </div>
 

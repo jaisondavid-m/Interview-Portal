@@ -50,7 +50,6 @@ export default function AdminInterviewConfig() {
   // ============================================================
   const handleExportQuestions = (format = 'json', questionsToExport = questions) => {
     if (!questionsToExport || questionsToExport.length === 0) {
-      alert('No questions available to download.');
       return;
     }
 
@@ -130,20 +129,18 @@ export default function AdminInterviewConfig() {
     }
   };
 
-  const handleBulkDeleteQuestions = async (questionIds, onSuccess) => {
-    if (!confirm(`Are you sure you want to delete ${questionIds.length} selected questions?`)) {
-      return;
-    }
-    setLoading(true);
-    try {
-      await api.post('/admin/interviews/questions/bulk-delete', { question_ids: questionIds });
-      if (onSuccess) onSuccess();
-      loadLevelQuestions(trackId, levelId);
-    } catch (err) {
-      alert(err.message || 'Failed to bulk delete questions');
-    } finally {
-      setLoading(false);
-    }
+  const handleBulkDeleteQuestions = (questionIds, onSuccess) => {
+    if (!questionIds || questionIds.length === 0) return;
+    setDeleteTarget({
+      type: 'bulk_questions',
+      data: {
+        ids: questionIds,
+        count: questionIds.length,
+        title: `${questionIds.length} selected questions`,
+        onSuccess,
+      },
+    });
+    setShowDeleteModal(true);
   };
 
   // Form States
@@ -416,9 +413,15 @@ export default function AdminInterviewConfig() {
         } else {
           loadLevelQuestions(trackId, levelId);
         }
+      } else if (deleteTarget.type === 'bulk_questions') {
+        await api.post('/admin/interviews/questions/bulk-delete', { question_ids: deleteTarget.data.ids });
+        if (deleteTarget.data.onSuccess) deleteTarget.data.onSuccess();
+        setShowDeleteModal(false);
+        setDeleteTarget(null);
+        loadLevelQuestions(trackId, levelId);
       }
     } catch (err) {
-      alert(err.message || 'Failed to delete item');
+      console.error('Failed to delete item', err);
     } finally {
       setFormLoading(false);
     }

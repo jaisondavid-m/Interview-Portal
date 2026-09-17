@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import FrontendLivePreview from './FrontendLivePreview';
 import InstalledPackagesModal, { INSTALLED_FRONTEND_PACKAGES } from './InstalledPackagesModal';
+import ConfirmModal from '../ConfirmModal';
 
 const DEFAULT_STARTER_CODE = `export default function App() {
   return (
@@ -46,6 +47,7 @@ export default function FrontendPlayground({
   const [copied, setCopied] = useState(false);
   const [showRequirements, setShowRequirements] = useState(false);
   const [showPackagesModal, setShowPackagesModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
 
   // Extract the admin-configured starter code from payload or question templates
   const adminStarterCode = useMemo(() => {
@@ -75,10 +77,13 @@ export default function FrontendPlayground({
 
   const handleResetCode = () => {
     if (!isEditable) return;
-    if (window.confirm('Reset code to starter boilerplate? All current changes will be overwritten.')) {
-      const starter = adminStarterCode || DEFAULT_STARTER_CODE;
-      onCodeChange(starter);
-    }
+    setShowResetModal(true);
+  };
+
+  const handleConfirmReset = () => {
+    setShowResetModal(false);
+    const starter = adminStarterCode || DEFAULT_STARTER_CODE;
+    onCodeChange(starter);
   };
 
   // Keyboard shortcut (F / Esc for fullscreen)
@@ -548,6 +553,18 @@ export default function FrontendPlayground({
       <InstalledPackagesModal
         isOpen={showPackagesModal}
         onClose={() => setShowPackagesModal(false)}
+      />
+
+      {/* Code Reset Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onConfirm={handleConfirmReset}
+        title="Reset Code Boilerplate?"
+        message="Are you sure you want to reset code to the starter template? All current changes will be overwritten."
+        confirmText="Reset Code"
+        cancelText="Keep Editing"
+        variant="danger"
       />
     </div>
   );

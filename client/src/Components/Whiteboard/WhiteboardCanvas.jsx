@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ConfirmModal from '../ConfirmModal';
 import {
   Server,
   Database,
@@ -219,6 +220,7 @@ export default function WhiteboardCanvas({
   const [connectSourceId, setConnectSourceId] = useState(null);
   const [editingNode, setEditingNode] = useState(null);
   const [showCatalogModal, setShowCatalogModal] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState('All');
   const [showRequirements, setShowRequirements] = useState(false);
 
@@ -688,13 +690,16 @@ export default function WhiteboardCanvas({
   // Clear Canvas
   const handleClearCanvas = () => {
     if (!isEditable) return;
-    if (window.confirm('Clear all architecture components from the whiteboard?')) {
-      setNodes([]);
-      setConnections([]);
-      setSelectedNodeId(null);
-      setSelectedConnectionId(null);
-      emitChange([], [], true);
-    }
+    setShowClearModal(true);
+  };
+
+  const handleConfirmClearCanvas = () => {
+    setShowClearModal(false);
+    setNodes([]);
+    setConnections([]);
+    setSelectedNodeId(null);
+    setSelectedConnectionId(null);
+    emitChange([], [], true);
   };
 
   // Helper to compute node center coordinates
@@ -1668,6 +1673,18 @@ export default function WhiteboardCanvas({
           </div>
         </div>
       )}
+
+      {/* Clear Canvas Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showClearModal}
+        onClose={() => setShowClearModal(false)}
+        onConfirm={handleConfirmClearCanvas}
+        title="Clear Architecture Whiteboard?"
+        message="Are you sure you want to clear all architecture components and connections from the canvas?"
+        confirmText="Clear Whiteboard"
+        cancelText="Keep Canvas"
+        variant="danger"
+      />
     </div>
   );
 }
