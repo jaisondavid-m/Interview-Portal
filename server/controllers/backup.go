@@ -48,40 +48,45 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		}
 	}
 
-	// 2. Fetch table names from information_schema
+	// 2. Fetch table names using robust direct row scanning
 	var tableNames []string
-	_ = database.DB.Raw(`
-		SELECT TABLE_NAME 
-		FROM information_schema.TABLES 
-		WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'
-		ORDER BY TABLE_NAME ASC
-	`, dbName).Pluck("TABLE_NAME", &tableNames)
+	rows, err := database.DB.Raw("SELECT TABLE_NAME FROM information_schema.TABLES WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME ASC", dbName).Rows()
+	if err == nil && rows != nil {
+		for rows.Next() {
+			var tName string
+			if err := rows.Scan(&tName); err == nil && tName != "" {
+				tableNames = append(tableNames, tName)
+			}
+		}
+		_ = rows.Close()
+	}
 
-	// Fallback to active DATABASE() schema if dbName had different casing
+	// Fallback to SHOW TABLES if information_schema returns nothing
 	if len(tableNames) == 0 {
-		_ = database.DB.Raw(`
-			SELECT TABLE_NAME 
-			FROM information_schema.TABLES 
-			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
-			ORDER BY TABLE_NAME ASC
-		`).Pluck("TABLE_NAME", &tableNames)
+		stRows, stErr := database.DB.Raw("SHOW TABLES").Rows()
+		if stErr == nil && stRows != nil {
+			for stRows.Next() {
+				var tName string
+				if err := stRows.Scan(&tName); err == nil && tName != "" {
+					tableNames = append(tableNames, tName)
+				}
+			}
+			_ = stRows.Close()
+		}
 	}
 
 	// 3. Fetch data length and index length for each table
-	type TableSizeInfo struct {
-		TableName string `gorm:"column:TABLE_NAME"`
-		DataBytes int64  `gorm:"column:DATA_BYTES"`
-	}
-	var sizeInfos []TableSizeInfo
-	_ = database.DB.Raw(`
-		SELECT TABLE_NAME, (COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)) AS DATA_BYTES 
-		FROM information_schema.TABLES 
-		WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE'
-	`, dbName).Scan(&sizeInfos)
-
 	sizeMap := make(map[string]int64)
-	for _, s := range sizeInfos {
-		sizeMap[s.TableName] = s.DataBytes
+	sizeRows, err := database.DB.Raw("SELECT TABLE_NAME, (COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)) FROM information_schema.TABLES WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE'", dbName).Rows()
+	if err == nil && sizeRows != nil {
+		for sizeRows.Next() {
+			var tName string
+			var dataBytes int64
+			if err := sizeRows.Scan(&tName, &dataBytes); err == nil {
+				sizeMap[tName] = dataBytes
+			}
+		}
+		_ = sizeRows.Close()
 	}
 
 	// 4. Count exact rows per table
@@ -91,7 +96,7 @@ func AdminGetDatabaseStats(c *gin.Context) {
 
 	for _, tbl := range tableNames {
 		var count int64
-		_ = database.DB.Table(tbl).Count(&count).Error
+		_ = database.DB.Raw(fmt.Sprintf("SELECT COUNT(*) FROM `%s`", tbl)).Scan(&count)
 
 		sz := sizeMap[tbl]
 		totalRows += count
@@ -114,7 +119,7 @@ func AdminGetDatabaseStats(c *gin.Context) {
 		DataSizeHuman: humanSize,
 		Tables:        tableStats,
 	}
-	
+
 	if config.AppConfig != nil {
 		res.Cluster.PrimaryHost = fmt.Sprintf("%s:%s", config.AppConfig.DBHost, config.AppConfig.DBPort)
 		res.Cluster.ReplicaHosts = config.AppConfig.DBReplicaHosts
@@ -152,12 +157,29 @@ func AdminExportDatabaseDump(c *gin.Context) {
 
 	// If no specific tables selected, fetch all base tables
 	if len(targetTables) == 0 {
-		_ = database.DB.Raw(`
-			SELECT TABLE_NAME 
-			FROM information_schema.TABLES 
-			WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE'
-			ORDER BY TABLE_NAME ASC
-		`, dbName).Pluck("TABLE_NAME", &targetTables)
+		rows, err := database.DB.Raw("SELECT TABLE_NAME FROM information_schema.TABLES WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME ASC", dbName).Rows()
+		if err == nil && rows != nil {
+			for rows.Next() {
+				var tName string
+				if err := rows.Scan(&tName); err == nil && tName != "" {
+					targetTables = append(targetTables, tName)
+				}
+			}
+			_ = rows.Close()
+		}
+	}
+
+	if len(targetTables) == 0 {
+		stRows, stErr := database.DB.Raw("SHOW TABLES").Rows()
+		if stErr == nil && stRows != nil {
+			for stRows.Next() {
+				var tName string
+				if err := stRows.Scan(&tName); err == nil && tName != "" {
+					targetTables = append(targetTables, tName)
+				}
+			}
+			_ = stRows.Close()
+		}
 	}
 
 	var buf bytes.Buffer
