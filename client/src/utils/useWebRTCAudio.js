@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   getSafeUserMedia,
   getHighQualityAudioConstraints,
-  optimizeAudioSDP,
-  createNoiseCleanedStream
+  optimizeAudioSDP
 } from './mediaUtils';
 
 const RTC_CONFIG = {
@@ -97,7 +96,7 @@ export default function useWebRTCAudio({
     el.playsInline = true;
     el.muted = false;
     el.volume = 1.0;
-    el.preload = 'none';
+    el.preload = 'auto';
     if ('preservesPitch' in el) {
       el.preservesPitch = false;
     }
@@ -120,8 +119,10 @@ export default function useWebRTCAudio({
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
-      if (remoteAudioElRef.current && remoteStreamRef.current) {
-        remoteAudioElRef.current.srcObject = remoteStreamRef.current;
+      if (remoteAudioElRef.current) {
+        if (remoteStreamRef.current && remoteAudioElRef.current.srcObject !== remoteStreamRef.current) {
+          remoteAudioElRef.current.srcObject = remoteStreamRef.current;
+        }
         remoteAudioElRef.current.muted = false;
         remoteAudioElRef.current.volume = 1.0;
         await remoteAudioElRef.current.play();
@@ -555,18 +556,10 @@ export default function useWebRTCAudio({
 
         localStreamRef.current = stream;
 
-        // Initialize Web Audio Graph & Mixer
+        // Initialize Web Audio Graph & Mixer for VAD and local recording
         await initAudioMixer(stream);
 
-        // Apply Studio Real-time Voice Noise Cleaner (High-Pass, Notch, Low-Pass, Dynamics Compressor & Smart Noise Gate)
-        let transmitStream = stream;
-        if (audioContextRef.current) {
-          const { cleanedStream, cleanup } = createNoiseCleanedStream(stream, audioContextRef.current);
-          transmitStream = cleanedStream;
-          dspCleanupRef.current = cleanup;
-        }
-
-        const audioTracks = transmitStream.getAudioTracks();
+        const audioTracks = stream.getAudioTracks();
         if (audioTracks.length > 0) {
           audioTracks[0].enabled = !isMutedRef.current;
         }
@@ -575,9 +568,9 @@ export default function useWebRTCAudio({
         const pc = new RTCPeerConnection(RTC_CONFIG);
         pcRef.current = pc;
 
-        // Add studio-cleaned local tracks to peer connection with high network priority
+        // Directly transmit hardware microphone tracks with browser-native Opus encoding and AEC
         audioTracks.forEach((track) => {
-          const sender = pc.addTrack(track, transmitStream);
+          const sender = pc.addTrack(track, stream);
           if (sender && sender.getParameters) {
             try {
               const params = sender.getParameters();
@@ -629,7 +622,7 @@ export default function useWebRTCAudio({
 
         // Remote Audio Track Received -> Fast zero-delay output to speakers & mixer
         pc.ontrack = (event) => {
-          // 0. Slash jitter buffer & playout delay for instant real-time speech!
+          // 0. Slash jitter buffer & playout delay for instant real-time speech
           if (event.receiver) {
             try {
               if ('playoutDelayHint' in event.receiver) {
@@ -652,18 +645,34 @@ export default function useWebRTCAudio({
             // 1. Connect to Web Audio Analyser & Recording Mixer
             connectRemoteAudioStream(remoteStream);
 
-            // 2. Output to dedicated HTML5 audio element with native hardware echo cancellation & 0ms delay
+            // 2. Play immediately when incoming track unmutes
+            if (event.track) {
+              event.track.onunmute = () => {
+                if (remoteAudioElRef.current) {
+                  remoteAudioElRef.current.play().then(() => {
+                    setIsAutoplayBlocked(false);
+                  }).catch(() => {
+                    setIsAutoplayBlocked(true);
+                  });
+                }
+              };
+            }
+
+            // 3. Output to dedicated HTML5 audio element with 0ms delay
             if (remoteAudioElRef.current) {
               const el = remoteAudioElRef.current;
               el.srcObject = remoteStream;
               el.muted = false;
               el.volume = 1.0;
-              el.play().then(() => {
-                setIsAutoplayBlocked(false);
-              }).catch((e) => {
-                console.warn('[WebRTC Audio] HTML audio autoplay deferred:', e);
-                setIsAutoplayBlocked(true);
-              });
+              const playPromise = el.play();
+              if (playPromise !== undefined) {
+                playPromise.then(() => {
+                  setIsAutoplayBlocked(false);
+                }).catch((e) => {
+                  console.warn('[WebRTC Audio] HTML audio autoplay deferred:', e);
+                  setIsAutoplayBlocked(true);
+                });
+              }
             }
 
             setConnectionState('connected');

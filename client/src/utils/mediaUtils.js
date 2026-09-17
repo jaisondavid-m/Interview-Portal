@@ -94,11 +94,7 @@ export function getHighQualityAudioConstraints() {
 
 /**
  * Real-time Studio Voice DSP Chain:
- * 1. High-Pass Filter (85 Hz): Removes table thumps, AC airflow, and breath plosives.
- * 2. 50Hz & 60Hz Mains Notch Filters: Strips electrical power line hum.
- * 3. Low-Pass Filter (7800 Hz): Removes computer coil whine and fan hiss.
- * 4. Dynamics Compressor: Levels voice volume without boosting background noise.
- * 5. Intelligent Real-Time Noise Gate: Closes background noise by ~98% during silence and opens instantly when speech begins.
+ * Provides non-destructive high-pass filtering and subtle dynamic compression for recording mixers.
  */
 export function createNoiseCleanedStream(rawStream, audioCtx) {
   try {
@@ -108,103 +104,36 @@ export function createNoiseCleanedStream(rawStream, audioCtx) {
 
     const source = audioCtx.createMediaStreamSource(rawStream);
 
-    // 1. High-pass filter (85Hz)
+    // 1. High-pass filter (80Hz) to remove table thumps and low AC rumble
     const highpass = audioCtx.createBiquadFilter();
     highpass.type = 'highpass';
-    highpass.frequency.setValueAtTime(85, audioCtx.currentTime);
+    highpass.frequency.setValueAtTime(80, audioCtx.currentTime);
     highpass.Q.setValueAtTime(0.707, audioCtx.currentTime);
 
-    // 2. Low-pass filter (7800Hz)
-    const lowpass = audioCtx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.setValueAtTime(7800, audioCtx.currentTime);
-    lowpass.Q.setValueAtTime(0.707, audioCtx.currentTime);
-
-    // 3. Electrical Notch Filters (50Hz / 60Hz)
-    const notch50 = audioCtx.createBiquadFilter();
-    notch50.type = 'notch';
-    notch50.frequency.setValueAtTime(50, audioCtx.currentTime);
-    notch50.Q.setValueAtTime(4.0, audioCtx.currentTime);
-
-    const notch60 = audioCtx.createBiquadFilter();
-    notch60.type = 'notch';
-    notch60.frequency.setValueAtTime(60, audioCtx.currentTime);
-    notch60.Q.setValueAtTime(4.0, audioCtx.currentTime);
-
-    // 4. Dynamics Compressor
+    // 2. Dynamics Compressor to level out microphone peaks gently
     const compressor = audioCtx.createDynamicsCompressor();
     compressor.threshold.setValueAtTime(-24, audioCtx.currentTime);
-    compressor.knee.setValueAtTime(8, audioCtx.currentTime);
-    compressor.ratio.setValueAtTime(3.5, audioCtx.currentTime);
+    compressor.knee.setValueAtTime(12, audioCtx.currentTime);
+    compressor.ratio.setValueAtTime(3.0, audioCtx.currentTime);
     compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
-    compressor.release.setValueAtTime(0.12, audioCtx.currentTime);
+    compressor.release.setValueAtTime(0.15, audioCtx.currentTime);
 
-    // 5. Intelligent Noise Gate
-    const gateGain = audioCtx.createGain();
-    gateGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
-
-    const gateAnalyser = audioCtx.createAnalyser();
-    gateAnalyser.fftSize = 256;
-    gateAnalyser.smoothingTimeConstant = 0.2;
-
-    // Connect DSP chain
     source.connect(highpass);
-    highpass.connect(notch50);
-    notch50.connect(notch60);
-    notch60.connect(lowpass);
-    lowpass.connect(compressor);
-    compressor.connect(gateAnalyser);
-    compressor.connect(gateGain);
+    highpass.connect(compressor);
 
     const dest = audioCtx.createMediaStreamDestination();
-    gateGain.connect(dest);
-
-    // Fast noise-gate loop
-    const dataArray = new Uint8Array(gateAnalyser.frequencyBinCount);
-    let isGateOpen = true;
-    let silenceFrames = 0;
-
-    const gateInterval = setInterval(() => {
-      if (audioCtx.state !== 'running') return;
-      gateAnalyser.getByteFrequencyData(dataArray);
-
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
-      }
-      const avg = sum / dataArray.length;
-
-      if (avg > 8) {
-        silenceFrames = 0;
-        if (!isGateOpen) {
-          isGateOpen = true;
-          gateGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.008); // 8ms instant smooth open
-        }
-      } else {
-        silenceFrames++;
-        if (silenceFrames > 6 && isGateOpen) {
-          isGateOpen = false;
-          gateGain.gain.setTargetAtTime(0.02, audioCtx.currentTime, 0.035); // 35ms smooth close
-        }
-      }
-    }, 25);
+    compressor.connect(dest);
 
     const cleanup = () => {
-      clearInterval(gateInterval);
       try {
         source.disconnect();
         highpass.disconnect();
-        notch50.disconnect();
-        notch60.disconnect();
-        lowpass.disconnect();
         compressor.disconnect();
-        gateGain.disconnect();
         dest.disconnect();
       } catch (e) {}
     };
 
-    const cleanedStream = dest.stream;
-    return { cleanedStream, cleanup };
+    return { cleanedStream: dest.stream, cleanup };
   } catch (err) {
     console.warn('[WebRTC Audio] Noise cleaning DSP fallback to raw stream:', err);
     return { cleanedStream: rawStream, cleanup: () => {} };
@@ -212,10 +141,8 @@ export function createNoiseCleanedStream(rawStream, audioCtx) {
 }
 
 /**
- * Optimizes WebRTC SDP by tuning Opus codec parameters for real-time, ultra-low latency voice:
- * - ptime=10, minptime=10, maxptime=20 : 10ms fast packetization (reduces packet buffering delay by 50-70%)
- * - usedtx=1 : Discontinuous transmission (silences packet transmission during pauses to eliminate background hiss)
- * - useinbandfec=1 : Forward Error Correction (recovers dropped voice frames without static/clicks)
+ * Optimizes WebRTC SDP by tuning Opus codec parameters for real-time speech:
+ * - useinbandfec=1 : Forward Error Correction (recovers dropped voice packets smoothly)
  * - maxaveragebitrate=64000 : High speech clarity
  * - stereo=0 : Clean mono encoding
  */
@@ -224,23 +151,18 @@ export function optimizeAudioSDP(sdp) {
 
   let modifiedSdp = sdp;
 
-  // 1. Force 10ms packet time in audio media section if not already present
-  if (!modifiedSdp.includes('a=ptime:10')) {
-    modifiedSdp = modifiedSdp.replace(/(m=audio[^\r\n]+[\r\n]+)/, '$1a=ptime:10\r\na=maxptime:20\r\n');
-  }
-
-  // 2. Find Opus payload type number (e.g., a=rtpmap:111 opus/48000/2)
+  // Find Opus payload type number (e.g., a=rtpmap:111 opus/48000/2)
   const opusMatch = modifiedSdp.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
   if (!opusMatch) return modifiedSdp;
 
   const opusPt = opusMatch[1];
   const fmtpRegex = new RegExp(`a=fmtp:${opusPt}\\s+([^\r\n]+)`);
-  const opusParams = 'minptime=10;ptime=10;maxptime=20;useinbandfec=1;usedtx=1;maxaveragebitrate=64000;stereo=0;sprop-stereo=0;cbr=0';
+  const opusParams = 'useinbandfec=1;maxaveragebitrate=64000;stereo=0;sprop-stereo=0';
 
   if (fmtpRegex.test(modifiedSdp)) {
     modifiedSdp = modifiedSdp.replace(fmtpRegex, (match, existingParams) => {
       const parts = existingParams.split(';').map((p) => p.trim()).filter(Boolean);
-      const keys = ['minptime', 'ptime', 'maxptime', 'useinbandfec', 'usedtx', 'maxaveragebitrate', 'stereo', 'sprop-stereo', 'cbr'];
+      const keys = ['useinbandfec', 'usedtx', 'maxaveragebitrate', 'stereo', 'sprop-stereo'];
       const filtered = parts.filter((p) => !keys.some((k) => p.startsWith(`${k}=`)));
       return `a=fmtp:${opusPt} ${[...filtered, opusParams].join(';')}`;
     });
