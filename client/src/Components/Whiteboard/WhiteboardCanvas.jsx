@@ -714,13 +714,106 @@ export default function WhiteboardCanvas({
     ? COMPONENT_CATALOG
     : COMPONENT_CATALOG.filter((c) => c.category === catalogFilter);
 
+  // Compact Room View Launcher Card (When not in Fullscreen)
+  if (!isFullscreen) {
+    return (
+      <div className="panel-card p-6 border-2 border-[var(--border)] bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-md flex flex-col justify-between space-y-6 animate-fadeIn min-h-[460px]">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-xs">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <span>Architecture Whiteboard Studio</span>
+                  <span className="text-[10px] bg-blue-500/15 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-mono font-bold uppercase border border-blue-500/30">
+                    Studio Mode
+                  </span>
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] font-mono">
+                  Interactive System Design & Distributed Architecture Workspace
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-md font-mono text-[11px] font-bold border bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <span>Live Whiteboard</span>
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+            Access the complete system design studio in full-screen mode to architect distributed systems, connect microservices, load balancers, databases, caches, and message queues in real time.
+          </p>
+
+          {/* Feature Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+                <Layers className="w-4 h-4 text-blue-500" />
+                <span>Cloud Component Catalog</span>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                Full palette of clients, API gateways, microservices, databases, queues, caches, and storage primitives.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+                <Link2 className="w-4 h-4 text-indigo-500" />
+                <span>Smart Directional Connections</span>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                Draw arrows with protocol annotations (HTTPS, gRPC, Async Queue, SQL Query) and live sync.
+              </p>
+            </div>
+          </div>
+
+          {/* Architecture Status Info */}
+          <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs font-mono flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+              <Layers className="w-3.5 h-3.5 text-blue-500" />
+              <span>Canvas Architecture:</span>
+              <strong className="text-blue-600 dark:text-blue-400">
+                {nodes.length} {nodes.length === 1 ? 'Node' : 'Nodes'} • {connections.length} {connections.length === 1 ? 'Link' : 'Links'}
+              </strong>
+            </div>
+            {nodes.length > 0 && (
+              <span className="text-[11px] text-[var(--text-muted)]">
+                Real-time canvas stream active
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Action Dock */}
+        <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+            <span>Click below or press <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] text-[10px] font-bold text-[var(--text-primary)]">F</kbd> for full screen</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(true)}
+            className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
+            title="Open Whiteboard Studio in Full Screen (Shortcut: F)"
+          >
+            <Layers className="w-4 h-4" />
+            <span>Open Whiteboard Studio</span>
+            <Maximize2 className="w-3.5 h-3.5 opacity-80 ml-0.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`select-none flex flex-col font-sans transition-all duration-200 ${
-        isFullscreen
-          ? 'fixed inset-0 z-[60] w-screen h-screen bg-[var(--bg-card)] shadow-2xl overflow-hidden'
-          : 'relative w-full h-[620px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] shadow-inner overflow-hidden'
-      }`}
+      className="fixed inset-0 z-50 rounded-none w-screen h-screen flex flex-col bg-[var(--bg-card)] border-none overflow-hidden transition-all"
     >
       {/* ============================================================ */}
       {/* TOP CONTROLS & STATUS TOOLBAR */}
@@ -925,21 +1018,17 @@ export default function WhiteboardCanvas({
             )}
           </div>
 
-          {/* Fullscreen / Minimize Toggle */}
+          {/* Exit Fullscreen Studio Mode Button */}
           <button
             type="button"
-            onClick={() => setIsFullscreen((prev) => !prev)}
-            className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border shadow-xs ${
-              isFullscreen
-                ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
-                : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-primary)] hover:border-blue-500 hover:text-blue-500'
-            }`}
-            title={isFullscreen ? 'Exit Fullscreen Mode (Press Esc or F)' : 'Expand to Fullscreen Mode (Press F)'}
+            onClick={() => setIsFullscreen(false)}
+            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:bg-blue-700 transition cursor-pointer"
+            title="Exit Studio Mode (Press Esc or F)"
           >
-            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            <span className="font-mono">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-            <kbd className="hidden sm:inline-block text-[9px] font-mono px-1 py-0.2 rounded bg-black/15 dark:bg-white/15 uppercase">
-              {isFullscreen ? 'Esc' : 'F'}
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span className="font-mono">Exit Studio</span>
+            <kbd className="hidden sm:inline-block text-[9px] font-mono px-1 py-0.2 rounded bg-black/20 uppercase ml-0.5">
+              Esc
             </kbd>
           </button>
         </div>
