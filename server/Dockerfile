@@ -8,10 +8,14 @@ WORKDIR /app
 ENV GOTOOLCHAIN=auto
 ENV CGO_ENABLED=0
 ENV GOOS=linux
+ENV GOPROXY="https://proxy.golang.org,https://goproxy.io,direct"
 
-# Copy dependency manifests and download modules
+# Copy dependency manifests and download modules with resilient fallback and retries
 COPY go.mod go.sum ./
-RUN go mod download
+RUN for i in 1 2 3 4 5; do \
+      go mod download && break || \
+      (echo "Module download attempt $i failed, retrying in 3s..." && sleep 3); \
+    done
 
 # Copy source files
 COPY . .
