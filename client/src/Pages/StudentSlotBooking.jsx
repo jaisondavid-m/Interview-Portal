@@ -415,13 +415,6 @@ export default function StudentSlotBooking() {
                           Physical venue details assigned upon booking.
                         </p>
                       </div>
-
-                      <div className="mt-3 flex items-center justify-between text-xs">
-                        <span className="text-[var(--text-secondary)]">Remaining Seats:</span>
-                        <span className={`font-bold font-mono ${isFull ? 'text-rose-500' : 'text-emerald-500'}`}>
-                          {slot.available_seats} / {slot.total_capacity}
-                        </span>
-                      </div>
                     </div>
 
                     {/* Action Button */}

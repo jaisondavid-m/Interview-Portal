@@ -767,13 +767,6 @@ export default function StudentInterviews() {
                               Venue and room details will be assigned upon booking.
                             </p>
                           </div>
-
-                          <div className="mt-3 pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
-                            <span className="text-[var(--text-secondary)]">Remaining Capacity:</span>
-                            <span className={`font-bold font-mono ${isFull ? 'text-rose-500' : 'text-emerald-500'}`}>
-                              {slot.available_seats} / {slot.total_capacity} seats
-                            </span>
-                          </div>
                         </div>
 
                         <div className="mt-4">
