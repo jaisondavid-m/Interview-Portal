@@ -382,7 +382,7 @@ func AdminBulkCreateUsers(c *gin.Context) {
 
 	defaultPW := strings.TrimSpace(input.DefaultPassword)
 	if defaultPW == "" {
-		defaultPW = "mockmate123"
+		defaultPW = "mockmate-bitsathy-4321"
 	}
 
 	defaultHashedPW, err := models.HashPassword(defaultPW)

@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Search, Filter, Edit2, Trash2, Shield, 
   GraduationCap, Check, X, AlertCircle, RefreshCw, KeyRound, SlidersHorizontal, RotateCcw,
   Eye, EyeOff, Upload, Download, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle,
-  Info, CheckSquare, Square, MinusSquare, LogOut, ChevronLeft, ChevronRight
+  Info, CheckSquare, Square, MinusSquare, LogOut, ChevronLeft, ChevronRight, Zap
 } from 'lucide-react';
 import api from '../api/axios';
 import SearchableSelect from '../Components/SearchableSelect';
@@ -69,7 +69,7 @@ export default function AdminUsers() {
   const [bulkRawText, setBulkRawText] = useState('');
   const [bulkDefaultDept, setBulkDefaultDept] = useState('CSE');
   const [bulkDefaultRole, setBulkDefaultRole] = useState('student');
-  const [bulkDefaultPassword, setBulkDefaultPassword] = useState('mockmate123');
+  const [bulkDefaultPassword, setBulkDefaultPassword] = useState('mockmate-bitsathy-4321');
   const [bulkPreview, setBulkPreview] = useState([]);
   const [bulkParseError, setBulkParseError] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -437,9 +437,9 @@ export default function AdminUsers() {
   const handleDownloadTemplate = () => {
     const sampleHeaders = 'name,email,roll_no,department,role,password\n';
     const sampleRows = [
-      'Mani M R S,manimozhichelvanmrs.ad25@bitsathy.ac.in,7376252AD230,AI&DS,student,mockmate123',
-      'Jagaprasanth P,jagaprasanthp.cs25@bitsathy.ac.in,7376251CS219,CSE,student,mockmate123',
-      'Jaison David M,jaisondavidm.cs25@bitsathy.ac.in,7376251CS221,CSE,student,mockmate123',
+      'Mani M R S,manimozhichelvanmrs.ad25@bitsathy.ac.in,7376252AD230,AI&DS,student,mockmate-bitsathy-4321',
+      'Jagaprasanth P,jagaprasanthp.cs25@bitsathy.ac.in,7376251CS219,CSE,student,mockmate-bitsathy-4321',
+      'Jaison David M,jaisondavidm.cs25@bitsathy.ac.in,7376251CS221,CSE,student,mockmate-bitsathy-4321',
       'Campus Admin,admin.placement@bitsathy.ac.in,ADMIN02,Administration,admin,Admin@123'
     ].join('\n');
     
@@ -523,7 +523,7 @@ export default function AdminUsers() {
       const role = roleIdx !== -1 
         ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : 'student') 
         : bulkDefaultRole;
-      const password = passIdx !== -1 ? (cols[passIdx] || '') : (bulkDefaultPassword || 'mockmate123');
+      const password = passIdx !== -1 ? (cols[passIdx] || '') : (bulkDefaultPassword || 'mockmate-bitsathy-4321');
 
       let status = 'valid';
       let message = 'Ready to create';
@@ -566,7 +566,7 @@ export default function AdminUsers() {
         roll_no: roll_no.trim(),
         department: department.trim() || bulkDefaultDept,
         role: role || bulkDefaultRole,
-        password: password || bulkDefaultPassword || 'mockmate123',
+        password: password || bulkDefaultPassword || 'mockmate-bitsathy-4321',
         status,
         message,
       });
@@ -628,7 +628,7 @@ export default function AdminUsers() {
           role: r.role,
           password: r.password,
         })),
-        default_password: bulkDefaultPassword || 'mockmate123',
+        default_password: bulkDefaultPassword || 'mockmate-bitsathy-4321',
         mode: bulkImportMode,
       };
 
@@ -1261,7 +1261,7 @@ export default function AdminUsers() {
                         rows={5}
                         value={bulkRawText}
                         onChange={(e) => handleTextChange(e.target.value)}
-                        placeholder={`name,email,roll_no,department,role,password\nRahul Sharma,rahul.cs25@bitsathy.ac.in,7376251CS104,CSE,student,mockmate123\nSneha Patel,sneha.it25@bitsathy.ac.in,7376251IT201,IT,student,`}
+                        placeholder={`name,email,roll_no,department,role,password\nRahul Sharma,rahul.cs25@bitsathy.ac.in,7376251CS104,CSE,student,mockmate-bitsathy-4321\nSneha Patel,sneha.it25@bitsathy.ac.in,7376251IT201,IT,student,`}
                         className="custom-input font-mono text-[11px] w-full p-3 resize-y"
                       />
                     </div>
@@ -1348,7 +1348,7 @@ export default function AdminUsers() {
                           }
                         }}
                         className="custom-input py-1.5 text-xs font-mono"
-                        placeholder="mockmate123"
+                        placeholder="mockmate-bitsathy-4321"
                       />
                     </div>
                     <div>
