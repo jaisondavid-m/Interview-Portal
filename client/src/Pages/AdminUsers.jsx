@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Users, UserPlus, Search, Filter, Edit2, Trash2, Shield, 
+import {
+  Users, UserPlus, Search, Filter, Edit2, Trash2, Shield,
   GraduationCap, Check, X, AlertCircle, RefreshCw, KeyRound, SlidersHorizontal, RotateCcw,
   Eye, EyeOff, Upload, Download, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle,
   Info, CheckSquare, Square, MinusSquare, LogOut, ChevronLeft, ChevronRight, Zap
@@ -442,7 +442,7 @@ export default function AdminUsers() {
       'Jaison David M,jaisondavidm.cs25@bitsathy.ac.in,7376251CS221,CSE,student,mockmate-bitsathy-4321',
       'Campus Admin,admin.placement@bitsathy.ac.in,ADMIN02,Administration,admin,Admin@123'
     ].join('\n');
-    
+
     const blob = new Blob([sampleHeaders + sampleRows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -496,7 +496,7 @@ export default function AdminUsers() {
 
     const firstLineCols = parseLine(lines[0]);
     const headerRow = firstLineCols.map(h => h.toLowerCase().replace(/[\s_\-/]/g, ''));
-    
+
     const nameIdx = headerRow.findIndex(h => h.includes('name'));
     const emailIdx = headerRow.findIndex(h => h.includes('email') || h.includes('mail'));
     const rollIdx = headerRow.findIndex(h => h.includes('roll') || h.includes('reg') || h.includes('id') || h.includes('rollno'));
@@ -520,8 +520,8 @@ export default function AdminUsers() {
       const roll_no = rollIdx !== -1 ? (cols[rollIdx] || '') : (cols[2] || '');
       const department = deptIdx !== -1 ? (cols[deptIdx] || '') : bulkDefaultDept;
       const rawRole = (cols[roleIdx] || '').toLowerCase().trim();
-      const role = roleIdx !== -1 
-        ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : 'student') 
+      const role = roleIdx !== -1
+        ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : 'student')
         : bulkDefaultRole;
       const password = passIdx !== -1 ? (cols[passIdx] || '') : (bulkDefaultPassword || 'mockmate-bitsathy-4321');
 
@@ -619,21 +619,48 @@ export default function AdminUsers() {
 
     setBulkLoading(true);
     try {
-      const payload = {
-        users: eligibleRows.map(r => ({
-          name: r.name,
-          email: r.email,
-          roll_no: r.roll_no,
-          department: r.department,
-          role: r.role,
-          password: r.password,
-        })),
-        default_password: bulkDefaultPassword || 'mockmate-bitsathy-4321',
-        mode: bulkImportMode,
-      };
+      const allUsers = eligibleRows.map(r => ({
+        name: r.name,
+        email: r.email,
+        roll_no: r.roll_no,
+        department: r.department,
+        role: r.role,
+        password: r.password,
+      }));
 
-      const res = await api.post('/admin/users/bulk', payload);
-      setBulkResult(res.data);
+      // Process in chunks of 1000 users with extended 3-minute timeout per batch
+      const CHUNK_SIZE = 1000;
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let totalSkipped = 0;
+      let allSkippedDetails = [];
+
+      for (let i = 0; i < allUsers.length; i += CHUNK_SIZE) {
+        const batch = allUsers.slice(i, i + CHUNK_SIZE);
+        const payload = {
+          users: batch,
+          default_password: bulkDefaultPassword || 'mockmate-bitsathy-4321',
+          mode: bulkImportMode,
+        };
+
+        const res = await api.post('/admin/users/bulk', payload, { timeout: 180000 });
+        if (res) {
+          totalCreated += res.created_count || 0;
+          totalUpdated += res.updated_count || 0;
+          totalSkipped += res.skipped_count || 0;
+          if (res.skipped_details?.length) {
+            allSkippedDetails = [...allSkippedDetails, ...res.skipped_details];
+          }
+        }
+      }
+
+      setBulkResult({
+        status: 'success',
+        created_count: totalCreated,
+        updated_count: totalUpdated,
+        skipped_count: totalSkipped,
+        skipped_details: allSkippedDetails,
+      });
       fetchUsers();
     } catch (err) {
       alert(err.message || 'Failed to complete bulk upload');
@@ -913,9 +940,8 @@ export default function AdminUsers() {
                   return (
                     <tr
                       key={user.id}
-                      className={`transition-colors ${
-                        isSelected ? 'bg-[var(--accent-dim)]/40 hover:bg-[var(--accent-dim)]/60' : 'hover:bg-[var(--bg-hover)]'
-                      }`}
+                      className={`transition-colors ${isSelected ? 'bg-[var(--accent-dim)]/40 hover:bg-[var(--accent-dim)]/60' : 'hover:bg-[var(--bg-hover)]'
+                        }`}
                     >
                       <td className="py-3 px-3 text-center">
                         <button
@@ -938,10 +964,10 @@ export default function AdminUsers() {
                             {isGoogleUser && (
                               <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-white rounded-full p-0.5 shadow-xs border border-zinc-200" title="Google Authenticated">
                                 <svg className="w-full h-full" viewBox="0 0 24 24">
-                                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-                                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"/>
-                                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-                                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z" />
+                                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z" />
+                                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+                                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
                                 </svg>
                               </div>
                             )}
@@ -966,13 +992,12 @@ export default function AdminUsers() {
                         {user.department || '—'}
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`status-pill ${
-                          user.role === 'admin'
+                        <span className={`status-pill ${user.role === 'admin'
                             ? 'status-accent'
                             : user.role === 'developer'
-                            ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
-                            : 'status-active'
-                        }`}>
+                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
+                              : 'status-active'
+                          }`}>
                           {user.role === 'admin' ? 'Administrator' : user.role === 'developer' ? 'Developer' : 'Student'}
                         </span>
                       </td>
@@ -996,11 +1021,10 @@ export default function AdminUsers() {
                         <button
                           onClick={() => openForceLogoutModal(user)}
                           disabled={!user.has_active_session}
-                          className={`p-1.5 rounded-[var(--radius-sm)] transition cursor-pointer ${
-                            user.has_active_session
+                          className={`p-1.5 rounded-[var(--radius-sm)] transition cursor-pointer ${user.has_active_session
                               ? 'hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 text-amber-500/80'
                               : 'opacity-25 cursor-not-allowed text-[var(--text-muted)]'
-                          }`}
+                            }`}
                           title={user.has_active_session ? `Force Logout ${user.name}` : 'User is not currently logged in'}
                         >
                           <LogOut className="w-3.5 h-3.5" />
@@ -1087,11 +1111,11 @@ export default function AdminUsers() {
       {/* BULK UPLOAD MODAL */}
       {/* ============================================================ */}
       {showBulkModal && (
-        <div 
+        <div
           onClick={() => setShowBulkModal(false)}
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-4xl shadow-[var(--shadow-lg)] animate-scaleUp max-h-[92vh] flex flex-col space-y-4"
           >
@@ -1204,11 +1228,10 @@ export default function AdminUsers() {
                     <button
                       type="button"
                       onClick={() => setBulkMode('file')}
-                      className={`py-1.5 px-3 rounded-t-[var(--radius-sm)] transition flex items-center gap-1.5 cursor-pointer ${
-                        bulkMode === 'file'
+                      className={`py-1.5 px-3 rounded-t-[var(--radius-sm)] transition flex items-center gap-1.5 cursor-pointer ${bulkMode === 'file'
                           ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-b-2 border-[var(--accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
+                        }`}
                     >
                       <Upload className="w-3.5 h-3.5" />
                       <span>Upload CSV File</span>
@@ -1216,11 +1239,10 @@ export default function AdminUsers() {
                     <button
                       type="button"
                       onClick={() => setBulkMode('text')}
-                      className={`py-1.5 px-3 rounded-t-[var(--radius-sm)] transition flex items-center gap-1.5 cursor-pointer ${
-                        bulkMode === 'text'
+                      className={`py-1.5 px-3 rounded-t-[var(--radius-sm)] transition flex items-center gap-1.5 cursor-pointer ${bulkMode === 'text'
                           ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-b-2 border-[var(--accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
+                        }`}
                     >
                       <FileText className="w-3.5 h-3.5" />
                       <span>Paste CSV Text</span>
@@ -1279,11 +1301,10 @@ export default function AdminUsers() {
                       <button
                         type="button"
                         onClick={() => handleModeChange('upsert')}
-                        className={`p-2.5 rounded border text-left transition cursor-pointer ${
-                          bulkImportMode === 'upsert'
+                        className={`p-2.5 rounded border text-left transition cursor-pointer ${bulkImportMode === 'upsert'
                             ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-xs'
                             : 'border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-raised)]'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-1.5 font-bold text-[12px] text-[var(--text-primary)]">
                           <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -1297,11 +1318,10 @@ export default function AdminUsers() {
                       <button
                         type="button"
                         onClick={() => handleModeChange('create_only')}
-                        className={`p-2.5 rounded border text-left transition cursor-pointer ${
-                          bulkImportMode === 'create_only'
+                        className={`p-2.5 rounded border text-left transition cursor-pointer ${bulkImportMode === 'create_only'
                             ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-xs'
                             : 'border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-raised)]'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-1.5 font-bold text-[12px] text-[var(--text-primary)]">
                           <UserPlus className="w-3.5 h-3.5 text-emerald-500" />
@@ -1315,11 +1335,10 @@ export default function AdminUsers() {
                       <button
                         type="button"
                         onClick={() => handleModeChange('update_only')}
-                        className={`p-2.5 rounded border text-left transition cursor-pointer ${
-                          bulkImportMode === 'update_only'
+                        className={`p-2.5 rounded border text-left transition cursor-pointer ${bulkImportMode === 'update_only'
                             ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-xs'
                             : 'border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-raised)]'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-1.5 font-bold text-[12px] text-[var(--text-primary)]">
                           <RotateCcw className="w-3.5 h-3.5 text-blue-500" />
@@ -1465,13 +1484,12 @@ export default function AdminUsers() {
                                   {r.department}
                                 </td>
                                 <td className="py-2 px-3">
-                                  <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded ${
-                                    r.role === 'admin' 
-                                      ? 'bg-purple-500/10 text-purple-600 font-bold' 
+                                  <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded ${r.role === 'admin'
+                                      ? 'bg-purple-500/10 text-purple-600 font-bold'
                                       : r.role === 'developer'
-                                      ? 'bg-indigo-500/10 text-indigo-600 font-bold'
-                                      : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
-                                  }`}>
+                                        ? 'bg-indigo-500/10 text-indigo-600 font-bold'
+                                        : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
+                                    }`}>
                                     {r.role}
                                   </span>
                                 </td>
@@ -1533,11 +1551,11 @@ export default function AdminUsers() {
       {/* BULK BATCH EDIT MODAL */}
       {/* ============================================================ */}
       {showBulkEditModal && (
-        <div 
+        <div
           onClick={() => setShowBulkEditModal(false)}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-lg shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
           >
@@ -1642,11 +1660,11 @@ export default function AdminUsers() {
       {/* BULK DELETE CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showBulkDeleteModal && (
-        <div 
+        <div
           onClick={() => setShowBulkDeleteModal(false)}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
           >
@@ -1703,11 +1721,11 @@ export default function AdminUsers() {
       {/* CREATE USER MODAL */}
       {/* ============================================================ */}
       {showCreateModal && (
-        <div 
+        <div
           onClick={() => setShowCreateModal(false)}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5"
           >
@@ -1851,11 +1869,11 @@ export default function AdminUsers() {
       {/* EDIT USER MODAL */}
       {/* ============================================================ */}
       {showEditModal && (
-        <div 
+        <div
           onClick={() => setShowEditModal(false)}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[var(--shadow-lg)] animate-slide-up space-y-4 sm:space-y-5"
           >
@@ -1994,11 +2012,11 @@ export default function AdminUsers() {
       {/* DELETE CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showDeleteModal && (
-        <div 
+        <div
           onClick={() => setShowDeleteModal(false)}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-slide-up space-y-4"
           >
@@ -2031,14 +2049,14 @@ export default function AdminUsers() {
       {/* SINGLE USER FORCE LOGOUT CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showForceLogoutModal && userToLogout && (
-        <div 
+        <div
           onClick={() => {
             setShowForceLogoutModal(false);
             setUserToLogout(null);
           }}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
           >
@@ -2098,11 +2116,11 @@ export default function AdminUsers() {
       {/* BULK FORCE LOGOUT CONFIRMATION MODAL */}
       {/* ============================================================ */}
       {showBulkForceLogoutModal && (
-        <div 
+        <div
           onClick={() => setShowBulkForceLogoutModal(false)}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-md shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
           >
