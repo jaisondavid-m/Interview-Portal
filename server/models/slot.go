@@ -19,6 +19,7 @@ const (
 // InterviewSlot represents a scheduled interview session across one or more physical examination venues
 type InterviewSlot struct {
 	ID                     uint                  `gorm:"primaryKey" json:"id"`
+	SlotType               string                `gorm:"size:20;default:'physical';index" json:"slot_type"`     // "physical" | "online"
 	VenueID                uint                  `gorm:"default:0;index" json:"venue_id"`                       // Legacy fallback
 	Venue                  *Venue                `gorm:"foreignKey:VenueID" json:"venue,omitempty"`             // Legacy fallback
 	FacultyID              uint                  `gorm:"default:0;index" json:"faculty_id"`                     // Legacy fallback

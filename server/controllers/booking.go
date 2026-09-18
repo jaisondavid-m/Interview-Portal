@@ -22,30 +22,31 @@ type BookSlotInput struct {
 
 // AvailableSlotResponse represents an open interview slot with venue and remaining capacity
 type AvailableSlotResponse struct {
-	ID                  uint     `json:"id"`
-	VenueID             uint     `json:"venue_id"`
-	VenueName           string   `json:"venue_name"`
-	Building            string   `json:"building"`
-	RoomNumber          string   `json:"room_number"`
-	FacultyName         string   `json:"faculty_name"`
-	FacultyDept         string   `json:"faculty_department"`
-	TrackID             *uint    `json:"track_id,omitempty"`
-	TrackTitle          string   `json:"track_title,omitempty"`
-	LevelID             *uint    `json:"level_id,omitempty"`
-	LevelName           string   `json:"level_name,omitempty"`
-	LevelNumber         int      `json:"level_number,omitempty"`
-	AllowedTrackIDs     []uint   `json:"allowed_track_ids,omitempty"`
-	AllowedLevelIDs     []uint   `json:"allowed_level_ids,omitempty"`
-	AllowedTracksSummary string  `json:"allowed_tracks_summary,omitempty"`
-	SlotDate            string   `json:"slot_date"`
-	StartTime           string   `json:"start_time"`
-	EndTime             string   `json:"end_time"`
-	TotalCapacity       int      `json:"total_capacity"`
-	BookedCount         int      `json:"booked_count"`
-	AvailableSeats      int      `json:"available_seats"`
-	IsBookedByMe        bool     `json:"is_booked_by_me"`
-	MyBookingID         uint     `json:"my_booking_id,omitempty"`
-	Notes               string   `json:"notes"`
+	ID                   uint     `json:"id"`
+	SlotType             string   `json:"slot_type"` // "physical" | "online"
+	VenueID              uint     `json:"venue_id"`
+	VenueName            string   `json:"venue_name"`
+	Building             string   `json:"building"`
+	RoomNumber           string   `json:"room_number"`
+	FacultyName          string   `json:"faculty_name"`
+	FacultyDept          string   `json:"faculty_department"`
+	TrackID              *uint    `json:"track_id,omitempty"`
+	TrackTitle           string   `json:"track_title,omitempty"`
+	LevelID              *uint    `json:"level_id,omitempty"`
+	LevelName            string   `json:"level_name,omitempty"`
+	LevelNumber          int      `json:"level_number,omitempty"`
+	AllowedTrackIDs      []uint   `json:"allowed_track_ids,omitempty"`
+	AllowedLevelIDs      []uint   `json:"allowed_level_ids,omitempty"`
+	AllowedTracksSummary string   `json:"allowed_tracks_summary,omitempty"`
+	SlotDate             string   `json:"slot_date"`
+	StartTime            string   `json:"start_time"`
+	EndTime              string   `json:"end_time"`
+	TotalCapacity        int      `json:"total_capacity"`
+	BookedCount          int      `json:"booked_count"`
+	AvailableSeats       int      `json:"available_seats"`
+	IsBookedByMe         bool     `json:"is_booked_by_me"`
+	MyBookingID          uint     `json:"my_booking_id,omitempty"`
+	Notes                string   `json:"notes"`
 }
 
 // GetAvailableSlots returns all upcoming active slots open for booking with track & level filters
@@ -156,12 +157,20 @@ func GetAvailableSlots(c *gin.Context) {
 			available = 0
 		}
 
-		// Do not disclose internal venue and invigilator details before booking
+		// Do not disclose internal venue and invigilator details before booking (for physical slots)
 		venueName := "Campus Examination Venue"
 		building := "Academic Complex"
 		roomNumber := "Assigned on Verification"
 		facultyName := "Faculty Invigilator"
 		facultyDept := "Examination Wing"
+
+		if s.SlotType == "online" {
+			venueName = "Online Video Assessment"
+			building = "Remote / Virtual"
+			roomNumber = "Online Session"
+			facultyName = "Self-Proctored"
+			facultyDept = "Virtual Proctor"
+		}
 
 		trackTitle := "All Domains"
 		if s.Track != nil {
@@ -178,29 +187,30 @@ func GetAvailableSlots(c *gin.Context) {
 		bookingID := myBookingsMap[s.ID]
 
 		response = append(response, AvailableSlotResponse{
-			ID:              s.ID,
-			VenueID:         s.VenueID,
-			VenueName:       venueName,
-			Building:        building,
-			RoomNumber:      roomNumber,
-			FacultyName:     facultyName,
-			FacultyDept:     facultyDept,
-			TrackID:         s.TrackID,
-			TrackTitle:      trackTitle,
-			LevelID:         s.LevelID,
-			LevelName:       levelName,
-			LevelNumber:     levelNumber,
-			AllowedTrackIDs: s.AllowedTrackIDs,
-			AllowedLevelIDs: s.AllowedLevelIDs,
-			SlotDate:        s.SlotDate,
-			StartTime:       s.StartTime,
-			EndTime:         s.EndTime,
-			TotalCapacity:   s.Capacity,
-			BookedCount:     int(booked),
-			AvailableSeats:  available,
-			IsBookedByMe:    bookingID > 0,
-			MyBookingID:     bookingID,
-			Notes:           s.Notes,
+			ID:                   s.ID,
+			SlotType:             s.SlotType,
+			VenueID:              s.VenueID,
+			VenueName:            venueName,
+			Building:             building,
+			RoomNumber:           roomNumber,
+			FacultyName:          facultyName,
+			FacultyDept:          facultyDept,
+			TrackID:              s.TrackID,
+			TrackTitle:           trackTitle,
+			LevelID:              s.LevelID,
+			LevelName:            levelName,
+			LevelNumber:          levelNumber,
+			AllowedTrackIDs:      s.AllowedTrackIDs,
+			AllowedLevelIDs:      s.AllowedLevelIDs,
+			SlotDate:             s.SlotDate,
+			StartTime:            s.StartTime,
+			EndTime:              s.EndTime,
+			TotalCapacity:        s.Capacity,
+			BookedCount:          int(booked),
+			AvailableSeats:       available,
+			IsBookedByMe:         bookingID > 0,
+			MyBookingID:          bookingID,
+			Notes:                s.Notes,
 		})
 	}
 
@@ -326,31 +336,33 @@ func BookSlot(c *gin.Context) {
 		return
 	}
 
-	// 5. Dynamic Venue Balancing (Allocate student to least-loaded venue in this slot)
+	// 5. Dynamic Venue Balancing (for physical slots, allocate student to least-loaded venue)
 	var assignedVenueID *uint
 	var assignedFacultyID *uint
 
-	if len(slot.Venues) > 0 {
-		bestVenue := slot.Venues[0]
-		minBookings := int64(999999)
-		for _, sv := range slot.Venues {
-			var count int64
-			database.DB.Model(&models.SlotBooking{}).Where("slot_id = ? AND assigned_venue_id = ? AND status != 'cancelled'", slot.ID, sv.VenueID).Count(&count)
-			if count < minBookings {
-				minBookings = count
-				bestVenue = sv
-			}
-		}
-		assignedVenueID = &bestVenue.VenueID
-		assignedFacultyID = &bestVenue.FacultyID
-	} else if slot.VenueID > 0 {
-		assignedVenueID = &slot.VenueID
-		assignedFacultyID = &slot.FacultyID
+	allocationStatus := "pending_verification"
+	if slot.SlotType == "online" || slot.AllocationsPublished {
+		allocationStatus = "verified"
 	}
 
-	allocationStatus := "pending_verification"
-	if slot.AllocationsPublished {
-		allocationStatus = "verified"
+	if slot.SlotType != "online" {
+		if len(slot.Venues) > 0 {
+			bestVenue := slot.Venues[0]
+			minBookings := int64(999999)
+			for _, sv := range slot.Venues {
+				var count int64
+				database.DB.Model(&models.SlotBooking{}).Where("slot_id = ? AND assigned_venue_id = ? AND status != 'cancelled'", slot.ID, sv.VenueID).Count(&count)
+				if count < minBookings {
+					minBookings = count
+					bestVenue = sv
+				}
+			}
+			assignedVenueID = &bestVenue.VenueID
+			assignedFacultyID = &bestVenue.FacultyID
+		} else if slot.VenueID > 0 {
+			assignedVenueID = &slot.VenueID
+			assignedFacultyID = &slot.FacultyID
+		}
 	}
 
 	// 6. Create Booking
@@ -364,7 +376,7 @@ func BookSlot(c *gin.Context) {
 		AllocationStatus:  allocationStatus,
 		Status:            "booked",
 		AttendanceStatus:  models.AttendancePending,
-		CanStartInterview: false,
+		CanStartInterview: slot.SlotType == "online",
 	}
 
 	if err := database.DB.Create(&booking).Error; err != nil {
@@ -379,9 +391,14 @@ func BookSlot(c *gin.Context) {
 	// Preload associations
 	database.DB.Preload("Slot.Venue").Preload("Slot.Faculty").Preload("AssignedVenue").Preload("AssignedFaculty").Preload("Track").First(&booking, booking.ID)
 
+	successMsg := "Interview slot reserved successfully! Venue allocation will be verified by the admin before your session."
+	if slot.SlotType == "online" {
+		successMsg = "Online interview slot reserved! You can join remotely at the scheduled session time."
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
-		"message": "Interview slot reserved successfully! Venue allocation will be verified by the admin before your session.",
+		"message": successMsg,
 		"data":    booking,
 	})
 }
@@ -415,6 +432,21 @@ func GetMyBookings(c *gin.Context) {
 
 	// Mask venue details if allocation is not verified/published yet
 	for i := range bookings {
+		isOnline := bookings[i].Slot != nil && bookings[i].Slot.SlotType == "online"
+		if isOnline {
+			if bookings[i].Slot != nil {
+				bookings[i].Slot.Venue = &models.Venue{
+					Name:        "Online Video Assessment",
+					Building:    "Remote / Virtual",
+					RoomNumber:  "Online Session",
+					Description: "Remote peer interview session. No physical venue attendance required.",
+				}
+			}
+			bookings[i].AssignedVenue = nil
+			bookings[i].AllocationStatus = "verified"
+			continue
+		}
+
 		isVerified := bookings[i].AllocationStatus == "verified" || (bookings[i].Slot != nil && bookings[i].Slot.AllocationsPublished)
 		if isVerified {
 			if bookings[i].AssignedVenue != nil && bookings[i].Slot != nil {
@@ -524,6 +556,44 @@ func GetActiveSlotCheckInStatus(c *gin.Context) {
 		return
 	}
 
+	isOnline := booking.Slot != nil && booking.Slot.SlotType == "online"
+	if isOnline {
+		nowTimeStr := time.Now().Format("15:04")
+		// Online slots: Student can start when current time is on/after StartTime (e.g. "09:00")
+		canStart := nowTimeStr >= booking.Slot.StartTime
+		if booking.Slot.EndTime != "" && nowTimeStr > booking.Slot.EndTime {
+			// Session window has ended
+			canStart = false
+		}
+
+		booking.Slot.Venue = &models.Venue{
+			Name:        "Online Video Assessment",
+			Building:    "Remote Examination",
+			RoomNumber:  "Online Session",
+			Description: "Remote peer interview session. No in-person faculty check-in required. Connects automatically during session time.",
+		}
+		booking.AssignedVenue = nil
+
+		attStatus := "pending"
+		if canStart {
+			attStatus = "present"
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data": gin.H{
+				"has_active_booking":     true,
+				"is_online":              true,
+				"can_start":              canStart,
+				"attendance_status":      attStatus,
+				"allocation_status":      "verified",
+				"venue_details_verified": true,
+				"booking":                booking,
+			},
+		})
+		return
+	}
+
 	isVerified := booking.AllocationStatus == "verified" || (booking.Slot != nil && booking.Slot.AllocationsPublished)
 	if isVerified {
 		if booking.AssignedVenue != nil && booking.Slot != nil {
@@ -545,6 +615,7 @@ func GetActiveSlotCheckInStatus(c *gin.Context) {
 		"status": "success",
 		"data": gin.H{
 			"has_active_booking":      true,
+			"is_online":               false,
 			"can_start":               booking.CanStartInterview && booking.AttendanceStatus == models.AttendancePresent,
 			"attendance_status":       booking.AttendanceStatus,
 			"allocation_status":       booking.AllocationStatus,

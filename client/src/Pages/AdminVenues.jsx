@@ -528,13 +528,20 @@ export default function AdminVenues() {
                             {s.status}
                           </span>
 
-                          <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
-                            s.allocations_published
-                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                              : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                          }`}>
-                            {s.allocations_published ? '✓ Published' : 'Draft Allocation'}
-                          </span>
+                          {s.slot_type === 'online' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                              <Globe className="w-3 h-3" />
+                              <span>Online Session</span>
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
+                              s.allocations_published
+                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                            }`}>
+                              {s.allocations_published ? '✓ Published' : 'Draft Allocation'}
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
@@ -550,15 +557,29 @@ export default function AdminVenues() {
                             <Clock className="w-4 h-4" />
                             {s.start_time} - {s.end_time}
                           </span>
-                          {s.prevent_same_venue_match && (
+                          {s.slot_type === 'online' ? (
+                            <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                              Remote Proctoring
+                            </span>
+                          ) : s.prevent_same_venue_match ? (
                             <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                               Cross-Venue Match
                             </span>
-                          )}
+                          ) : null}
                         </div>
 
                         {/* Venues Summary */}
-                        {venueAssignments ? (
+                        {s.slot_type === 'online' ? (
+                          <div className="mt-2.5 p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                            <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+                              <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <span>Online Remote Virtual Session</span>
+                            </div>
+                            <p className="text-[10.5px] text-indigo-300/80 mt-0.5">
+                              No physical venue / faculty required • Starts automatically on time
+                            </p>
+                          </div>
+                        ) : venueAssignments ? (
                           <div className="mt-2.5 space-y-1.5">
                             <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
                               Assigned Venues ({venueAssignments.length}):
@@ -977,16 +998,31 @@ export default function AdminVenues() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                      <ClipboardList className="w-5 h-5 text-[var(--accent)]" />
-                      <span>Slot Candidate Roster & Venue Allocation</span>
+                      {selectedSlotRoster.slot?.slot_type === 'online' ? (
+                        <>
+                          <Globe className="w-5 h-5 text-indigo-400" />
+                          <span>Online Slot Candidate Roster</span>
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardList className="w-5 h-5 text-[var(--accent)]" />
+                          <span>Slot Candidate Roster & Venue Allocation</span>
+                        </>
+                      )}
                     </h2>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      selectedSlotRoster.slot?.allocations_published
-                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                        : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                    }`}>
-                      {selectedSlotRoster.slot?.allocations_published ? '✓ Allocations Published to Students' : 'Draft Allocation (Hidden from Students)'}
-                    </span>
+                    {selectedSlotRoster.slot?.slot_type === 'online' ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        ✓ Online Auto-Access (No Faculty Required)
+                      </span>
+                    ) : (
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        selectedSlotRoster.slot?.allocations_published
+                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                      }`}>
+                        {selectedSlotRoster.slot?.allocations_published ? '✓ Allocations Published to Students' : 'Draft Allocation (Hidden from Students)'}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-[var(--text-primary)]">{selectedSlotRoster.slot?.slot_date}</span>
@@ -999,39 +1035,43 @@ export default function AdminVenues() {
 
                 {/* Top Action Buttons */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleAutoBalanceVenues}
-                    disabled={autoBalancing || !selectedSlotRoster.venues || selectedSlotRoster.venues.length <= 1}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold shadow-sm transition-all disabled:opacity-40 cursor-pointer"
-                    title="Evenly distribute booked students across assigned venues"
-                  >
-                    {autoBalancing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" /> : <Shuffle className="w-3.5 h-3.5 text-[var(--accent)]" />}
-                    <span>Auto-Balance Venues</span>
-                  </button>
+                  {selectedSlotRoster.slot?.slot_type !== 'online' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleAutoBalanceVenues}
+                        disabled={autoBalancing || !selectedSlotRoster.venues || selectedSlotRoster.venues.length <= 1}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold shadow-sm transition-all disabled:opacity-40 cursor-pointer"
+                        title="Evenly distribute booked students across assigned venues"
+                      >
+                        {autoBalancing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" /> : <Shuffle className="w-3.5 h-3.5 text-[var(--accent)]" />}
+                        <span>Auto-Balance Venues</span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={handlePublishAllocations}
-                    disabled={publishingAllocations}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition-all disabled:opacity-50 cursor-pointer"
-                    title="Publish room allocations so candidates can see their assigned rooms"
-                  >
-                    {publishingAllocations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                    <span>{selectedSlotRoster.slot?.allocations_published ? 'Re-Publish / Sync' : 'Verify & Publish'}</span>
-                  </button>
+                      <button
+                        type="button"
+                        onClick={handlePublishAllocations}
+                        disabled={publishingAllocations}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                        title="Publish room allocations so candidates can see their assigned rooms"
+                      >
+                        {publishingAllocations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                        <span>{selectedSlotRoster.slot?.allocations_published ? 'Re-Publish / Sync' : 'Verify & Publish'}</span>
+                      </button>
+                    </>
+                  )}
 
                   <button
                     onClick={() => setShowRosterModal(false)}
-                    className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] ml-1"
+                    className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] ml-1 cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Multi-Venue Breakdown Bar */}
-              {selectedSlotRoster.venues && selectedSlotRoster.venues.length > 0 && (
+              {/* Multi-Venue Breakdown Bar (Physical Slots Only) */}
+              {selectedSlotRoster.slot?.slot_type !== 'online' && selectedSlotRoster.venues && selectedSlotRoster.venues.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                   {selectedSlotRoster.venues.map((va) => {
                     const activeStudentsInThisVenue = (selectedSlotRoster.bookings || []).filter(
@@ -1080,8 +1120,8 @@ export default function AdminVenues() {
                 />
               </div>
 
-              {/* Venue Filter Pills */}
-              {selectedSlotRoster.venues && selectedSlotRoster.venues.length > 1 && (
+              {/* Venue Filter Pills (Physical Slots Only) */}
+              {selectedSlotRoster.slot?.slot_type !== 'online' && selectedSlotRoster.venues && selectedSlotRoster.venues.length > 1 && (
                 <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
                   <button
                     type="button"
@@ -1136,8 +1176,8 @@ export default function AdminVenues() {
                       <th className="pb-2.5">Roll No</th>
                       <th className="pb-2.5">Student Name</th>
                       <th className="pb-2.5">Domain / Level</th>
-                      <th className="pb-2.5">Assigned Venue</th>
-                      <th className="pb-2.5">Allocation</th>
+                      <th className="pb-2.5">Venue / Mode</th>
+                      <th className="pb-2.5">Status</th>
                       <th className="pb-2.5">Attendance</th>
                       <th className="pb-2.5 text-right">Actions</th>
                     </tr>
@@ -1163,6 +1203,7 @@ export default function AdminVenues() {
                         const isCancelled = b.status === 'cancelled';
                         const isCancelling = cancellingBookingId === b.id;
                         const isReassigning = reassigningBookingId === b.id;
+                        const isOnlineSlot = selectedSlotRoster.slot?.slot_type === 'online';
                         const venueOptions = selectedSlotRoster.venues && selectedSlotRoster.venues.length > 0
                           ? selectedSlotRoster.venues
                           : (selectedSlotRoster.slot?.venue ? [{ venue_id: selectedSlotRoster.slot.venue.id, venue: selectedSlotRoster.slot.venue }] : []);
@@ -1191,10 +1232,15 @@ export default function AdminVenues() {
                               ) : null}
                             </td>
 
-                            {/* Assigned Venue Selector */}
+                            {/* Assigned Venue Selector / Mode */}
                             <td className="py-2.5">
                               {isCancelled ? (
                                 <span className="text-zinc-500 text-[11px]">—</span>
+                              ) : isOnlineSlot ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-400">
+                                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Online Remote</span>
+                                </span>
                               ) : venueOptions.length > 1 ? (
                                 <div className="flex items-center gap-1.5">
                                   <select
@@ -1226,11 +1272,11 @@ export default function AdminVenues() {
                                 </span>
                               ) : (
                                 <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
-                                  b.allocation_status === 'verified'
+                                  b.allocation_status === 'verified' || isOnlineSlot
                                     ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                                     : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                                 }`}>
-                                  {b.allocation_status === 'verified' ? '✓ Verified' : 'Draft'}
+                                  {b.allocation_status === 'verified' || isOnlineSlot ? '✓ Verified' : 'Draft'}
                                 </span>
                               )}
                             </td>
@@ -1239,6 +1285,10 @@ export default function AdminVenues() {
                             <td className="py-2.5">
                               {isCancelled ? (
                                 <span className="text-zinc-500 text-[11px]">—</span>
+                              ) : isOnlineSlot ? (
+                                <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                  Auto (On-Time)
+                                </span>
                               ) : (
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                   b.attendance_status === 'present'
@@ -1288,7 +1338,9 @@ export default function AdminVenues() {
             {/* Modal Footer */}
             <div className="p-4 border-t border-[var(--border)] shrink-0 flex items-center justify-between bg-[var(--bg)]">
               <div className="text-xs text-[var(--text-secondary)]">
-                Tip: Use <strong>Auto-Balance</strong> to equalize students across venues, or manually change their venue above before publishing.
+                {selectedSlotRoster.slot?.slot_type === 'online'
+                  ? 'Candidates can join their virtual assessment directly on time. Admins can cancel any seat booking above.'
+                  : 'Tip: Use Auto-Balance to equalize students across venues, or manually change their venue above before publishing.'}
               </div>
               <button
                 onClick={() => setShowRosterModal(false)}

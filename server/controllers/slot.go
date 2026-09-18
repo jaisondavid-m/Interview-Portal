@@ -22,9 +22,10 @@ type SlotVenueInput struct {
 
 // CreateSlotInput represents the request payload for scheduling a new slot
 type CreateSlotInput struct {
+	SlotType              string           `json:"slot_type"`                // "physical" | "online"
 	VenueID               *uint            `json:"venue_id"`                 // Optional/legacy fallback if venues array not provided
 	FacultyID             *uint            `json:"faculty_id"`               // Optional/legacy fallback
-	Venues                []SlotVenueInput `json:"venues"`                   // Multi-venue assignments
+	Venues                []SlotVenueInput `json:"venues"`                   // Multi-venue assignments (physical slots)
 	PreventSameVenueMatch *bool            `json:"prevent_same_venue_match"` // Cross-venue matching
 	TrackID               *uint            `json:"track_id"`
 	LevelID               *uint            `json:"level_id"`
@@ -33,12 +34,13 @@ type CreateSlotInput struct {
 	SlotDate              string           `json:"slot_date" binding:"required"` // "YYYY-MM-DD"
 	StartTime             string           `json:"start_time" binding:"required"` // "HH:MM" (e.g. "09:00")
 	EndTime               string           `json:"end_time" binding:"required"`   // "HH:MM" (e.g. "10:30")
-	Capacity              *int             `json:"capacity"`                      // Optional, defaults to sum of venue capacities
+	Capacity              *int             `json:"capacity"`                      // Required for online slots, or auto-sum for physical
 	Notes                 string           `json:"notes"`
 }
 
 // UpdateSlotInput represents the request payload for editing a slot
 type UpdateSlotInput struct {
+	SlotType              string             `json:"slot_type"`
 	VenueID               *uint              `json:"venue_id"`
 	FacultyID             *uint              `json:"faculty_id"`
 	Venues                *[]SlotVenueInput  `json:"venues"`
@@ -257,7 +259,7 @@ func AdminGetSlotDetail(c *gin.Context) {
 	})
 }
 
-// AdminCreateSlot creates a new interview time slot and assigns multiple venues with distinct faculty
+// AdminCreateSlot creates a new interview time slot and assigns multiple venues with distinct faculty (or creates an online slot)
 func AdminCreateSlot(c *gin.Context) {
 	var input CreateSlotInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -269,7 +271,90 @@ func AdminCreateSlot(c *gin.Context) {
 		return
 	}
 
-	// Determine venues to assign
+	slotType := "physical"
+	if input.SlotType == "online" {
+		slotType = "online"
+	}
+
+	// Process Allowed Tracks (Multi-select)
+	allowedTracksJSON := ""
+	var legacyTrackID *uint
+	if len(input.AllowedTrackIDs) > 0 {
+		b, _ := json.Marshal(input.AllowedTrackIDs)
+		allowedTracksJSON = string(b)
+		if len(input.AllowedTrackIDs) == 1 {
+			legacyTrackID = &input.AllowedTrackIDs[0]
+		}
+	} else if input.TrackID != nil && *input.TrackID > 0 {
+		legacyTrackID = input.TrackID
+		b, _ := json.Marshal([]uint{*input.TrackID})
+		allowedTracksJSON = string(b)
+	}
+
+	// Process Allowed Levels (Multi-select)
+	allowedLevelsJSON := ""
+	var legacyLevelID *uint
+	if len(input.AllowedLevelIDs) > 0 {
+		b, _ := json.Marshal(input.AllowedLevelIDs)
+		allowedLevelsJSON = string(b)
+		if len(input.AllowedLevelIDs) == 1 {
+			legacyLevelID = &input.AllowedLevelIDs[0]
+		}
+	} else if input.LevelID != nil && *input.LevelID > 0 {
+		legacyLevelID = input.LevelID
+		b, _ := json.Marshal([]uint{*input.LevelID})
+		allowedLevelsJSON = string(b)
+	}
+
+	if slotType == "online" {
+		capacity := 50
+		if input.Capacity != nil && *input.Capacity > 0 {
+			capacity = *input.Capacity
+		}
+
+		slot := models.InterviewSlot{
+			SlotType:              "online",
+			VenueID:               0,
+			FacultyID:             0,
+			PreventSameVenueMatch: false,
+			AllocationsPublished:  true, // Online slots have no physical rooms to hide
+			TrackID:               legacyTrackID,
+			LevelID:               legacyLevelID,
+			AllowedTracksJSON:     allowedTracksJSON,
+			AllowedLevelsJSON:     allowedLevelsJSON,
+			SlotDate:              strings.TrimSpace(input.SlotDate),
+			StartTime:             strings.TrimSpace(input.StartTime),
+			EndTime:               strings.TrimSpace(input.EndTime),
+			Capacity:              capacity,
+			BookedCount:           0,
+			PresentCount:          0,
+			Status:                models.SlotScheduled,
+			Notes:                 strings.TrimSpace(input.Notes),
+		}
+
+		if err := database.DB.Create(&slot).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to schedule online slot",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		enriched := PopulateSlotAllowedEntities([]models.InterviewSlot{slot})
+		if len(enriched) > 0 {
+			slot = enriched[0]
+		}
+
+		c.JSON(http.StatusCreated, gin.H{
+			"status":  "success",
+			"message": "Online interview slot scheduled successfully",
+			"data":    slot,
+		})
+		return
+	}
+
+	// Determine venues to assign (for physical slots)
 	venuesToAssign := input.Venues
 	if len(venuesToAssign) == 0 {
 		// Fallback for single venue
@@ -282,7 +367,7 @@ func AdminCreateSlot(c *gin.Context) {
 			fID = *input.FacultyID
 		}
 		if vID == 0 || fID == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "At least one examination venue and faculty member must be assigned"})
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "At least one examination venue and faculty member must be assigned for physical in-person slots"})
 			return
 		}
 		capVal := 30
@@ -338,36 +423,6 @@ func AdminCreateSlot(c *gin.Context) {
 		totalCalculatedCapacity += vInput.Capacity
 	}
 
-	// Process Allowed Tracks (Multi-select)
-	allowedTracksJSON := ""
-	var legacyTrackID *uint
-	if len(input.AllowedTrackIDs) > 0 {
-		b, _ := json.Marshal(input.AllowedTrackIDs)
-		allowedTracksJSON = string(b)
-		if len(input.AllowedTrackIDs) == 1 {
-			legacyTrackID = &input.AllowedTrackIDs[0]
-		}
-	} else if input.TrackID != nil && *input.TrackID > 0 {
-		legacyTrackID = input.TrackID
-		b, _ := json.Marshal([]uint{*input.TrackID})
-		allowedTracksJSON = string(b)
-	}
-
-	// Process Allowed Levels (Multi-select)
-	allowedLevelsJSON := ""
-	var legacyLevelID *uint
-	if len(input.AllowedLevelIDs) > 0 {
-		b, _ := json.Marshal(input.AllowedLevelIDs)
-		allowedLevelsJSON = string(b)
-		if len(input.AllowedLevelIDs) == 1 {
-			legacyLevelID = &input.AllowedLevelIDs[0]
-		}
-	} else if input.LevelID != nil && *input.LevelID > 0 {
-		legacyLevelID = input.LevelID
-		b, _ := json.Marshal([]uint{*input.LevelID})
-		allowedLevelsJSON = string(b)
-	}
-
 	capacity := totalCalculatedCapacity
 	if input.Capacity != nil && *input.Capacity > 0 {
 		capacity = *input.Capacity
@@ -379,6 +434,7 @@ func AdminCreateSlot(c *gin.Context) {
 	}
 
 	slot := models.InterviewSlot{
+		SlotType:              "physical",
 		VenueID:               venuesToAssign[0].VenueID,
 		FacultyID:             venuesToAssign[0].FacultyID,
 		PreventSameVenueMatch: preventSameVenue,
@@ -474,8 +530,23 @@ func AdminUpdateSlot(c *gin.Context) {
 		return
 	}
 
-	// Handle multi-venue update if provided
-	if input.Venues != nil && len(*input.Venues) > 0 {
+	// Handle slot type
+	if input.SlotType != "" {
+		slot.SlotType = input.SlotType
+		if slot.SlotType == "online" {
+			database.DB.Where("slot_id = ?", slot.ID).Delete(&models.SlotVenueAssignment{})
+			slot.VenueID = 0
+			slot.FacultyID = 0
+			slot.AllocationsPublished = true
+			slot.PreventSameVenueMatch = false
+			if input.Capacity != nil && *input.Capacity > 0 {
+				slot.Capacity = *input.Capacity
+			}
+		}
+	}
+
+	// Handle multi-venue update if provided (for physical slots)
+	if slot.SlotType != "online" && input.Venues != nil && len(*input.Venues) > 0 {
 		venueMap := make(map[uint]bool)
 		facultyMap := make(map[uint]bool)
 		totalCalculatedCapacity := 0

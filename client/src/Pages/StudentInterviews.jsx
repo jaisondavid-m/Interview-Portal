@@ -26,7 +26,8 @@ import {
   Unlock,
   Ticket,
   UserCheck,
-  RefreshCw
+  RefreshCw,
+  Globe
 } from 'lucide-react';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import api from '../api/axios';
@@ -327,11 +328,13 @@ export default function StudentInterviews() {
         </div>
       </div>
 
-      {/* STICKY REAL-TIME IN-VENUE ATTENDANCE GATE CARD */}
+      {/* STICKY REAL-TIME IN-VENUE / ONLINE ATTENDANCE GATE CARD */}
       {activeCheckIn?.has_active_booking && activeCheckIn.booking && (
         <div className={`p-5 rounded-2xl border transition-all ${
           activeCheckIn.can_start
             ? 'bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/30'
+            : activeCheckIn.is_online
+            ? 'bg-gradient-to-r from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/30'
             : activeCheckIn.venue_details_verified
             ? 'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/30'
             : 'bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-transparent border-sky-500/30'
@@ -341,17 +344,21 @@ export default function StudentInterviews() {
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                 activeCheckIn.can_start
                   ? 'bg-emerald-500/20 text-emerald-500'
+                  : activeCheckIn.is_online
+                  ? 'bg-indigo-500/20 text-indigo-400'
                   : activeCheckIn.venue_details_verified
                   ? 'bg-amber-500/20 text-amber-500 animate-pulse'
                   : 'bg-sky-500/20 text-sky-400 animate-pulse'
               }`}>
-                {activeCheckIn.can_start ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                {activeCheckIn.can_start ? <Unlock className="w-5 h-5" /> : activeCheckIn.is_online ? <Globe className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)]">
                     {activeCheckIn.can_start
-                      ? 'Attendance Verified — Cleared to Interview!'
+                      ? (activeCheckIn.is_online ? 'Online Session Active — Cleared to Interview!' : 'Attendance Verified — Cleared to Interview!')
+                      : activeCheckIn.is_online
+                      ? `Online Slot Reserved — Starts at ${activeCheckIn.booking.slot?.start_time}`
                       : activeCheckIn.venue_details_verified
                       ? 'Physical In-Venue Attendance Pending'
                       : 'Slot Reserved — Venue Allocation in Progress'}
@@ -359,16 +366,30 @@ export default function StudentInterviews() {
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                     activeCheckIn.can_start
                       ? 'bg-emerald-500 text-white'
+                      : activeCheckIn.is_online
+                      ? 'bg-indigo-600 text-white'
                       : activeCheckIn.venue_details_verified
                       ? 'bg-amber-500 text-white animate-pulse'
                       : 'bg-sky-600 text-white'
                   }`}>
-                    {activeCheckIn.can_start ? activeCheckIn.attendance_status : activeCheckIn.venue_details_verified ? activeCheckIn.attendance_status : 'Allocation Draft'}
+                    {activeCheckIn.can_start
+                      ? activeCheckIn.attendance_status
+                      : activeCheckIn.is_online
+                      ? 'Online Scheduled'
+                      : activeCheckIn.venue_details_verified
+                      ? activeCheckIn.attendance_status
+                      : 'Allocation Draft'}
                   </span>
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] mt-1">
                   {activeCheckIn.can_start ? (
-                    <span>You are checked in at <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. Click below to start your peer assessment.</span>
+                    activeCheckIn.is_online ? (
+                      <span>Your online session is now live. Click below to begin your peer mock interview assessment!</span>
+                    ) : (
+                      <span>You are checked in at <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. Click below to start your peer assessment.</span>
+                    )
+                  ) : activeCheckIn.is_online ? (
+                    <span>This is a remote virtual slot scheduled for <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.slot_date} ({activeCheckIn.booking.slot?.start_time} - {activeCheckIn.booking.slot?.end_time})</strong>. No faculty check-in is required; this button will unlock automatically on time!</span>
                   ) : activeCheckIn.venue_details_verified ? (
                     <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. The faculty invigilator at the venue will verify your attendance.</span>
                   ) : (
@@ -388,6 +409,11 @@ export default function StudentInterviews() {
                   <span>Start Mock Interview</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
+              ) : activeCheckIn.is_online ? (
+                <div className="flex items-center gap-2 text-xs font-medium text-indigo-400">
+                  <Clock className="w-4 h-4 animate-spin" />
+                  <span>Unlocks at {activeCheckIn.booking.slot?.start_time}...</span>
+                </div>
               ) : activeCheckIn.venue_details_verified ? (
                 <div className="flex items-center gap-2 text-xs font-medium text-amber-500">
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -528,7 +554,26 @@ export default function StudentInterviews() {
                     {/* Slot Booking Pass Details (If Booked) */}
                     {isBooked && (
                       <div className="mt-3 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs space-y-1">
-                        {isVerified ? (
+                        {booking.slot?.slot_type === 'online' ? (
+                          <>
+                            <div className="flex items-center justify-between font-semibold">
+                              <span className="text-indigo-400 flex items-center gap-1.5 font-bold">
+                                <Globe className="w-3.5 h-3.5" />
+                                <span>Online Video Assessment</span>
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                activeCheckIn?.can_start && activeCheckIn.booking?.id === booking.id
+                                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                  : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                              }`}>
+                                {activeCheckIn?.can_start && activeCheckIn.booking?.id === booking.id ? 'Live Now' : 'Online Session'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[var(--text-secondary)]">
+                              {booking.slot?.slot_date} • {booking.slot?.start_time} - {booking.slot?.end_time} • No faculty check-in needed
+                            </p>
+                          </>
+                        ) : isVerified ? (
                           <>
                             <div className="flex items-center justify-between font-semibold">
                               <span className="text-[var(--text-primary)]">{booking.slot?.venue?.name} (Room {booking.slot?.venue?.room_number})</span>
@@ -561,50 +606,83 @@ export default function StudentInterviews() {
 
                   {/* Action Buttons */}
                   <div className="pt-5 mt-5 border-t border-[var(--border)] flex items-center justify-between gap-3">
-                    {isPresent ? (
-                      <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-bold">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Attendance Verified</span>
-                      </div>
+                    {booking?.slot?.slot_type === 'online' ? (
+                      activeCheckIn?.can_start && activeCheckIn.booking?.id === booking.id ? (
+                        <>
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-bold">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Session Live</span>
+                          </div>
+                          <button
+                            onClick={() => handleStartVerifiedInterview(selectedTrack, lvl)}
+                            className="btn btn-primary bg-emerald-600 hover:bg-emerald-500 text-[13px] py-2 px-4 flex items-center gap-2 shadow-md font-bold cursor-pointer transition-transform hover:scale-105"
+                          >
+                            <Video className="w-4 h-4" />
+                            <span>Launch Interview</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 text-xs text-indigo-400 font-medium">
+                            <Globe className="w-3.5 h-3.5" />
+                            <span>Online ({booking.slot?.start_time})</span>
+                          </div>
+                          <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-mono text-indigo-400">
+                            <span>Unlocks on Time</span>
+                          </div>
+                        </>
+                      )
+                    ) : isPresent ? (
+                      <>
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-bold">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Attendance Verified</span>
+                        </div>
+                        <button
+                          onClick={() => handleStartVerifiedInterview(selectedTrack, lvl)}
+                          className="btn btn-primary bg-emerald-600 hover:bg-emerald-500 text-[13px] py-2 px-4 flex items-center gap-2 shadow-md font-bold cursor-pointer transition-transform hover:scale-105"
+                        >
+                          <Video className="w-4 h-4" />
+                          <span>Launch Interview</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     ) : isBooked && isVerified ? (
-                      <div className="flex items-center gap-1.5 text-xs text-amber-500 font-medium animate-pulse">
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>Report to Venue</span>
-                      </div>
+                      <>
+                        <div className="flex items-center gap-1.5 text-xs text-amber-500 font-medium animate-pulse">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Report to Venue</span>
+                        </div>
+                        <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)]">
+                          <span>Slot Reserved</span>
+                        </div>
+                      </>
                     ) : isBooked ? (
-                      <div className="flex items-center gap-1.5 text-xs text-sky-400 font-medium">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Allocation Pending</span>
-                      </div>
+                      <>
+                        <div className="flex items-center gap-1.5 text-xs text-sky-400 font-medium">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Allocation Pending</span>
+                        </div>
+                        <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)]">
+                          <span>Slot Reserved</span>
+                        </div>
+                      </>
                     ) : (
-                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)]">
-                        <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
-                        <span>Lab Reservation</span>
-                      </div>
-                    )}
-
-                    {isPresent ? (
-                      <button
-                        onClick={() => handleStartVerifiedInterview(selectedTrack, lvl)}
-                        className="btn btn-primary bg-emerald-600 hover:bg-emerald-500 text-[13px] py-2 px-4 flex items-center gap-2 shadow-md font-bold cursor-pointer transition-transform hover:scale-105"
-                      >
-                        <Video className="w-4 h-4" />
-                        <span>Launch Interview</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    ) : isBooked ? (
-                      <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)]">
-                        <span>Slot Reserved</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleOpenSlotBooking(selectedTrack, lvl)}
-                        className="btn btn-primary text-[13px] py-2 px-4 flex items-center gap-2 shadow-[var(--shadow-sm)] hover:scale-[1.02] active:scale-[0.98] transition-transform font-bold cursor-pointer"
-                      >
-                        <CalendarCheck className="w-4 h-4" />
-                        <span>Book a Slot</span>
-                        <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
-                      </button>
+                      <>
+                        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)]">
+                          <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <span>Session Booking</span>
+                        </div>
+                        <button
+                          onClick={() => handleOpenSlotBooking(selectedTrack, lvl)}
+                          className="btn btn-primary text-[13px] py-2 px-4 flex items-center gap-2 shadow-[var(--shadow-sm)] hover:scale-[1.02] active:scale-[0.98] transition-transform font-bold cursor-pointer"
+                        >
+                          <CalendarCheck className="w-4 h-4" />
+                          <span>Book a Slot</span>
+                          <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -766,8 +844,12 @@ export default function StudentInterviews() {
                       >
                         <div>
                           <div className="flex items-center justify-between mb-3">
-                            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--bg-card)] border border-[var(--border)] text-[var(--accent)] font-mono">
-                              {slot.slot_date}
+                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
+                              slot.slot_type === 'online'
+                                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                : 'bg-[var(--bg-card)] border border-[var(--border)] text-[var(--accent)]'
+                            }`}>
+                              {slot.slot_type === 'online' ? 'Online Remote' : slot.slot_date}
                             </span>
                             <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)]">
                               <Clock className="w-3.5 h-3.5" />
@@ -777,13 +859,19 @@ export default function StudentInterviews() {
 
                           <div className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-1">
                             <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                              {slot.slot_type === 'online' ? (
+                                <Globe className="w-4 h-4 text-indigo-400 shrink-0" />
+                              ) : (
+                                <Clock className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                              )}
                               <h4 className="text-sm font-bold text-[var(--text-primary)]">
-                                Session Time: {slot.start_time} - {slot.end_time}
+                                {slot.slot_type === 'online' ? 'Online Virtual Session' : `Session Time: ${slot.start_time} - ${slot.end_time}`}
                               </h4>
                             </div>
                             <p className="text-[10.5px] text-[var(--text-secondary)]">
-                              Venue and room details will be assigned upon booking.
+                              {slot.slot_type === 'online'
+                                ? 'No physical venue / faculty required. Starts automatically on time.'
+                                : 'Venue and room details will be assigned upon booking.'}
                             </p>
                           </div>
                         </div>
