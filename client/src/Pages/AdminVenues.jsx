@@ -1073,14 +1073,10 @@ export default function AdminVenues() {
                       </p>
                     )}
 
-                    <div className="mt-4 grid grid-cols-3 gap-2 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-center">
+                    <div className="mt-4 grid grid-cols-2 gap-2 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-center">
                       <div>
                         <p className="text-[10px] text-[var(--text-secondary)]">Max Cap</p>
                         <p className="text-sm font-bold text-[var(--text-primary)]">{v.capacity}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-[var(--text-secondary)]">Active Slots</p>
-                        <p className="text-sm font-bold text-[var(--accent)]">{v.active_slots || 0}</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-[var(--text-secondary)]">Total Slots</p>
