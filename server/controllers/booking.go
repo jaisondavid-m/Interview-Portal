@@ -22,27 +22,30 @@ type BookSlotInput struct {
 
 // AvailableSlotResponse represents an open interview slot with venue and remaining capacity
 type AvailableSlotResponse struct {
-	ID             uint                  `json:"id"`
-	VenueID        uint                  `json:"venue_id"`
-	VenueName      string                `json:"venue_name"`
-	Building       string                `json:"building"`
-	RoomNumber     string                `json:"room_number"`
-	FacultyName    string                `json:"faculty_name"`
-	FacultyDept    string                `json:"faculty_department"`
-	TrackID        *uint                 `json:"track_id,omitempty"`
-	TrackTitle     string                `json:"track_title,omitempty"`
-	LevelID        *uint                 `json:"level_id,omitempty"`
-	LevelName      string                `json:"level_name,omitempty"`
-	LevelNumber    int                   `json:"level_number,omitempty"`
-	SlotDate       string                `json:"slot_date"`
-	StartTime      string                `json:"start_time"`
-	EndTime        string                `json:"end_time"`
-	TotalCapacity  int                   `json:"total_capacity"`
-	BookedCount    int                   `json:"booked_count"`
-	AvailableSeats int                   `json:"available_seats"`
-	IsBookedByMe   bool                  `json:"is_booked_by_me"`
-	MyBookingID    uint                  `json:"my_booking_id,omitempty"`
-	Notes          string                `json:"notes"`
+	ID                  uint     `json:"id"`
+	VenueID             uint     `json:"venue_id"`
+	VenueName           string   `json:"venue_name"`
+	Building            string   `json:"building"`
+	RoomNumber          string   `json:"room_number"`
+	FacultyName         string   `json:"faculty_name"`
+	FacultyDept         string   `json:"faculty_department"`
+	TrackID             *uint    `json:"track_id,omitempty"`
+	TrackTitle          string   `json:"track_title,omitempty"`
+	LevelID             *uint    `json:"level_id,omitempty"`
+	LevelName           string   `json:"level_name,omitempty"`
+	LevelNumber         int      `json:"level_number,omitempty"`
+	AllowedTrackIDs     []uint   `json:"allowed_track_ids,omitempty"`
+	AllowedLevelIDs     []uint   `json:"allowed_level_ids,omitempty"`
+	AllowedTracksSummary string  `json:"allowed_tracks_summary,omitempty"`
+	SlotDate            string   `json:"slot_date"`
+	StartTime           string   `json:"start_time"`
+	EndTime             string   `json:"end_time"`
+	TotalCapacity       int      `json:"total_capacity"`
+	BookedCount         int      `json:"booked_count"`
+	AvailableSeats      int      `json:"available_seats"`
+	IsBookedByMe        bool     `json:"is_booked_by_me"`
+	MyBookingID         uint     `json:"my_booking_id,omitempty"`
+	Notes               string   `json:"notes"`
 }
 
 // GetAvailableSlots returns all upcoming active slots open for booking with track & level filters
@@ -66,18 +69,6 @@ func GetAvailableSlots(c *gin.Context) {
 		Preload("Faculty").
 		Preload("Track").
 		Preload("Level")
-
-	if trackIDStr != "" && trackIDStr != "all" {
-		if tid, err := strconv.ParseUint(trackIDStr, 10, 32); err == nil && tid > 0 {
-			query = query.Where("(track_id IS NULL OR track_id = ?)", uint(tid))
-		}
-	}
-
-	if levelIDStr != "" && levelIDStr != "all" {
-		if lid, err := strconv.ParseUint(levelIDStr, 10, 32); err == nil && lid > 0 {
-			query = query.Where("(level_id IS NULL OR level_id = 0 OR level_id = ?)", uint(lid))
-		}
-	}
 
 	if dateStr != "" {
 		query = query.Where("slot_date = ?", dateStr)
@@ -103,8 +94,60 @@ func GetAvailableSlots(c *gin.Context) {
 		}
 	}
 
+	var reqTrackID uint
+	if trackIDStr != "" && trackIDStr != "all" {
+		if tid, err := strconv.ParseUint(trackIDStr, 10, 32); err == nil {
+			reqTrackID = uint(tid)
+		}
+	}
+
+	var reqLevelID uint
+	if levelIDStr != "" && levelIDStr != "all" {
+		if lid, err := strconv.ParseUint(levelIDStr, 10, 32); err == nil {
+			reqLevelID = uint(lid)
+		}
+	}
+
 	response := make([]AvailableSlotResponse, 0, len(slots))
 	for _, s := range slots {
+		ParseSlotAllowedIDs(&s)
+
+		// 1. Filter by Track if requested
+		if reqTrackID > 0 {
+			if len(s.AllowedTrackIDs) > 0 {
+				found := false
+				for _, tid := range s.AllowedTrackIDs {
+					if tid == reqTrackID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+			} else if s.TrackID != nil && *s.TrackID > 0 && *s.TrackID != reqTrackID {
+				continue
+			}
+		}
+
+		// 2. Filter by Level if requested
+		if reqLevelID > 0 {
+			if len(s.AllowedLevelIDs) > 0 {
+				found := false
+				for _, lid := range s.AllowedLevelIDs {
+					if lid == reqLevelID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+			} else if s.LevelID != nil && *s.LevelID > 0 && *s.LevelID != reqLevelID {
+				continue
+			}
+		}
+
 		var booked int64
 		database.DB.Model(&models.SlotBooking{}).Where("slot_id = ? AND status != 'cancelled'", s.ID).Count(&booked)
 
@@ -144,27 +187,29 @@ func GetAvailableSlots(c *gin.Context) {
 		bookingID := myBookingsMap[s.ID]
 
 		response = append(response, AvailableSlotResponse{
-			ID:             s.ID,
-			VenueID:        s.VenueID,
-			VenueName:      venueName,
-			Building:       building,
-			RoomNumber:     roomNumber,
-			FacultyName:    facultyName,
-			FacultyDept:    facultyDept,
-			TrackID:        s.TrackID,
-			TrackTitle:     trackTitle,
-			LevelID:        s.LevelID,
-			LevelName:      levelName,
-			LevelNumber:    levelNumber,
-			SlotDate:       s.SlotDate,
-			StartTime:      s.StartTime,
-			EndTime:        s.EndTime,
-			TotalCapacity:  s.Capacity,
-			BookedCount:    int(booked),
-			AvailableSeats: available,
-			IsBookedByMe:   bookingID > 0,
-			MyBookingID:    bookingID,
-			Notes:          s.Notes,
+			ID:              s.ID,
+			VenueID:         s.VenueID,
+			VenueName:       venueName,
+			Building:        building,
+			RoomNumber:      roomNumber,
+			FacultyName:     facultyName,
+			FacultyDept:     facultyDept,
+			TrackID:         s.TrackID,
+			TrackTitle:      trackTitle,
+			LevelID:         s.LevelID,
+			LevelName:       levelName,
+			LevelNumber:     levelNumber,
+			AllowedTrackIDs: s.AllowedTrackIDs,
+			AllowedLevelIDs: s.AllowedLevelIDs,
+			SlotDate:        s.SlotDate,
+			StartTime:       s.StartTime,
+			EndTime:         s.EndTime,
+			TotalCapacity:   s.Capacity,
+			BookedCount:     int(booked),
+			AvailableSeats:  available,
+			IsBookedByMe:    bookingID > 0,
+			MyBookingID:     bookingID,
+			Notes:           s.Notes,
 		})
 	}
 
@@ -205,8 +250,25 @@ func BookSlot(c *gin.Context) {
 		return
 	}
 
-	// Check domain restriction if slot is locked to a specific track
-	if slot.TrackID != nil && *slot.TrackID > 0 && *slot.TrackID != input.TrackID {
+	ParseSlotAllowedIDs(&slot)
+
+	// Check domain restriction
+	if len(slot.AllowedTrackIDs) > 0 {
+		found := false
+		for _, tid := range slot.AllowedTrackIDs {
+			if tid == input.TrackID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  "error",
+				"message": "This slot does not include the selected domain",
+			})
+			return
+		}
+	} else if slot.TrackID != nil && *slot.TrackID > 0 && *slot.TrackID != input.TrackID {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "This slot is restricted to a different interview domain",
@@ -214,8 +276,23 @@ func BookSlot(c *gin.Context) {
 		return
 	}
 
-	// Check level restriction if slot is locked to a specific level
-	if slot.LevelID != nil && *slot.LevelID > 0 && *slot.LevelID != input.LevelID {
+	// Check level restriction
+	if len(slot.AllowedLevelIDs) > 0 && input.LevelID > 0 {
+		found := false
+		for _, lid := range slot.AllowedLevelIDs {
+			if lid == input.LevelID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  "error",
+				"message": "This slot does not include the selected difficulty level tier",
+			})
+			return
+		}
+	} else if slot.LevelID != nil && *slot.LevelID > 0 && input.LevelID > 0 && *slot.LevelID != input.LevelID {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "This slot is restricted to a different difficulty level tier",

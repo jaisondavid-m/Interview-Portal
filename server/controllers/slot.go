@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -14,29 +15,115 @@ import (
 
 // CreateSlotInput represents the request payload for scheduling a new slot
 type CreateSlotInput struct {
-	VenueID   uint   `json:"venue_id" binding:"required"`
-	FacultyID uint   `json:"faculty_id" binding:"required"`
-	TrackID   *uint  `json:"track_id"`
-	LevelID   *uint  `json:"level_id"`
-	SlotDate  string `json:"slot_date" binding:"required"` // "YYYY-MM-DD"
-	StartTime string `json:"start_time" binding:"required"` // "HH:MM" (e.g. "09:00")
-	EndTime   string `json:"end_time" binding:"required"`   // "HH:MM" (e.g. "10:30")
-	Capacity  *int   `json:"capacity"`                      // Optional, defaults to venue capacity
-	Notes     string `json:"notes"`
+	VenueID         uint   `json:"venue_id" binding:"required"`
+	FacultyID       uint   `json:"faculty_id" binding:"required"`
+	TrackID         *uint  `json:"track_id"`
+	LevelID         *uint  `json:"level_id"`
+	AllowedTrackIDs []uint `json:"allowed_track_ids"`
+	AllowedLevelIDs []uint `json:"allowed_level_ids"`
+	SlotDate        string `json:"slot_date" binding:"required"` // "YYYY-MM-DD"
+	StartTime       string `json:"start_time" binding:"required"` // "HH:MM" (e.g. "09:00")
+	EndTime         string `json:"end_time" binding:"required"`   // "HH:MM" (e.g. "10:30")
+	Capacity        *int   `json:"capacity"`                      // Optional, defaults to venue capacity
+	Notes           string `json:"notes"`
 }
 
 // UpdateSlotInput represents the request payload for editing a slot
 type UpdateSlotInput struct {
-	VenueID   *uint              `json:"venue_id"`
-	FacultyID *uint              `json:"faculty_id"`
-	TrackID   *uint              `json:"track_id"`
-	LevelID   *uint              `json:"level_id"`
-	SlotDate  string             `json:"slot_date"`
-	StartTime string             `json:"start_time"`
-	EndTime   string             `json:"end_time"`
-	Capacity  *int               `json:"capacity"`
-	Status    *models.SlotStatus `json:"status"`
-	Notes     string             `json:"notes"`
+	VenueID         *uint              `json:"venue_id"`
+	FacultyID       *uint              `json:"faculty_id"`
+	TrackID         *uint              `json:"track_id"`
+	LevelID         *uint              `json:"level_id"`
+	AllowedTrackIDs *[]uint            `json:"allowed_track_ids"`
+	AllowedLevelIDs *[]uint            `json:"allowed_level_ids"`
+	SlotDate        string             `json:"slot_date"`
+	StartTime       string             `json:"start_time"`
+	EndTime         string             `json:"end_time"`
+	Capacity        *int               `json:"capacity"`
+	Status          *models.SlotStatus `json:"status"`
+	Notes           string             `json:"notes"`
+}
+
+// ParseSlotAllowedIDs extracts allowed track and level ID slices from JSON or legacy columns
+func ParseSlotAllowedIDs(slot *models.InterviewSlot) {
+	slot.AllowedTrackIDs = make([]uint, 0)
+	slot.AllowedLevelIDs = make([]uint, 0)
+
+	if strings.TrimSpace(slot.AllowedTracksJSON) != "" && slot.AllowedTracksJSON != "[]" {
+		_ = json.Unmarshal([]byte(slot.AllowedTracksJSON), &slot.AllowedTrackIDs)
+	} else if slot.TrackID != nil && *slot.TrackID > 0 {
+		slot.AllowedTrackIDs = append(slot.AllowedTrackIDs, *slot.TrackID)
+	}
+
+	if strings.TrimSpace(slot.AllowedLevelsJSON) != "" && slot.AllowedLevelsJSON != "[]" {
+		_ = json.Unmarshal([]byte(slot.AllowedLevelsJSON), &slot.AllowedLevelIDs)
+	} else if slot.LevelID != nil && *slot.LevelID > 0 {
+		slot.AllowedLevelIDs = append(slot.AllowedLevelIDs, *slot.LevelID)
+	}
+}
+
+// PopulateSlotAllowedEntities attaches full Track and Level model lists to slots for rich UI display
+func PopulateSlotAllowedEntities(slots []models.InterviewSlot) []models.InterviewSlot {
+	if len(slots) == 0 {
+		return slots
+	}
+
+	trackIDMap := make(map[uint]bool)
+	levelIDMap := make(map[uint]bool)
+
+	for i := range slots {
+		ParseSlotAllowedIDs(&slots[i])
+		for _, tid := range slots[i].AllowedTrackIDs {
+			trackIDMap[tid] = true
+		}
+		for _, lid := range slots[i].AllowedLevelIDs {
+			levelIDMap[lid] = true
+		}
+	}
+
+	tracksById := make(map[uint]models.InterviewTrack)
+	if len(trackIDMap) > 0 {
+		var trackIDs []uint
+		for tid := range trackIDMap {
+			trackIDs = append(trackIDs, tid)
+		}
+		var tracks []models.InterviewTrack
+		database.DB.Preload("Levels").Where("id IN ?", trackIDs).Find(&tracks)
+		for _, t := range tracks {
+			tracksById[t.ID] = t
+		}
+	}
+
+	levelsById := make(map[uint]models.InterviewLevel)
+	if len(levelIDMap) > 0 {
+		var levelIDs []uint
+		for lid := range levelIDMap {
+			levelIDs = append(levelIDs, lid)
+		}
+		var levels []models.InterviewLevel
+		database.DB.Where("id IN ?", levelIDs).Find(&levels)
+		for _, l := range levels {
+			levelsById[l.ID] = l
+		}
+	}
+
+	for i := range slots {
+		slots[i].AllowedTracks = make([]models.InterviewTrack, 0)
+		for _, tid := range slots[i].AllowedTrackIDs {
+			if t, ok := tracksById[tid]; ok {
+				slots[i].AllowedTracks = append(slots[i].AllowedTracks, t)
+			}
+		}
+
+		slots[i].AllowedLevels = make([]models.InterviewLevel, 0)
+		for _, lid := range slots[i].AllowedLevelIDs {
+			if l, ok := levelsById[lid]; ok {
+				slots[i].AllowedLevels = append(slots[i].AllowedLevels, l)
+			}
+		}
+	}
+
+	return slots
 }
 
 // AdminGetSlots retrieves interview slots with filtering by date range, venue, faculty, track, and status
@@ -69,13 +156,13 @@ func AdminGetSlots(c *gin.Context) {
 
 	if trackIDStr != "" && trackIDStr != "all" {
 		if tid, err := strconv.ParseUint(trackIDStr, 10, 32); err == nil && tid > 0 {
-			query = query.Where("track_id = ?", uint(tid))
+			query = query.Where("(track_id = ? OR allowed_tracks_json LIKE ?)", uint(tid), fmt.Sprintf("%%%d%%", tid))
 		}
 	}
 
 	if levelIDStr != "" && levelIDStr != "all" {
 		if lid, err := strconv.ParseUint(levelIDStr, 10, 32); err == nil && lid > 0 {
-			query = query.Where("level_id = ?", uint(lid))
+			query = query.Where("(level_id = ? OR allowed_levels_json LIKE ?)", uint(lid), fmt.Sprintf("%%%d%%", lid))
 		}
 	}
 
@@ -100,6 +187,9 @@ func AdminGetSlots(c *gin.Context) {
 		})
 		return
 	}
+
+	// Enrich slots with allowed tracks and levels
+	slots = PopulateSlotAllowedEntities(slots)
 
 	// Update counts for each slot dynamically
 	for i := range slots {
@@ -149,39 +239,34 @@ func AdminCreateSlot(c *gin.Context) {
 		return
 	}
 
-	// Validate Optional Track
-	var trackID *uint
-	if input.TrackID != nil && *input.TrackID > 0 {
-		var track models.InterviewTrack
-		if err := database.DB.First(&track, *input.TrackID).Error; err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Selected track does not exist",
-			})
-			return
+	// Process Allowed Tracks (Multi-select)
+	allowedTracksJSON := ""
+	var legacyTrackID *uint
+	if len(input.AllowedTrackIDs) > 0 {
+		b, _ := json.Marshal(input.AllowedTrackIDs)
+		allowedTracksJSON = string(b)
+		if len(input.AllowedTrackIDs) == 1 {
+			legacyTrackID = &input.AllowedTrackIDs[0]
 		}
-		trackID = input.TrackID
+	} else if input.TrackID != nil && *input.TrackID > 0 {
+		legacyTrackID = input.TrackID
+		b, _ := json.Marshal([]uint{*input.TrackID})
+		allowedTracksJSON = string(b)
 	}
 
-	// Validate Optional Level
-	var levelID *uint
-	if input.LevelID != nil && *input.LevelID > 0 {
-		if trackID == nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Track must be selected when specifying a level restriction",
-			})
-			return
+	// Process Allowed Levels (Multi-select)
+	allowedLevelsJSON := ""
+	var legacyLevelID *uint
+	if len(input.AllowedLevelIDs) > 0 {
+		b, _ := json.Marshal(input.AllowedLevelIDs)
+		allowedLevelsJSON = string(b)
+		if len(input.AllowedLevelIDs) == 1 {
+			legacyLevelID = &input.AllowedLevelIDs[0]
 		}
-		var level models.InterviewLevel
-		if err := database.DB.Where("id = ? AND track_id = ?", *input.LevelID, *trackID).First(&level).Error; err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Selected level does not exist within the specified track",
-			})
-			return
-		}
-		levelID = input.LevelID
+	} else if input.LevelID != nil && *input.LevelID > 0 {
+		legacyLevelID = input.LevelID
+		b, _ := json.Marshal([]uint{*input.LevelID})
+		allowedLevelsJSON = string(b)
 	}
 
 	capacity := venue.Capacity
@@ -190,18 +275,20 @@ func AdminCreateSlot(c *gin.Context) {
 	}
 
 	slot := models.InterviewSlot{
-		VenueID:      input.VenueID,
-		FacultyID:    input.FacultyID,
-		TrackID:      trackID,
-		LevelID:      levelID,
-		SlotDate:     strings.TrimSpace(input.SlotDate),
-		StartTime:    strings.TrimSpace(input.StartTime),
-		EndTime:      strings.TrimSpace(input.EndTime),
-		Capacity:     capacity,
-		BookedCount:  0,
-		PresentCount: 0,
-		Status:       models.SlotScheduled,
-		Notes:        strings.TrimSpace(input.Notes),
+		VenueID:           input.VenueID,
+		FacultyID:         input.FacultyID,
+		TrackID:           legacyTrackID,
+		LevelID:           legacyLevelID,
+		AllowedTracksJSON: allowedTracksJSON,
+		AllowedLevelsJSON: allowedLevelsJSON,
+		SlotDate:          strings.TrimSpace(input.SlotDate),
+		StartTime:         strings.TrimSpace(input.StartTime),
+		EndTime:           strings.TrimSpace(input.EndTime),
+		Capacity:          capacity,
+		BookedCount:       0,
+		PresentCount:      0,
+		Status:            models.SlotScheduled,
+		Notes:             strings.TrimSpace(input.Notes),
 	}
 
 	if err := database.DB.Create(&slot).Error; err != nil {
@@ -215,6 +302,10 @@ func AdminCreateSlot(c *gin.Context) {
 
 	// Load preloads for clean response
 	database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Level").First(&slot, slot.ID)
+	enriched := PopulateSlotAllowedEntities([]models.InterviewSlot{slot})
+	if len(enriched) > 0 {
+		slot = enriched[0]
+	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
@@ -272,20 +363,51 @@ func AdminUpdateSlot(c *gin.Context) {
 		slot.FacultyID = *input.FacultyID
 	}
 
-	if input.TrackID != nil {
+	if input.AllowedTrackIDs != nil {
+		if len(*input.AllowedTrackIDs) == 0 {
+			slot.AllowedTracksJSON = ""
+			slot.TrackID = nil
+		} else {
+			b, _ := json.Marshal(*input.AllowedTrackIDs)
+			slot.AllowedTracksJSON = string(b)
+			if len(*input.AllowedTrackIDs) == 1 {
+				slot.TrackID = &(*input.AllowedTrackIDs)[0]
+			} else {
+				slot.TrackID = nil
+			}
+		}
+	} else if input.TrackID != nil {
 		if *input.TrackID == 0 {
 			slot.TrackID = nil
-			slot.LevelID = nil
+			slot.AllowedTracksJSON = ""
 		} else {
 			slot.TrackID = input.TrackID
+			b, _ := json.Marshal([]uint{*input.TrackID})
+			slot.AllowedTracksJSON = string(b)
 		}
 	}
 
-	if input.LevelID != nil {
-		if *input.LevelID == 0 {
+	if input.AllowedLevelIDs != nil {
+		if len(*input.AllowedLevelIDs) == 0 {
+			slot.AllowedLevelsJSON = ""
 			slot.LevelID = nil
 		} else {
+			b, _ := json.Marshal(*input.AllowedLevelIDs)
+			slot.AllowedLevelsJSON = string(b)
+			if len(*input.AllowedLevelIDs) == 1 {
+				slot.LevelID = &(*input.AllowedLevelIDs)[0]
+			} else {
+				slot.LevelID = nil
+			}
+		}
+	} else if input.LevelID != nil {
+		if *input.LevelID == 0 {
+			slot.LevelID = nil
+			slot.AllowedLevelsJSON = ""
+		} else {
 			slot.LevelID = input.LevelID
+			b, _ := json.Marshal([]uint{*input.LevelID})
+			slot.AllowedLevelsJSON = string(b)
 		}
 	}
 
@@ -318,6 +440,10 @@ func AdminUpdateSlot(c *gin.Context) {
 	}
 
 	database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Level").First(&slot, slot.ID)
+	enriched := PopulateSlotAllowedEntities([]models.InterviewSlot{slot})
+	if len(enriched) > 0 {
+		slot = enriched[0]
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",

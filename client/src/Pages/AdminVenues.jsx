@@ -19,7 +19,11 @@ import {
   Sparkles,
   ClipboardList,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  CheckSquare,
+  Square,
+  BookOpen
 } from 'lucide-react';
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
@@ -62,6 +66,9 @@ export default function AdminVenues() {
     faculty_id: '',
     track_id: '',
     level_id: '',
+    allowed_track_ids: [],
+    allowed_level_ids: [],
+    is_open_to_all: true,
     slot_date: new Date().toISOString().split('T')[0],
     start_time: '09:00',
     end_time: '10:30',
@@ -195,6 +202,97 @@ export default function AdminVenues() {
     }
   };
 
+  // Multi-Domain & Level Handlers
+  const handleToggleTrack = (trackId) => {
+    const tid = Number(trackId);
+    const isSelected = slotFormData.allowed_track_ids.includes(tid);
+    const newTracks = isSelected
+      ? slotFormData.allowed_track_ids.filter(id => id !== tid)
+      : [...slotFormData.allowed_track_ids, tid];
+
+    const trackObj = tracks.find(t => Number(t.id) === tid);
+    const trackLevelIds = trackObj?.levels?.map(l => Number(l.id)) || [];
+    let newLevels = slotFormData.allowed_level_ids;
+    if (isSelected) {
+      newLevels = newLevels.filter(lid => !trackLevelIds.includes(lid));
+    }
+
+    setSlotFormData({
+      ...slotFormData,
+      allowed_track_ids: newTracks,
+      allowed_level_ids: newLevels,
+      is_open_to_all: newTracks.length === 0,
+    });
+  };
+
+  const handleToggleLevel = (trackId, levelId) => {
+    const tid = Number(trackId);
+    const lid = Number(levelId);
+    const trackObj = tracks.find(t => Number(t.id) === tid);
+    const allTrackLevelIds = trackObj?.levels?.map(l => Number(l.id)) || [];
+
+    let newTracks = slotFormData.allowed_track_ids.includes(tid)
+      ? [...slotFormData.allowed_track_ids]
+      : [...slotFormData.allowed_track_ids, tid];
+
+    const currentSelectedForTrack = slotFormData.allowed_level_ids.filter(id => allTrackLevelIds.includes(id));
+    let newLevels = [...slotFormData.allowed_level_ids];
+
+    if (currentSelectedForTrack.length === 0) {
+      // Transition from "all levels open" to single selected level
+      newLevels.push(lid);
+    } else if (newLevels.includes(lid)) {
+      newLevels = newLevels.filter(id => id !== lid);
+    } else {
+      newLevels.push(lid);
+    }
+
+    setSlotFormData({
+      ...slotFormData,
+      allowed_track_ids: newTracks,
+      allowed_level_ids: newLevels,
+      is_open_to_all: false,
+    });
+  };
+
+  const handleToggleAllLevelsForTrack = (track) => {
+    const tid = Number(track.id);
+    const trackLevelIds = track.levels?.map(l => Number(l.id)) || [];
+
+    let newTracks = slotFormData.allowed_track_ids.includes(tid)
+      ? [...slotFormData.allowed_track_ids]
+      : [...slotFormData.allowed_track_ids, tid];
+
+    // Reset explicit level filters for this track to open all levels
+    const newLevels = slotFormData.allowed_level_ids.filter(id => !trackLevelIds.includes(id));
+
+    setSlotFormData({
+      ...slotFormData,
+      allowed_track_ids: newTracks,
+      allowed_level_ids: newLevels,
+      is_open_to_all: false,
+    });
+  };
+
+  const handleSelectAllDomains = () => {
+    const allTrackIds = tracks.map(t => Number(t.id));
+    setSlotFormData({
+      ...slotFormData,
+      allowed_track_ids: allTrackIds,
+      allowed_level_ids: [],
+      is_open_to_all: false,
+    });
+  };
+
+  const handleSetOpenToAll = () => {
+    setSlotFormData({
+      ...slotFormData,
+      allowed_track_ids: [],
+      allowed_level_ids: [],
+      is_open_to_all: true,
+    });
+  };
+
   // Slot Handlers
   const handleOpenCreateSlot = () => {
     setEditingSlot(null);
@@ -207,6 +305,9 @@ export default function AdminVenues() {
       faculty_id: defaultFaculty,
       track_id: '',
       level_id: '',
+      allowed_track_ids: [],
+      allowed_level_ids: [],
+      is_open_to_all: true,
       slot_date: new Date().toISOString().split('T')[0],
       start_time: '09:00',
       end_time: '10:30',
@@ -218,11 +319,30 @@ export default function AdminVenues() {
 
   const handleOpenEditSlot = (s) => {
     setEditingSlot(s);
+    let allowedTracks = [];
+    if (Array.isArray(s.allowed_track_ids) && s.allowed_track_ids.length > 0) {
+      allowedTracks = s.allowed_track_ids.map(Number);
+    } else if (s.track_id) {
+      allowedTracks = [Number(s.track_id)];
+    }
+
+    let allowedLevels = [];
+    if (Array.isArray(s.allowed_level_ids) && s.allowed_level_ids.length > 0) {
+      allowedLevels = s.allowed_level_ids.map(Number);
+    } else if (s.level_id) {
+      allowedLevels = [Number(s.level_id)];
+    }
+
+    const isOpenToAll = allowedTracks.length === 0;
+
     setSlotFormData({
       venue_id: s.venue_id,
       faculty_id: s.faculty_id,
       track_id: s.track_id || '',
       level_id: s.level_id || '',
+      allowed_track_ids: allowedTracks,
+      allowed_level_ids: allowedLevels,
+      is_open_to_all: isOpenToAll,
       slot_date: s.slot_date,
       start_time: s.start_time,
       end_time: s.end_time,
@@ -240,11 +360,14 @@ export default function AdminVenues() {
       return;
     }
 
+    const allowedTrackIds = slotFormData.is_open_to_all ? [] : slotFormData.allowed_track_ids.map(Number);
+    const allowedLevelIds = slotFormData.is_open_to_all ? [] : slotFormData.allowed_level_ids.map(Number);
+
     const payload = {
       venue_id: Number(slotFormData.venue_id),
       faculty_id: Number(slotFormData.faculty_id),
-      track_id: slotFormData.track_id ? Number(slotFormData.track_id) : null,
-      level_id: slotFormData.level_id ? Number(slotFormData.level_id) : null,
+      allowed_track_ids: allowedTrackIds,
+      allowed_level_ids: allowedLevelIds,
       slot_date: slotFormData.slot_date,
       start_time: slotFormData.start_time,
       end_time: slotFormData.end_time,
@@ -551,17 +674,52 @@ export default function AdminVenues() {
                             <p className="text-[10px] text-[var(--text-secondary)]">{s.faculty?.department || 'Invigilator'}</p>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          {s.track && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)]">
-                              {s.track.title}
-                            </span>
-                          )}
-                          {s.level && (
-                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] font-mono">
-                              Level {s.level.level_number}: {s.level.name}
-                            </span>
-                          )}
+                        <div className="flex flex-col items-end gap-1 max-w-[60%]">
+                          {(() => {
+                            if (s.allowed_tracks && s.allowed_tracks.length > 0) {
+                              return (
+                                <div className="flex flex-wrap gap-1 justify-end">
+                                  {s.allowed_tracks.slice(0, 2).map(trk => {
+                                    const trkLevelIds = trk.levels?.map(l => l.id) || [];
+                                    const allowedForThisTrk = (s.allowed_level_ids || []).filter(id => trkLevelIds.includes(id));
+                                    const lvlSummary = allowedForThisTrk.length > 0 && allowedForThisTrk.length < trkLevelIds.length
+                                      ? `(${allowedForThisTrk.length} Lvl)`
+                                      : '';
+
+                                    return (
+                                      <span key={trk.id} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)]">
+                                        {trk.title} {lvlSummary}
+                                      </span>
+                                    );
+                                  })}
+                                  {s.allowed_tracks.length > 2 && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                                      +{s.allowed_tracks.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            }
+                            if (s.track) {
+                              return (
+                                <>
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)]">
+                                    {s.track.title}
+                                  </span>
+                                  {s.level && (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] font-mono">
+                                      Level {s.level.level_number}: {s.level.name}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            }
+                            return (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                Open to All Domains
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -985,41 +1143,132 @@ export default function AdminVenues() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                    Track / Domain (Optional)
-                  </label>
-                  <select
-                    value={slotFormData.track_id}
-                    onChange={(e) => setSlotFormData({ ...slotFormData, track_id: e.target.value, level_id: '' })}
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="">Open to All Domains</option>
-                    {tracks.map(t => (
-                      <option key={t.id} value={t.id}>{t.title}</option>
-                    ))}
-                  </select>
+              {/* Allowed Domains & Levels Multi-Selector */}
+              <div className="space-y-2.5 p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-primary)]">
+                      Allowed Domains & Difficulty Levels (Optional)
+                    </label>
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      {slotFormData.is_open_to_all
+                        ? 'Open to all interview domains and difficulty level tiers'
+                        : `Restricted to ${slotFormData.allowed_track_ids.length} selected domain(s)`}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleSetOpenToAll}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
+                        slotFormData.is_open_to_all
+                          ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 font-bold'
+                          : 'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+                      }`}
+                    >
+                      <Globe className="w-3 h-3" />
+                      <span>All Domains (Open)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSelectAllDomains}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
+                        !slotFormData.is_open_to_all && slotFormData.allowed_track_ids.length === tracks.length
+                          ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] font-bold'
+                          : 'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+                      }`}
+                    >
+                      <CheckSquare className="w-3 h-3" />
+                      <span>Select All</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                    Difficulty Level (Optional)
-                  </label>
-                  <select
-                    value={slotFormData.level_id}
-                    onChange={(e) => setSlotFormData({ ...slotFormData, level_id: e.target.value })}
-                    disabled={!slotFormData.track_id}
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
-                  >
-                    <option value="">All Levels in Domain</option>
-                    {(() => {
-                      const selectedTrackObj = tracks.find(t => Number(t.id) === Number(slotFormData.track_id));
-                      return selectedTrackObj?.levels?.map(lvl => (
-                        <option key={lvl.id} value={lvl.id}>Level {lvl.level_number}: {lvl.name}</option>
-                      )) || null;
-                    })()}
-                  </select>
+                {/* Domain & Levels Interactive List */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                  {tracks.map((t) => {
+                    const isTrackSelected = !slotFormData.is_open_to_all && slotFormData.allowed_track_ids.includes(Number(t.id));
+                    const trackLevels = t.levels || [];
+                    const trackLevelIds = trackLevels.map(l => Number(l.id));
+                    const selectedLevelIdsForTrack = slotFormData.allowed_level_ids.filter(id => trackLevelIds.includes(id));
+                    const isAllLevelsForTrack = selectedLevelIdsForTrack.length === 0 || selectedLevelIdsForTrack.length === trackLevels.length;
+
+                    return (
+                      <div
+                        key={t.id}
+                        className={`p-2.5 rounded-xl border transition-all ${
+                          isTrackSelected
+                            ? 'bg-[var(--bg-card)] border-[var(--accent)] shadow-sm'
+                            : 'bg-[var(--bg-card)]/50 border-[var(--border)] hover:border-[var(--border-strong)]'
+                        }`}
+                      >
+                        {/* Domain Row */}
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isTrackSelected}
+                              onChange={() => handleToggleTrack(t.id)}
+                              className="w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
+                            />
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-[var(--text-primary)]">{t.title}</span>
+                              <span className="px-1.5 py-0.2 text-[9px] rounded font-mono uppercase bg-[var(--bg)] border border-[var(--border)] text-[var(--text-secondary)]">
+                                {t.category || 'Domain'}
+                              </span>
+                            </div>
+                          </label>
+
+                          {isTrackSelected && (
+                            <span className="text-[10px] font-semibold text-[var(--accent)] font-mono">
+                              {isAllLevelsForTrack
+                                ? 'All Levels'
+                                : `${selectedLevelIdsForTrack.length}/${trackLevels.length} Levels`}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Expandable Level Chips */}
+                        {isTrackSelected && trackLevels.length > 0 && (
+                          <div className="mt-2.5 pt-2 border-t border-[var(--border)] space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px] text-[var(--text-secondary)]">
+                              <span>Select Allowed Levels for {t.title}:</span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAllLevelsForTrack(t)}
+                                className="text-[10px] font-semibold text-[var(--accent)] hover:underline"
+                              >
+                                {isAllLevelsForTrack ? 'Select Specific' : 'Reset to All Levels'}
+                              </button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              {trackLevels.map((lvl) => {
+                                const isLvlSelected = isAllLevelsForTrack || selectedLevelIdsForTrack.includes(Number(lvl.id));
+
+                                return (
+                                  <button
+                                    type="button"
+                                    key={lvl.id}
+                                    onClick={() => handleToggleLevel(t.id, lvl.id)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                      isLvlSelected
+                                        ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] font-bold'
+                                        : 'bg-[var(--bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] opacity-60 hover:opacity-100'
+                                    }`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isLvlSelected ? 'bg-[var(--accent)]' : 'bg-zinc-400'}`} />
+                                    <span>L{lvl.level_number}: {lvl.name}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
