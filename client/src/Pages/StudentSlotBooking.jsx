@@ -360,9 +360,9 @@ export default function StudentSlotBooking() {
           ) : availableSlots.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl text-center">
               <Building2 className="w-10 h-10 text-[var(--text-secondary)] opacity-40 mb-2" />
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">No interview slots available</h3>
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">No slots available</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
-                There are no open examination slots matching your filter criteria. Please check back soon or try another date.
+                No slots are currently available matching your criteria. Please check back soon.
               </p>
             </div>
           ) : (
@@ -457,7 +457,7 @@ export default function StudentSlotBooking() {
               <Ticket className="w-10 h-10 text-[var(--text-secondary)] opacity-40 mb-2" />
               <h3 className="text-sm font-bold text-[var(--text-primary)]">No bookings found</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
-                You haven't booked any upcoming physical examination slots yet.
+                You haven't booked any upcoming slots yet.
               </p>
               <button
                 onClick={() => setActiveTab('available')}

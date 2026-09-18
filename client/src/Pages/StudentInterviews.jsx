@@ -311,7 +311,7 @@ export default function StudentInterviews() {
             <span>Mock Mate Interviews</span>
           </h1>
           <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Book an examination slot in your campus lab. Faculty invigilators verify your in-venue attendance to unlock live peer interviews.
+            Book a slot at your campus venue. Faculty at the venue will verify your attendance to start your peer interview.
           </p>
         </div>
 
@@ -688,7 +688,7 @@ export default function StudentInterviews() {
               <div>
                 <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
                   <CalendarCheck className="w-5 h-5 text-[var(--accent)]" />
-                  <span>Reserve Examination Slot</span>
+                  <span>Book Interview Slot</span>
                 </h2>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                   {targetLevel.track.title} • Level {targetLevel.level?.level_number}: {targetLevel.level?.name}
@@ -706,21 +706,21 @@ export default function StudentInterviews() {
               <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <p>
-                  Choose an upcoming physical laboratory session. The faculty invigilator in the lab will take attendance and unlock your interview.
+                  Select a slot to attend. The faculty at the venue will verify your attendance to start your interview.
                 </p>
               </div>
 
               {loadingSlots ? (
                 <div className="flex flex-col items-center justify-center py-12 text-[var(--text-secondary)]">
                   <Loader2 className="w-7 h-7 animate-spin text-[var(--accent)] mb-2" />
-                  <p className="text-xs">Fetching open lab slots for this level...</p>
+                  <p className="text-xs">Checking available slots...</p>
                 </div>
               ) : availableSlots.length === 0 ? (
                 <div className="text-center py-12 text-[var(--text-secondary)]">
                   <Building2 className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                  <h4 className="text-sm font-bold text-[var(--text-primary)]">No examination slots scheduled</h4>
+                  <h4 className="text-sm font-bold text-[var(--text-primary)]">No slots available</h4>
                   <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm mx-auto">
-                    There are no open venue slots scheduled for this domain and level. Please check back later or contact your instructor.
+                    No slots are currently available for this domain and level. Please check back later.
                   </p>
                 </div>
               ) : (
