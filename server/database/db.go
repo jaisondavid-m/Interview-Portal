@@ -166,18 +166,19 @@ func runMigrations(db *gorm.DB) error {
 // seedDefaultRoles ensures standard system roles exist in the database
 func seedDefaultRoles(db *gorm.DB) {
 	systemRoles := []models.Role{
-		{Name: "admin", DisplayName: "Administrator", Description: "Full system administration and platform control", IsSystem: true},
-		{Name: "student", DisplayName: "Student", Description: "Candidate attending peer interviews and assessments", IsSystem: true},
-		{Name: "developer", DisplayName: "Developer", Description: "Platform monitoring, audit logs, and database management", IsSystem: true},
-		{Name: "faculty", DisplayName: "Faculty / Invigilator", Description: "Faculty managing lab venues, slots, and student in-person attendance", IsSystem: true},
+		{Name: "admin", DisplayName: "Administrator", Description: "Full system administration and platform control", DefaultPage: "/admin/dashboard", IsSystem: true},
+		{Name: "student", DisplayName: "Student", Description: "Candidate attending peer interviews and assessments", DefaultPage: "/dashboard", IsSystem: true},
+		{Name: "developer", DisplayName: "Developer", Description: "Platform monitoring, audit logs, and database management", DefaultPage: "/developer/audit-logs", IsSystem: true},
+		{Name: "faculty", DisplayName: "Faculty / Invigilator", Description: "Faculty managing lab venues, slots, and student in-person attendance", DefaultPage: "/faculty/attendance", IsSystem: true},
 	}
 
 	for _, r := range systemRoles {
-		var count int64
-		db.Model(&models.Role{}).Where("name = ?", r.Name).Count(&count)
-		if count == 0 {
+		var existing models.Role
+		if err := db.Where("name = ?", r.Name).First(&existing).Error; err != nil {
 			db.Create(&r)
 			log.Printf("[INFO] Seeded system role: %s (%s)\n", r.Name, r.DisplayName)
+		} else if existing.DefaultPage == "" && r.DefaultPage != "" {
+			db.Model(&existing).Update("default_page", r.DefaultPage)
 		}
 	}
 }

@@ -12,6 +12,7 @@ type Role struct {
 	Name        string         `gorm:"size:50;uniqueIndex;not null" json:"name" binding:"required"`
 	DisplayName string         `gorm:"size:100;not null" json:"display_name" binding:"required"`
 	Description string         `gorm:"size:255" json:"description"`
+	DefaultPage string         `gorm:"size:255;default:''" json:"default_page"` // Route/path user lands on after login
 	IsSystem    bool           `gorm:"default:false" json:"is_system"` // System roles (admin, student, developer) cannot be deleted
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`

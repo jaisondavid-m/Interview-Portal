@@ -52,12 +52,22 @@ function RootRedirect() {
 
   if (user) {
     const role = user.role?.toLowerCase();
+    const landingPage = user.default_page || permissions?.defaultPage;
+
+    if (landingPage && landingPage.trim() !== '') {
+      return <Navigate to={landingPage.trim()} replace />;
+    }
+
     if (role === 'admin') {
       return <Navigate to="/admin/dashboard" replace />;
     }
 
     if (role === 'faculty') {
-      return <Navigate to="/faculty/dashboard" replace />;
+      return <Navigate to="/faculty/attendance" replace />;
+    }
+
+    if (role === 'developer') {
+      return <Navigate to="/developer/audit-logs" replace />;
     }
 
     // Dynamic landing: navigate to first permitted page if available
@@ -68,9 +78,6 @@ function RootRedirect() {
       }
     }
 
-    if (role === 'developer') {
-      return <Navigate to="/developer/audit-logs" replace />;
-    }
     return <Navigate to="/dashboard" replace />;
   }
 

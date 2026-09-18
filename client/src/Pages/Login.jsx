@@ -65,16 +65,21 @@ export default function Login() {
     }
   }, []);
 
+  const getDestination = (u) => {
+    if (u?.default_page && u.default_page.trim() !== '') {
+      return u.default_page.trim();
+    }
+    const role = u?.role?.toLowerCase();
+    if (role === 'admin') return '/admin/dashboard';
+    if (role === 'developer') return '/developer/audit-logs';
+    if (role === 'faculty') return '/faculty/attendance';
+    return '/dashboard';
+  };
+
   // Redirect if already authenticated
   useEffect(() => {
     if (user) {
-      if (user.role === 'admin') {
-        navigate('/admin/dashboard', { replace: true });
-      } else if (user.role === 'developer') {
-        navigate('/developer/audit-logs', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
+      navigate(getDestination(user), { replace: true });
     }
   }, [user, navigate]);
 
@@ -127,13 +132,7 @@ export default function Login() {
     try {
       const res = await loginWithGoogle(payload);
       if (res && res.success && res.user) {
-        if (res.user.role === 'admin') {
-          navigate('/admin/dashboard', { replace: true });
-        } else if (res.user.role === 'developer') {
-          navigate('/developer/audit-logs', { replace: true });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
+        navigate(getDestination(res.user), { replace: true });
       } else {
         setError(res?.error || 'Google authentication failed');
       }
@@ -181,13 +180,7 @@ export default function Login() {
       const res = await login(loginIdentifier, loginPassword);
 
       if (res && res.success && res.user) {
-        if (res.user.role === 'admin') {
-          navigate('/admin/dashboard', { replace: true });
-        } else if (res.user.role === 'developer') {
-          navigate('/developer/audit-logs', { replace: true });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
+        navigate(getDestination(res.user), { replace: true });
       } else {
         setError(res?.error || 'Invalid email/roll number or password');
       }

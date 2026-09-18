@@ -15,15 +15,16 @@ import (
 
 // RoleWithStats represents a role alongside its user count and permissions
 type RoleWithStats struct {
-	ID          uint                        `json:"id"`
-	Name        string                      `json:"name"`
-	DisplayName string                      `json:"display_name"`
-	Description string                      `json:"description"`
-	IsSystem    bool                        `json:"is_system"`
-	UserCount   int64                       `json:"user_count"`
-	Permissions map[string]bool             `json:"permissions"`
-	CreatedAt   string                      `json:"created_at"`
-	UpdatedAt   string                      `json:"updated_at"`
+	ID          uint            `json:"id"`
+	Name        string          `json:"name"`
+	DisplayName string          `json:"display_name"`
+	Description string          `json:"description"`
+	DefaultPage string          `json:"default_page"`
+	IsSystem    bool            `json:"is_system"`
+	UserCount   int64           `json:"user_count"`
+	Permissions map[string]bool `json:"permissions"`
+	CreatedAt   string          `json:"created_at"`
+	UpdatedAt   string          `json:"updated_at"`
 }
 
 // AdminGetRoles retrieves all roles with user counts and page access mappings
@@ -73,6 +74,7 @@ func AdminGetRoles(c *gin.Context) {
 			Name:        r.Name,
 			DisplayName: r.DisplayName,
 			Description: r.Description,
+			DefaultPage: r.DefaultPage,
 			IsSystem:    r.IsSystem,
 			UserCount:   countMap[strings.ToLower(r.Name)],
 			Permissions: rolePerms,
@@ -93,6 +95,7 @@ func AdminCreateRole(c *gin.Context) {
 		Name        string          `json:"name" binding:"required"`
 		DisplayName string          `json:"display_name" binding:"required"`
 		Description string          `json:"description"`
+		DefaultPage string          `json:"default_page"`
 		Permissions map[string]bool `json:"permissions"`
 	}
 
@@ -138,6 +141,7 @@ func AdminCreateRole(c *gin.Context) {
 		Name:        slug,
 		DisplayName: displayName,
 		Description: strings.TrimSpace(input.Description),
+		DefaultPage: strings.TrimSpace(input.DefaultPage),
 		IsSystem:    false,
 	}
 
@@ -186,8 +190,9 @@ func AdminUpdateRole(c *gin.Context) {
 	}
 
 	var input struct {
-		DisplayName string `json:"display_name"`
-		Description string `json:"description"`
+		DisplayName string  `json:"display_name"`
+		Description string  `json:"description"`
+		DefaultPage *string `json:"default_page"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -205,6 +210,9 @@ func AdminUpdateRole(c *gin.Context) {
 	}
 	if input.Description != "" {
 		updates["description"] = strings.TrimSpace(input.Description)
+	}
+	if input.DefaultPage != nil {
+		updates["default_page"] = strings.TrimSpace(*input.DefaultPage)
 	}
 
 	if err := database.DB.Model(&role).Updates(updates).Error; err != nil {
@@ -581,10 +589,14 @@ func GetUserPagePermissions(c *gin.Context) {
 		database.DB.Where("`key` IN ?", allowedKeys).Order("order_index asc").Find(&pages)
 	}
 
+	var userRole models.Role
+	database.DB.Where("name = ?", roleName).First(&userRole)
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
 			"role":         roleName,
+			"default_page": userRole.DefaultPage,
 			"allowed_keys": allowedKeys,
 			"pages":        pages,
 		},

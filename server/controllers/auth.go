@@ -76,19 +76,27 @@ func Login(c *gin.Context) {
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", token, 72*3600, "/", "", false, true)
 
+	// Fetch role's configured default page
+	var userRole models.Role
+	var defaultPage string
+	if err := database.DB.Where("name = ?", strings.ToLower(user.Role)).First(&userRole).Error; err == nil {
+		defaultPage = userRole.DefaultPage
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "Login successful",
 		"token":   token,
 		"user": gin.H{
-			"id":          user.ID,
-			"name":        user.Name,
-			"email":       user.Email,
-			"roll_no":     user.RollNo,
-			"department":  user.Department,
-			"role":        user.Role,
-			"avatar_url":  user.AvatarURL,
-			"auth_method": user.AuthMethod,
+			"id":           user.ID,
+			"name":         user.Name,
+			"email":        user.Email,
+			"roll_no":      user.RollNo,
+			"department":   user.Department,
+			"role":         user.Role,
+			"avatar_url":   user.AvatarURL,
+			"auth_method":  user.AuthMethod,
+			"default_page": defaultPage,
 		},
 	})
 }
@@ -226,19 +234,27 @@ func GoogleLogin(c *gin.Context) {
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", token, 72*3600, "/", "", false, true)
 
+	// Fetch role's configured default page
+	var userRole models.Role
+	var defaultPage string
+	if err := database.DB.Where("name = ?", strings.ToLower(user.Role)).First(&userRole).Error; err == nil {
+		defaultPage = userRole.DefaultPage
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "Google authentication successful",
 		"token":   token,
 		"user": gin.H{
-			"id":          user.ID,
-			"name":        user.Name,
-			"email":       user.Email,
-			"roll_no":     user.RollNo,
-			"department":  user.Department,
-			"role":        user.Role,
-			"avatar_url":  user.AvatarURL,
-			"auth_method": user.AuthMethod,
+			"id":           user.ID,
+			"name":         user.Name,
+			"email":        user.Email,
+			"roll_no":      user.RollNo,
+			"department":   user.Department,
+			"role":         user.Role,
+			"avatar_url":   user.AvatarURL,
+			"auth_method":  user.AuthMethod,
+			"default_page": defaultPage,
 		},
 	})
 }
@@ -294,15 +310,23 @@ func GetMe(c *gin.Context) {
 		return
 	}
 
+	// Fetch role's configured default page
+	var userRole models.Role
+	var defaultPage string
+	if err := database.DB.Where("name = ?", strings.ToLower(user.Role)).First(&userRole).Error; err == nil {
+		defaultPage = userRole.DefaultPage
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"user": gin.H{
-			"id":         user.ID,
-			"name":       user.Name,
-			"email":      user.Email,
-			"roll_no":    user.RollNo,
-			"department": user.Department,
-			"role":       user.Role,
+			"id":           user.ID,
+			"name":         user.Name,
+			"email":        user.Email,
+			"roll_no":      user.RollNo,
+			"department":   user.Department,
+			"role":         user.Role,
+			"default_page": defaultPage,
 		},
 	})
 }

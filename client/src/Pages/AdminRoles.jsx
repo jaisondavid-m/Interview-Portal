@@ -95,6 +95,7 @@ export default function AdminRoles() {
     name: '',
     display_name: '',
     description: '',
+    default_page: '',
     clone_from: 'student',
   });
 
@@ -157,6 +158,32 @@ export default function AdminRoles() {
   const currentRoleObj = useMemo(() => {
     return roles.find(r => r.name === selectedRole) || roles[0] || { name: 'admin', display_name: 'Administrator', is_system: true };
   }, [roles, selectedRole]);
+
+  // Fallback default landing route per role type
+  const getDefaultFallback = (roleName) => {
+    const lower = roleName?.toLowerCase();
+    if (lower === 'admin') return '/admin/dashboard';
+    if (lower === 'developer') return '/developer/audit-logs';
+    if (lower === 'faculty') return '/faculty/attendance';
+    return '/dashboard';
+  };
+
+  // Quick inline update of default landing page for a role
+  const handleUpdateDefaultPage = async (roleObj, newDefaultPage) => {
+    try {
+      await api.put(`/admin/roles/${roleObj.id}`, {
+        default_page: newDefaultPage,
+      });
+
+      setRoles(prev => prev.map(r => r.id === roleObj.id ? { ...r, default_page: newDefaultPage } : r));
+      const targetName = pages.find(p => p.path === newDefaultPage)?.name || newDefaultPage || 'System Default';
+      showToast(`Default landing page for "${roleObj.display_name}" set to "${targetName}"`, 'success');
+      window.dispatchEvent(new Event('permissionsUpdated'));
+    } catch (err) {
+      console.error('Failed to update default page:', err);
+      showToast('Failed to update default landing page', 'error');
+    }
+  };
 
   // Filtered pages based on search query
   const filteredPages = useMemo(() => {
@@ -312,13 +339,14 @@ export default function AdminRoles() {
         name: newRoleForm.name.trim(),
         display_name: newRoleForm.display_name.trim(),
         description: newRoleForm.description.trim(),
+        default_page: newRoleForm.default_page ? newRoleForm.default_page.trim() : '',
         permissions: initialPerms,
       });
 
       if (res && res.data) {
         showToast(`Role "${newRoleForm.display_name}" created successfully`, 'success');
         setShowCreateRoleModal(false);
-        setNewRoleForm({ name: '', display_name: '', description: '', clone_from: 'student' });
+        setNewRoleForm({ name: '', display_name: '', description: '', default_page: '', clone_from: 'student' });
         await fetchData();
         setSelectedRole(res.data.name || newRoleForm.name.toLowerCase().trim());
       }
@@ -340,10 +368,12 @@ export default function AdminRoles() {
       await api.put(`/admin/roles/${roleToEdit.id}`, {
         display_name: roleToEdit.display_name,
         description: roleToEdit.description,
+        default_page: roleToEdit.default_page || '',
       });
 
       showToast(`Role "${roleToEdit.display_name}" updated`, 'success');
       setShowEditRoleModal(false);
+      window.dispatchEvent(new Event('permissionsUpdated'));
       await fetchData();
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to update role';
@@ -613,9 +643,45 @@ export default function AdminRoles() {
                     </div>
 
                     {/* Card Body: Description */}
-                    <p className="text-[12.5px] text-[var(--text-secondary)] line-clamp-3 leading-relaxed min-h-[48px]">
+                    <p className="text-[12.5px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed min-h-[38px]">
                       {r.description || 'Custom defined role with granular page access rules.'}
                     </p>
+
+                    {/* Default Landing Page Configuration Section */}
+                    <div
+                      className="pt-2.5 pb-1 border-t border-[var(--border)]/70 flex flex-col gap-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+                          <Globe className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <span>Default Landing Page:</span>
+                        </div>
+                        {r.default_page ? (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] truncate max-w-[130px]" title={r.default_page}>
+                            {r.default_page}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                            Auto
+                          </span>
+                        )}
+                      </div>
+
+                      <select
+                        value={r.default_page || ''}
+                        onChange={(e) => handleUpdateDefaultPage(r, e.target.value)}
+                        className="w-full text-xs py-1.5 px-2.5 bg-[var(--bg-raised)] hover:bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--accent)] rounded-[var(--radius-sm)] text-[var(--text-primary)] transition cursor-pointer font-sans"
+                        title="Configure page loaded immediately after user logs in with this role"
+                      >
+                        <option value="">System Default ({getDefaultFallback(r.name)})</option>
+                        {pages.map((p) => (
+                          <option key={p.key} value={p.path}>
+                            {p.name} ({p.path})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
                     {/* Footer: Manage Permissions Button & Edit / Delete Icons */}
                     <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
@@ -696,6 +762,26 @@ export default function AdminRoles() {
               <p className="text-[12px] text-[var(--text-secondary)]">
                 {currentRoleObj.description || 'Toggle the cards below to permit or restrict access to any page for this role.'}
               </p>
+
+              {/* Default Landing Page Selector in Active Role Header */}
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                <span className="text-xs text-[var(--text-secondary)] font-medium flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span>Default Landing Page:</span>
+                </span>
+                <select
+                  value={currentRoleObj.default_page || ''}
+                  onChange={(e) => handleUpdateDefaultPage(currentRoleObj, e.target.value)}
+                  className="text-xs py-1 px-2.5 bg-[var(--bg-raised)] hover:bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--accent)] rounded-[var(--radius-sm)] text-[var(--text-primary)] font-medium transition cursor-pointer max-w-xs"
+                >
+                  <option value="">System Default ({getDefaultFallback(currentRoleObj.name)})</option>
+                  {pages.map((p) => (
+                    <option key={p.key} value={p.path}>
+                      {p.name} ({p.path})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Quick Bulk Actions for this Role */}
@@ -1209,6 +1295,23 @@ export default function AdminRoles() {
               </div>
 
               <div>
+                <label className="block text-[var(--text-secondary)] font-medium mb-1">Default Landing Page after Login</label>
+                <select
+                  value={newRoleForm.default_page || ''}
+                  onChange={(e) => setNewRoleForm({ ...newRoleForm, default_page: e.target.value })}
+                  className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                >
+                  <option value="">System Default (/dashboard)</option>
+                  {pages.map((p) => (
+                    <option key={p.key} value={p.path}>
+                      {p.name} ({p.path})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-[var(--text-muted)]">Users with this role will land on this page upon logging in.</span>
+              </div>
+
+              <div>
                 <label className="block text-[var(--text-secondary)] font-medium mb-1">Initial Permissions Template</label>
                 <select
                   value={newRoleForm.clone_from}
@@ -1290,6 +1393,23 @@ export default function AdminRoles() {
                   required
                   className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[var(--text-secondary)] font-medium mb-1">Default Landing Page after Login</label>
+                <select
+                  value={roleToEdit.default_page || ''}
+                  onChange={(e) => setRoleToEdit({ ...roleToEdit, default_page: e.target.value })}
+                  className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                >
+                  <option value="">System Default ({getDefaultFallback(roleToEdit.name)})</option>
+                  {pages.map((p) => (
+                    <option key={p.key} value={p.path}>
+                      {p.name} ({p.path})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-[var(--text-muted)]">Users with this role will land on this page upon logging in.</span>
               </div>
 
               <div>

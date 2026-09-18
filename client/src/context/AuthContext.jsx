@@ -5,7 +5,7 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [permissions, setPermissions] = useState({ allowedKeys: [], pages: [] });
+  const [permissions, setPermissions] = useState({ allowedKeys: [], pages: [], defaultPage: '' });
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
         setPermissions({
           allowedKeys: res.data.allowed_keys || [],
           pages: res.data.pages || [],
+          defaultPage: res.data.default_page || '',
         });
         return res.data;
       }
