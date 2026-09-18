@@ -124,7 +124,7 @@ export default function AdminUsers() {
     name: '',
     email: '',
     roll_no: '',
-    department: 'CSE',
+    department: '',
     password: '',
     role: 'student',
   });
@@ -402,7 +402,7 @@ export default function AdminUsers() {
       name: user.name || '',
       email: user.email || '',
       roll_no: user.roll_no || '',
-      department: user.department || 'CSE',
+      department: user.department || '',
       password: '',
       role: user.role || 'student',
     });
@@ -420,7 +420,7 @@ export default function AdminUsers() {
       name: '',
       email: '',
       roll_no: '',
-      department: 'CSE',
+      department: '',
       password: '',
       role: 'student',
     });
@@ -1448,18 +1448,18 @@ export default function AdminUsers() {
                       <span className="text-[11px] font-medium text-[var(--text-secondary)] block mb-1">
                         Default Department (if blank):
                       </span>
-                      <select
+                      <input
+                        type="text"
                         value={bulkDefaultDept}
-                        onChange={(e) => setBulkDefaultDept(e.target.value)}
-                        className="custom-input py-1.5 text-xs bg-[var(--bg-input)]"
-                      >
-                        <option value="CSE">CSE</option>
-                        <option value="IT">IT</option>
-                        <option value="ECE">ECE</option>
-                        <option value="EEE">EEE</option>
-                        <option value="AI&DS">AI & DS</option>
-                        <option value="Administration">Administration</option>
-                      </select>
+                        onChange={(e) => {
+                          setBulkDefaultDept(e.target.value);
+                          if (bulkFile || bulkRawText) {
+                            parseCSVText(bulkRawText || '');
+                          }
+                        }}
+                        className="custom-input py-1.5 text-xs font-mono"
+                        placeholder="e.g. CSE, IT, Mechanical"
+                      />
                     </div>
                     <div>
                       <span className="text-[11px] font-medium text-[var(--text-secondary)] block mb-1">
@@ -1659,19 +1659,13 @@ export default function AdminUsers() {
             <form onSubmit={handleBulkEditSubmit} className="space-y-4 pt-1">
               <label className="block space-y-1">
                 <span className="text-[12px] font-semibold text-[var(--text-primary)]">Change Department</span>
-                <select
+                <input
+                  type="text"
                   value={bulkEditFormData.department}
                   onChange={(e) => setBulkEditFormData({ ...bulkEditFormData, department: e.target.value })}
-                  className="custom-input w-full bg-[var(--bg-input)]"
-                >
-                  <option value="">-- Leave Unchanged --</option>
-                  <option value="CSE">CSE</option>
-                  <option value="IT">IT</option>
-                  <option value="ECE">ECE</option>
-                  <option value="EEE">EEE</option>
-                  <option value="AI&DS">AI & DS</option>
-                  <option value="Administration">Administration</option>
-                </select>
+                  placeholder="Leave empty to keep unchanged (e.g. CSE, IT)"
+                  className="custom-input w-full text-xs"
+                />
               </label>
 
               <label className="block space-y-1">
@@ -1853,18 +1847,14 @@ export default function AdminUsers() {
 
                 <label>
                   <span>Department</span>
-                  <select
+                  <input
+                    type="text"
+                    required
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="custom-input bg-[var(--bg-input)]"
-                  >
-                    <option value="CSE">CSE</option>
-                    <option value="IT">IT</option>
-                    <option value="ECE">ECE</option>
-                    <option value="EEE">EEE</option>
-                    <option value="AI&DS">AI & DS</option>
-                    <option value="Administration">Administration</option>
-                  </select>
+                    placeholder="e.g. CSE, IT, Mechanical"
+                    className="custom-input"
+                  />
                 </label>
               </div>
 
@@ -1998,18 +1988,13 @@ export default function AdminUsers() {
 
                 <label>
                   <span>Department</span>
-                  <select
+                  <input
+                    type="text"
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="custom-input bg-[var(--bg-input)]"
-                  >
-                    <option value="CSE">CSE</option>
-                    <option value="IT">IT</option>
-                    <option value="ECE">ECE</option>
-                    <option value="EEE">EEE</option>
-                    <option value="AI&DS">AI & DS</option>
-                    <option value="Administration">Administration</option>
-                  </select>
+                    placeholder="e.g. CSE, IT, Mechanical"
+                    className="custom-input"
+                  />
                 </label>
               </div>
 
