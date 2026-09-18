@@ -28,6 +28,7 @@ import {
   UserCheck,
   RefreshCw
 } from 'lucide-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import api from '../api/axios';
 import { SkeletonTrackGrid } from '../Components/Skeleton';
 
@@ -362,7 +363,7 @@ export default function StudentInterviews() {
                   {activeCheckIn.can_start ? (
                     <span>You are checked in at <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. Click below to start your peer assessment.</span>
                   ) : (
-                    <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. Invigilator <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.faculty?.name}</strong> will verify you. (Live updates enabled)</span>
+                    <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. The faculty invigilator at the venue will verify your attendance. (Live updates enabled)</span>
                   )}
                 </p>
               </div>
@@ -533,7 +534,7 @@ export default function StudentInterviews() {
                             </span>
                           </div>
                           <p className="text-[11px] text-[var(--text-secondary)]">
-                            {booking.slot?.slot_date} • {booking.slot?.start_time} - {booking.slot?.end_time} • Faculty: {booking.slot?.faculty?.name}
+                            {booking.slot?.slot_date} • {booking.slot?.start_time} - {booking.slot?.end_time}
                           </p>
                         </div>
                       )}
@@ -716,11 +717,17 @@ export default function StudentInterviews() {
                   <p className="text-xs">Checking available slots...</p>
                 </div>
               ) : availableSlots.length === 0 ? (
-                <div className="text-center py-12 text-[var(--text-secondary)]">
-                  <Building2 className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <div className="text-center py-6 text-[var(--text-secondary)] space-y-2">
+                  <div className="w-36 h-36 mx-auto">
+                    <DotLottieReact
+                      src="/lotties/document-empty.lottie"
+                      loop
+                      autoplay
+                    />
+                  </div>
                   <h4 className="text-sm font-bold text-[var(--text-primary)]">No slots available</h4>
-                  <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm mx-auto">
-                    No slots are currently available for this domain and level. Please check back later.
+                  <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+                    No interview slots are currently open for this domain and level. Please check back later.
                   </p>
                 </div>
               ) : (
@@ -739,29 +746,32 @@ export default function StudentInterviews() {
                         }`}
                       >
                         <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--bg-card)] border border-[var(--border)] text-[var(--accent)]">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--bg-card)] border border-[var(--border)] text-[var(--accent)] font-mono">
                               {slot.slot_date}
                             </span>
-                            <span className="flex items-center gap-1 text-xs font-semibold text-[var(--accent)]">
-                              <Clock className="w-3 h-3" />
-                              {slot.start_time} - {slot.end_time}
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)]">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>{slot.start_time} - {slot.end_time}</span>
                             </span>
                           </div>
 
-                          <h4 className="text-sm font-bold text-[var(--text-primary)]">{slot.venue_name}</h4>
-                          <p className="text-xs text-[var(--text-secondary)] mt-0.5 flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-[var(--accent)]" />
-                            Room {slot.room_number} • {slot.building}
-                          </p>
-                          <p className="text-[11px] text-[var(--text-secondary)] mt-1">
-                            Invigilator: <strong className="text-[var(--text-primary)]">{slot.faculty_name}</strong>
-                          </p>
+                          <div className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                              <h4 className="text-sm font-bold text-[var(--text-primary)]">
+                                Session Time: {slot.start_time} - {slot.end_time}
+                              </h4>
+                            </div>
+                            <p className="text-[10.5px] text-[var(--text-secondary)]">
+                              Venue and room details will be assigned upon booking.
+                            </p>
+                          </div>
 
-                          <div className="mt-2.5 pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
-                            <span className="text-[var(--text-secondary)]">Remaining Seats:</span>
+                          <div className="mt-3 pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
+                            <span className="text-[var(--text-secondary)]">Remaining Capacity:</span>
                             <span className={`font-bold font-mono ${isFull ? 'text-rose-500' : 'text-emerald-500'}`}>
-                              {slot.available_seats} / {slot.total_capacity}
+                              {slot.available_seats} / {slot.total_capacity} seats
                             </span>
                           </div>
                         </div>
@@ -776,7 +786,7 @@ export default function StudentInterviews() {
                             <button
                               onClick={() => handleConfirmSlotBooking(slot.id)}
                               disabled={isFull || bookingLoading}
-                              className="w-full py-2 px-3 rounded-lg bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
+                              className="w-full py-2 px-3 rounded-lg bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               {bookingLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                               <span>{isFull ? 'Slot Full' : 'Confirm Slot'}</span>

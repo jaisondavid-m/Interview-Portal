@@ -20,6 +20,7 @@ import {
   Video,
   Ticket
 } from 'lucide-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
@@ -273,7 +274,7 @@ export default function StudentSlotBooking() {
                   {activeCheckIn.can_start ? (
                     <span>Faculty has checked you in at <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. You can now launch your mock interview!</span>
                   ) : (
-                    <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} ({activeCheckIn.booking.slot?.venue?.room_number})</strong>. Invigilator <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.faculty?.name}</strong> will mark your attendance. (Auto-refreshing...)</span>
+                    <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. The faculty invigilator at the venue will mark your attendance. (Auto-refreshing...)</span>
                   )}
                 </p>
               </div>
@@ -358,10 +359,16 @@ export default function StudentSlotBooking() {
               <p className="text-xs">Loading available slots...</p>
             </div>
           ) : availableSlots.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl text-center">
-              <Building2 className="w-10 h-10 text-[var(--text-secondary)] opacity-40 mb-2" />
+            <div className="text-center py-6 text-[var(--text-secondary)] space-y-2">
+              <div className="w-36 h-36 mx-auto">
+                <DotLottieReact
+                  src="/lotties/document-empty.lottie"
+                  loop
+                  autoplay
+                />
+              </div>
               <h3 className="text-sm font-bold text-[var(--text-primary)]">No slots available</h3>
-              <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
                 No slots are currently available matching your criteria. Please check back soon.
               </p>
             </div>
@@ -384,7 +391,7 @@ export default function StudentSlotBooking() {
                       {/* Top Badges */}
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[var(--bg)] border border-[var(--border)] text-[var(--text-secondary)]">
-                          {slot.track_title}
+                          {slot.track_title || 'General'}
                         </span>
 
                         <div className="flex items-center gap-1 text-xs font-semibold text-[var(--accent)]">
@@ -393,28 +400,27 @@ export default function StudentSlotBooking() {
                         </div>
                       </div>
 
-                      {/* Venue & Location */}
-                      <h3 className="text-base font-bold text-[var(--text-primary)]">{slot.venue_name}</h3>
-                      <p className="text-xs text-[var(--text-secondary)] mt-0.5 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
-                        Room {slot.room_number} • {slot.building}
-                      </p>
+                      {/* Session Timing Header */}
+                      <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                          <h4 className="text-sm font-bold text-[var(--text-primary)]">
+                            {slot.start_time} - {slot.end_time}
+                          </h4>
+                        </div>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          Date: <strong className="text-[var(--text-primary)]">{slot.slot_date}</strong>
+                        </p>
+                        <p className="text-[10.5px] text-[var(--text-secondary)]">
+                          Physical venue details assigned upon booking.
+                        </p>
+                      </div>
 
-                      <div className="mt-3 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-[var(--text-secondary)]">Date:</span>
-                          <span className="font-semibold text-[var(--text-primary)]">{slot.slot_date}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-[var(--text-secondary)]">Faculty Invigilator:</span>
-                          <span className="font-semibold text-[var(--text-primary)]">{slot.faculty_name}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-[var(--text-secondary)]">Remaining Seats:</span>
-                          <span className={`font-bold font-mono ${isFull ? 'text-rose-500' : 'text-emerald-500'}`}>
-                            {slot.available_seats} / {slot.total_capacity}
-                          </span>
-                        </div>
+                      <div className="mt-3 flex items-center justify-between text-xs">
+                        <span className="text-[var(--text-secondary)]">Remaining Seats:</span>
+                        <span className={`font-bold font-mono ${isFull ? 'text-rose-500' : 'text-emerald-500'}`}>
+                          {slot.available_seats} / {slot.total_capacity}
+                        </span>
                       </div>
                     </div>
 
@@ -429,7 +435,7 @@ export default function StudentSlotBooking() {
                         <button
                           onClick={() => handleOpenBooking(slot)}
                           disabled={isFull}
-                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold shadow-sm transition-all"
+                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
                         >
                           <CalendarCheck className="w-4 h-4" />
                           <span>{isFull ? 'Slot Full' : 'Book Interview Seat'}</span>
@@ -508,9 +514,9 @@ export default function StudentSlotBooking() {
                         <p className="text-[11px] text-[var(--accent)]">{b.slot?.start_time} - {b.slot?.end_time}</p>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[var(--text-secondary)]">Track / Faculty</span>
+                        <span className="text-[10px] text-[var(--text-secondary)]">Domain Track</span>
                         <p className="font-semibold text-[var(--text-primary)]">{b.track?.title}</p>
-                        <p className="text-[11px] text-[var(--text-secondary)]">{b.slot?.faculty?.name || 'Staff'}</p>
+                        <p className="text-[11px] text-[var(--text-secondary)]">Standard Assessment</p>
                       </div>
                     </div>
 
@@ -562,10 +568,9 @@ export default function StudentSlotBooking() {
 
             <form onSubmit={handleConfirmBooking} className="p-5 space-y-4">
               <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-1">
-                <p className="text-xs font-semibold text-[var(--text-primary)]">{slotToBook.venue_name}</p>
-                <p className="text-[11px] text-[var(--text-secondary)]">Room {slotToBook.room_number} • {slotToBook.building}</p>
-                <p className="text-[11px] text-[var(--accent)] font-semibold">{slotToBook.slot_date} • {slotToBook.start_time} - {slotToBook.end_time}</p>
-                <p className="text-[11px] text-[var(--text-secondary)]">Faculty Invigilator: {slotToBook.faculty_name}</p>
+                <p className="text-xs font-bold text-[var(--text-primary)]">Interview Session Timing</p>
+                <p className="text-[12px] text-[var(--accent)] font-semibold">{slotToBook.slot_date} • {slotToBook.start_time} - {slotToBook.end_time}</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">Physical venue assignment will be confirmed upon reservation.</p>
               </div>
 
               <div>
