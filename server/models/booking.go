@@ -26,6 +26,7 @@ type SlotBooking struct {
 	TrackID            uint             `gorm:"not null;index" json:"track_id"`
 	Track              *InterviewTrack  `gorm:"foreignKey:TrackID" json:"track,omitempty"`
 	LevelID            uint             `gorm:"default:0" json:"level_id"`
+	Level              *InterviewLevel  `gorm:"foreignKey:LevelID" json:"level,omitempty"`
 	AssignedVenueID    *uint            `gorm:"index" json:"assigned_venue_id,omitempty"`
 	AssignedVenue      *Venue           `gorm:"foreignKey:AssignedVenueID" json:"assigned_venue,omitempty"`
 	AssignedFacultyID  *uint            `gorm:"index" json:"assigned_faculty_id,omitempty"`
