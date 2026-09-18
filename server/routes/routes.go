@@ -129,6 +129,7 @@ func SetupRouter() *gin.Engine {
 			adminUsers.Use(middlewares.RequirePermission("admin_users"))
 			{
 				adminUsers.GET("", controllers.AdminGetUsers)
+				adminUsers.GET("/departments", controllers.GetDistinctStudentDepartments)
 				adminUsers.GET("/export", controllers.AdminExportUsersCSV)
 				adminUsers.GET("/:id", controllers.AdminGetUserByID)
 				adminUsers.POST("", controllers.AdminCreateUser)
@@ -140,6 +141,8 @@ func SetupRouter() *gin.Engine {
 				adminUsers.PUT("/:id", controllers.AdminUpdateUser)
 				adminUsers.DELETE("/:id", controllers.AdminDeleteUser)
 			}
+
+			admin.GET("/departments", controllers.GetDistinctStudentDepartments)
 
 			// Role & Page Access Management (Strictly Superadmin Only)
 			adminRoles := admin.Group("/roles")

@@ -117,9 +117,13 @@ func AdminGetUsers(c *gin.Context) {
 	hasNext := page < totalPages
 	hasPrev := page > 1
 
-	// Query distinct departments for dynamic filter dropdown
+	// Query distinct departments from students for dynamic filter dropdown
 	var distinctDepts []string
-	database.DB.Model(&models.User{}).Where("department != '' AND department IS NOT NULL").Distinct("department").Order("department asc").Pluck("department", &distinctDepts)
+	database.DB.Model(&models.User{}).
+		Where("role = 'student' AND department != '' AND department IS NOT NULL").
+		Distinct("department").
+		Order("department asc").
+		Pluck("department", &distinctDepts)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":                "success",
@@ -133,6 +137,21 @@ func AdminGetUsers(c *gin.Context) {
 			"has_next":      hasNext,
 			"has_prev":      hasPrev,
 		},
+	})
+}
+
+// GetDistinctStudentDepartments returns unique department list across all student records
+func GetDistinctStudentDepartments(c *gin.Context) {
+	var distinctDepts []string
+	database.DB.Model(&models.User{}).
+		Where("role = 'student' AND department != '' AND department IS NOT NULL").
+		Distinct("department").
+		Order("department asc").
+		Pluck("department", &distinctDepts)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   distinctDepts,
 	})
 }
 

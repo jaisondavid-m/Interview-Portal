@@ -62,7 +62,9 @@ export default function AdminLeaderboard() {
   // Detailed Modal for viewing an individual student's scorecard & interview performance breakdown
   const [selectedStudent, setSelectedStudent] = useState(null);
 
-  // Load Interview Tracks / Domains from DB
+  const [serverDepartments, setServerDepartments] = useState([]);
+
+  // Load Interview Tracks / Domains and distinct student departments from DB
   useEffect(() => {
     const fetchTracks = async () => {
       try {
@@ -75,7 +77,19 @@ export default function AdminLeaderboard() {
         console.error('Failed to load interview tracks:', err);
       }
     };
+    const fetchDepts = async () => {
+      try {
+        const res = await api.get('/admin/departments');
+        const list = res?.data || (Array.isArray(res) ? res : []);
+        if (Array.isArray(list) && list.length > 0) {
+          setServerDepartments(list.filter(d => d && d.trim()));
+        }
+      } catch (err) {
+        console.error('Failed to load student departments:', err);
+      }
+    };
     fetchTracks();
+    fetchDepts();
   }, []);
 
   const fetchLeaderboard = async () => {
@@ -100,6 +114,9 @@ export default function AdminLeaderboard() {
       const res = await api.get(`/admin/feedback/leaderboard?${params.toString()}`);
       const data = res?.data?.data || res?.data || res;
       setLeaderboard(data.leaderboard || []);
+      if (data.departments && Array.isArray(data.departments) && data.departments.length > 0) {
+        setServerDepartments(data.departments);
+      }
       setStats(data.stats || null);
       if (data.pagination || res?.pagination) {
         setPagination(data.pagination || res.pagination);
@@ -140,8 +157,11 @@ export default function AdminLeaderboard() {
     setSortOrder('desc');
   };
 
-  // Unique list of departments
+  // Unique list of departments from student records
   const departments = useMemo(() => {
+    if (serverDepartments && serverDepartments.length > 0) {
+      return serverDepartments;
+    }
     const depts = new Set();
     leaderboard.forEach((s) => {
       if (s.department && s.department.trim()) {
@@ -149,7 +169,7 @@ export default function AdminLeaderboard() {
       }
     });
     return Array.from(depts);
-  }, [leaderboard]);
+  }, [serverDepartments, leaderboard]);
 
   // Top 3 Podium Students
   const topThree = useMemo(() => {

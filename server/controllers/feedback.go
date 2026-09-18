@@ -1804,10 +1804,19 @@ func AdminGetFeedbackLeaderboard(c *gin.Context) {
 	hasNext := page < totalPages
 	hasPrev := page > 1
 
+	// Query distinct student departments for the department filter
+	var distinctStudentDepts []string
+	database.DB.Model(&models.User{}).
+		Where("role = 'student' AND department != '' AND department IS NOT NULL").
+		Distinct("department").
+		Order("department asc").
+		Pluck("department", &distinctStudentDepts)
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
 			"leaderboard": paginatedEntries,
+			"departments": distinctStudentDepts,
 			"stats": gin.H{
 				"total_students":            len(students),
 				"active_students":           activeStudentsCount,

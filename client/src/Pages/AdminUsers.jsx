@@ -12,39 +12,6 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const DEPARTMENT_OPTIONS = [
   { value: 'ALL', label: 'All Departments' },
-  { value: 'Computer Science and Engineering', label: 'Computer Science and Engineering', badge: 'CSE' },
-  { value: 'CSE', label: 'CSE', badge: 'Comp Sci' },
-  { value: 'Information Technology', label: 'Information Technology', badge: 'IT' },
-  { value: 'IT', label: 'IT', badge: 'Info Tech' },
-  { value: 'Artificial Intelligence and Data Science', label: 'Artificial Intelligence and Data Science', badge: 'AI & DS' },
-  { value: 'AI&DS', label: 'AI & DS', badge: 'AI & DS' },
-  { value: 'Artificial Intelligence and Machine Learning', label: 'Artificial Intelligence and Machine Learning', badge: 'AIML' },
-  { value: 'AIML', label: 'AIML', badge: 'AIML' },
-  { value: 'Electronics and Communication Engineering', label: 'Electronics and Communication Engineering', badge: 'ECE' },
-  { value: 'ECE', label: 'ECE', badge: 'Electronics' },
-  { value: 'Electrical and Electronics Engineering', label: 'Electrical and Electronics Engineering', badge: 'EEE' },
-  { value: 'EEE', label: 'EEE', badge: 'Electrical' },
-  { value: 'Electronics and Instrumentation Engineering', label: 'Electronics and Instrumentation Engineering', badge: 'EIE' },
-  { value: 'EIE', label: 'EIE', badge: 'Instrumentation' },
-  { value: 'Mechanical Engineering', label: 'Mechanical Engineering', badge: 'Mechanical' },
-  { value: 'Mechanical', label: 'Mechanical', badge: 'Mech' },
-  { value: 'Mechatronics', label: 'Mechatronics', badge: 'Mechatronics' },
-  { value: 'Biomedical Engineering', label: 'Biomedical Engineering', badge: 'BME' },
-  { value: 'Biotechnology', label: 'Biotechnology', badge: 'Biotech' },
-  { value: 'Civil Engineering', label: 'Civil Engineering', badge: 'Civil' },
-  { value: 'Civil', label: 'Civil', badge: 'Civil' },
-  { value: 'Computer Science and Design', label: 'Computer Science and Design', badge: 'CSD' },
-  { value: 'CSD', label: 'CSD', badge: 'CSD' },
-  { value: 'Computer Science and Business Systems', label: 'Computer Science and Business Systems', badge: 'CSBS' },
-  { value: 'CSBS', label: 'CSBS', badge: 'CSBS' },
-  { value: 'Information Science and Engineering', label: 'Information Science and Engineering', badge: 'ISE' },
-  { value: 'ISE', label: 'ISE', badge: 'ISE' },
-  { value: 'Agricultural Engineering', label: 'Agricultural Engineering', badge: 'Agri' },
-  { value: 'Aeronautical Engineering', label: 'Aeronautical Engineering', badge: 'Aero' },
-  { value: 'Food Technology', label: 'Food Technology', badge: 'Food' },
-  { value: 'Fashion Technology', label: 'Fashion Technology', badge: 'Fashion' },
-  { value: 'School of Management Studies', label: 'School of Management Studies', badge: 'MBA' },
-  { value: 'Administration', label: 'Administration', badge: 'Admin Staff' },
 ];
 
 const ROLE_OPTIONS = [
@@ -167,24 +134,20 @@ export default function AdminUsers() {
           setPagination(res.pagination);
         }
         if (res.available_departments && Array.isArray(res.available_departments)) {
-          const baseMap = new Map();
-          DEPARTMENT_OPTIONS.forEach(opt => baseMap.set(opt.value.toLowerCase(), opt));
-
-          res.available_departments.forEach(deptName => {
-            if (deptName && deptName.trim()) {
-              const trimmed = deptName.trim();
-              const key = trimmed.toLowerCase();
-              if (!baseMap.has(key)) {
-                baseMap.set(key, {
+          const dynamicOptions = [
+            { value: 'ALL', label: 'All Departments' },
+            ...res.available_departments
+              .filter(d => d && d.trim())
+              .map(deptName => {
+                const trimmed = deptName.trim();
+                return {
                   value: trimmed,
                   label: trimmed,
-                  badge: 'Dept'
-                });
-              }
-            }
-          });
-
-          setDeptOptions(Array.from(baseMap.values()));
+                  badge: trimmed.length <= 6 ? trimmed : trimmed.split(' ').map(w => w[0]).join('').slice(0, 5).toUpperCase()
+                };
+              })
+          ];
+          setDeptOptions(dynamicOptions);
         }
       }
     } catch (err) {
@@ -235,6 +198,27 @@ export default function AdminUsers() {
 
   useEffect(() => {
     fetchRoles();
+    const fetchDepts = async () => {
+      try {
+        const res = await api.get('/admin/departments');
+        const list = res?.data || (Array.isArray(res) ? res : []);
+        if (Array.isArray(list) && list.length > 0) {
+          const dynamicOptions = [
+            { value: 'ALL', label: 'All Departments' },
+            ...list.filter(d => d && d.trim()).map(deptName => {
+              const trimmed = deptName.trim();
+              return {
+                value: trimmed,
+                label: trimmed,
+                badge: trimmed.length <= 6 ? trimmed : trimmed.split(' ').map(w => w[0]).join('').slice(0, 5).toUpperCase()
+              };
+            })
+          ];
+          setDeptOptions(dynamicOptions);
+        }
+      } catch (e) {}
+    };
+    fetchDepts();
   }, []);
 
   useEffect(() => {
