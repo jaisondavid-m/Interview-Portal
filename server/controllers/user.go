@@ -197,8 +197,8 @@ func AdminCreateUser(c *gin.Context) {
 		return
 	}
 
-	role := input.Role
-	if role != "admin" {
+	role := strings.TrimSpace(input.Role)
+	if role == "" {
 		role = "student"
 	}
 
@@ -485,11 +485,7 @@ func AdminBulkCreateUsers(c *gin.Context) {
 				updates["department"] = department
 			}
 			if role != "" {
-				if role == "admin" || role == "developer" {
-					updates["role"] = role
-				} else {
-					updates["role"] = "student"
-				}
+				updates["role"] = role
 			}
 			if customPW := strings.TrimSpace(item.Password); len(customPW) >= 4 {
 				updates["password"] = getHashedPassword(customPW)
@@ -514,7 +510,7 @@ func AdminBulkCreateUsers(c *gin.Context) {
 				name = strings.Title(strings.ReplaceAll(parts[0], ".", " "))
 			}
 
-			if role != "admin" && role != "developer" {
+			if role == "" {
 				role = "student"
 			}
 

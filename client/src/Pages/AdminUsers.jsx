@@ -50,6 +50,7 @@ const DEPARTMENT_OPTIONS = [
 const ROLE_OPTIONS = [
   { value: 'ALL', label: 'All Roles' },
   { value: 'student', label: 'Student' },
+  { value: 'faculty', label: 'Faculty / Invigilator' },
   { value: 'admin', label: 'Administrator' },
   { value: 'developer', label: 'Developer' },
 ];
@@ -1068,11 +1069,22 @@ export default function AdminUsers() {
                       <td className="py-3 px-4">
                         <span className={`status-pill ${user.role === 'admin'
                             ? 'status-accent'
-                            : user.role === 'developer'
-                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
-                              : 'status-active'
+                            : user.role === 'faculty'
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-semibold'
+                              : user.role === 'developer'
+                                ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
+                                : 'status-active'
                           }`}>
-                          {user.role === 'admin' ? 'Administrator' : user.role === 'developer' ? 'Developer' : 'Student'}
+                          {roleOptions.find(r => r.value.toLowerCase() === (user.role || '').toLowerCase())?.label ||
+                            (user.role === 'admin'
+                              ? 'Administrator'
+                              : user.role === 'faculty'
+                                ? 'Faculty / Invigilator'
+                                : user.role === 'developer'
+                                  ? 'Developer'
+                                  : user.role
+                                    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                                    : 'Student')}
                         </span>
                       </td>
                       <td className="py-3 px-4">
@@ -1560,9 +1572,11 @@ export default function AdminUsers() {
                                 <td className="py-2 px-3">
                                   <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded ${r.role === 'admin'
                                       ? 'bg-purple-500/10 text-purple-600 font-bold'
-                                      : r.role === 'developer'
-                                        ? 'bg-indigo-500/10 text-indigo-600 font-bold'
-                                        : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
+                                      : r.role === 'faculty'
+                                        ? 'bg-amber-500/10 text-amber-600 font-bold'
+                                        : r.role === 'developer'
+                                          ? 'bg-indigo-500/10 text-indigo-600 font-bold'
+                                          : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
                                     }`}>
                                     {r.role}
                                   </span>
