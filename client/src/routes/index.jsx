@@ -20,9 +20,14 @@ import AdminFeedbackConfig from '../Pages/AdminFeedbackConfig';
 import AdminLeaderboard from '../Pages/AdminLeaderboard';
 import AdminQuestionEditor from '../Pages/AdminQuestionEditor';
 import StudentInterviews from '../Pages/StudentInterviews';
+import StudentInterviewsTesting from '../Pages/StudentInterviewsTesting';
 import InterviewRoom from '../Pages/InterviewRoom';
 import DeveloperAuditLogs from '../Pages/DeveloperAuditLogs';
 import AdminBackup from '../Pages/AdminBackup';
+import AdminVenues from '../Pages/AdminVenues';
+import FacultyDashboard from '../Pages/FacultyDashboard';
+import FacultyAttendance from '../Pages/FacultyAttendance';
+import StudentSlotBooking from '../Pages/StudentSlotBooking';
 import NotFound from '../Pages/NotFound';
 
 // Route Guards & Error Boundary
@@ -48,6 +53,10 @@ function RootRedirect() {
     const role = user.role?.toLowerCase();
     if (role === 'admin') {
       return <Navigate to="/admin/dashboard" replace />;
+    }
+
+    if (role === 'faculty') {
+      return <Navigate to="/faculty/dashboard" replace />;
     }
 
     // Dynamic landing: navigate to first permitted page if available
@@ -225,6 +234,36 @@ export const router = createBrowserRouter([
               </DynamicPageRoute>
             ),
           },
+          {
+            path: 'admin/venues',
+            element: (
+              <DynamicPageRoute pageKey="admin_venues">
+                <AdminVenues />
+              </DynamicPageRoute>
+            ),
+          },
+
+          // Faculty Portal Routes
+          {
+            path: 'faculty',
+            element: <Navigate to="/faculty/dashboard" replace />,
+          },
+          {
+            path: 'faculty/dashboard',
+            element: (
+              <DynamicPageRoute pageKey="faculty_dashboard">
+                <FacultyDashboard />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'faculty/attendance',
+            element: (
+              <DynamicPageRoute pageKey="faculty_attendance">
+                <FacultyAttendance />
+              </DynamicPageRoute>
+            ),
+          },
 
           // Developer Portal Routes
           {
@@ -238,6 +277,20 @@ export const router = createBrowserRouter([
           {
             path: 'developer',
             element: <Navigate to="/developer/audit-logs" replace />,
+          },
+
+          // Student Slot Booking Route
+          {
+            path: 'slots',
+            element: <Navigate to="/slots/book" replace />,
+          },
+          {
+            path: 'slots/book',
+            element: (
+              <DynamicPageRoute pageKey="student_slots">
+                <StudentSlotBooking />
+              </DynamicPageRoute>
+            ),
           },
 
           // Student & Collaborative Workspace Routes
@@ -254,6 +307,14 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="student_interviews">
                 <StudentInterviews />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'interviews/testing',
+            element: (
+              <DynamicPageRoute pageKey={['student_interviews_testing', 'student_interviews']}>
+                <StudentInterviewsTesting />
               </DynamicPageRoute>
             ),
           },

@@ -223,8 +223,51 @@ func SetupRouter() *gin.Engine {
 				adminBackup.GET("/dump", controllers.AdminExportDatabaseDump)
 			}
 
+			// Venues & Slot Scheduling Management
+			adminVenues := admin.Group("/venues")
+			adminVenues.Use(middlewares.RequirePermission("admin_venues"))
+			{
+				adminVenues.GET("", controllers.AdminGetVenues)
+				adminVenues.POST("", controllers.AdminCreateVenue)
+				adminVenues.GET("/faculty-list", controllers.AdminGetFacultyList)
+				adminVenues.PUT("/:id", controllers.AdminUpdateVenue)
+				adminVenues.DELETE("/:id", controllers.AdminDeleteVenue)
+			}
+
+			adminSlots := admin.Group("/slots")
+			adminSlots.Use(middlewares.RequirePermission("admin_venues"))
+			{
+				adminSlots.GET("", controllers.AdminGetSlots)
+				adminSlots.POST("", controllers.AdminCreateSlot)
+				adminSlots.GET("/:id/roster", controllers.AdminGetSlotRoster)
+				adminSlots.PUT("/:id", controllers.AdminUpdateSlot)
+				adminSlots.DELETE("/:id", controllers.AdminDeleteSlot)
+			}
+
 			// Interview History Dedicated Route
 			admin.GET("/history", middlewares.RequirePermission("admin_history"), controllers.AdminGetInterviewSessions)
+		}
+
+		// Faculty Portal & Live In-Venue Attendance (Require JWT + Faculty/Admin Permissions)
+		faculty := g.Group("/faculty")
+		faculty.Use(middlewares.AuthMiddleware(), middlewares.RequirePermission("faculty_dashboard", "faculty_attendance"))
+		{
+			faculty.GET("/dashboard/stats", controllers.GetFacultyDashboardStats)
+			faculty.GET("/slots", controllers.GetFacultyAssignedSlots)
+			faculty.GET("/slots/:id/roster", controllers.GetFacultySlotRoster)
+			faculty.POST("/slots/:id/attendance/:bookingId", controllers.UpdateStudentAttendance)
+			faculty.POST("/slots/:id/attendance/bulk", controllers.BulkUpdateAttendance)
+		}
+
+		// Student Slot Booking & Active In-Venue Check-in
+		slots := g.Group("/slots")
+		slots.Use(middlewares.AuthMiddleware())
+		{
+			slots.GET("/available", controllers.GetAvailableSlots)
+			slots.POST("/book", controllers.BookSlot)
+			slots.GET("/my-bookings", controllers.GetMyBookings)
+			slots.POST("/bookings/:id/cancel", controllers.CancelBooking)
+			slots.GET("/active-checkin", controllers.GetActiveSlotCheckInStatus)
 		}
 	}
 

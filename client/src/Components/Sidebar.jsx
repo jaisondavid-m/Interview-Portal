@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
-  Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, Database 
+  Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, Database,
+  Building2, CalendarCheck, ClipboardCheck, FlaskConical
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -17,6 +18,10 @@ const ICON_MAP = {
   Terminal,
   Video,
   Database,
+  Building2,
+  CalendarCheck,
+  ClipboardCheck,
+  FlaskConical,
 };
 
 export default function Sidebar() {
@@ -31,6 +36,7 @@ export default function Sidebar() {
   const userRole = user?.role?.toLowerCase();
   const isAdmin = userRole === 'admin';
   const isDeveloper = userRole === 'developer';
+  const isFaculty = userRole === 'faculty';
 
   // Extract non-parameterized pages from context permissions
   const navPages = React.useMemo(() => {
@@ -46,11 +52,17 @@ export default function Sidebar() {
         { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
         { name: 'Database Backup', path: '/admin/backup', icon: Database },
       ]
+    : isFaculty
+    ? [
+        { name: 'Faculty Dashboard', path: '/faculty/dashboard', icon: LayoutDashboard },
+        { name: 'Venue Attendance', path: '/faculty/attendance', icon: ClipboardCheck },
+      ]
     : isAdmin
     ? [
         { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'User Management', path: '/admin/users', icon: Users },
         { name: 'Role Management', path: '/admin/roles', icon: ShieldCheck },
+        { name: 'Venues & Slots', path: '/admin/venues', icon: Building2 },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
         { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
         { name: 'Leaderboard', path: '/admin/leaderboard', icon: Trophy },
@@ -61,6 +73,7 @@ export default function Sidebar() {
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Interviews', path: '/interviews', icon: Video },
+        { name: 'Interview - Testing', path: '/interviews/testing', icon: FlaskConical },
         { name: 'Interview History', path: '/history', icon: History },
       ];
 
