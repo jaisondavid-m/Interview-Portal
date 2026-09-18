@@ -201,6 +201,9 @@ export default function StudentInterviews() {
       showToast('Interview slot reserved! Please report to the venue on time.');
       setBookingModalOpen(false);
       fetchMyBookingsAndStatus();
+      setTimeout(() => {
+        navigate('/my-bookings');
+      }, 500);
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to book slot', 'error');
     } finally {

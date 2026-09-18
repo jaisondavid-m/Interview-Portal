@@ -155,8 +155,50 @@ func runMigrations(db *gorm.DB) error {
 	)
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)
+		syncAppPagesCatalog(db)
 	}
 	return err
+}
+
+// syncAppPagesCatalog ensures the app catalog page for My Bookings is updated and mapped
+func syncAppPagesCatalog(db *gorm.DB) {
+	// Update or migrate any legacy /slots/book or student_slots page to /my-bookings
+	db.Model(&models.AppPage{}).
+		Where("`key` = 'student_slots' OR path = '/slots/book'").
+		Updates(map[string]interface{}{
+			"key":         "student_bookings",
+			"name":        "My Bookings",
+			"path":        "/my-bookings",
+			"icon":        "CalendarCheck",
+			"category":    "Interviews & Practice",
+			"description": "View reserved interview sessions, check-in status, and launch peer assessments",
+		})
+
+	// Also ensure role permissions for student_bookings exist for student and admin
+	var count int64
+	db.Model(&models.AppPage{}).Where("`key` = 'student_bookings'").Count(&count)
+	if count == 0 {
+		myBookingsPage := models.AppPage{
+			Key:         "student_bookings",
+			Name:        "My Bookings",
+			Path:        "/my-bookings",
+			Icon:        "CalendarCheck",
+			Category:    "Interviews & Practice",
+			Description: "View reserved interview sessions, check-in status, and launch peer assessments",
+			OrderIndex:  2,
+		}
+		if err := db.Create(&myBookingsPage).Error; err == nil {
+			db.Create(&models.RolePagePermission{RoleName: "student", PageKey: "student_bookings", CanAccess: true})
+			db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: "student_bookings", CanAccess: true})
+		}
+	} else {
+		// Ensure student role permission
+		var permCount int64
+		db.Model(&models.RolePagePermission{}).Where("role_name = 'student' AND page_key = 'student_bookings'").Count(&permCount)
+		if permCount == 0 {
+			db.Create(&models.RolePagePermission{RoleName: "student", PageKey: "student_bookings", CanAccess: true})
+		}
+	}
 }
 
 // migrateAndDropLegacyPayloadJSONColumn migrates any unmigrated JSON records then permanently drops payload_json column

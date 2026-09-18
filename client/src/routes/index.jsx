@@ -28,7 +28,7 @@ import AdminVenues from '../Pages/AdminVenues';
 import AdminSlotEditor from '../Pages/AdminSlotEditor';
 import FacultyDashboard from '../Pages/FacultyDashboard';
 import FacultyAttendance from '../Pages/FacultyAttendance';
-import StudentSlotBooking from '../Pages/StudentSlotBooking';
+import MyBookings from '../Pages/MyBookings';
 import NotFound from '../Pages/NotFound';
 
 // Route Guards & Error Boundary
@@ -303,18 +303,26 @@ export const router = createBrowserRouter([
             element: <Navigate to="/developer/audit-logs" replace />,
           },
 
-          // Student Slot Booking Route
+          // Student My Bookings Routes
           {
-            path: 'slots',
-            element: <Navigate to="/slots/book" replace />,
+            path: 'my-bookings',
+            element: (
+              <DynamicPageRoute pageKey={['student_bookings', 'student_slots', 'student_interviews']}>
+                <MyBookings />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'slots/my-bookings',
+            element: <Navigate to="/my-bookings" replace />,
           },
           {
             path: 'slots/book',
-            element: (
-              <DynamicPageRoute pageKey="student_slots">
-                <StudentSlotBooking />
-              </DynamicPageRoute>
-            ),
+            element: <Navigate to="/my-bookings" replace />,
+          },
+          {
+            path: 'slots',
+            element: <Navigate to="/my-bookings" replace />,
           },
 
           // Student & Collaborative Workspace Routes

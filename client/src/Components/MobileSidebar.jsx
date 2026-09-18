@@ -92,6 +92,8 @@ export default function MobileSidebar({ isOpen, onClose }) {
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Interviews', path: '/interviews', icon: Video },
+        { name: 'My Bookings', path: '/my-bookings', icon: CalendarCheck },
+        { name: 'Interview - Testing', path: '/interviews/testing', icon: FlaskConical },
         { name: 'Interview History', path: '/history', icon: History },
       ];
 
