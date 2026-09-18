@@ -37,25 +37,38 @@ func GetFacultyDashboardStats(c *gin.Context) {
 
 	todayStr := time.Now().Format("2006-01-02")
 
-	slotsQuery := database.DB.Model(&models.InterviewSlot{})
-	if !isAdmin {
-		slotsQuery = slotsQuery.Where("faculty_id = ?", facultyID)
+	// Get all slot IDs assigned to this faculty member (both direct and multi-venue assigned)
+	var allFacultySlotIDs []uint
+	if isAdmin {
+		database.DB.Model(&models.InterviewSlot{}).Pluck("id", &allFacultySlotIDs)
+	} else {
+		database.DB.Model(&models.InterviewSlot{}).
+			Where("faculty_id = ? OR id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?)", facultyID, facultyID).
+			Pluck("id", &allFacultySlotIDs)
 	}
 
-	var totalSlots int64
+	var totalSlots int64 = int64(len(allFacultySlotIDs))
+	var activeUpcomingSlots int64
+	var completedSlots int64
 	var todaySlots int64
-	slotsQuery.Count(&totalSlots)
-
-	todaySlotsQuery := database.DB.Model(&models.InterviewSlot{}).Where("slot_date = ?", todayStr)
-	if !isAdmin {
-		todaySlotsQuery = todaySlotsQuery.Where("faculty_id = ?", facultyID)
-	}
-	todaySlotsQuery.Count(&todaySlots)
-
-	// Get slot IDs assigned to this faculty for today
 	var todaySlotIDs []uint
-	todaySlotsQuery.Pluck("id", &todaySlotIDs)
 
+	if len(allFacultySlotIDs) > 0 {
+		database.DB.Model(&models.InterviewSlot{}).
+			Where("id IN ? AND status IN ?", allFacultySlotIDs, []string{"scheduled", "active"}).
+			Count(&activeUpcomingSlots)
+
+		database.DB.Model(&models.InterviewSlot{}).
+			Where("id IN ? AND status = 'completed'", allFacultySlotIDs).
+			Count(&completedSlots)
+
+		database.DB.Model(&models.InterviewSlot{}).
+			Where("id IN ? AND slot_date = ?", allFacultySlotIDs, todayStr).
+			Pluck("id", &todaySlotIDs)
+		todaySlots = int64(len(todaySlotIDs))
+	}
+
+	// Today's attendance counts
 	var totalBookingsToday int64
 	var presentToday int64
 	var absentToday int64
@@ -68,16 +81,45 @@ func GetFacultyDashboardStats(c *gin.Context) {
 		database.DB.Model(&models.SlotBooking{}).Where("slot_id IN ? AND attendance_status = 'pending'", todaySlotIDs).Count(&pendingToday)
 	}
 
+	// Total students evaluated / attended across all faculty slots
+	var totalEvaluated int64
+	if len(allFacultySlotIDs) > 0 {
+		database.DB.Model(&models.SlotBooking{}).
+			Where("slot_id IN ? AND attendance_status = 'present'", allFacultySlotIDs).
+			Count(&totalEvaluated)
+	}
+
+	// Currently running live sessions in this faculty's venues
+	var liveSessionsCount int64
+	if len(allFacultySlotIDs) > 0 {
+		var facultyStudentIDs []uint
+		database.DB.Model(&models.SlotBooking{}).
+			Where("slot_id IN ? AND status != 'cancelled'", allFacultySlotIDs).
+			Distinct("student_id").
+			Pluck("student_id", &facultyStudentIDs)
+
+		if len(facultyStudentIDs) > 0 {
+			database.DB.Model(&models.InterviewSession{}).
+				Where("status = 'in_progress' AND (interviewer_id IN ? OR interviewee_id IN ?)", facultyStudentIDs, facultyStudentIDs).
+				Count(&liveSessionsCount)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"today_date":            todayStr,
-			"today_slots_count":     todaySlots,
-			"total_slots_count":     totalSlots,
-			"today_students_booked": totalBookingsToday,
-			"today_students_present": presentToday,
-			"today_students_absent": absentToday,
-			"today_students_pending": pendingToday,
+			"today_date":                todayStr,
+			"today_slots_count":         todaySlots,
+			"total_slots_count":         totalSlots,
+			"total_slots_managed":       totalSlots,
+			"active_upcoming_slots":     activeUpcomingSlots,
+			"completed_slots":           completedSlots,
+			"live_sessions_count":       liveSessionsCount,
+			"total_students_evaluated":  totalEvaluated,
+			"today_students_booked":     totalBookingsToday,
+			"today_students_present":    presentToday,
+			"today_students_absent":     absentToday,
+			"today_students_pending":    pendingToday,
 		},
 	})
 }
@@ -93,13 +135,14 @@ func GetFacultyAssignedSlots(c *gin.Context) {
 	roleVal, _ := c.Get("userRole")
 	isAdmin := strings.ToLower(fmt.Sprintf("%v", roleVal)) == "admin"
 
-	scope := strings.ToLower(strings.TrimSpace(c.DefaultQuery("scope", "today"))) // "today", "upcoming", "all", "history"
+	scope := strings.ToLower(strings.TrimSpace(c.DefaultQuery("scope", "all"))) // "all", "today", "upcoming", "history"
 	todayStr := time.Now().Format("2006-01-02")
 
 	query := database.DB.Model(&models.InterviewSlot{}).
 		Preload("Venue").
 		Preload("Faculty").
 		Preload("Track").
+		Preload("Level").
 		Preload("Venues.Venue").
 		Preload("Venues.Faculty")
 
@@ -117,7 +160,8 @@ func GetFacultyAssignedSlots(c *gin.Context) {
 	}
 
 	var slots []models.InterviewSlot
-	if err := query.Order("slot_date asc, start_time asc").Find(&slots).Error; err != nil {
+	orderClause := "CASE WHEN status = 'active' THEN 1 WHEN status = 'scheduled' THEN 2 WHEN status = 'completed' THEN 3 WHEN status = 'cancelled' THEN 4 ELSE 5 END asc, slot_date desc, start_time asc"
+	if err := query.Order(orderClause).Find(&slots).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to fetch assigned slots",
@@ -138,6 +182,320 @@ func GetFacultyAssignedSlots(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   slots,
+	})
+}
+
+// GetFacultyInterviewSessions retrieves live running sessions and history for students mapped to this faculty's venues
+func GetFacultyInterviewSessions(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Authentication required"})
+		return
+	}
+	facultyID := rawUserID.(uint)
+	roleVal, _ := c.Get("userRole")
+	isAdmin := strings.ToLower(fmt.Sprintf("%v", roleVal)) == "admin"
+
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "20"))
+	statusFilter := strings.TrimSpace(c.Query("status"))
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+
+	// Find all slot IDs belonging to this faculty
+	var facultySlotIDs []uint
+	if isAdmin {
+		database.DB.Model(&models.InterviewSlot{}).Pluck("id", &facultySlotIDs)
+	} else {
+		database.DB.Model(&models.InterviewSlot{}).
+			Where("faculty_id = ? OR id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?)", facultyID, facultyID).
+			Pluck("id", &facultySlotIDs)
+	}
+
+	if len(facultySlotIDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data":   []models.InterviewSession{},
+			"pagination": gin.H{
+				"page":          1,
+				"limit":         20,
+				"total_records": 0,
+				"total_pages":   1,
+				"has_next":      false,
+				"has_prev":      false,
+			},
+		})
+		return
+	}
+
+	// Find student IDs who have bookings in this faculty's slots/venues
+	var studentIDs []uint
+	database.DB.Model(&models.SlotBooking{}).
+		Where("slot_id IN ? AND status != 'cancelled'", facultySlotIDs).
+		Distinct("student_id").
+		Pluck("student_id", &studentIDs)
+
+	if len(studentIDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data":   []models.InterviewSession{},
+			"pagination": gin.H{
+				"page":          1,
+				"limit":         20,
+				"total_records": 0,
+				"total_pages":   1,
+				"has_next":      false,
+				"has_prev":      false,
+			},
+		})
+		return
+	}
+
+	query := database.DB.Model(&models.InterviewSession{}).
+		Where("interview_sessions.interviewer_id IN ? OR interview_sessions.interviewee_id IN ?", studentIDs, studentIDs)
+
+	if statusFilter != "" && !strings.EqualFold(statusFilter, "all") {
+		query = query.Where("interview_sessions.status = ?", statusFilter)
+	}
+
+	if search != "" {
+		s := "%" + search + "%"
+		query = query.Joins("LEFT JOIN users AS interviewer ON interviewer.id = interview_sessions.interviewer_id").
+			Joins("LEFT JOIN users AS interviewee ON interviewee.id = interview_sessions.interviewee_id").
+			Joins("LEFT JOIN interview_tracks ON interview_tracks.id = interview_sessions.track_id").
+			Where("LOWER(interviewer.name) LIKE ? OR LOWER(interviewer.email) LIKE ? OR LOWER(interviewer.roll_no) LIKE ? OR LOWER(interviewee.name) LIKE ? OR LOWER(interviewee.email) LIKE ? OR LOWER(interviewee.roll_no) LIKE ? OR LOWER(interview_tracks.title) LIKE ?", s, s, s, s, s, s, s)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to count faculty interview sessions",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	page := 1
+	limit := 20
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+		limit = l
+		if limit > 200 {
+			limit = 200
+		}
+	}
+	offset := (page - 1) * limit
+
+	var sessions []models.InterviewSession
+	// Prioritize live 'in_progress' sessions first, then most recent completed
+	orderClause := "CASE WHEN interview_sessions.status = 'in_progress' THEN 1 ELSE 2 END asc, interview_sessions.created_at desc"
+	if err := query.
+		Preload("Track").
+		Preload("Level").
+		Preload("Interviewer").
+		Preload("Interviewee").
+		Order(orderClause).
+		Limit(limit).
+		Offset(offset).
+		Find(&sessions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to fetch faculty interview sessions",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	type UserSummary struct {
+		ID         uint   `json:"id"`
+		Name       string `json:"name"`
+		Email      string `json:"email"`
+		RollNo     string `json:"roll_no"`
+		Department string `json:"department"`
+		Role       string `json:"role"`
+	}
+
+	type SessionDTO struct {
+		ID            uint         `json:"id"`
+		TrackID       uint         `json:"track_id"`
+		TrackTitle    string       `json:"track_title"`
+		TrackCategory string       `json:"track_category"`
+		LevelID       uint         `json:"level_id"`
+		LevelName     string       `json:"level_name"`
+		LevelNumber   int          `json:"level_number"`
+		LevelMode     string       `json:"level_mode"`
+		Interviewer   *UserSummary `json:"interviewer"`
+		Interviewee   *UserSummary `json:"interviewee"`
+		Status        string       `json:"status"`
+		Round         int          `json:"round"`
+		SwitchCount   int          `json:"switch_count"`
+		HasRecording  bool         `json:"has_recording"`
+		HasReport     bool         `json:"has_security_report"`
+		StartedAt     time.Time    `json:"started_at"`
+		EndedAt       *time.Time   `json:"ended_at"`
+		CreatedAt     time.Time    `json:"created_at"`
+	}
+
+	dtoList := make([]SessionDTO, 0, len(sessions))
+	for _, s := range sessions {
+		var hasRec int64
+		database.DB.Model(&models.InterviewRecording{}).Where("session_id = ?", s.ID).Count(&hasRec)
+
+		var hasSec int64
+		database.DB.Model(&models.SessionSecurityReport{}).Where("session_id = ?", s.ID).Count(&hasSec)
+
+		var interviewerSummary *UserSummary
+		if s.Interviewer != nil {
+			interviewerSummary = &UserSummary{
+				ID:         s.Interviewer.ID,
+				Name:       s.Interviewer.Name,
+				Email:      s.Interviewer.Email,
+				RollNo:     s.Interviewer.RollNo,
+				Department: s.Interviewer.Department,
+				Role:       s.Interviewer.Role,
+			}
+		}
+
+		var intervieweeSummary *UserSummary
+		if s.Interviewee != nil {
+			intervieweeSummary = &UserSummary{
+				ID:         s.Interviewee.ID,
+				Name:       s.Interviewee.Name,
+				Email:      s.Interviewee.Email,
+				RollNo:     s.Interviewee.RollNo,
+				Department: s.Interviewee.Department,
+				Role:       s.Interviewee.Role,
+			}
+		}
+
+		trackTitle := "Technical Track"
+		trackCategory := "Technical"
+		if s.Track != nil {
+			trackTitle = s.Track.Title
+			trackCategory = s.Track.Category
+		}
+
+		levelName := "Assessment Level"
+		levelNumber := 1
+		levelMode := "coding"
+		if s.Level != nil {
+			levelName = s.Level.Name
+			levelNumber = s.Level.LevelNumber
+			levelMode = string(s.Level.Mode)
+		}
+
+		dtoList = append(dtoList, SessionDTO{
+			ID:            s.ID,
+			TrackID:       s.TrackID,
+			TrackTitle:    trackTitle,
+			TrackCategory: trackCategory,
+			LevelID:       s.LevelID,
+			LevelName:     levelName,
+			LevelNumber:   levelNumber,
+			LevelMode:     levelMode,
+			Interviewer:   interviewerSummary,
+			Interviewee:   intervieweeSummary,
+			Status:        s.Status,
+			Round:         s.Round,
+			SwitchCount:   s.SwitchCount,
+			HasRecording:  hasRec > 0,
+			HasReport:     hasSec > 0,
+			StartedAt:     s.StartedAt,
+			EndedAt:       s.EndedAt,
+			CreatedAt:     s.CreatedAt,
+		})
+	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   dtoList,
+		"pagination": gin.H{
+			"page":          page,
+			"limit":         limit,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      page < totalPages,
+			"has_prev":      page > 1,
+		},
+	})
+}
+
+// GetFacultyInterviewSessionDetail retrieves complete session detail for a faculty member
+func GetFacultyInterviewSessionDetail(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Authentication required"})
+		return
+	}
+	facultyID := rawUserID.(uint)
+	roleVal, _ := c.Get("userRole")
+	isAdmin := strings.ToLower(fmt.Sprintf("%v", roleVal)) == "admin"
+
+	sessionIDParam := c.Param("id")
+	sessionID, err := strconv.ParseUint(sessionIDParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid session ID"})
+		return
+	}
+
+	var session models.InterviewSession
+	if err := database.DB.
+		Preload("Track").
+		Preload("Level").
+		Preload("Interviewer").
+		Preload("Interviewee").
+		Preload("CurrentQuestion").
+		First(&session, uint(sessionID)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview session not found"})
+		return
+	}
+
+	// Security validation: ensure the session belongs to this faculty's mapped slots & venues
+	if !isAdmin {
+		var count int64
+		database.DB.Model(&models.SlotBooking{}).
+			Where("(student_id = ? OR student_id = ?) AND (assigned_faculty_id = ? OR slot_id IN (SELECT id FROM interview_slots WHERE faculty_id = ?) OR slot_id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?))", session.InterviewerID, session.IntervieweeID, facultyID, facultyID, facultyID).
+			Count(&count)
+		if count == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access restricted: This interview session did not take place at your assigned venue/slot"})
+			return
+		}
+	}
+
+	var recording *models.InterviewRecording
+	var rec models.InterviewRecording
+	if err := database.DB.Where("session_id = ?", session.ID).First(&rec).Error; err == nil {
+		recording = &rec
+	}
+
+	var feedbacks []models.InterviewFeedback
+	database.DB.Where("session_id = ?", session.ID).
+		Preload("Reviewer").
+		Preload("Reviewee").
+		Preload("Responses.Question").
+		Find(&feedbacks)
+
+	var securityReports []models.SessionSecurityReport
+	database.DB.Where("session_id = ?", session.ID).
+		Preload("Reporter").
+		Preload("ReportedUser").
+		Find(&securityReports)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"session":          session,
+			"recording":        recording,
+			"feedbacks":        feedbacks,
+			"security_reports": securityReports,
+		},
 	})
 }
 

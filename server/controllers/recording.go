@@ -436,8 +436,19 @@ func StreamInterviewRecording(c *gin.Context) {
 		var session models.InterviewSession
 		if err := database.DB.First(&session, rec.SessionID).Error; err == nil {
 			if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
-				c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied to this interview recording"})
-				return
+				if roleStr == "faculty" {
+					var count int64
+					database.DB.Model(&models.SlotBooking{}).
+						Where("(student_id = ? OR student_id = ?) AND (assigned_faculty_id = ? OR slot_id IN (SELECT id FROM interview_slots WHERE faculty_id = ?) OR slot_id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?))", session.InterviewerID, session.IntervieweeID, currentUserID, currentUserID, currentUserID).
+						Count(&count)
+					if count == 0 {
+						c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied to this interview recording"})
+						return
+					}
+				} else {
+					c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied to this interview recording"})
+					return
+				}
 			}
 		}
 	}

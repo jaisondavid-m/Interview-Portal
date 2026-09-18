@@ -263,6 +263,11 @@ func SetupRouter() *gin.Engine {
 			faculty.GET("/slots/:id/roster", controllers.GetFacultySlotRoster)
 			faculty.POST("/slots/:id/attendance/:bookingId", controllers.UpdateStudentAttendance)
 			faculty.POST("/slots/:id/attendance/bulk", controllers.BulkUpdateAttendance)
+			faculty.GET("/interviews/sessions", controllers.GetFacultyInterviewSessions)
+			faculty.GET("/interviews/sessions/:id", controllers.GetFacultyInterviewSessionDetail)
+			faculty.GET("/interviews/sessions/:id/recording", controllers.GetSessionRecording)
+			faculty.GET("/interviews/sessions/:id/recording/stream", controllers.StreamInterviewRecording)
+			faculty.GET("/recordings/:filename", controllers.StreamInterviewRecording)
 		}
 
 		// Student Slot Booking & Active In-Venue Check-in
