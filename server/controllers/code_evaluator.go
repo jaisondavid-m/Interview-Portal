@@ -276,6 +276,24 @@ func normalizeLanguage(lang string) string {
 	}
 }
 
+func createSandboxTempDir(prefix string) (string, error) {
+	// First attempt creating within application local sandbox directory so binaries are never placed on noexec-mounted /tmp partitions
+	appSandboxDir := filepath.Join(".", ".sandbox_exec")
+	if err := os.MkdirAll(appSandboxDir, 0777); err == nil {
+		if dir, err := os.MkdirTemp(appSandboxDir, prefix); err == nil {
+			_ = os.Chmod(dir, 0777)
+			return dir, nil
+		}
+	}
+
+	// Fallback to system default temp dir
+	dir, err := os.MkdirTemp("", prefix)
+	if err == nil {
+		_ = os.Chmod(dir, 0777)
+	}
+	return dir, err
+}
+
 // ============================================================
 // C EXECUTOR (gcc / clang)
 // ============================================================
@@ -285,7 +303,7 @@ func executeC(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResul
 		return executeViaRemote("c", code, testCases, isCustom)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "mockmate_c_*")
+	tmpDir, err := createSandboxTempDir("mockmate_c_*")
 	if err != nil {
 		return executeViaRemote("c", code, testCases, isCustom)
 	}
@@ -303,10 +321,11 @@ func executeC(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResul
 	}
 
 	// Compile C code with C11 standard and math library (-lm)
-	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 7*time.Second)
+	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancelCompile()
 
 	compileCmd := exec.CommandContext(ctxCompile, cCompiler, "-O2", "-std=c11", srcPath, "-o", binPath, "-lm")
+	compileCmd.Dir = tmpDir
 	var compileStderr bytes.Buffer
 	compileCmd.Stderr = &compileStderr
 
@@ -317,6 +336,9 @@ func executeC(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResul
 		}
 		return makeErrorResults(testCases, "C Compilation Error:\n"+errStr), nil
 	}
+
+	// Ensure binary has executable permissions on disk
+	_ = os.Chmod(binPath, 0755)
 
 	return runCommandPerTestCase(binPath, []string{}, testCases, isCustom)
 }
@@ -403,7 +425,7 @@ func executeGo(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResu
 		return executeViaRemote("go", code, testCases, isCustom)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "mockmate_go_*")
+	tmpDir, err := createSandboxTempDir("mockmate_go_*")
 	if err != nil {
 		return executeViaRemote("go", code, testCases, isCustom)
 	}
@@ -426,39 +448,57 @@ func executeGo(code string, testCases []EvalTestCase, isCustom bool) ([]EvalResu
 		return executeViaRemote("go", code, testCases, isCustom)
 	}
 
-	// Create an isolated go.mod in the temporary directory so the compiler runs
-	// independently without searching for parent modules, workspaces, or vendor directories
-	goModPath := filepath.Join(tmpDir, "go.mod")
-	_ = os.WriteFile(goModPath, []byte("module mockmate_solution\n\ngo 1.20\n"), 0644)
-
-	// Compile Go binary for fast multi-test case execution (CGO_ENABLED=0 ensures pure internal linker without MinGW/GCC delays)
-	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 10*time.Second)
+	// Compile Go binary: First try fast pure compilation with GO111MODULE=off
+	// This compiles in <50ms without module resolution or proxy network hangs
+	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancelCompile()
 
-	compileCmd := exec.CommandContext(ctxCompile, goPath, "build", "-mod=mod", "-o", binPath, "main.go")
+	compileCmd := exec.CommandContext(ctxCompile, goPath, "build", "-ldflags=-s -w", "-o", binPath, srcPath)
 	compileCmd.Dir = tmpDir
 	compileCmd.Env = append(os.Environ(),
 		"CGO_ENABLED=0",
 		"GOWORK=off",
-		"GO111MODULE=on",
-		"GOPROXY=off",
-		"GONOPROXY=*",
-		"GONOSUMDB=*",
+		"GO111MODULE=off",
 	)
 	var compileStderr bytes.Buffer
 	compileCmd.Stderr = &compileStderr
 
 	if err := compileCmd.Run(); err != nil {
-		errStr := strings.TrimSpace(compileStderr.String())
-		if errStr == "" {
-			errStr = err.Error()
+		// If GO111MODULE=off failed (e.g. backend code with external module dependencies), try isolated module build
+		goModPath := filepath.Join(tmpDir, "go.mod")
+		_ = os.WriteFile(goModPath, []byte("module mockmate_solution\n\ngo 1.20\n"), 0644)
+
+		compileCmd2 := exec.CommandContext(ctxCompile, goPath, "build", "-ldflags=-s -w", "-o", binPath, "main.go")
+		compileCmd2.Dir = tmpDir
+		compileCmd2.Env = append(os.Environ(),
+			"CGO_ENABLED=0",
+			"GOWORK=off",
+			"GO111MODULE=auto",
+			"GOPROXY=off",
+			"GONOPROXY=*",
+			"GONOSUMDB=*",
+		)
+		var compileStderr2 bytes.Buffer
+		compileCmd2.Stderr = &compileStderr2
+
+		if err2 := compileCmd2.Run(); err2 != nil {
+			errStr := strings.TrimSpace(compileStderr2.String())
+			if errStr == "" {
+				errStr = strings.TrimSpace(compileStderr.String())
+			}
+			if errStr == "" {
+				errStr = err2.Error()
+			}
+			// If compilation failed because of missing external module, try remote fallback
+			if strings.Contains(errStr, "cannot find package") || strings.Contains(errStr, "no required module") {
+				return executeViaRemote("go", code, testCases, isCustom)
+			}
+			return makeErrorResults(testCases, "Go Compilation Error:\n"+errStr), nil
 		}
-		// If compilation failed because of missing external module, try remote fallback
-		if strings.Contains(errStr, "cannot find package") || strings.Contains(errStr, "no required module") {
-			return executeViaRemote("go", code, testCases, isCustom)
-		}
-		return makeErrorResults(testCases, "Go Compilation Error:\n"+errStr), nil
 	}
+
+	// Ensure binary has executable permissions on disk
+	_ = os.Chmod(binPath, 0755)
 
 	return runCommandPerTestCase(binPath, []string{}, testCases, isCustom)
 }
@@ -474,7 +514,7 @@ func executePython(code string, testCases []EvalTestCase, isCustom bool) ([]Eval
 	}
 
 	// Create temp python file for reliable execution
-	tmpDir, err := os.MkdirTemp("", "mockmate_py_*")
+	tmpDir, err := createSandboxTempDir("mockmate_py_*")
 	if err != nil {
 		return executeViaRemote("python", code, testCases, isCustom)
 	}
@@ -500,7 +540,7 @@ func executeJavaScript(code string, testCases []EvalTestCase, isCustom bool) ([]
 		return executeViaRemote("javascript", code, testCases, isCustom)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "mockmate_js_*")
+	tmpDir, err := createSandboxTempDir("mockmate_js_*")
 	if err != nil {
 		return executeViaRemote("javascript", code, testCases, isCustom)
 	}
@@ -1258,7 +1298,7 @@ func executeCpp(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRes
 		return executeViaRemote("cpp", code, testCases, isCustom)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "mockmate_cpp_*")
+	tmpDir, err := createSandboxTempDir("mockmate_cpp_*")
 	if err != nil {
 		return executeViaRemote("cpp", code, testCases, isCustom)
 	}
@@ -1276,10 +1316,11 @@ func executeCpp(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRes
 	}
 
 	// Compile C++ code
-	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 7*time.Second)
+	ctxCompile, cancelCompile := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancelCompile()
 
 	compileCmd := exec.CommandContext(ctxCompile, cppCompiler, "-O2", "-std=c++17", srcPath, "-o", binPath)
+	compileCmd.Dir = tmpDir
 	var compileStderr bytes.Buffer
 	compileCmd.Stderr = &compileStderr
 
@@ -1290,6 +1331,9 @@ func executeCpp(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRes
 		}
 		return makeErrorResults(testCases, "Compilation Error:\n"+errStr), nil
 	}
+
+	// Ensure binary has executable permissions on disk
+	_ = os.Chmod(binPath, 0755)
 
 	return runCommandPerTestCase(binPath, []string{}, testCases, isCustom)
 }
@@ -1402,7 +1446,7 @@ func executeJava(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRe
 		return executeViaRemote("java", code, testCases, isCustom)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "mockmate_java_*")
+	tmpDir, err := createSandboxTempDir("mockmate_java_*")
 	if err != nil {
 		return executeViaRemote("java", code, testCases, isCustom)
 	}
@@ -1430,6 +1474,7 @@ func executeJava(code string, testCases []EvalTestCase, isCustom bool) ([]EvalRe
 		defer cancelCompile()
 
 		compileCmd := exec.CommandContext(ctxCompile, javacPath, "-cp", tmpDir, srcPath)
+		compileCmd.Dir = tmpDir
 		var compileStderr bytes.Buffer
 		compileCmd.Stderr = &compileStderr
 
