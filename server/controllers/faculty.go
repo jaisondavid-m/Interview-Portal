@@ -47,13 +47,17 @@ func GetFacultyDashboardStats(c *gin.Context) {
 			Pluck("id", &allFacultySlotIDs)
 	}
 
-	var totalSlots int64 = int64(len(allFacultySlotIDs))
+	var totalSlots int64 = 0
 	var activeUpcomingSlots int64
 	var completedSlots int64
 	var todaySlots int64
 	var todaySlotIDs []uint
 
 	if len(allFacultySlotIDs) > 0 {
+		database.DB.Model(&models.InterviewSlot{}).
+			Where("id IN ? AND status != 'cancelled'", allFacultySlotIDs).
+			Count(&totalSlots)
+
 		database.DB.Model(&models.InterviewSlot{}).
 			Where("id IN ? AND status IN ?", allFacultySlotIDs, []string{"scheduled", "active"}).
 			Count(&activeUpcomingSlots)
@@ -63,7 +67,7 @@ func GetFacultyDashboardStats(c *gin.Context) {
 			Count(&completedSlots)
 
 		database.DB.Model(&models.InterviewSlot{}).
-			Where("id IN ? AND slot_date = ?", allFacultySlotIDs, todayStr).
+			Where("id IN ? AND slot_date = ? AND status != 'cancelled'", allFacultySlotIDs, todayStr).
 			Pluck("id", &todaySlotIDs)
 		todaySlots = int64(len(todaySlotIDs))
 	}

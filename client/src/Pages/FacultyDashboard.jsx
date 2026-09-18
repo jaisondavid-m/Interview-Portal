@@ -289,7 +289,7 @@ export default function FacultyDashboard() {
             </span>
           </div>
           <p className="mt-3 text-2xl font-bold text-[var(--text-primary)] font-mono">
-            {stats?.total_slots_managed ?? stats?.total_slots_count ?? 0}
+            {stats?.total_slots_managed ?? stats?.total_slots_count ?? slots.filter(s => s.status !== 'cancelled').length}
           </p>
           <p className="mt-1 text-[11px] text-[var(--text-secondary)]">Assigned Examination Slots</p>
         </div>
