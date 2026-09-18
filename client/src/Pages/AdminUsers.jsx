@@ -52,6 +52,7 @@ export default function AdminUsers() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [showForceLogoutModal, setShowForceLogoutModal] = useState(false);
   const [showBulkForceLogoutModal, setShowBulkForceLogoutModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -63,6 +64,7 @@ export default function AdminUsers() {
 
   // Bulk Upload State
   const [bulkMode, setBulkMode] = useState('file'); // 'file' | 'text'
+  const [bulkImportMode, setBulkImportMode] = useState('upsert'); // 'upsert' | 'create_only' | 'update_only'
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkRawText, setBulkRawText] = useState('');
   const [bulkDefaultDept, setBulkDefaultDept] = useState('CSE');
@@ -73,6 +75,13 @@ export default function AdminUsers() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Bulk Batch Edit State
+  const [bulkEditFormData, setBulkEditFormData] = useState({
+    department: '',
+    role: '',
+    password: '',
+  });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -263,6 +272,31 @@ export default function AdminUsers() {
     }
   };
 
+  // Handle Bulk Batch Edit Submit
+  const handleBulkEditSubmit = async (e) => {
+    e.preventDefault();
+    if (selectedIds.size === 0) return;
+    setFormLoading(true);
+    try {
+      const userIds = Array.from(selectedIds);
+      const payload = {
+        user_ids: userIds,
+        department: bulkEditFormData.department || undefined,
+        role: bulkEditFormData.role || undefined,
+        password: bulkEditFormData.password || undefined,
+      };
+      await api.post('/admin/users/bulk-update', payload);
+      setShowBulkEditModal(false);
+      setBulkEditFormData({ department: '', role: '', password: '' });
+      setSelectedIds(new Set());
+      fetchUsers();
+    } catch (err) {
+      alert(err.message || 'Failed to batch update selected users');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   // Handle Single User Force Logout
   const handleForceLogoutSubmit = async () => {
     if (!userToLogout) return;
@@ -423,7 +457,7 @@ export default function AdminUsers() {
   // ============================================================
   // CSV PARSER & PREVIEW
   // ============================================================
-  const parseCSVText = (csvText) => {
+  const parseCSVText = (csvText, importMode = bulkImportMode) => {
     setBulkParseError('');
     if (!csvText || !csvText.trim()) {
       setBulkPreview([]);
@@ -484,34 +518,51 @@ export default function AdminUsers() {
       const name = nameIdx !== -1 ? (cols[nameIdx] || '') : (cols[0] || '');
       const email = emailIdx !== -1 ? (cols[emailIdx] || '') : (cols[1] || '');
       const roll_no = rollIdx !== -1 ? (cols[rollIdx] || '') : (cols[2] || '');
+      const department = deptIdx !== -1 ? (cols[deptIdx] || '') : bulkDefaultDept;
       const rawRole = (cols[roleIdx] || '').toLowerCase().trim();
       const role = roleIdx !== -1 
         ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : 'student') 
         : bulkDefaultRole;
+      const password = passIdx !== -1 ? (cols[passIdx] || '') : (bulkDefaultPassword || 'mockmate123');
 
       let status = 'valid';
-      let message = 'Ready to import';
+      let message = 'Ready to create';
 
-      if (!name.trim()) {
+      const emailLower = email.toLowerCase().trim();
+
+      if (!name.trim() && importMode !== 'update_only') {
         status = 'error';
         message = 'Missing full name';
-      } else if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      } else if (!emailLower || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
         status = 'error';
         message = 'Invalid email address';
-      } else if (existingEmails.has(email.toLowerCase().trim())) {
+      } else if (batchEmails.has(emailLower)) {
         status = 'warning';
-        message = 'Email already in database';
-      } else if (batchEmails.has(email.toLowerCase().trim())) {
-        status = 'warning';
-        message = 'Duplicate email in file';
+        message = 'Duplicate in upload file';
+      } else if (existingEmails.has(emailLower)) {
+        if (importMode === 'create_only') {
+          status = 'warning';
+          message = 'Already in DB (will skip)';
+        } else {
+          status = 'update';
+          message = 'Will update existing account';
+        }
+        batchEmails.add(emailLower);
       } else {
-        batchEmails.add(email.toLowerCase().trim());
+        if (importMode === 'update_only') {
+          status = 'warning';
+          message = 'Not found in DB (will skip)';
+        } else {
+          status = 'valid';
+          message = 'Will create new account';
+        }
+        batchEmails.add(emailLower);
       }
 
       rows.push({
         id: i,
         name: name.trim(),
-        email: email.toLowerCase().trim(),
+        email: emailLower,
         roll_no: roll_no.trim(),
         department: department.trim() || bulkDefaultDept,
         role: role || bulkDefaultRole,
@@ -531,14 +582,22 @@ export default function AdminUsers() {
     const reader = new FileReader();
     reader.onload = (evt) => {
       const text = evt.target.result;
-      parseCSVText(text);
+      setBulkRawText(text);
+      parseCSVText(text, bulkImportMode);
     };
     reader.readAsText(file);
   };
 
   const handleTextChange = (text) => {
     setBulkRawText(text);
-    parseCSVText(text);
+    parseCSVText(text, bulkImportMode);
+  };
+
+  const handleModeChange = (mode) => {
+    setBulkImportMode(mode);
+    if (bulkRawText) {
+      parseCSVText(bulkRawText, mode);
+    }
   };
 
   const openBulkModal = () => {
@@ -547,20 +606,21 @@ export default function AdminUsers() {
     setBulkPreview([]);
     setBulkResult(null);
     setBulkParseError('');
+    setBulkImportMode('upsert');
     setShowBulkModal(true);
   };
 
   const handleBulkUploadSubmit = async () => {
-    const validRows = bulkPreview.filter(r => r.status === 'valid');
-    if (validRows.length === 0) {
-      alert('No valid accounts to import. Please check your data.');
+    const eligibleRows = bulkPreview.filter(r => r.status === 'valid' || r.status === 'update');
+    if (eligibleRows.length === 0) {
+      alert('No valid accounts to import or update. Please check your data.');
       return;
     }
 
     setBulkLoading(true);
     try {
       const payload = {
-        users: validRows.map(r => ({
+        users: eligibleRows.map(r => ({
           name: r.name,
           email: r.email,
           roll_no: r.roll_no,
@@ -569,6 +629,7 @@ export default function AdminUsers() {
           password: r.password,
         })),
         default_password: bulkDefaultPassword || 'mockmate123',
+        mode: bulkImportMode,
       };
 
       const res = await api.post('/admin/users/bulk', payload);
@@ -582,8 +643,10 @@ export default function AdminUsers() {
   };
 
   const validCount = bulkPreview.filter(r => r.status === 'valid').length;
+  const updateCount = bulkPreview.filter(r => r.status === 'update').length;
   const warningCount = bulkPreview.filter(r => r.status === 'warning').length;
   const errorCount = bulkPreview.filter(r => r.status === 'error').length;
+  const totalProcessable = validCount + updateCount;
   const isAllSelected = filteredUsers.length > 0 && selectedIds.size === filteredUsers.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredUsers.length;
 
@@ -758,6 +821,15 @@ export default function AdminUsers() {
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              onClick={() => setShowBulkEditModal(true)}
+              className="btn btn-secondary text-[11px] py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium text-[var(--accent)] border-[var(--border-accent)] hover:bg-[var(--accent-dim)]"
+              title="Batch update department, role, or password for selected users"
+            >
+              <Edit2 className="w-3 h-3 text-[var(--accent)]" />
+              <span>Bulk Edit ({selectedIds.size})</span>
+            </button>
+
+            <button
               onClick={() => {
                 const selectedUsers = users.filter((u) => selectedIds.has(u.id));
                 handleExportCSV(selectedUsers, 'selected');
@@ -837,6 +909,7 @@ export default function AdminUsers() {
               ) : (
                 filteredUsers.map((user) => {
                   const isSelected = selectedIds.has(user.id);
+                  const isGoogleUser = user.auth_method === 'google' || !!user.google_id;
                   return (
                     <tr
                       key={user.id}
@@ -860,11 +933,28 @@ export default function AdminUsers() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="card-avatar w-8 h-8 text-[11px]">
+                          <div className="card-avatar w-8 h-8 text-[11px] relative">
                             {user.name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                            {isGoogleUser && (
+                              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-white rounded-full p-0.5 shadow-xs border border-zinc-200" title="Google Authenticated">
+                                <svg className="w-full h-full" viewBox="0 0 24 24">
+                                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"/>
+                                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                                </svg>
+                              </div>
+                            )}
                           </div>
                           <div>
-                            <p className="font-semibold text-[var(--text-primary)] font-ui">{user.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-[var(--text-primary)] font-ui">{user.name}</p>
+                              {isGoogleUser && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
+                                  Google
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[11px] text-[var(--text-muted)] font-mono">{user.email}</p>
                           </div>
                         </div>
@@ -1044,10 +1134,10 @@ export default function AdminUsers() {
                     </div>
                     <div>
                       <h4 className="text-[16px] font-bold text-[var(--text-primary)]">
-                        Bulk Provisioning Completed!
+                        Bulk Processing Completed!
                       </h4>
                       <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-                        <strong>{bulkResult.created_count || 0}</strong> accounts were successfully registered.
+                        <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{bulkResult.created_count || 0}</strong> created, <strong className="text-blue-600 dark:text-blue-400 font-mono">{bulkResult.updated_count || 0}</strong> updated.
                         {bulkResult.skipped_count > 0 && ` ${bulkResult.skipped_count} entries were skipped.`}
                       </p>
                     </div>
@@ -1177,6 +1267,71 @@ export default function AdminUsers() {
                     </div>
                   )}
 
+                  {/* Import Strategy / Mode Options */}
+                  <div className="p-3 bg-[var(--bg-input)] rounded-[var(--radius-md)] border border-[var(--border)] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        Import Strategy & Duplicate Handling
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleModeChange('upsert')}
+                        className={`p-2.5 rounded border text-left transition cursor-pointer ${
+                          bulkImportMode === 'upsert'
+                            ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-xs'
+                            : 'border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-raised)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-[12px] text-[var(--text-primary)]">
+                          <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <span>Upsert (Recommended)</span>
+                        </div>
+                        <p className="text-[10px] text-[var(--text-secondary)] mt-0.5 leading-tight">
+                          Create new users & update existing records (department, roll no, etc.)
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleModeChange('create_only')}
+                        className={`p-2.5 rounded border text-left transition cursor-pointer ${
+                          bulkImportMode === 'create_only'
+                            ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-xs'
+                            : 'border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-raised)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-[12px] text-[var(--text-primary)]">
+                          <UserPlus className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Create Only</span>
+                        </div>
+                        <p className="text-[10px] text-[var(--text-secondary)] mt-0.5 leading-tight">
+                          Only add new users. Skip any emails that already exist in database.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleModeChange('update_only')}
+                        className={`p-2.5 rounded border text-left transition cursor-pointer ${
+                          bulkImportMode === 'update_only'
+                            ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-xs'
+                            : 'border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-raised)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-[12px] text-[var(--text-primary)]">
+                          <RotateCcw className="w-3.5 h-3.5 text-blue-500" />
+                          <span>Update Only</span>
+                        </div>
+                        <p className="text-[10px] text-[var(--text-secondary)] mt-0.5 leading-tight">
+                          Only update existing records. Skip new emails not found in database.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Fallback Defaults Configuration */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] text-xs">
                     <div>
@@ -1234,7 +1389,7 @@ export default function AdminUsers() {
                     <div className="space-y-2.5">
                       {/* Validation Stats Pills */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[12px] font-bold text-[var(--text-primary)]">
                             Parsed Preview:
                           </span>
@@ -1242,11 +1397,16 @@ export default function AdminUsers() {
                             Total: {bulkPreview.length}
                           </span>
                           <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
-                            ✓ {validCount} Valid
+                            + {validCount} New
                           </span>
+                          {updateCount > 0 && (
+                            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20">
+                              ↻ {updateCount} Update
+                            </span>
+                          )}
                           {warningCount > 0 && (
                             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
-                              ⚠ {warningCount} Duplicates
+                              ⚠ {warningCount} Skipped
                             </span>
                           )}
                           {errorCount > 0 && (
@@ -1276,15 +1436,19 @@ export default function AdminUsers() {
                                 <td className="py-2 px-3 whitespace-nowrap">
                                   {r.status === 'valid' ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                      <CheckCircle2 className="w-3 h-3" /> Ready
+                                      <CheckCircle2 className="w-3 h-3" /> Create
+                                    </span>
+                                  ) : r.status === 'update' ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400" title={r.message}>
+                                      <RotateCcw className="w-3 h-3" /> Update
                                     </span>
                                   ) : r.status === 'warning' ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400" title={r.message}>
-                                      <AlertTriangle className="w-3 h-3" /> {r.message}
+                                      <AlertTriangle className="w-3 h-3" /> Skip
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400" title={r.message}>
-                                      <AlertCircle className="w-3 h-3" /> {r.message}
+                                      <AlertCircle className="w-3 h-3" /> Invalid
                                     </span>
                                   )}
                                 </td>
@@ -1326,8 +1490,8 @@ export default function AdminUsers() {
             {!bulkResult && (
               <div className="flex items-center justify-between pt-3 border-t border-[var(--border)] shrink-0">
                 <div className="text-[12px] text-[var(--text-muted)]">
-                  {validCount > 0 ? (
-                    <span><strong>{validCount}</strong> valid accounts ready for registration</span>
+                  {totalProcessable > 0 ? (
+                    <span><strong>{totalProcessable}</strong> accounts ({validCount} new, {updateCount} update) ready</span>
                   ) : (
                     <span>Upload or paste CSV records to preview</span>
                   )}
@@ -1342,25 +1506,134 @@ export default function AdminUsers() {
                   </button>
                   <button
                     type="button"
-                    disabled={validCount === 0 || bulkLoading}
+                    disabled={totalProcessable === 0 || bulkLoading}
                     onClick={handleBulkUploadSubmit}
                     className="btn btn-primary text-xs py-2 px-5 flex items-center gap-1.5 shadow-[var(--shadow-sm)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {bulkLoading ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Importing {validCount} Users...</span>
+                        <span>Processing {totalProcessable} Users...</span>
                       </>
                     ) : (
                       <>
                         <Upload className="w-3.5 h-3.5" />
-                        <span>Import {validCount} Users</span>
+                        <span>Process {totalProcessable} Users</span>
                       </>
                     )}
                   </button>
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* BULK BATCH EDIT MODAL */}
+      {/* ============================================================ */}
+      {showBulkEditModal && (
+        <div 
+          onClick={() => setShowBulkEditModal(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] p-6 w-full max-w-lg shadow-[var(--shadow-lg)] animate-scaleUp space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center shrink-0">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
+                    Bulk Edit {selectedIds.size} Accounts
+                  </h3>
+                  <p className="text-[12px] text-[var(--text-muted)]">
+                    Update department, role, or passwords across all selected users
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBulkEditModal(false)}
+                className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleBulkEditSubmit} className="space-y-4 pt-1">
+              <label className="block space-y-1">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Change Department</span>
+                <select
+                  value={bulkEditFormData.department}
+                  onChange={(e) => setBulkEditFormData({ ...bulkEditFormData, department: e.target.value })}
+                  className="custom-input w-full bg-[var(--bg-input)]"
+                >
+                  <option value="">-- Leave Unchanged --</option>
+                  <option value="CSE">CSE</option>
+                  <option value="IT">IT</option>
+                  <option value="ECE">ECE</option>
+                  <option value="EEE">EEE</option>
+                  <option value="AI&DS">AI & DS</option>
+                  <option value="Administration">Administration</option>
+                </select>
+              </label>
+
+              <label className="block space-y-1">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Change Role</span>
+                <select
+                  value={bulkEditFormData.role}
+                  onChange={(e) => setBulkEditFormData({ ...bulkEditFormData, role: e.target.value })}
+                  className="custom-input w-full bg-[var(--bg-input)]"
+                >
+                  <option value="">-- Leave Unchanged --</option>
+                  {roleOptions.filter(r => r.value !== 'ALL').map(r => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block space-y-1">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Reset Password for Selected</span>
+                <input
+                  type="text"
+                  value={bulkEditFormData.password}
+                  onChange={(e) => setBulkEditFormData({ ...bulkEditFormData, password: e.target.value })}
+                  placeholder="Leave empty to keep existing passwords"
+                  className="custom-input w-full font-mono text-xs"
+                />
+              </label>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkEditModal(false)}
+                  className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={formLoading || (!bulkEditFormData.department && !bulkEditFormData.role && !bulkEditFormData.password)}
+                  className="btn btn-primary text-xs py-2 px-5 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {formLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Apply Changes ({selectedIds.size})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

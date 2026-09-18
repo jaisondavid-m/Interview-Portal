@@ -333,7 +333,7 @@ func AdminDeleteUser(c *gin.Context) {
 	})
 }
 
-// BulkUserItem represents a single user row in a bulk creation request
+// BulkUserItem represents a single user row in a bulk creation/update request
 type BulkUserItem struct {
 	Name       string `json:"name"`
 	Email      string `json:"email"`
@@ -343,13 +343,15 @@ type BulkUserItem struct {
 	Role       string `json:"role"`
 }
 
-// BulkCreateUsersInput represents the JSON body for bulk creation
+// BulkCreateUsersInput represents the JSON body for bulk creation/update
 type BulkCreateUsersInput struct {
 	Users           []BulkUserItem `json:"users" binding:"required"`
 	DefaultPassword string         `json:"default_password"`
+	Mode            string         `json:"mode"`            // "upsert" (default), "create_only", "update_only"
+	UpdateExisting  *bool          `json:"update_existing"` // Legacy boolean compatibility
 }
 
-// AdminBulkCreateUsers creates multiple users in a single operation
+// AdminBulkCreateUsers creates or updates multiple users in a single operation
 func AdminBulkCreateUsers(c *gin.Context) {
 	var input BulkCreateUsersInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -369,6 +371,15 @@ func AdminBulkCreateUsers(c *gin.Context) {
 		return
 	}
 
+	mode := strings.ToLower(strings.TrimSpace(input.Mode))
+	if mode == "" {
+		if input.UpdateExisting != nil && !*input.UpdateExisting {
+			mode = "create_only"
+		} else {
+			mode = "upsert"
+		}
+	}
+
 	defaultPW := strings.TrimSpace(input.DefaultPassword)
 	if defaultPW == "" {
 		defaultPW = "mockmate123"
@@ -383,15 +394,16 @@ func AdminBulkCreateUsers(c *gin.Context) {
 		return
 	}
 
-	// Fetch existing emails to prevent duplicate key errors
+	// Fetch existing users mapped by lowercase email
 	var existingUsers []models.User
-	database.DB.Select("email").Find(&existingUsers)
-	existingEmailMap := make(map[string]bool)
+	database.DB.Find(&existingUsers)
+	existingUserMap := make(map[string]models.User)
 	for _, u := range existingUsers {
-		existingEmailMap[strings.ToLower(strings.TrimSpace(u.Email))] = true
+		existingUserMap[strings.ToLower(strings.TrimSpace(u.Email))] = u
 	}
 
 	var createdUsers []models.User
+	var updatedUsers []models.User
 	var skippedDetails []string
 	seenInBatch := make(map[string]bool)
 
@@ -402,18 +414,13 @@ func AdminBulkCreateUsers(c *gin.Context) {
 		department := strings.TrimSpace(item.Department)
 		role := strings.ToLower(strings.TrimSpace(item.Role))
 
-		if name == "" || email == "" {
-			skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d: Missing required name or email", idx+1))
+		if email == "" {
+			skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d: Missing required email", idx+1))
 			continue
 		}
 
 		if !strings.Contains(email, "@") {
 			skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d (%s): Invalid email format", idx+1, email))
-			continue
-		}
-
-		if existingEmailMap[email] {
-			skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d (%s): Email already registered in system", idx+1, email))
 			continue
 		}
 
@@ -423,42 +430,160 @@ func AdminBulkCreateUsers(c *gin.Context) {
 		}
 		seenInBatch[email] = true
 
-		if role != "admin" {
-			role = "student"
-		}
+		existingUser, exists := existingUserMap[email]
 
-		hashedPW := defaultHashedPW
-		if customPW := strings.TrimSpace(item.Password); len(customPW) >= 4 {
-			if hp, err := models.HashPassword(customPW); err == nil {
-				hashedPW = hp
+		if exists {
+			// Record already exists in DB
+			if mode == "create_only" {
+				skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d (%s): Email already registered (skipped in create-only mode)", idx+1, email))
+				continue
 			}
-		}
 
-		newUser := models.User{
-			Name:       name,
-			Email:      email,
-			RollNo:     rollNo,
-			Department: department,
-			Password:   hashedPW,
-			Role:       role,
-		}
+			// Mode is "upsert" or "update_only" -> Update existing user record
+			updates := map[string]interface{}{}
+			if name != "" {
+				updates["name"] = name
+			}
+			if rollNo != "" {
+				updates["roll_no"] = rollNo
+			}
+			if department != "" {
+				updates["department"] = department
+			}
+			if role != "" {
+				if role == "admin" || role == "developer" {
+					updates["role"] = role
+				} else {
+					updates["role"] = "student"
+				}
+			}
+			if customPW := strings.TrimSpace(item.Password); len(customPW) >= 4 {
+				if hp, err := models.HashPassword(customPW); err == nil {
+					updates["password"] = hp
+				}
+			}
 
-		if err := database.DB.Create(&newUser).Error; err != nil {
-			skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d (%s): Database insert error: %v", idx+1, email, err.Error()))
-			continue
-		}
+			if len(updates) > 0 {
+				if err := database.DB.Model(&existingUser).Updates(updates).Error; err != nil {
+					skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d (%s): Failed to update user in database: %v", idx+1, email, err.Error()))
+					continue
+				}
+			}
 
-		existingEmailMap[email] = true
-		createdUsers = append(createdUsers, newUser)
+			// Reload updated user
+			database.DB.First(&existingUser, existingUser.ID)
+			updatedUsers = append(updatedUsers, existingUser)
+		} else {
+			// Record does not exist in DB
+			if mode == "update_only" {
+				skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d (%s): User does not exist in database (skipped in update-only mode)", idx+1, email))
+				continue
+			}
+
+			if name == "" {
+				parts := strings.Split(email, "@")
+				name = strings.Title(strings.ReplaceAll(parts[0], ".", " "))
+			}
+
+			if role != "admin" && role != "developer" {
+				role = "student"
+			}
+
+			if department == "" {
+				department = "CSE"
+			}
+
+			hashedPW := defaultHashedPW
+			if customPW := strings.TrimSpace(item.Password); len(customPW) >= 4 {
+				if hp, err := models.HashPassword(customPW); err == nil {
+					hashedPW = hp
+				}
+			}
+
+			newUser := models.User{
+				Name:       name,
+				Email:      email,
+				RollNo:     rollNo,
+				Department: department,
+				Password:   hashedPW,
+				Role:       role,
+				AuthMethod: "local",
+			}
+
+			if err := database.DB.Create(&newUser).Error; err != nil {
+				skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d (%s): Database insert error: %v", idx+1, email, err.Error()))
+				continue
+			}
+
+			existingUserMap[email] = newUser
+			createdUsers = append(createdUsers, newUser)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":          "success",
-		"message":         fmt.Sprintf("Bulk provisioning complete: %d created, %d skipped", len(createdUsers), len(skippedDetails)),
+		"message":         fmt.Sprintf("Bulk provisioning complete: %d created, %d updated, %d skipped", len(createdUsers), len(updatedUsers), len(skippedDetails)),
 		"created_count":   len(createdUsers),
+		"updated_count":   len(updatedUsers),
 		"skipped_count":   len(skippedDetails),
 		"skipped_details": skippedDetails,
 		"created_users":   createdUsers,
+		"updated_users":   updatedUsers,
+	})
+}
+
+// AdminBulkUpdateUsers allows admins to batch-update selected user accounts (e.g. change department, role, or reset password)
+func AdminBulkUpdateUsers(c *gin.Context) {
+	var input struct {
+		UserIDs    []uint `json:"user_ids" binding:"required"`
+		Department string `json:"department"`
+		Role       string `json:"role"`
+		Password   string `json:"password"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil || len(input.UserIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "No users selected or invalid payload",
+		})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if d := strings.TrimSpace(input.Department); d != "" {
+		updates["department"] = d
+	}
+	if r := strings.TrimSpace(input.Role); r != "" {
+		updates["role"] = r
+	}
+	if pw := strings.TrimSpace(input.Password); len(pw) >= 4 {
+		if hp, err := models.HashPassword(pw); err == nil {
+			updates["password"] = hp
+		}
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "No valid fields provided to update (provide department, role, or new password)",
+		})
+		return
+	}
+
+	res := database.DB.Model(&models.User{}).Where("id IN ?", input.UserIDs).Updates(updates)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to batch update users",
+			"error":   res.Error.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":        "success",
+		"message":       fmt.Sprintf("Successfully updated %d user accounts", res.RowsAffected),
+		"updated_count": res.RowsAffected,
 	})
 }
 

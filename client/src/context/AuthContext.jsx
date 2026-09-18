@@ -117,6 +117,33 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Google Login handler
+  const loginWithGoogle = async (googlePayload) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Accepts string credential (ID token) or object payload
+      const body = typeof googlePayload === 'string' 
+        ? { credential: googlePayload } 
+        : googlePayload;
+
+      const res = await api.post('/auth/google', body);
+
+      if (res && res.user) {
+        setUser(res.user);
+        await fetchPermissions();
+        return { success: true, user: res.user };
+      }
+      return { success: false, error: 'Invalid Google authentication response' };
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || 'Google sign-in failed';
+      setError(errMsg);
+      return { success: false, error: errMsg };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Logout handler
   const logout = async () => {
     try {
@@ -139,6 +166,7 @@ export function AuthProvider({ children }) {
     loading,
     error,
     login,
+    loginWithGoogle,
     logout,
     checkAuth,
     isAuthenticated: !!user,

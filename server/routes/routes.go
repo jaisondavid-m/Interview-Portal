@@ -26,6 +26,7 @@ func SetupRouter() *gin.Engine {
 		auth := g.Group("/auth")
 		{
 			auth.POST("/login", controllers.Login)
+			auth.POST("/google", controllers.GoogleLogin)
 			auth.POST("/logout", controllers.Logout)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.GetMe)
 			auth.GET("/permissions", middlewares.AuthMiddleware(), controllers.GetUserPagePermissions)
@@ -132,6 +133,7 @@ func SetupRouter() *gin.Engine {
 				adminUsers.GET("/:id", controllers.AdminGetUserByID)
 				adminUsers.POST("", controllers.AdminCreateUser)
 				adminUsers.POST("/bulk", controllers.AdminBulkCreateUsers)
+				adminUsers.POST("/bulk-update", controllers.AdminBulkUpdateUsers)
 				adminUsers.POST("/bulk-delete", controllers.AdminBulkDeleteUsers)
 				adminUsers.POST("/bulk-force-logout", controllers.AdminBulkForceLogoutUsers)
 				adminUsers.POST("/:id/force-logout", controllers.AdminForceLogoutUser)

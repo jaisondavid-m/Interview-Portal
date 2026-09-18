@@ -23,6 +23,8 @@ type Config struct {
 	DBMaxOpenConns    int
 	DBConnMaxLifetime time.Duration
 	JWTSecret         string
+	GoogleClientID    string
+	GoogleClientSecret string
 }
 
 // AppConfig is the global configuration instance
@@ -49,18 +51,20 @@ func LoadConfig() *Config {
 	maxOpen, _ := strconv.Atoi(getEnv("DB_MAX_OPEN_CONNS", "100"))
 
 	AppConfig = &Config{
-		Port:              getEnv("PORT", getEnv("SERVER_PORT", "8080")),
-		GinMode:           getEnv("GIN_MODE", "debug"),
-		DBHost:            getEnv("DB_HOST", "localhost"),
-		DBPort:            getEnv("DB_PORT", getEnv("DB_EXTERNAL_PORT", "3306")),
-		DBUser:            getEnv("DB_USER", getEnv("MYSQL_USER", "root")),
-		DBPassword:        getEnv("DB_PASSWORD", getEnv("MYSQL_PASSWORD", getEnv("MYSQL_ROOT_PASSWORD", "jaison"))),
-		DBName:            getEnv("DB_NAME", getEnv("MYSQL_DATABASE", "mock_mate")),
-		DBReplicaHosts:    replicaHosts,
-		DBMaxIdleConns:    maxIdle,
-		DBMaxOpenConns:    maxOpen,
-		DBConnMaxLifetime: time.Hour,
-		JWTSecret:         getEnv("JWT_SECRET", "mock_mate_secure_jwt_secret_2026"),
+		Port:               getEnv("PORT", getEnv("SERVER_PORT", "8080")),
+		GinMode:            getEnv("GIN_MODE", "debug"),
+		DBHost:             getEnv("DB_HOST", "localhost"),
+		DBPort:             getEnv("DB_PORT", getEnv("DB_EXTERNAL_PORT", "3306")),
+		DBUser:             getEnv("DB_USER", getEnv("MYSQL_USER", "root")),
+		DBPassword:         getEnv("DB_PASSWORD", getEnv("MYSQL_PASSWORD", getEnv("MYSQL_ROOT_PASSWORD", "jaison"))),
+		DBName:             getEnv("DB_NAME", getEnv("MYSQL_DATABASE", "mock_mate")),
+		DBReplicaHosts:     replicaHosts,
+		DBMaxIdleConns:     maxIdle,
+		DBMaxOpenConns:     maxOpen,
+		DBConnMaxLifetime:  time.Hour,
+		JWTSecret:          getEnv("JWT_SECRET", "mock_mate_secure_jwt_secret_2026"),
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", getEnv("VITE_GOOGLE_CLIENT_ID", "")),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
 	}
 
 	return AppConfig

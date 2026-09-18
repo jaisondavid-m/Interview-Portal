@@ -16,7 +16,10 @@ type User struct {
 	Department       string         `gorm:"size:100" json:"department"`
 	Password         string         `gorm:"size:255;not null" json:"-"`
 	Role             string         `gorm:"size:20;default:'student';not null" json:"role"` // 'admin' or 'student'
-	ActiveToken      string         `gorm:"type:text" json:"-"`                             // Current active session JWT token for single-device enforcement
+	GoogleID         string         `gorm:"size:100;index" json:"google_id,omitempty"`
+	AvatarURL        string         `gorm:"size:255" json:"avatar_url,omitempty"`
+	AuthMethod       string         `gorm:"size:30;default:'local'" json:"auth_method"` // 'local' or 'google'
+	ActiveToken      string         `gorm:"type:text" json:"-"`                         // Current active session JWT token for single-device enforcement
 	LastLoginAt      *time.Time     `json:"last_login_at"`
 	HasActiveSession bool           `gorm:"-" json:"has_active_session"` // Virtual field populated for UI
 	CreatedAt        time.Time      `json:"created_at"`
