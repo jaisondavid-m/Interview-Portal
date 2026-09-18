@@ -22,6 +22,7 @@ const ICON_MAP = {
   CalendarCheck,
   ClipboardCheck,
   FlaskConical,
+  Settings: SlidersHorizontal,
 };
 
 export default function Sidebar() {
@@ -51,6 +52,7 @@ export default function Sidebar() {
     ? [
         { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
         { name: 'Database Backup', path: '/admin/backup', icon: Database },
+        { name: 'System Settings', path: '/developer/settings', icon: SlidersHorizontal },
       ]
     : isFaculty
     ? [
@@ -69,6 +71,7 @@ export default function Sidebar() {
         { name: 'Interview History', path: '/admin/history', icon: History },
         { name: 'Audit Logs', path: '/admin/audit-logs', icon: Terminal },
         { name: 'Database Backup', path: '/admin/backup', icon: Database },
+        { name: 'System Settings', path: '/admin/settings', icon: SlidersHorizontal },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },

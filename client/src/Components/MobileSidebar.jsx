@@ -22,6 +22,7 @@ const ICON_MAP = {
   CalendarCheck,
   ClipboardCheck,
   FlaskConical,
+  Settings: SlidersHorizontal,
 };
 
 export default function MobileSidebar({ isOpen, onClose }) {
@@ -77,17 +78,22 @@ export default function MobileSidebar({ isOpen, onClose }) {
   const fallbackMenuItems = isDeveloper
     ? [
         { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
+        { name: 'Database Backup', path: '/admin/backup', icon: Database },
+        { name: 'System Settings', path: '/developer/settings', icon: SlidersHorizontal },
       ]
     : isAdmin
     ? [
         { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'User Management', path: '/admin/users', icon: Users },
         { name: 'Role Management', path: '/admin/roles', icon: ShieldCheck },
+        { name: 'Venues & Slots', path: '/admin/venues', icon: Building2 },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
         { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
         { name: 'Leaderboard', path: '/admin/leaderboard', icon: Trophy },
         { name: 'Interview History', path: '/admin/history', icon: History },
         { name: 'Audit Logs', path: '/admin/audit-logs', icon: Terminal },
+        { name: 'Database Backup', path: '/admin/backup', icon: Database },
+        { name: 'System Settings', path: '/admin/settings', icon: SlidersHorizontal },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },

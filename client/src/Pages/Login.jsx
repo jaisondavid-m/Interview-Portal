@@ -50,12 +50,31 @@ export default function Login() {
   const [error, setError] = useState('');
   const [selectedQuick, setSelectedQuick] = useState(null);
   const [notice, setNotice] = useState('');
+  const [quickLoginEnabled, setQuickLoginEnabled] = useState(true);
 
   const tokenClientRef = useRef(null);
   const { user, login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+
+  // Check public dynamic quick login toggle
+  useEffect(() => {
+    const fetchQuickLoginStatus = async () => {
+      try {
+        const res = await api.get('/auth/quick-login-status');
+        const data = res?.data || res;
+        if (data?.data && typeof data.data.quick_login_enabled === 'boolean') {
+          setQuickLoginEnabled(data.data.quick_login_enabled);
+        } else if (typeof data?.quick_login_enabled === 'boolean') {
+          setQuickLoginEnabled(data.quick_login_enabled);
+        }
+      } catch (e) {
+        // Keep default true on transient network errors
+      }
+    };
+    fetchQuickLoginStatus();
+  }, []);
 
   useEffect(() => {
     const savedNotice = sessionStorage.getItem('logoutNotice');
@@ -329,52 +348,57 @@ export default function Login() {
         </button>
       </div>
 
-      {/* Divider */}
-      <div className="relative flex items-center justify-center pt-1">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[var(--border)]" />
-        </div>
-        <div className="relative px-3 bg-[var(--bg-card)] text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
-          Quick Demo Accounts
-        </div>
-      </div>
+      {/* Quick Demo Accounts (Dynamically toggled from System Settings) */}
+      {quickLoginEnabled && (
+        <>
+          {/* Divider */}
+          <div className="relative flex items-center justify-center pt-1 animate-fadeIn">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[var(--border)]" />
+            </div>
+            <div className="relative px-3 bg-[var(--bg-card)] text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
+              Quick Demo Accounts
+            </div>
+          </div>
 
-      {/* Quick Login Cards */}
-      <div className="space-y-2.5">
-        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider font-bold">
-          <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
-          <span>Quick 1-Click Login</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {QUICK_ACCOUNTS.map((acc) => {
-            const IconComponent = acc.icon;
-            const isSelected = selectedQuick === acc.email || identifier === acc.email;
-            const isLoggingIn = activeQuickLogging === acc.email;
+          {/* Quick Login Cards */}
+          <div className="space-y-2.5 animate-fadeIn">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider font-bold">
+              <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Quick 1-Click Login</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {QUICK_ACCOUNTS.map((acc) => {
+                const IconComponent = acc.icon;
+                const isSelected = selectedQuick === acc.email || identifier === acc.email;
+                const isLoggingIn = activeQuickLogging === acc.email;
 
-            return (
-              <button
-                key={acc.email}
-                type="button"
-                disabled={loading || googleLoading}
-                onClick={() => handleQuickLogin(acc)}
-                className={`py-3 px-2 rounded-[var(--radius-sm)] border text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
-                  isSelected || isLoggingIn
-                    ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-sm)]'
-                    : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)]/50 hover:bg-[var(--bg-raised)]'
-                }`}
-                title={`Instant login as ${acc.title}`}
-              >
-                <div className={`p-1.5 rounded-full border ${acc.badgeStyle}`}>
-                  <IconComponent className="w-4 h-4" />
-                </div>
-                <span className="text-[12px] font-bold text-[var(--text-primary)] truncate max-w-full">
-                  {isLoggingIn ? 'Logging in...' : acc.title}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+                return (
+                  <button
+                    key={acc.email}
+                    type="button"
+                    disabled={loading || googleLoading}
+                    onClick={() => handleQuickLogin(acc)}
+                    className={`py-3 px-2 rounded-[var(--radius-sm)] border text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                      isSelected || isLoggingIn
+                        ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-[var(--shadow-sm)]'
+                        : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)]/50 hover:bg-[var(--bg-raised)]'
+                    }`}
+                    title={`Instant login as ${acc.title}`}
+                  >
+                    <div className={`p-1.5 rounded-full border ${acc.badgeStyle}`}>
+                      <IconComponent className="w-4 h-4" />
+                    </div>
+                    <span className="text-[12px] font-bold text-[var(--text-primary)] truncate max-w-full">
+                      {isLoggingIn ? 'Logging in...' : acc.title}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

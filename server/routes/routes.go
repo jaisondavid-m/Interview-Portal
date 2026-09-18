@@ -30,16 +30,21 @@ func SetupRouter() *gin.Engine {
 			auth.POST("/logout", controllers.Logout)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.GetMe)
 			auth.GET("/permissions", middlewares.AuthMiddleware(), controllers.GetUserPagePermissions)
+			auth.GET("/settings", controllers.GetPublicSystemSettings)
+			auth.GET("/quick-login-status", controllers.GetPublicQuickLoginStatus)
 		}
 
 		// Developer & System Audit Logs (Require JWT + audit_logs permission or Admin)
 		developer := g.Group("/developer")
-		developer.Use(middlewares.AuthMiddleware(), middlewares.RequirePermission("audit_logs"))
+		developer.Use(middlewares.AuthMiddleware(), middlewares.RequirePermission("audit_logs", "system_settings"))
 		{
 			developer.GET("/audit-logs", controllers.GetAuditLogs)
 			developer.GET("/audit-logs/stats", controllers.GetAuditStats)
 			developer.GET("/audit-logs/:id", controllers.GetAuditLogByID)
 			developer.DELETE("/audit-logs/clear", controllers.ClearAuditLogs)
+			developer.GET("/settings", controllers.AdminGetSystemSettings)
+			developer.POST("/settings", controllers.AdminUpdateSystemSetting)
+			developer.PUT("/settings", controllers.AdminUpdateSystemSetting)
 		}
 
 		// Student Protected Routes (Require JWT)
@@ -253,8 +258,26 @@ func SetupRouter() *gin.Engine {
 				adminSlots.DELETE("/bookings/:id", controllers.AdminCancelBooking)
 			}
 
+			// System Settings
+			adminSettings := admin.Group("/settings")
+			adminSettings.Use(middlewares.RequirePermission("system_settings", "admin_dashboard", "audit_logs"))
+			{
+				adminSettings.GET("", controllers.AdminGetSystemSettings)
+				adminSettings.POST("", controllers.AdminUpdateSystemSetting)
+				adminSettings.PUT("", controllers.AdminUpdateSystemSetting)
+			}
+
 			// Interview History Dedicated Route
 			admin.GET("/history", middlewares.RequirePermission("admin_history"), controllers.AdminGetInterviewSessions)
+		}
+
+		// Direct System Settings (Admin & Developer)
+		systemSettings := g.Group("/system/settings")
+		systemSettings.Use(middlewares.AuthMiddleware(), middlewares.RequirePermission("system_settings", "admin_dashboard", "audit_logs"))
+		{
+			systemSettings.GET("", controllers.AdminGetSystemSettings)
+			systemSettings.POST("", controllers.AdminUpdateSystemSetting)
+			systemSettings.PUT("", controllers.AdminUpdateSystemSetting)
 		}
 
 		// Faculty Portal & Live In-Venue Attendance (Require JWT + Faculty/Admin Permissions)

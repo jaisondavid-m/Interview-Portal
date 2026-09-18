@@ -26,6 +26,7 @@ import DeveloperAuditLogs from '../Pages/DeveloperAuditLogs';
 import AdminBackup from '../Pages/AdminBackup';
 import AdminVenues from '../Pages/AdminVenues';
 import AdminSlotEditor from '../Pages/AdminSlotEditor';
+import AdminSettings from '../Pages/AdminSettings';
 import FacultyDashboard from '../Pages/FacultyDashboard';
 import FacultyAttendance from '../Pages/FacultyAttendance';
 import MyBookings from '../Pages/MyBookings';
@@ -263,6 +264,23 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="admin_venues">
                 <AdminSlotEditor />
+              </DynamicPageRoute>
+            ),
+          },
+
+          {
+            path: 'admin/settings',
+            element: (
+              <DynamicPageRoute pageKey="system_settings">
+                <AdminSettings />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'developer/settings',
+            element: (
+              <DynamicPageRoute pageKey="system_settings">
+                <AdminSettings />
               </DynamicPageRoute>
             ),
           },

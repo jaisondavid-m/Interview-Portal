@@ -152,6 +152,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.InterviewSlot{},
 		&models.SlotVenueAssignment{},
 		&models.SlotBooking{},
+		&models.SystemSetting{},
 	)
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)
@@ -160,9 +161,22 @@ func runMigrations(db *gorm.DB) error {
 	return err
 }
 
-// syncAppPagesCatalog ensures the app catalog page for My Bookings is updated and mapped
+// syncAppPagesCatalog ensures the app catalog page for My Bookings and System Settings are updated and mapped
 func syncAppPagesCatalog(db *gorm.DB) {
-	// Update or migrate any legacy /slots/book or student_slots page to /my-bookings
+	// 1. Seed default quick_login_enabled setting if not present
+	var qlSetting models.SystemSetting
+	if err := db.Where("`key` = 'quick_login_enabled'").First(&qlSetting).Error; err != nil {
+		db.Create(&models.SystemSetting{
+			Key:         "quick_login_enabled",
+			Value:       "true",
+			DisplayName: "Quick 1-Click Login",
+			Category:    "Authentication",
+			Description: "Show quick 1-click demo login buttons on the login page for fast testing",
+			UpdatedAt:   time.Now(),
+		})
+	}
+
+	// 2. Update or migrate any legacy /slots/book or student_slots page to /my-bookings
 	db.Model(&models.AppPage{}).
 		Where("`key` = 'student_slots' OR path = '/slots/book'").
 		Updates(map[string]interface{}{
@@ -197,6 +211,45 @@ func syncAppPagesCatalog(db *gorm.DB) {
 		db.Model(&models.RolePagePermission{}).Where("role_name = 'student' AND page_key = 'student_bookings'").Count(&permCount)
 		if permCount == 0 {
 			db.Create(&models.RolePagePermission{RoleName: "student", PageKey: "student_bookings", CanAccess: true})
+		}
+	}
+
+	// 3. Ensure System Settings page exists in AppPage catalog and is mapped to admin & developer roles
+	var settingsPageCount int64
+	db.Model(&models.AppPage{}).Where("`key` = 'system_settings'").Count(&settingsPageCount)
+	if settingsPageCount == 0 {
+		settingsPage := models.AppPage{
+			Key:         "system_settings",
+			Name:        "System Settings",
+			Path:        "/admin/settings",
+			Icon:        "SlidersHorizontal",
+			Category:    "System Administration",
+			Description: "Manage platform feature toggles, quick login options, and global configurations",
+			OrderIndex:  90,
+		}
+		if err := db.Create(&settingsPage).Error; err == nil {
+			db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: "system_settings", CanAccess: true})
+			db.Create(&models.RolePagePermission{RoleName: "developer", PageKey: "system_settings", CanAccess: true})
+		}
+	} else {
+		db.Model(&models.AppPage{}).Where("`key` = 'system_settings'").Updates(map[string]interface{}{
+			"name":        "System Settings",
+			"path":        "/admin/settings",
+			"icon":        "SlidersHorizontal",
+			"category":    "System Administration",
+			"description": "Manage platform feature toggles, quick login options, and global configurations",
+		})
+		// Ensure admin permission
+		var adminPermCount int64
+		db.Model(&models.RolePagePermission{}).Where("role_name = 'admin' AND page_key = 'system_settings'").Count(&adminPermCount)
+		if adminPermCount == 0 {
+			db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: "system_settings", CanAccess: true})
+		}
+		// Ensure developer permission
+		var devPermCount int64
+		db.Model(&models.RolePagePermission{}).Where("role_name = 'developer' AND page_key = 'system_settings'").Count(&devPermCount)
+		if devPermCount == 0 {
+			db.Create(&models.RolePagePermission{RoleName: "developer", PageKey: "system_settings", CanAccess: true})
 		}
 	}
 }
