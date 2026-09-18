@@ -673,39 +673,6 @@ export default function AdminRoles() {
                       {r.description || 'Custom defined role with granular page access rules.'}
                     </p>
 
-                    {/* Default Landing Page Configuration Section */}
-                    <div
-                      className="pt-2.5 pb-1 border-t border-[var(--border)]/70 flex flex-col gap-1.5 relative"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)]">
-                          <Globe className="w-3.5 h-3.5 text-[var(--accent)]" />
-                          <span>Default Landing Page:</span>
-                        </div>
-                        {r.default_page ? (
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] truncate max-w-[130px]" title={r.default_page}>
-                            {r.default_page}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                            Auto
-                          </span>
-                        )}
-                      </div>
-
-                      <SearchableSelect
-                        options={getRolePageSelectOptions(r.name)}
-                        value={r.default_page || ''}
-                        onChange={(val) => handleUpdateDefaultPage(r, val)}
-                        placeholder={`System Default (${getDefaultFallback(r.name)})`}
-                        searchPlaceholder="Search catalog pages by name, path, or category..."
-                        fullWidth={true}
-                        menuWidth="w-full min-w-[280px]"
-                        className="py-1.5 text-[11.5px] bg-[var(--bg-raised)]"
-                      />
-                    </div>
-
                     {/* Footer: Manage Permissions Button & Edit / Delete Icons */}
                     <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)] group-hover:translate-x-1 transition-transform">
