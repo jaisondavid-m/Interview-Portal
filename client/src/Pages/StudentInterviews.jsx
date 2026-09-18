@@ -315,17 +315,6 @@ export default function StudentInterviews() {
             Book a slot at your campus venue. Faculty at the venue will verify your attendance to start your peer interview.
           </p>
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
-          <button
-            onClick={() => navigate('/interviews/testing')}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold transition-all"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Sandbox Practice Mode</span>
-          </button>
-        </div>
       </div>
 
       {/* STICKY REAL-TIME IN-VENUE / ONLINE ATTENDANCE GATE CARD */}
