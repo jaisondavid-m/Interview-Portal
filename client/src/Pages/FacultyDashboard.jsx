@@ -233,48 +233,6 @@ export default function FacultyDashboard() {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* 1. WELCOME HEADER & ACTIONS */}
-      {/* ============================================================ */}
-      <div className="relative overflow-hidden p-6 sm:p-8 bg-gradient-to-r from-[var(--accent-dim)] via-[var(--bg-card)] to-[var(--bg-card)] border border-[var(--border-accent)] rounded-3xl shadow-sm">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] text-xs font-semibold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Faculty Examination & Assessment Console</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] tracking-tight">
-              Welcome back, {user?.name || 'Faculty Member'}
-            </h1>
-            <p className="mt-1 text-xs sm:text-sm text-[var(--text-secondary)] max-w-2xl">
-              Monitor your assigned examination venues, view live student interview sessions & audio streams, mark attendance, and inspect completed assessment records.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={() => {
-                fetchStats();
-                fetchSlots();
-                fetchSessions();
-                showToast('Refreshed faculty data');
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold transition-all cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${statsLoading || loadingSlots ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-
-            <button
-              onClick={() => navigate('/faculty/attendance')}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 shadow-md transition-all cursor-pointer"
-            >
-              <ClipboardCheck className="w-4 h-4" />
-              <span>Live Attendance Console</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* ============================================================ */}
       {/* 2. TOP MANAGEMENT KPI STATS */}
