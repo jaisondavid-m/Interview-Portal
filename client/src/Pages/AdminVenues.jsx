@@ -435,6 +435,34 @@ export default function AdminVenues() {
     }
   };
 
+  const [cancellingBookingId, setCancellingBookingId] = useState(null);
+
+  const handleAdminCancelBooking = async (booking) => {
+    const studentName = booking.student?.name || 'Student';
+    const rollNo = booking.student?.roll_no ? ` (${booking.student.roll_no})` : '';
+    if (!window.confirm(`Are you sure you want to cancel the booking for ${studentName}${rollNo}? This will free up 1 seat in this slot.`)) {
+      return;
+    }
+
+    try {
+      setCancellingBookingId(booking.id);
+      await api.post(`/admin/slots/bookings/${booking.id}/cancel`);
+      showToast(`Booking cancelled for ${studentName}`);
+
+      // Refresh current roster
+      if (selectedSlotRoster?.slot?.id) {
+        const res = await api.get(`/admin/slots/${selectedSlotRoster.slot.id}/roster`);
+        setSelectedSlotRoster(res?.data || res);
+      }
+      // Refresh slots table to update seat counts
+      fetchSlots();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to cancel student booking', 'error');
+    } finally {
+      setCancellingBookingId(null);
+    }
+  };
+
   // Filtered Venues
   const filteredVenues = useMemo(() => {
     if (!venueSearch) return venues;
@@ -1375,7 +1403,7 @@ export default function AdminVenues() {
               </div>
 
               <div className="text-xs text-[var(--text-secondary)]">
-                Total Booked: <span className="font-bold text-[var(--text-primary)]">{selectedSlotRoster?.bookings?.length || 0}</span> / {selectedSlotRoster?.slot?.capacity}
+                Active Booked: <span className="font-bold text-[var(--text-primary)]">{selectedSlotRoster?.bookings?.filter(b => b.status !== 'cancelled').length || 0}</span> / {selectedSlotRoster?.slot?.capacity}
               </div>
             </div>
 
@@ -1396,9 +1424,10 @@ export default function AdminVenues() {
                     <tr className="border-b border-[var(--border)] text-[var(--text-secondary)] uppercase tracking-wider font-semibold text-[10px]">
                       <th className="pb-2.5">Roll No</th>
                       <th className="pb-2.5">Student Name</th>
-                      <th className="pb-2.5">Domain Track</th>
+                      <th className="pb-2.5">Domain / Level</th>
                       <th className="pb-2.5">Attendance</th>
                       <th className="pb-2.5">Interview Access</th>
+                      <th className="pb-2.5 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
@@ -1409,48 +1438,97 @@ export default function AdminVenues() {
                         return (
                           b.student?.name?.toLowerCase().includes(q) ||
                           b.student?.roll_no?.toLowerCase().includes(q) ||
-                          b.student?.email?.toLowerCase().includes(q)
+                          b.student?.email?.toLowerCase().includes(q) ||
+                          b.track?.title?.toLowerCase().includes(q)
                         );
                       })
-                      .map((b) => (
-                        <tr key={b.id} className="hover:bg-[var(--bg-hover)] transition-all">
-                          <td className="py-2.5 font-mono font-semibold text-[var(--text-primary)]">
-                            {b.student?.roll_no || 'N/A'}
-                          </td>
-                          <td className="py-2.5">
-                            <p className="font-semibold text-[var(--text-primary)]">{b.student?.name}</p>
-                            <p className="text-[10px] text-[var(--text-secondary)]">{b.student?.department || 'Student'}</p>
-                          </td>
-                          <td className="py-2.5 font-medium text-[var(--text-secondary)]">
-                            {b.track?.title || 'General'}
-                          </td>
-                          <td className="py-2.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              b.attendance_status === 'present'
-                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                                : b.attendance_status === 'absent'
-                                ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                                : b.attendance_status === 'late'
-                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
-                            }`}>
-                              {b.attendance_status}
-                            </span>
-                          </td>
-                          <td className="py-2.5">
-                            {b.can_start_interview ? (
-                              <span className="flex items-center gap-1 text-emerald-500 font-semibold text-[11px]">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Unlocked</span>
-                              </span>
-                            ) : (
-                              <span className="text-[var(--text-secondary)] text-[11px]">
-                                Locked (Pending Present)
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      .map((b) => {
+                        const isCancelled = b.status === 'cancelled';
+                        const isCancelling = cancellingBookingId === b.id;
+
+                        return (
+                          <tr key={b.id} className="hover:bg-[var(--bg-hover)] transition-all">
+                            <td className="py-2.5 font-mono font-semibold text-[var(--text-primary)]">
+                              {b.student?.roll_no || 'N/A'}
+                            </td>
+                            <td className="py-2.5">
+                              <p className="font-semibold text-[var(--text-primary)]">{b.student?.name}</p>
+                              <p className="text-[10px] text-[var(--text-secondary)]">{b.student?.department || b.student?.email || 'Student'}</p>
+                            </td>
+                            <td className="py-2.5 font-medium text-[var(--text-secondary)]">
+                              <div className="font-semibold text-[var(--text-primary)]">
+                                {b.track?.title || 'General'}
+                              </div>
+                              {b.level ? (
+                                <span className="text-[10px] text-[var(--accent)] font-mono">
+                                  Level {b.level.level_number}: {b.level.name}
+                                </span>
+                              ) : b.level_id ? (
+                                <span className="text-[10px] text-[var(--accent)] font-mono">
+                                  Level {b.level_id}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="py-2.5">
+                              {isCancelled ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
+                                  Cancelled
+                                </span>
+                              ) : (
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  b.attendance_status === 'present'
+                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                    : b.attendance_status === 'absent'
+                                    ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                                    : b.attendance_status === 'late'
+                                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                    : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                                }`}>
+                                  {b.attendance_status || 'pending'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5">
+                              {isCancelled ? (
+                                <span className="text-zinc-500 text-[11px]">
+                                  Booking Cancelled
+                                </span>
+                              ) : b.can_start_interview ? (
+                                <span className="flex items-center gap-1 text-emerald-500 font-semibold text-[11px]">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Unlocked</span>
+                                </span>
+                              ) : (
+                                <span className="text-[var(--text-secondary)] text-[11px]">
+                                  Locked (Pending Present)
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 text-right">
+                              {isCancelled ? (
+                                <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                                  Cancelled
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminCancelBooking(b)}
+                                  disabled={isCancelling}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 text-[11px] font-semibold transition-all cursor-pointer disabled:opacity-50"
+                                  title="Cancel student booking and free up seat"
+                                >
+                                  {isCancelling ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-3 h-3" />
+                                  )}
+                                  <span>Cancel Booking</span>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               )}

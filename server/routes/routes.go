@@ -242,6 +242,8 @@ func SetupRouter() *gin.Engine {
 				adminSlots.GET("/:id/roster", controllers.AdminGetSlotRoster)
 				adminSlots.PUT("/:id", controllers.AdminUpdateSlot)
 				adminSlots.DELETE("/:id", controllers.AdminDeleteSlot)
+				adminSlots.POST("/bookings/:id/cancel", controllers.AdminCancelBooking)
+				adminSlots.DELETE("/bookings/:id", controllers.AdminCancelBooking)
 			}
 
 			// Interview History Dedicated Route

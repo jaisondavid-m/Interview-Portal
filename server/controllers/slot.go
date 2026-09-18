@@ -527,6 +527,7 @@ func AdminGetSlotRoster(c *gin.Context) {
 		Where("slot_id = ?", slot.ID).
 		Preload("Student").
 		Preload("Track").
+		Preload("Level").
 		Order("created_at asc").
 		Find(&bookings).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -543,5 +544,43 @@ func AdminGetSlotRoster(c *gin.Context) {
 			"slot":     slot,
 			"bookings": bookings,
 		},
+	})
+}
+
+// AdminCancelBooking allows an administrator to cancel a student's booking for a slot
+func AdminCancelBooking(c *gin.Context) {
+	idParam := c.Param("id")
+	bookingID, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid booking ID"})
+		return
+	}
+
+	var booking models.SlotBooking
+	if err := database.DB.Preload("Student").Preload("Track").Preload("Level").First(&booking, uint(bookingID)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Booking not found"})
+		return
+	}
+
+	if booking.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Booking is already cancelled"})
+		return
+	}
+
+	booking.Status = "cancelled"
+	booking.CanStartInterview = false
+	if err := database.DB.Save(&booking).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to cancel booking",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Student booking cancelled successfully",
+		"data":    booking,
 	})
 }
