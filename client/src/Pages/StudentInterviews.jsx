@@ -801,13 +801,6 @@ export default function StudentInterviews() {
             </div>
 
             <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4">
-              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <p>
-                  Select a slot to attend. The faculty at the venue will verify your attendance to start your interview.
-                </p>
-              </div>
-
               {loadingSlots ? (
                 <div className="flex flex-col items-center justify-center py-12 text-[var(--text-secondary)]">
                   <Loader2 className="w-7 h-7 animate-spin text-[var(--accent)] mb-2" />
