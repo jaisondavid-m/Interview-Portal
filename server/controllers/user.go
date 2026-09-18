@@ -117,9 +117,14 @@ func AdminGetUsers(c *gin.Context) {
 	hasNext := page < totalPages
 	hasPrev := page > 1
 
+	// Query distinct departments for dynamic filter dropdown
+	var distinctDepts []string
+	database.DB.Model(&models.User{}).Where("department != '' AND department IS NOT NULL").Distinct("department").Order("department asc").Pluck("department", &distinctDepts)
+
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   users,
+		"status":                "success",
+		"data":                  users,
+		"available_departments": distinctDepts,
 		"pagination": gin.H{
 			"page":          page,
 			"limit":         limit,
