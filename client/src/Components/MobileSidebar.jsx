@@ -2,7 +2,8 @@ import React, { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
-  Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, X 
+  Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, X,
+  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Database
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,6 +17,11 @@ const ICON_MAP = {
   History,
   Terminal,
   Video,
+  Database,
+  Building2,
+  CalendarCheck,
+  ClipboardCheck,
+  FlaskConical,
 };
 
 export default function MobileSidebar({ isOpen, onClose }) {
@@ -159,10 +165,14 @@ export default function MobileSidebar({ isOpen, onClose }) {
           <nav className="p-3 space-y-1 max-h-[calc(100vh-210px)] overflow-y-auto custom-scrollbar">
             {menuItems.map((item) => {
               const Icon = item.icon;
+              const isPrefixOfAnother = menuItems.some(
+                other => other.path !== item.path && other.path.startsWith(item.path + '/')
+              );
               return (
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  end={isPrefixOfAnother || item.path === '/dashboard'}
                   onClick={onClose}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm)] text-[13px] font-medium font-ui transition-all ${

@@ -91,10 +91,14 @@ export default function Sidebar() {
       <nav className="space-y-1.5 pt-1">
         {menuItems.map((item) => {
           const Icon = item.icon;
+          const isPrefixOfAnother = menuItems.some(
+            other => other.path !== item.path && other.path.startsWith(item.path + '/')
+          );
           return (
             <NavLink
               key={item.path}
               to={item.path}
+              end={isPrefixOfAnother || item.path === '/dashboard'}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3.5 py-2.5 rounded-[var(--radius-sm)] text-[13px] font-medium font-ui transition-all ${
                   isActive
