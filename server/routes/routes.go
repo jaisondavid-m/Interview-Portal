@@ -239,6 +239,7 @@ func SetupRouter() *gin.Engine {
 			{
 				adminSlots.GET("", controllers.AdminGetSlots)
 				adminSlots.POST("", controllers.AdminCreateSlot)
+				adminSlots.GET("/:id", controllers.AdminGetSlotDetail)
 				adminSlots.GET("/:id/roster", controllers.AdminGetSlotRoster)
 				adminSlots.PUT("/:id", controllers.AdminUpdateSlot)
 				adminSlots.DELETE("/:id", controllers.AdminDeleteSlot)

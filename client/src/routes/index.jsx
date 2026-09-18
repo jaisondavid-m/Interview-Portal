@@ -25,6 +25,7 @@ import InterviewRoom from '../Pages/InterviewRoom';
 import DeveloperAuditLogs from '../Pages/DeveloperAuditLogs';
 import AdminBackup from '../Pages/AdminBackup';
 import AdminVenues from '../Pages/AdminVenues';
+import AdminSlotEditor from '../Pages/AdminSlotEditor';
 import FacultyDashboard from '../Pages/FacultyDashboard';
 import FacultyAttendance from '../Pages/FacultyAttendance';
 import StudentSlotBooking from '../Pages/StudentSlotBooking';
@@ -239,6 +240,22 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="admin_venues">
                 <AdminVenues />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/slots/new',
+            element: (
+              <DynamicPageRoute pageKey="admin_venues">
+                <AdminSlotEditor />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/slots/:slotId/edit',
+            element: (
+              <DynamicPageRoute pageKey="admin_venues">
+                <AdminSlotEditor />
               </DynamicPageRoute>
             ),
           },

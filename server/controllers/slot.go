@@ -207,6 +207,39 @@ func AdminGetSlots(c *gin.Context) {
 	})
 }
 
+// AdminGetSlotDetail retrieves a single interview slot by ID
+func AdminGetSlotDetail(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid slot ID"})
+		return
+	}
+
+	var slot models.InterviewSlot
+	if err := database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Level").First(&slot, uint(id)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Slot not found"})
+		return
+	}
+
+	enriched := PopulateSlotAllowedEntities([]models.InterviewSlot{slot})
+	if len(enriched) > 0 {
+		slot = enriched[0]
+	}
+
+	var booked int64
+	var present int64
+	database.DB.Model(&models.SlotBooking{}).Where("slot_id = ? AND status != 'cancelled'", slot.ID).Count(&booked)
+	database.DB.Model(&models.SlotBooking{}).Where("slot_id = ? AND attendance_status = 'present'", slot.ID).Count(&present)
+	slot.BookedCount = int(booked)
+	slot.PresentCount = int(present)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   slot,
+	})
+}
+
 // AdminCreateSlot creates a new interview time slot and assigns faculty to the venue
 func AdminCreateSlot(c *gin.Context) {
 	var input CreateSlotInput
