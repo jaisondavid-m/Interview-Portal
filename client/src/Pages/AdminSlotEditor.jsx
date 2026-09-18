@@ -52,7 +52,7 @@ export default function AdminSlotEditor() {
     slot_venues: [
       { venue_id: '', faculty_id: '', capacity: 30 }
     ],
-    prevent_same_venue_match: true,
+    prevent_same_venue_match: false,
     slot_date: new Date().toISOString().split('T')[0],
     start_time: '09:00',
     end_time: '10:30',
@@ -148,7 +148,7 @@ export default function AdminSlotEditor() {
           setFormData({
             slot_type: s.slot_type || (s.venue_id === 0 && (!s.venues || s.venues.length === 0) ? 'online' : 'physical'),
             slot_venues: slotVenues,
-            prevent_same_venue_match: s.prevent_same_venue_match !== false,
+            prevent_same_venue_match: Boolean(s.prevent_same_venue_match),
             slot_date: s.slot_date || new Date().toISOString().split('T')[0],
             start_time: s.start_time || '09:00',
             end_time: s.end_time || '10:30',
@@ -212,7 +212,7 @@ export default function AdminSlotEditor() {
 
   const handleRemoveVenueRow = (index) => {
     if (formData.slot_venues.length <= 1) {
-      showToast('A slot must have at least one examination venue', 'error');
+      showToast('A slot must have at least one venue', 'error');
       return;
     }
 
@@ -385,7 +385,7 @@ export default function AdminSlotEditor() {
 
     if (!isOnline) {
       if (formData.slot_venues.length === 0) {
-        showToast('Please add at least one examination venue', 'error');
+        showToast('Please add at least one venue', 'error');
         return;
       }
 
@@ -512,7 +512,7 @@ export default function AdminSlotEditor() {
             <span>{isEditing ? 'Edit Interview Slot' : 'Schedule New Interview Slot'}</span>
           </h1>
           <p className="text-xs text-[var(--text-secondary)]">
-            Configure multi-venue physical examination labs, assign unique faculty invigilators, and configure cross-venue matchmaking.
+            Configure venues, assign faculty, and set schedule details.
           </p>
         </div>
 
@@ -555,7 +555,7 @@ export default function AdminSlotEditor() {
               }`}
             >
               <Building2 className="w-4 h-4" />
-              <span>Physical (In-Person Examination Labs)</span>
+              <span>Physical Venue</span>
             </button>
 
             <button
@@ -585,7 +585,7 @@ export default function AdminSlotEditor() {
                     <span>Online Virtual Session Settings</span>
                   </h3>
                   <p className="text-[11px] text-[var(--text-secondary)]">
-                    No physical examination venue or faculty invigilator is required.
+                    No venue or faculty is required.
                   </p>
                 </div>
               </div>
@@ -623,10 +623,10 @@ export default function AdminSlotEditor() {
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      Examination Venues & Faculty Invigilators
+                      Venues & Faculty
                     </h3>
                     <p className="text-[11px] text-[var(--text-secondary)]">
-                      Assign 1 or more physical examination rooms. Each venue must be mapped to a distinct faculty invigilator.
+                      Assign 1 or more venues. Each venue must be mapped to a distinct faculty.
                     </p>
                   </div>
                 </div>
@@ -670,7 +670,7 @@ export default function AdminSlotEditor() {
                       <div className="flex items-center justify-between pb-2 border-b border-[var(--border)] text-xs font-bold text-[var(--text-secondary)]">
                         <span className="flex items-center gap-1.5 text-[var(--text-primary)]">
                           <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
-                          <span>Examination Location #{idx + 1}</span>
+                          <span>Venue #{idx + 1}</span>
                         </span>
 
                         {formData.slot_venues.length > 1 && (
@@ -766,14 +766,14 @@ export default function AdminSlotEditor() {
                     <div className="flex items-center gap-2">
                       <ArrowRightLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
                       <span className="text-xs font-bold text-[var(--text-primary)]">
-                        Enforce Cross-Venue Matchmaking (Recommended)
+                        Enforce Cross-Venue Matchmaking
                       </span>
                       <span className="px-2 py-0.2 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                         Integrity Shield
                       </span>
                     </div>
                     <p className="text-[11px] text-[var(--text-secondary)]">
-                      Guarantees that a candidate in Venue 1 will connect with a peer sitting in Venue 2 or Venue 3 (prevents candidates sitting in the same physical room from interviewing each other).
+                      Guarantees that a candidate in Venue 1 will connect with a peer sitting in Venue 2 or Venue 3 (prevents candidates sitting in the same physical venue from interviewing each other).
                     </p>
                   </div>
                 </label>
@@ -792,7 +792,7 @@ export default function AdminSlotEditor() {
                   Session Schedule, Timings & Total Seat Quota
                 </h3>
                 <p className="text-[11px] text-[var(--text-secondary)]">
-                  Configure the examination date, start/end session timings, and total combined capacity.
+                  Configure the slot date, start/end session timings, and total combined capacity.
                 </p>
               </div>
             </div>

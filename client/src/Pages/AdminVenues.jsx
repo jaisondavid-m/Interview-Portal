@@ -355,7 +355,7 @@ export default function AdminVenues() {
             </h1>
           </div>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Manage physical interview examination labs, schedule session time slots, and assign faculty invigilators.
+            Manage physical venues, schedule session time slots, and assign faculty.
           </p>
         </div>
 
@@ -385,7 +385,7 @@ export default function AdminVenues() {
               }`}
             >
               <Building2 className="w-3.5 h-3.5" />
-              <span>Venues & Labs</span>
+              <span>Venues</span>
               <span className="ml-1 px-1.5 py-0.2 text-[10px] rounded-full bg-[var(--accent-dim)] text-[var(--accent)]">
                 {venues.length}
               </span>
@@ -491,7 +491,7 @@ export default function AdminVenues() {
               </div>
               <h3 className="text-base font-semibold text-[var(--text-primary)]">No interview slots found</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
-                Schedule an interview slot to assign faculty invigilators to physical examination labs.
+                Schedule an interview slot to assign faculty to venues.
               </p>
               <button
                 onClick={handleOpenCreateSlot}

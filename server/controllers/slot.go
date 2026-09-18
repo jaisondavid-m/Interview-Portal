@@ -367,7 +367,7 @@ func AdminCreateSlot(c *gin.Context) {
 			fID = *input.FacultyID
 		}
 		if vID == 0 || fID == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "At least one examination venue and faculty member must be assigned for physical in-person slots"})
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "At least one venue and faculty member must be assigned for physical in-person slots"})
 			return
 		}
 		capVal := 30
@@ -428,7 +428,7 @@ func AdminCreateSlot(c *gin.Context) {
 		capacity = *input.Capacity
 	}
 
-	preventSameVenue := true
+	preventSameVenue := false
 	if input.PreventSameVenueMatch != nil {
 		preventSameVenue = *input.PreventSameVenueMatch
 	}

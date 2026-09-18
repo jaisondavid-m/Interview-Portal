@@ -25,7 +25,7 @@ type InterviewSlot struct {
 	FacultyID              uint                  `gorm:"default:0;index" json:"faculty_id"`                     // Legacy fallback
 	Faculty                *User                 `gorm:"foreignKey:FacultyID" json:"faculty,omitempty"`         // Legacy fallback
 	Venues                 []SlotVenueAssignment `gorm:"foreignKey:SlotID" json:"venues,omitempty"`            // Multi-venue assignments
-	PreventSameVenueMatch  bool                  `gorm:"default:true" json:"prevent_same_venue_match"`          // Cross-venue matching
+	PreventSameVenueMatch  bool                  `gorm:"default:false" json:"prevent_same_venue_match"`         // Cross-venue matching
 	AllocationsPublished   bool                  `gorm:"default:false" json:"allocations_published"`            // Admin verified & published to students
 	TrackID                *uint                 `gorm:"index" json:"track_id,omitempty"`                      // Nullable: legacy/fallback domain constraint
 	Track                  *InterviewTrack       `gorm:"foreignKey:TrackID" json:"track,omitempty"`
