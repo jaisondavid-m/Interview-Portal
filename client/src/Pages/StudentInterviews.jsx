@@ -269,7 +269,6 @@ export default function StudentInterviews() {
       if (b.status !== 'cancelled') {
         const key = `${b.track_id}_${b.level_id || 0}`;
         map[key] = b;
-        map[`track_${b.track_id}`] = b; // track-level fallback
       }
     }
     return map;
@@ -476,7 +475,7 @@ export default function StudentInterviews() {
 
                 // Check if student has a booking for this level
                 const bookingKey = `${selectedTrack.id}_${lvl.id}`;
-                const booking = activeBookingMap[bookingKey] || activeBookingMap[`track_${selectedTrack.id}`];
+                const booking = activeBookingMap[bookingKey];
                 const isBooked = !!booking;
                 const isPresent = booking?.attendance_status === 'present';
                 const isPending = booking?.attendance_status === 'pending';
@@ -569,13 +568,9 @@ export default function StudentInterviews() {
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       ) : isBooked ? (
-                        <button
-                          onClick={() => handleOpenSlotBooking(selectedTrack, lvl)}
-                          className="btn btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                        >
-                          <CalendarCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
-                          <span>Change Slot</span>
-                        </button>
+                        <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)]">
+                          <span>Slot Reserved</span>
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleOpenSlotBooking(selectedTrack, lvl)}
