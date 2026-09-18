@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
+import SearchableSelect from '../Components/SearchableSelect';
 
 // Icon mapping helper
 const ICON_COMPONENTS = {
@@ -166,6 +167,31 @@ export default function AdminRoles() {
     if (lower === 'developer') return '/developer/audit-logs';
     if (lower === 'faculty') return '/faculty/attendance';
     return '/dashboard';
+  };
+
+  // Build searchable dropdown options for landing page per role
+  const getRolePageSelectOptions = (roleName) => {
+    const fallback = getDefaultFallback(roleName);
+    return [
+      {
+        value: '',
+        label: `System Default (${fallback})`,
+        sublabel: `Auto redirects to ${fallback}`,
+        badge: 'Default',
+        icon: Globe,
+      },
+      ...pages.map((p) => {
+        const PageIcon = ICON_COMPONENTS[p.icon] || FileCode2;
+        return {
+          value: p.path,
+          label: p.name,
+          sublabel: p.path,
+          badge: p.path,
+          category: p.category,
+          icon: PageIcon,
+        };
+      }),
+    ];
   };
 
   // Quick inline update of default landing page for a role
@@ -649,7 +675,7 @@ export default function AdminRoles() {
 
                     {/* Default Landing Page Configuration Section */}
                     <div
-                      className="pt-2.5 pb-1 border-t border-[var(--border)]/70 flex flex-col gap-1.5"
+                      className="pt-2.5 pb-1 border-t border-[var(--border)]/70 flex flex-col gap-1.5 relative"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -668,19 +694,16 @@ export default function AdminRoles() {
                         )}
                       </div>
 
-                      <select
+                      <SearchableSelect
+                        options={getRolePageSelectOptions(r.name)}
                         value={r.default_page || ''}
-                        onChange={(e) => handleUpdateDefaultPage(r, e.target.value)}
-                        className="w-full text-xs py-1.5 px-2.5 bg-[var(--bg-raised)] hover:bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--accent)] rounded-[var(--radius-sm)] text-[var(--text-primary)] transition cursor-pointer font-sans"
-                        title="Configure page loaded immediately after user logs in with this role"
-                      >
-                        <option value="">System Default ({getDefaultFallback(r.name)})</option>
-                        {pages.map((p) => (
-                          <option key={p.key} value={p.path}>
-                            {p.name} ({p.path})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => handleUpdateDefaultPage(r, val)}
+                        placeholder={`System Default (${getDefaultFallback(r.name)})`}
+                        searchPlaceholder="Search catalog pages by name, path, or category..."
+                        fullWidth={true}
+                        menuWidth="w-full min-w-[280px]"
+                        className="py-1.5 text-[11.5px] bg-[var(--bg-raised)]"
+                      />
                     </div>
 
                     {/* Footer: Manage Permissions Button & Edit / Delete Icons */}
@@ -765,22 +788,22 @@ export default function AdminRoles() {
 
               {/* Default Landing Page Selector in Active Role Header */}
               <div className="flex items-center gap-2 pt-1 flex-wrap">
-                <span className="text-xs text-[var(--text-secondary)] font-medium flex items-center gap-1.5">
+                <span className="text-xs text-[var(--text-secondary)] font-medium flex items-center gap-1.5 shrink-0">
                   <Globe className="w-3.5 h-3.5 text-[var(--accent)]" />
                   <span>Default Landing Page:</span>
                 </span>
-                <select
-                  value={currentRoleObj.default_page || ''}
-                  onChange={(e) => handleUpdateDefaultPage(currentRoleObj, e.target.value)}
-                  className="text-xs py-1 px-2.5 bg-[var(--bg-raised)] hover:bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--accent)] rounded-[var(--radius-sm)] text-[var(--text-primary)] font-medium transition cursor-pointer max-w-xs"
-                >
-                  <option value="">System Default ({getDefaultFallback(currentRoleObj.name)})</option>
-                  {pages.map((p) => (
-                    <option key={p.key} value={p.path}>
-                      {p.name} ({p.path})
-                    </option>
-                  ))}
-                </select>
+                <div className="w-64 sm:w-80">
+                  <SearchableSelect
+                    options={getRolePageSelectOptions(currentRoleObj.name)}
+                    value={currentRoleObj.default_page || ''}
+                    onChange={(val) => handleUpdateDefaultPage(currentRoleObj, val)}
+                    placeholder={`System Default (${getDefaultFallback(currentRoleObj.name)})`}
+                    searchPlaceholder="Search catalog pages by name, path, or category..."
+                    fullWidth={true}
+                    menuWidth="w-80 sm:w-96"
+                    className="py-1 text-xs bg-[var(--bg-raised)]"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1296,19 +1319,16 @@ export default function AdminRoles() {
 
               <div>
                 <label className="block text-[var(--text-secondary)] font-medium mb-1">Default Landing Page after Login</label>
-                <select
+                <SearchableSelect
+                  options={getRolePageSelectOptions(newRoleForm.name || 'student')}
                   value={newRoleForm.default_page || ''}
-                  onChange={(e) => setNewRoleForm({ ...newRoleForm, default_page: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="">System Default (/dashboard)</option>
-                  {pages.map((p) => (
-                    <option key={p.key} value={p.path}>
-                      {p.name} ({p.path})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[10px] text-[var(--text-muted)]">Users with this role will land on this page upon logging in.</span>
+                  onChange={(val) => setNewRoleForm({ ...newRoleForm, default_page: val })}
+                  placeholder="System Default (/dashboard)"
+                  searchPlaceholder="Search catalog pages..."
+                  fullWidth={true}
+                  menuWidth="w-full"
+                />
+                <span className="text-[10px] text-[var(--text-muted)] mt-1 block">Users with this role will land on this page upon logging in.</span>
               </div>
 
               <div>
@@ -1397,19 +1417,16 @@ export default function AdminRoles() {
 
               <div>
                 <label className="block text-[var(--text-secondary)] font-medium mb-1">Default Landing Page after Login</label>
-                <select
+                <SearchableSelect
+                  options={getRolePageSelectOptions(roleToEdit.name)}
                   value={roleToEdit.default_page || ''}
-                  onChange={(e) => setRoleToEdit({ ...roleToEdit, default_page: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="">System Default ({getDefaultFallback(roleToEdit.name)})</option>
-                  {pages.map((p) => (
-                    <option key={p.key} value={p.path}>
-                      {p.name} ({p.path})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[10px] text-[var(--text-muted)]">Users with this role will land on this page upon logging in.</span>
+                  onChange={(val) => setRoleToEdit({ ...roleToEdit, default_page: val })}
+                  placeholder={`System Default (${getDefaultFallback(roleToEdit.name)})`}
+                  searchPlaceholder="Search catalog pages..."
+                  fullWidth={true}
+                  menuWidth="w-full"
+                />
+                <span className="text-[10px] text-[var(--text-muted)] mt-1 block">Users with this role will land on this page upon logging in.</span>
               </div>
 
               <div>
