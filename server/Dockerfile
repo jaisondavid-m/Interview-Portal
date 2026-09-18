@@ -17,13 +17,24 @@ COPY . .
 RUN go build -mod=vendor -ldflags="-w -s" -o /app/server main.go
 
 # ==========================================
-# Production Stage (Node.js + Python3 Runtime)
+# Multi-stage Runtime stages
 # ==========================================
 FROM python:3.12-alpine AS python-runtime
+FROM eclipse-temurin:17-alpine AS java-runtime
 
-FROM node:22-alpine
+FROM node:22-alpine3.21
 
 WORKDIR /app
+
+# Install GCC, G++, libc-dev for native C/C++ compilation with high-speed mirror
+RUN echo "http://mirrors.aliyun.com/alpine/v3.21/main" > /etc/apk/repositories && \
+    echo "http://mirrors.aliyun.com/alpine/v3.21/community" >> /etc/apk/repositories && \
+    apk add --no-cache build-base
+
+# Copy Java runtime from eclipse-temurin:17-alpine (instant multi-stage copy, zero APK network timeouts)
+COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="/opt/java/openjdk/bin:${PATH}"
 
 # Copy Python runtime from official python:3.12-alpine (zero network dependency during build)
 COPY --from=python-runtime /usr/local/bin/python3* /usr/local/bin/
@@ -32,14 +43,10 @@ COPY --from=python-runtime /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=python-runtime /usr/local/lib/libpython* /usr/local/lib/
 COPY --from=python-runtime /usr/local/include/python3.12 /usr/local/include/python3.12
 
-# Install GCC, G++, libc-dev, and OpenJDK 17 for native C++ and Java compilation
-RUN apk add --no-cache build-base openjdk17
-
 # Symlink python and node for universal path resolution
 RUN ln -sf /usr/local/bin/python3 /usr/bin/python3 && \
     ln -sf /usr/local/bin/python3 /usr/bin/python && \
     ln -sf /usr/local/bin/node /usr/bin/node 2>/dev/null || true
-
 
 # Copy Go runtime from official golang builder (zero network dependency during build)
 COPY --from=builder /usr/local/go /usr/local/go

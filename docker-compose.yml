@@ -166,6 +166,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+      network: host
     container_name: mockmate-server
     restart: unless-stopped
     environment:
@@ -203,6 +204,7 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+      network: host
       args:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
     container_name: mockmate-client
