@@ -24,6 +24,7 @@ import {
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from '../Components/ConfirmModal';
 
 export default function StudentSlotBooking() {
   const navigate = useNavigate();
@@ -42,6 +43,10 @@ export default function StudentSlotBooking() {
   const [myBookings, setMyBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [activeCheckIn, setActiveCheckIn] = useState(null);
+
+  // Cancel Booking Modal State
+  const [bookingToCancel, setBookingToCancel] = useState(null);
+  const [cancellingBookingId, setCancellingBookingId] = useState(null);
 
   // Booking Modal
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -163,15 +168,23 @@ export default function StudentSlotBooking() {
     }
   };
 
-  const handleCancelBooking = async (bookingId) => {
-    if (!window.confirm('Are you sure you want to cancel this slot booking?')) return;
+  const handleCancelBooking = (booking) => {
+    setBookingToCancel(booking);
+  };
+
+  const handleConfirmCancelBooking = async () => {
+    if (!bookingToCancel) return;
     try {
-      await api.post(`/slots/bookings/${bookingId}/cancel`);
+      setCancellingBookingId(bookingToCancel.id);
+      await api.post(`/slots/bookings/${bookingToCancel.id}/cancel`);
       showToast('Booking cancelled successfully');
       fetchAvailableSlots();
       fetchMyBookingsAndStatus();
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to cancel booking', 'error');
+    } finally {
+      setCancellingBookingId(null);
+      setBookingToCancel(null);
     }
   };
 
@@ -592,7 +605,7 @@ export default function StudentSlotBooking() {
 
                       {!isCancelled && !isPresent && (
                         <button
-                          onClick={() => handleCancelBooking(b.id)}
+                          onClick={() => handleCancelBooking(b)}
                           className="px-3 py-1 text-xs font-semibold text-[var(--red)] hover:bg-[var(--red-bg)] rounded-lg transition-all cursor-pointer"
                         >
                           Cancel Booking
@@ -697,6 +710,28 @@ export default function StudentSlotBooking() {
           </div>
         </div>
       )}
+
+      {/* CONFIRM CANCEL BOOKING MODAL */}
+      <ConfirmModal
+        isOpen={Boolean(bookingToCancel)}
+        title="Cancel Interview Booking"
+        message={
+          bookingToCancel ? (
+            <span>
+              Are you sure you want to cancel your booking for{' '}
+              <strong className="text-[var(--text-primary)]">
+                {bookingToCancel.track?.title || 'this track'} on {bookingToCancel.slot?.slot_date} ({bookingToCancel.slot?.start_time})
+              </strong>
+              ? Your seat will be freed up for other candidates.
+            </span>
+          ) : ''
+        }
+        confirmText="Confirm Cancellation"
+        cancelText="Keep Booking"
+        loading={Boolean(cancellingBookingId)}
+        onConfirm={handleConfirmCancelBooking}
+        onCancel={() => setBookingToCancel(null)}
+      />
     </div>
   );
 }

@@ -302,13 +302,16 @@ export default function AdminVenues() {
   };
 
   const [cancellingBookingId, setCancellingBookingId] = useState(null);
+  const [bookingToCancel, setBookingToCancel] = useState(null);
 
-  const handleAdminCancelBooking = async (booking) => {
+  const handleAdminCancelBooking = (booking) => {
+    setBookingToCancel(booking);
+  };
+
+  const handleConfirmCancelBooking = async () => {
+    if (!bookingToCancel) return;
+    const booking = bookingToCancel;
     const studentName = booking.student?.name || 'Student';
-    const rollNo = booking.student?.roll_no ? ` (${booking.student.roll_no})` : '';
-    if (!window.confirm(`Are you sure you want to cancel the booking for ${studentName}${rollNo}? This will free up 1 seat in this slot.`)) {
-      return;
-    }
 
     try {
       setCancellingBookingId(booking.id);
@@ -326,6 +329,7 @@ export default function AdminVenues() {
       showToast(err.response?.data?.message || 'Failed to cancel student booking', 'error');
     } finally {
       setCancellingBookingId(null);
+      setBookingToCancel(null);
     }
   };
 
@@ -1593,7 +1597,7 @@ export default function AdminVenues() {
         </div>
       )}
 
-      {/* CONFIRM DELETE MODAL */}
+      {/* CONFIRM DELETE VENUE / SLOT MODAL */}
       <ConfirmModal
         isOpen={showDeleteModal}
         title={itemToDelete?.type === 'venue' ? 'Delete Venue' : 'Cancel / Delete Slot'}
@@ -1606,6 +1610,29 @@ export default function AdminVenues() {
           setShowDeleteModal(false);
           setItemToDelete(null);
         }}
+      />
+
+      {/* CONFIRM CANCEL STUDENT BOOKING MODAL */}
+      <ConfirmModal
+        isOpen={Boolean(bookingToCancel)}
+        title="Cancel Student Booking"
+        message={
+          bookingToCancel ? (
+            <span>
+              Are you sure you want to cancel the booking for{' '}
+              <strong className="text-[var(--text-primary)]">
+                {bookingToCancel.student?.name || 'Student'}
+                {bookingToCancel.student?.roll_no ? ` (${bookingToCancel.student.roll_no})` : ''}
+              </strong>
+              ? This will release their allocated seat back into the slot.
+            </span>
+          ) : ''
+        }
+        confirmText="Confirm Cancellation"
+        cancelText="Keep Booking"
+        loading={Boolean(cancellingBookingId)}
+        onConfirm={handleConfirmCancelBooking}
+        onCancel={() => setBookingToCancel(null)}
       />
     </div>
   );

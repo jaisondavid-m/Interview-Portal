@@ -804,11 +804,12 @@ export default function QuestionBulkModal({
   const handleSubmit = async () => {
     const validItems = parsedPreview.filter((p) => p.status === 'valid');
     if (validItems.length === 0) {
-      alert('No valid questions to import.');
+      setParseError('No valid questions to import. Please ensure items are marked valid.');
       return;
     }
 
     setLoading(true);
+    setParseError('');
     try {
       const payload = {
         questions: validItems.map((p) => ({
@@ -822,7 +823,7 @@ export default function QuestionBulkModal({
       setImportResult(res.data || res);
       if (onSuccess) onSuccess();
     } catch (err) {
-      alert(err.message || 'Failed to bulk import questions');
+      setParseError(err.response?.data?.message || err.message || 'Failed to bulk import questions');
     } finally {
       setLoading(false);
     }

@@ -112,6 +112,13 @@ export default function AdminUsers() {
     password: '',
   });
 
+  // Toast Notification State
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -297,8 +304,9 @@ export default function AdminUsers() {
         return next;
       });
       fetchUsers();
+      showToast(`User ${selectedUser.name || ''} deleted successfully`);
     } catch (err) {
-      alert(err.message || 'Failed to delete user');
+      showToast(err.response?.data?.message || err.message || 'Failed to delete user', 'error');
     } finally {
       setFormLoading(false);
     }
@@ -313,9 +321,10 @@ export default function AdminUsers() {
       await api.post('/admin/users/bulk-delete', { user_ids: userIds });
       setShowBulkDeleteModal(false);
       setSelectedIds(new Set());
+      showToast(`${userIds.length} users deleted successfully`);
       fetchUsers();
     } catch (err) {
-      alert(err.message || 'Failed to delete selected users');
+      showToast(err.response?.data?.message || err.message || 'Failed to delete selected users', 'error');
     } finally {
       setFormLoading(false);
     }
@@ -338,9 +347,10 @@ export default function AdminUsers() {
       setShowBulkEditModal(false);
       setBulkEditFormData({ department: '', role: '', password: '' });
       setSelectedIds(new Set());
+      showToast(`${userIds.length} users updated successfully`);
       fetchUsers();
     } catch (err) {
-      alert(err.message || 'Failed to batch update selected users');
+      showToast(err.response?.data?.message || err.message || 'Failed to batch update selected users', 'error');
     } finally {
       setFormLoading(false);
     }
@@ -354,9 +364,10 @@ export default function AdminUsers() {
       await api.post(`/admin/users/${userToLogout.id}/force-logout`);
       setShowForceLogoutModal(false);
       setUserToLogout(null);
+      showToast('User session terminated successfully');
       fetchUsers();
     } catch (err) {
-      alert(err.message || 'Failed to force logout user');
+      showToast(err.response?.data?.message || err.message || 'Failed to force logout user', 'error');
     } finally {
       setLogoutLoading(false);
     }
@@ -371,9 +382,10 @@ export default function AdminUsers() {
       await api.post('/admin/users/bulk-force-logout', { user_ids: userIds });
       setShowBulkForceLogoutModal(false);
       setSelectedIds(new Set());
+      showToast(`${userIds.length} user sessions terminated`);
       fetchUsers();
     } catch (err) {
-      alert(err.message || 'Failed to force logout selected users');
+      showToast(err.response?.data?.message || err.message || 'Failed to force logout selected users', 'error');
     } finally {
       setLogoutLoading(false);
     }
@@ -455,7 +467,7 @@ export default function AdminUsers() {
   // ============================================================
   const handleExportCSV = (usersToExport = filteredUsers, filenameSuffix = 'export') => {
     if (!usersToExport || usersToExport.length === 0) {
-      alert('No user records available to download.');
+      showToast('No user records available to download.', 'error');
       return;
     }
 
@@ -662,7 +674,7 @@ export default function AdminUsers() {
   const handleBulkUploadSubmit = async () => {
     const eligibleRows = bulkPreview.filter(r => r.status === 'valid' || r.status === 'update');
     if (eligibleRows.length === 0) {
-      alert('No valid accounts to import or update. Please check your data.');
+      showToast('No valid accounts to import or update. Please check your data.', 'error');
       return;
     }
 
@@ -710,9 +722,10 @@ export default function AdminUsers() {
         skipped_count: totalSkipped,
         skipped_details: allSkippedDetails,
       });
+      showToast(`Bulk upload complete: ${totalCreated} created, ${totalUpdated} updated`);
       fetchUsers();
     } catch (err) {
-      alert(err.message || 'Failed to complete bulk upload');
+      showToast(err.response?.data?.message || err.message || 'Failed to complete bulk upload', 'error');
     } finally {
       setBulkLoading(false);
     }
@@ -728,6 +741,18 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
+          toast.type === 'error'
+            ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
+            : 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--accent)]/30'
+        }`}>
+          {toast.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
       {/* Top Banner & Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>

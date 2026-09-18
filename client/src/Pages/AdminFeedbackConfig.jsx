@@ -245,12 +245,12 @@ export default function AdminFeedbackConfig() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.question_text.trim()) {
-      alert('Please enter the question text.');
+      setError('Please enter the question text.');
       return;
     }
 
     if (formData.question_type === 'mcq' && formData.options.length < 2) {
-      alert('MCQ questions require at least two answer options.');
+      setError('MCQ questions require at least two answer options.');
       return;
     }
 

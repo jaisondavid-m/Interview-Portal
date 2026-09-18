@@ -148,16 +148,23 @@ export default function DeveloperAuditLogs() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   // Clear Logs
   const handleClearLogs = async () => {
     try {
       setClearing(true);
       await api.delete(`/developer/audit-logs/clear?older_than_days=${clearDays}`);
       setShowClearModal(false);
+      showToast('Audit logs cleared successfully');
       fetchStats();
       fetchLogs();
     } catch (err) {
-      alert('Failed to clear logs: ' + (err.response?.data?.message || err.message));
+      showToast(err.response?.data?.message || err.message || 'Failed to clear logs', 'error');
     } finally {
       setClearing(false);
     }
@@ -244,6 +251,18 @@ export default function DeveloperAuditLogs() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16 font-sans">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
+          toast.type === 'error'
+            ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
+            : 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--accent)]/30'
+        }`}>
+          {toast.type === 'error' ? <AlertTriangle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
       {/* ============================================================ */}
       {/* 1. TOP HEADER & TELEMETRY CONTROLS */}
       {/* ============================================================ */}
