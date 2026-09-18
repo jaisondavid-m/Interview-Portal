@@ -150,6 +150,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.RolePagePermission{},
 		&models.Venue{},
 		&models.InterviewSlot{},
+		&models.SlotVenueAssignment{},
 		&models.SlotBooking{},
 	)
 	if err == nil {

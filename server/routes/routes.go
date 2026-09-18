@@ -243,6 +243,9 @@ func SetupRouter() *gin.Engine {
 				adminSlots.GET("/:id/roster", controllers.AdminGetSlotRoster)
 				adminSlots.PUT("/:id", controllers.AdminUpdateSlot)
 				adminSlots.DELETE("/:id", controllers.AdminDeleteSlot)
+				adminSlots.POST("/:id/publish-allocations", controllers.AdminPublishSlotAllocations)
+				adminSlots.POST("/:id/reassign-venue", controllers.AdminReassignStudentVenue)
+				adminSlots.POST("/:id/auto-balance", controllers.AdminAutoBalanceSlotVenues)
 				adminSlots.POST("/bookings/:id/cancel", controllers.AdminCancelBooking)
 				adminSlots.DELETE("/bookings/:id", controllers.AdminCancelBooking)
 			}

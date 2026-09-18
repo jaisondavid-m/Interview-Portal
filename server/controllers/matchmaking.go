@@ -397,17 +397,63 @@ func JoinMatchmaking(c *gin.Context) {
 	}
 
 	// 4. Cancel old waiting queue entries for this user
-	database.DB.Model(&models.MatchmakingQueueEntry{}).
-		Where("user_id = ? AND status = 'waiting'", currentUserID).
-		Update("status", "cancelled")
+	// 5. Check if current user has an active booking today with an assigned venue
+	var currentBooking models.SlotBooking
+	var currentVenueID uint
+	todayStr := time.Now().Format("2006-01-02")
+	if err := database.DB.
+		Joins("JOIN interview_slots ON interview_slots.id = slot_bookings.slot_id").
+		Where("slot_bookings.student_id = ? AND slot_bookings.status != 'cancelled' AND interview_slots.slot_date = ?", currentUserID, todayStr).
+		Preload("Slot").
+		First(&currentBooking).Error; err == nil {
+		if currentBooking.AssignedVenueID != nil {
+			currentVenueID = *currentBooking.AssignedVenueID
+		} else if currentBooking.Slot != nil {
+			currentVenueID = currentBooking.Slot.VenueID
+		}
+	}
 
-	// 5. Search for an active waiting student in the SAME track (different user)
-	var peerEntry models.MatchmakingQueueEntry
-	err := database.DB.Where("track_id = ? AND user_id != ? AND status = 'waiting'", req.TrackID, currentUserID).
+	// 6. Search for active waiting peer entries in the SAME track (different user)
+	var peerEntries []models.MatchmakingQueueEntry
+	database.DB.Where("track_id = ? AND user_id != ? AND status = 'waiting'", req.TrackID, currentUserID).
 		Order("id asc").
-		First(&peerEntry).Error
+		Find(&peerEntries)
 
-	if err == nil {
+	var peerEntry *models.MatchmakingQueueEntry
+	for i := range peerEntries {
+		candidatePeer := peerEntries[i]
+
+		// Check candidate peer's assigned venue
+		var peerBooking models.SlotBooking
+		var peerVenueID uint
+		if err := database.DB.
+			Joins("JOIN interview_slots ON interview_slots.id = slot_bookings.slot_id").
+			Where("slot_bookings.student_id = ? AND slot_bookings.status != 'cancelled' AND interview_slots.slot_date = ?", candidatePeer.UserID, todayStr).
+			Preload("Slot").
+			First(&peerBooking).Error; err == nil {
+			if peerBooking.AssignedVenueID != nil {
+				peerVenueID = *peerBooking.AssignedVenueID
+			} else if peerBooking.Slot != nil {
+				peerVenueID = peerBooking.Slot.VenueID
+			}
+		}
+
+		// Cross-venue rule: If cross-venue matching is enabled, prevent pairing students in the SAME physical venue
+		preventSameVenue := true
+		if currentBooking.Slot != nil {
+			preventSameVenue = currentBooking.Slot.PreventSameVenueMatch
+		}
+
+		if preventSameVenue && currentVenueID > 0 && peerVenueID > 0 && currentVenueID == peerVenueID {
+			// Skip peer in the same venue
+			continue
+		}
+
+		peerEntry = &candidatePeer
+		break
+	}
+
+	if peerEntry != nil {
 		// PEER FOUND! Determine level
 		if levelID == 0 && peerEntry.LevelID > 0 {
 			levelID = peerEntry.LevelID

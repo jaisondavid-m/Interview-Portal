@@ -484,20 +484,35 @@ export default function StudentSlotBooking() {
                           <Ticket className="w-4 h-4" />
                         </span>
                         <div>
-                          <h3 className="text-sm font-bold text-[var(--text-primary)]">{b.slot?.venue?.name}</h3>
-                          <p className="text-[11px] text-[var(--text-secondary)]">Room {b.slot?.venue?.room_number} • {b.slot?.venue?.building}</p>
+                          <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                            {b.allocation_status === 'verified' || b.slot?.allocations_published
+                              ? b.slot?.venue?.name
+                              : 'Campus Venue (Allocation in Progress)'}
+                          </h3>
+                          <p className="text-[11px] text-[var(--text-secondary)]">
+                            {b.allocation_status === 'verified' || b.slot?.allocations_published
+                              ? `Room ${b.slot?.venue?.room_number} • ${b.slot?.venue?.building}`
+                              : 'Room number assigned before session'}
+                          </p>
                         </div>
                       </div>
 
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        isPresent
-                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                          : isCancelled
-                          ? 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
-                          : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                      }`}>
-                        {b.attendance_status}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {b.allocation_status !== 'verified' && !b.slot?.allocations_published && !isCancelled && (
+                          <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                            Allocation Draft
+                          </span>
+                        )}
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          isPresent
+                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                            : isCancelled
+                            ? 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                            : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                        }`}>
+                          {b.attendance_status}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] grid grid-cols-2 gap-2 text-xs">

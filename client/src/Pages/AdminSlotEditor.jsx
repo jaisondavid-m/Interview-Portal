@@ -12,6 +12,8 @@ import {
   Save,
   Check,
   X,
+  Plus,
+  Trash2,
   UserCheck,
   MapPin,
   Layers,
@@ -27,7 +29,9 @@ import {
   ChevronRight,
   Code,
   Cpu,
-  BrainCircuit
+  BrainCircuit,
+  GitFork,
+  ArrowRightLeft
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -44,8 +48,10 @@ export default function AdminSlotEditor() {
 
   // Form State
   const [formData, setFormData] = useState({
-    venue_id: '',
-    faculty_id: '',
+    slot_venues: [
+      { venue_id: '', faculty_id: '', capacity: 30 }
+    ],
+    prevent_same_venue_match: true,
     slot_date: new Date().toISOString().split('T')[0],
     start_time: '09:00',
     end_time: '10:30',
@@ -116,9 +122,31 @@ export default function AdminSlotEditor() {
 
           const isOpenToAll = allowedTracks.length === 0;
 
+          // Build slot venues array
+          let slotVenues = [];
+          if (Array.isArray(s.venues) && s.venues.length > 0) {
+            slotVenues = s.venues.map(sv => ({
+              venue_id: String(sv.venue_id || ''),
+              faculty_id: String(sv.faculty_id || ''),
+              capacity: sv.capacity || 30,
+            }));
+          } else if (s.venue_id && s.faculty_id) {
+            slotVenues = [{
+              venue_id: String(s.venue_id),
+              faculty_id: String(s.faculty_id),
+              capacity: s.capacity || 30,
+            }];
+          } else {
+            slotVenues = [{
+              venue_id: venueData[0]?.id ? String(venueData[0].id) : '',
+              faculty_id: facData[0]?.id ? String(facData[0].id) : '',
+              capacity: venueData[0]?.capacity || 30,
+            }];
+          }
+
           setFormData({
-            venue_id: String(s.venue_id || ''),
-            faculty_id: String(s.faculty_id || ''),
+            slot_venues: slotVenues,
+            prevent_same_venue_match: s.prevent_same_venue_match !== false,
             slot_date: s.slot_date || new Date().toISOString().split('T')[0],
             start_time: s.start_time || '09:00',
             end_time: s.end_time || '10:30',
@@ -137,8 +165,9 @@ export default function AdminSlotEditor() {
 
           setFormData(prev => ({
             ...prev,
-            venue_id: defaultVenue,
-            faculty_id: defaultFaculty,
+            slot_venues: [
+              { venue_id: defaultVenue, faculty_id: defaultFaculty, capacity: defaultVenueCap }
+            ],
             capacity: defaultVenueCap,
           }));
         }
@@ -152,25 +181,96 @@ export default function AdminSlotEditor() {
     fetchData();
   }, [slotId, isEditing]);
 
-  // Selected venue details
-  const selectedVenue = useMemo(() => {
-    return venues.find(v => String(v.id) === String(formData.venue_id));
-  }, [venues, formData.venue_id]);
+  // Venue row management
+  const handleAddVenueRow = () => {
+    // Find unassigned venue and unassigned faculty
+    const assignedVenueIds = formData.slot_venues.map(v => String(v.venue_id));
+    const assignedFacultyIds = formData.slot_venues.map(v => String(v.faculty_id));
 
-  // Selected faculty details
-  const selectedFaculty = useMemo(() => {
-    return facultyList.find(f => String(f.id) === String(formData.faculty_id));
-  }, [facultyList, formData.faculty_id]);
+    const nextVenue = venues.find(v => !assignedVenueIds.includes(String(v.id))) || venues[0];
+    const nextFaculty = facultyList.find(f => !assignedFacultyIds.includes(String(f.id))) || facultyList[0];
 
-  // When venue changes, update capacity recommendation if not manually customized
-  const handleVenueChange = (newVenueId) => {
-    const v = venues.find(item => String(item.id) === String(newVenueId));
+    const newVenues = [
+      ...formData.slot_venues,
+      {
+        venue_id: nextVenue ? String(nextVenue.id) : '',
+        faculty_id: nextFaculty ? String(nextFaculty.id) : '',
+        capacity: nextVenue?.capacity || 30,
+      }
+    ];
+
+    const totalCap = newVenues.reduce((sum, v) => sum + (Number(v.capacity) || 0), 0);
+
     setFormData(prev => ({
       ...prev,
-      venue_id: newVenueId,
-      capacity: v?.capacity || prev.capacity || 30,
+      slot_venues: newVenues,
+      capacity: totalCap,
     }));
   };
+
+  const handleRemoveVenueRow = (index) => {
+    if (formData.slot_venues.length <= 1) {
+      showToast('A slot must have at least one examination venue', 'error');
+      return;
+    }
+
+    const newVenues = formData.slot_venues.filter((_, i) => i !== index);
+    const totalCap = newVenues.reduce((sum, v) => sum + (Number(v.capacity) || 0), 0);
+
+    setFormData(prev => ({
+      ...prev,
+      slot_venues: newVenues,
+      capacity: totalCap,
+    }));
+  };
+
+  const handleUpdateVenueRow = (index, field, value) => {
+    const newVenues = [...formData.slot_venues];
+    newVenues[index] = { ...newVenues[index], [field]: value };
+
+    if (field === 'venue_id') {
+      const v = venues.find(item => String(item.id) === String(value));
+      if (v) {
+        newVenues[index].capacity = v.capacity;
+      }
+    }
+
+    const totalCap = newVenues.reduce((sum, v) => sum + (Number(v.capacity) || 0), 0);
+
+    setFormData(prev => ({
+      ...prev,
+      slot_venues: newVenues,
+      capacity: totalCap,
+    }));
+  };
+
+  // Check for duplicate faculty assignments across venues in the slot
+  const duplicateFacultyError = useMemo(() => {
+    const seen = new Set();
+    for (const sv of formData.slot_venues) {
+      if (!sv.faculty_id) continue;
+      if (seen.has(String(sv.faculty_id))) {
+        const fac = facultyList.find(f => String(f.id) === String(sv.faculty_id));
+        return `Faculty "${fac?.name || 'Faculty Member'}" is assigned to multiple venues in this slot. Each venue must be mapped to a distinct faculty invigilator.`;
+      }
+      seen.add(String(sv.faculty_id));
+    }
+    return null;
+  }, [formData.slot_venues, facultyList]);
+
+  // Check for duplicate venue assignments
+  const duplicateVenueError = useMemo(() => {
+    const seen = new Set();
+    for (const sv of formData.slot_venues) {
+      if (!sv.venue_id) continue;
+      if (seen.has(String(sv.venue_id))) {
+        const ven = venues.find(v => String(v.id) === String(sv.venue_id));
+        return `Venue "${ven?.name || 'Venue'}" is added multiple times. Each venue row must be unique.`;
+      }
+      seen.add(String(sv.venue_id));
+    }
+    return null;
+  }, [formData.slot_venues, venues]);
 
   // Date shortcut presets
   const setDatePreset = (offsetDays) => {
@@ -279,14 +379,33 @@ export default function AdminSlotEditor() {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
 
-    if (!formData.venue_id) {
-      showToast('Please select an examination venue', 'error');
+    if (formData.slot_venues.length === 0) {
+      showToast('Please add at least one examination venue', 'error');
       return;
     }
-    if (!formData.faculty_id) {
-      showToast('Please assign a faculty invigilator', 'error');
+
+    for (let i = 0; i < formData.slot_venues.length; i++) {
+      const sv = formData.slot_venues[i];
+      if (!sv.venue_id) {
+        showToast(`Please select a venue for Location #${i + 1}`, 'error');
+        return;
+      }
+      if (!sv.faculty_id) {
+        showToast(`Please assign a faculty invigilator for Location #${i + 1}`, 'error');
+        return;
+      }
+    }
+
+    if (duplicateFacultyError) {
+      showToast(duplicateFacultyError, 'error');
       return;
     }
+
+    if (duplicateVenueError) {
+      showToast(duplicateVenueError, 'error');
+      return;
+    }
+
     if (!formData.slot_date || !formData.start_time || !formData.end_time) {
       showToast('Please specify the date and session timings', 'error');
       return;
@@ -296,15 +415,23 @@ export default function AdminSlotEditor() {
       return;
     }
 
+    const venuesPayload = formData.slot_venues.map(sv => ({
+      venue_id: Number(sv.venue_id),
+      faculty_id: Number(sv.faculty_id),
+      capacity: Number(sv.capacity) || 30,
+    }));
+
+    const totalCap = venuesPayload.reduce((sum, v) => sum + v.capacity, 0);
+
     const payload = {
-      venue_id: Number(formData.venue_id),
-      faculty_id: Number(formData.faculty_id),
+      venues: venuesPayload,
+      prevent_same_venue_match: formData.prevent_same_venue_match,
       allowed_track_ids: formData.is_open_to_all ? [] : formData.allowed_track_ids.map(Number),
       allowed_level_ids: formData.is_open_to_all ? [] : formData.allowed_level_ids.map(Number),
       slot_date: formData.slot_date,
       start_time: formData.start_time,
       end_time: formData.end_time,
-      capacity: Number(formData.capacity) || 30,
+      capacity: Number(formData.capacity) || totalCap,
       notes: formData.notes,
     };
 
@@ -376,7 +503,7 @@ export default function AdminSlotEditor() {
             <span>{isEditing ? 'Edit Interview Slot' : 'Schedule New Interview Slot'}</span>
           </h1>
           <p className="text-xs text-[var(--text-secondary)]">
-            Set up campus laboratory, assign faculty invigilator, configure session timing, and define domain eligibility.
+            Configure multi-venue physical examination labs, assign unique faculty invigilators, and configure cross-venue matchmaking.
           </p>
         </div>
 
@@ -394,7 +521,7 @@ export default function AdminSlotEditor() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || Boolean(duplicateFacultyError) || Boolean(duplicateVenueError)}
             className="flex items-center gap-2 px-6 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all shadow-md hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -407,94 +534,169 @@ export default function AdminSlotEditor() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* LEFT COLUMN: Form Inputs */}
         <div className="lg:col-span-8 space-y-6">
-          {/* SECTION 1: VENUE & FACULTY */}
+          {/* SECTION 1: MULTI-VENUE & UNIQUE FACULTY ASSIGNMENT */}
           <div className="panel-card p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-sm space-y-5">
-            <div className="flex items-center gap-2.5 pb-3 border-b border-[var(--border)]">
-              <div className="w-8 h-8 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold">
-                1
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold">
+                  1
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                    Examination Venues & Faculty Invigilators
+                  </h3>
+                  <p className="text-[11px] text-[var(--text-secondary)]">
+                    Assign 1 or more physical examination rooms. Each venue must be mapped to a distinct faculty invigilator.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                  Examination Venue & Faculty Invigilator
-                </h3>
-                <p className="text-[11px] text-[var(--text-secondary)]">
-                  Select the physical laboratory and assign the supervising faculty member.
-                </p>
-              </div>
+
+              <button
+                type="button"
+                onClick={handleAddVenueRow}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] text-xs font-semibold hover:opacity-90 transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Another Venue</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {/* Select Venue */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-[var(--text-primary)]">
-                  Examination Venue <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={formData.venue_id}
-                  onChange={(e) => handleVenueChange(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
-                >
-                  <option value="" disabled>-- Select a Venue --</option>
-                  {venues.map(v => (
-                    <option key={v.id} value={v.id}>
-                      {v.name} (Room {v.room_number}) • {v.building} • Max: {v.capacity}
-                    </option>
-                  ))}
-                </select>
+            {/* Validation Alerts */}
+            {duplicateFacultyError && (
+              <div className="p-3.5 rounded-xl bg-[var(--red-bg)] border border-[var(--red)]/30 text-[var(--red)] text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p className="font-semibold">{duplicateFacultyError}</p>
+              </div>
+            )}
 
-                {selectedVenue && (
-                  <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[11px] space-y-1">
-                    <div className="flex items-center justify-between font-semibold text-[var(--text-primary)]">
-                      <span className="flex items-center gap-1.5">
+            {duplicateVenueError && (
+              <div className="p-3.5 rounded-xl bg-[var(--red-bg)] border border-[var(--red)]/30 text-[var(--red)] text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p className="font-semibold">{duplicateVenueError}</p>
+              </div>
+            )}
+
+            {/* Venue Rows List */}
+            <div className="space-y-4">
+              {formData.slot_venues.map((sv, idx) => {
+                const venueObj = venues.find(v => String(v.id) === String(sv.venue_id));
+                const facultyObj = facultyList.find(f => String(f.id) === String(sv.faculty_id));
+
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all space-y-3"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-[var(--border)] text-xs font-bold text-[var(--text-secondary)]">
+                      <span className="flex items-center gap-1.5 text-[var(--text-primary)]">
                         <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
-                        {selectedVenue.name}
+                        <span>Examination Location #{idx + 1}</span>
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-[10px] font-mono">
-                        Room {selectedVenue.room_number}
-                      </span>
-                    </div>
-                    <p className="text-[var(--text-secondary)]">
-                      Building: <strong className="text-[var(--text-primary)]">{selectedVenue.building}</strong> • Max Capacity: <strong className="text-[var(--text-primary)]">{selectedVenue.capacity} seats</strong>
-                    </p>
-                  </div>
-                )}
-              </div>
 
-              {/* Assign Faculty */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-[var(--text-primary)]">
-                  Faculty Invigilator <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={formData.faculty_id}
-                  onChange={(e) => setFormData({ ...formData, faculty_id: e.target.value })}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
-                >
-                  <option value="" disabled>-- Select Faculty Member --</option>
-                  {facultyList.map(f => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} ({f.department || 'Faculty'} • {f.email})
-                    </option>
-                  ))}
-                </select>
-
-                {selectedFaculty && (
-                  <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[11px] space-y-1">
-                    <div className="flex items-center justify-between font-semibold text-[var(--text-primary)]">
-                      <span className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
-                        {selectedFaculty.name}
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-mono uppercase">
-                        Invigilator
-                      </span>
+                      {formData.slot_venues.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVenueRow(idx)}
+                          className="text-rose-500 hover:text-rose-600 flex items-center gap-1 text-[11px] font-semibold transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Remove Venue</span>
+                        </button>
+                      )}
                     </div>
-                    <p className="text-[var(--text-secondary)]">
-                      Department: <strong className="text-[var(--text-primary)]">{selectedFaculty.department || 'Academic Staff'}</strong> • {selectedFaculty.email}
-                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                      {/* Venue Dropdown */}
+                      <div className="sm:col-span-5 space-y-1">
+                        <label className="block text-[11px] font-bold text-[var(--text-primary)]">
+                          Select Venue <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={sv.venue_id}
+                          onChange={(e) => handleUpdateVenueRow(idx, 'venue_id', e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
+                        >
+                          <option value="" disabled>-- Select Venue --</option>
+                          {venues.map(v => (
+                            <option key={v.id} value={v.id}>
+                              {v.name} (Room {v.room_number}) • {v.building}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Faculty Dropdown */}
+                      <div className="sm:col-span-5 space-y-1">
+                        <label className="block text-[11px] font-bold text-[var(--text-primary)]">
+                          Assigned Faculty Invigilator <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={sv.faculty_id}
+                          onChange={(e) => handleUpdateVenueRow(idx, 'faculty_id', e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
+                        >
+                          <option value="" disabled>-- Select Faculty Member --</option>
+                          {facultyList.map(f => (
+                            <option key={f.id} value={f.id}>
+                              {f.name} ({f.department || 'Faculty'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Capacity */}
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="block text-[11px] font-bold text-[var(--text-primary)]">
+                          Capacity
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="200"
+                          value={sv.capacity}
+                          onChange={(e) => handleUpdateVenueRow(idx, 'capacity', parseInt(e.target.value) || 1)}
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-mono font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Venue & Faculty Mini Badge Info */}
+                    {venueObj && facultyObj && (
+                      <div className="pt-1 flex items-center justify-between flex-wrap gap-2 text-[10.5px] text-[var(--text-secondary)] font-mono">
+                        <span>Room: <strong className="text-[var(--text-primary)]">{venueObj.room_number} ({venueObj.building})</strong></span>
+                        <span>Invigilator: <strong className="text-emerald-500">{facultyObj.name}</strong></span>
+                        <span>Allocated Seats: <strong className="text-[var(--accent)]">{sv.capacity}</strong></span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })}
+            </div>
+
+            {/* Cross-Venue Matchmaking Toggle */}
+            <div className="pt-3 border-t border-[var(--border)]">
+              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] hover:border-[var(--border-accent)] transition-all cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.prevent_same_venue_match}
+                  onChange={(e) => setFormData({ ...formData, prevent_same_venue_match: e.target.checked })}
+                  className="mt-1 w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
+                />
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <ArrowRightLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                      Enforce Cross-Venue Matchmaking (Recommended)
+                    </span>
+                    <span className="px-2 py-0.2 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                      Integrity Shield
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-secondary)]">
+                    Guarantees that a candidate in Venue 1 will connect with a peer sitting in Venue 2 or Venue 3 (prevents candidates sitting in the same physical room from interviewing each other).
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -506,10 +708,10 @@ export default function AdminSlotEditor() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                  Session Date, Schedule & Capacity
+                  Session Schedule, Timings & Total Seat Quota
                 </h3>
                 <p className="text-[11px] text-[var(--text-secondary)]">
-                  Configure the examination date, start/end timings, and maximum seat quota.
+                  Configure the examination date, start/end session timings, and total combined capacity.
                 </p>
               </div>
             </div>
@@ -526,21 +728,21 @@ export default function AdminSlotEditor() {
                     <button
                       type="button"
                       onClick={() => setDatePreset(0)}
-                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-secondary)]"
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-secondary)] cursor-pointer"
                     >
                       Today
                     </button>
                     <button
                       type="button"
                       onClick={() => setDatePreset(1)}
-                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-secondary)]"
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-secondary)] cursor-pointer"
                     >
                       Tomorrow
                     </button>
                     <button
                       type="button"
                       onClick={() => setDatePreset(2)}
-                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-secondary)]"
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-secondary)] cursor-pointer"
                     >
                       +2 Days
                     </button>
@@ -599,7 +801,7 @@ export default function AdminSlotEditor() {
                     key={mins}
                     type="button"
                     onClick={() => setDurationPreset(mins)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                       sessionDuration === mins
                         ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
                         : 'bg-[var(--bg)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-accent)]'
@@ -615,17 +817,11 @@ export default function AdminSlotEditor() {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-[var(--text-primary)]">
-                      Seat Capacity <span className="text-rose-500">*</span>
+                      Total Seat Quota (Combined Venues) <span className="text-rose-500">*</span>
                     </label>
-                    {selectedVenue && (
-                      <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, capacity: selectedVenue.capacity })}
-                        className="text-[10px] text-[var(--accent)] hover:underline font-semibold"
-                      >
-                        Set to Venue Max ({selectedVenue.capacity})
-                      </button>
-                    )}
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                      Auto-sum of {formData.slot_venues.length} venue(s)
+                    </span>
                   </div>
                   <input
                     type="number"
@@ -640,7 +836,7 @@ export default function AdminSlotEditor() {
                 {isEditing && (
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-[var(--text-primary)]">
-                      Slot Status
+                      Slot Lifecycle Status
                     </label>
                     <select
                       value={formData.status}
@@ -756,14 +952,14 @@ export default function AdminSlotEditor() {
                     <button
                       type="button"
                       onClick={handleSelectAllDomains}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] hover:opacity-90 transition-all"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] hover:opacity-90 transition-all cursor-pointer"
                     >
                       Select All
                     </button>
                     <button
                       type="button"
                       onClick={handleClearAllDomains}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
                     >
                       Clear All
                     </button>
@@ -831,13 +1027,12 @@ export default function AdminSlotEditor() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  // Clear specific levels -> revert to all levels
                                   setFormData(prev => ({
                                     ...prev,
                                     allowed_level_ids: prev.allowed_level_ids.filter(id => !trackLevelIds.includes(id)),
                                   }));
                                 }}
-                                className={`text-[10px] font-semibold hover:underline ${isAllLevels ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
+                                className={`text-[10px] font-semibold hover:underline cursor-pointer ${isAllLevels ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
                               >
                                 {isAllLevels ? '✓ All Levels Selected' : 'Switch to All Levels'}
                               </button>
@@ -893,7 +1088,7 @@ export default function AdminSlotEditor() {
 
             <textarea
               rows="3"
-              placeholder="e.g., Please arrive 10 minutes prior to slot start time with college ID card. System login credentials will be provided at the center desk."
+              placeholder="e.g., Please arrive 10 minutes prior to slot start time with college ID card. Venue allocation will be verified by the admin before your session."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
@@ -919,17 +1114,33 @@ export default function AdminSlotEditor() {
               </span>
             </div>
 
-            {/* Venue & Room Pill */}
-            <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-2">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-[var(--accent)] shrink-0" />
-                <span className="font-bold text-xs text-[var(--text-primary)]">
-                  {selectedVenue?.name || 'No Venue Selected'}
-                </span>
+            {/* Venues Summary List */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>Assigned Venues ({formData.slot_venues.length}):</span>
+              </span>
+
+              <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                {formData.slot_venues.map((sv, i) => {
+                  const ven = venues.find(v => String(v.id) === String(sv.venue_id));
+                  const fac = facultyList.find(f => String(f.id) === String(sv.faculty_id));
+
+                  return (
+                    <div key={i} className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs space-y-1">
+                      <div className="flex items-center justify-between font-bold text-[var(--text-primary)]">
+                        <span>{ven?.name || `Location #${i + 1}`}</span>
+                        <span className="px-2 py-0.2 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-[10px] font-mono">
+                          {sv.capacity} Seats
+                        </span>
+                      </div>
+                      <p className="text-[10.5px] text-[var(--text-secondary)]">
+                        Room: {ven?.room_number || 'TBD'} • Invigilator: <strong className="text-emerald-500">{fac?.name || 'Unassigned'}</strong>
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="text-[11px] text-[var(--text-secondary)] pl-6">
-                Room: <strong className="text-[var(--text-primary)]">{selectedVenue?.room_number || 'TBD'}</strong> • Building: {selectedVenue?.building || 'Campus'}
-              </p>
             </div>
 
             {/* Date & Time */}
@@ -948,24 +1159,26 @@ export default function AdminSlotEditor() {
               </p>
             </div>
 
-            {/* Faculty */}
-            <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-2">
-              <div className="flex items-center gap-2 text-xs">
-                <UserCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span className="font-bold text-[var(--text-primary)]">
-                  {selectedFaculty?.name || 'No Faculty Assigned'}
-                </span>
-              </div>
-              <p className="text-[11px] text-[var(--text-secondary)] pl-6">
-                Department: {selectedFaculty?.department || 'Invigilator'}
-              </p>
+            {/* Cross-Venue Matchmaking Badge */}
+            <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 text-[var(--text-secondary)] font-medium">
+                <ArrowRightLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>Cross-Venue Match:</span>
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                formData.prevent_same_venue_match
+                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+              }`}>
+                {formData.prevent_same_venue_match ? 'Enforced' : 'Same-Venue Allowed'}
+              </span>
             </div>
 
             {/* Capacity */}
             <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between text-xs">
               <span className="flex items-center gap-2 font-medium text-[var(--text-secondary)]">
                 <Users className="w-4 h-4 text-[var(--accent)]" />
-                <span>Seat Capacity:</span>
+                <span>Total Combined Seats:</span>
               </span>
               <strong className="text-sm font-mono text-[var(--text-primary)]">
                 {formData.capacity} Seats
@@ -1005,7 +1218,7 @@ export default function AdminSlotEditor() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={saving}
+                disabled={saving || Boolean(duplicateFacultyError) || Boolean(duplicateVenueError)}
                 className="w-full py-2.5 px-4 rounded-xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1018,10 +1231,10 @@ export default function AdminSlotEditor() {
           <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-secondary)] space-y-2">
             <div className="flex items-center gap-2 font-bold text-[var(--text-primary)]">
               <ShieldCheck className="w-4 h-4 text-[var(--accent)]" />
-              <span>Invigilator & Attendance Gate</span>
+              <span>Admin Allocation & Disclosure Gate</span>
             </div>
             <p className="text-[11px] leading-relaxed">
-              When students book this slot, their interview room remains locked until the assigned faculty marks their physical attendance as <strong>Present</strong> in the faculty portal.
+              When students reserve this slot, specific room details remain masked until you review the student distribution in the slot roster and click <strong>Verify & Publish Allocations</strong>.
             </p>
           </div>
         </div>

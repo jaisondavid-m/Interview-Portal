@@ -26,7 +26,12 @@ type SlotBooking struct {
 	TrackID            uint             `gorm:"not null;index" json:"track_id"`
 	Track              *InterviewTrack  `gorm:"foreignKey:TrackID" json:"track,omitempty"`
 	LevelID            uint             `gorm:"default:0" json:"level_id"`
-	Status             string           `gorm:"size:30;default:'booked';index" json:"status"` // booked, completed, cancelled
+	AssignedVenueID    *uint            `gorm:"index" json:"assigned_venue_id,omitempty"`
+	AssignedVenue      *Venue           `gorm:"foreignKey:AssignedVenueID" json:"assigned_venue,omitempty"`
+	AssignedFacultyID  *uint            `gorm:"index" json:"assigned_faculty_id,omitempty"`
+	AssignedFaculty    *User            `gorm:"foreignKey:AssignedFacultyID" json:"assigned_faculty,omitempty"`
+	AllocationStatus   string           `gorm:"size:30;default:'pending_verification';index" json:"allocation_status"` // pending_verification, verified, cancelled
+	Status             string           `gorm:"size:30;default:'booked';index" json:"status"`                            // booked, completed, cancelled
 	AttendanceStatus   AttendanceStatus `gorm:"size:30;default:'pending';index" json:"attendance_status"`
 	CanStartInterview  bool             `gorm:"default:false" json:"can_start_interview"`
 	AttendanceMarkedAt *time.Time       `json:"attendance_marked_at"`

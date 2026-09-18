@@ -156,21 +156,12 @@ func GetAvailableSlots(c *gin.Context) {
 			available = 0
 		}
 
-		venueName := ""
-		building := ""
-		roomNumber := ""
-		if s.Venue != nil {
-			venueName = s.Venue.Name
-			building = s.Venue.Building
-			roomNumber = s.Venue.RoomNumber
-		}
-
-		facultyName := "Assigned Staff"
-		facultyDept := ""
-		if s.Faculty != nil {
-			facultyName = s.Faculty.Name
-			facultyDept = s.Faculty.Department
-		}
+		// Do not disclose internal venue and invigilator details before booking
+		venueName := "Campus Examination Venue"
+		building := "Academic Complex"
+		roomNumber := "Assigned on Verification"
+		facultyName := "Faculty Invigilator"
+		facultyDept := "Examination Wing"
 
 		trackTitle := "All Domains"
 		if s.Track != nil {
@@ -219,7 +210,7 @@ func GetAvailableSlots(c *gin.Context) {
 	})
 }
 
-// BookSlot allows a student to reserve an interview slot
+// BookSlot reserves a seat in an interview slot and dynamically balances student into an assigned venue
 func BookSlot(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -232,21 +223,27 @@ func BookSlot(c *gin.Context) {
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "Invalid booking input",
+			"message": "Invalid booking payload",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	// 1. Verify Slot exists and is open
+	// 1. Fetch Slot
 	var slot models.InterviewSlot
-	if err := database.DB.Preload("Venue").Preload("Faculty").First(&slot, input.SlotID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview slot not found"})
+	if err := database.DB.Preload("Venue").Preload("Faculty").Preload("Venues.Venue").Preload("Venues.Faculty").First(&slot, input.SlotID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":  "error",
+			"message": "Interview slot not found",
+		})
 		return
 	}
 
 	if slot.Status == models.SlotCancelled || slot.Status == models.SlotCompleted {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "This slot is no longer open for booking"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": fmt.Sprintf("Cannot book a %s slot", slot.Status),
+		})
 		return
 	}
 
@@ -329,12 +326,42 @@ func BookSlot(c *gin.Context) {
 		return
 	}
 
-	// 5. Create Booking
+	// 5. Dynamic Venue Balancing (Allocate student to least-loaded venue in this slot)
+	var assignedVenueID *uint
+	var assignedFacultyID *uint
+
+	if len(slot.Venues) > 0 {
+		bestVenue := slot.Venues[0]
+		minBookings := int64(999999)
+		for _, sv := range slot.Venues {
+			var count int64
+			database.DB.Model(&models.SlotBooking{}).Where("slot_id = ? AND assigned_venue_id = ? AND status != 'cancelled'", slot.ID, sv.VenueID).Count(&count)
+			if count < minBookings {
+				minBookings = count
+				bestVenue = sv
+			}
+		}
+		assignedVenueID = &bestVenue.VenueID
+		assignedFacultyID = &bestVenue.FacultyID
+	} else if slot.VenueID > 0 {
+		assignedVenueID = &slot.VenueID
+		assignedFacultyID = &slot.FacultyID
+	}
+
+	allocationStatus := "pending_verification"
+	if slot.AllocationsPublished {
+		allocationStatus = "verified"
+	}
+
+	// 6. Create Booking
 	booking := models.SlotBooking{
 		SlotID:            slot.ID,
 		StudentID:         studentID,
 		TrackID:           input.TrackID,
 		LevelID:           input.LevelID,
+		AssignedVenueID:   assignedVenueID,
+		AssignedFacultyID: assignedFacultyID,
+		AllocationStatus:  allocationStatus,
 		Status:            "booked",
 		AttendanceStatus:  models.AttendancePending,
 		CanStartInterview: false,
@@ -350,16 +377,16 @@ func BookSlot(c *gin.Context) {
 	}
 
 	// Preload associations
-	database.DB.Preload("Slot.Venue").Preload("Slot.Faculty").Preload("Track").First(&booking, booking.ID)
+	database.DB.Preload("Slot.Venue").Preload("Slot.Faculty").Preload("AssignedVenue").Preload("AssignedFaculty").Preload("Track").First(&booking, booking.ID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
-		"message": "Interview slot booked successfully! Please report to the venue at the scheduled time.",
+		"message": "Interview slot reserved successfully! Venue allocation will be verified by the admin before your session.",
 		"data":    booking,
 	})
 }
 
-// GetMyBookings retrieves all slot bookings for the authenticated student
+// GetMyBookings retrieves all slot bookings for the authenticated student with venue privacy masking
 func GetMyBookings(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -373,6 +400,8 @@ func GetMyBookings(c *gin.Context) {
 		Where("student_id = ?", studentID).
 		Preload("Slot.Venue").
 		Preload("Slot.Faculty").
+		Preload("AssignedVenue").
+		Preload("AssignedFaculty").
 		Preload("Track").
 		Order("created_at desc").
 		Find(&bookings).Error; err != nil {
@@ -382,6 +411,26 @@ func GetMyBookings(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	// Mask venue details if allocation is not verified/published yet
+	for i := range bookings {
+		isVerified := bookings[i].AllocationStatus == "verified" || (bookings[i].Slot != nil && bookings[i].Slot.AllocationsPublished)
+		if isVerified {
+			if bookings[i].AssignedVenue != nil && bookings[i].Slot != nil {
+				bookings[i].Slot.Venue = bookings[i].AssignedVenue
+			}
+		} else {
+			if bookings[i].Slot != nil {
+				bookings[i].Slot.Venue = &models.Venue{
+					Name:        "Campus Lab (Allocation in Progress)",
+					Building:    "Academic Block",
+					RoomNumber:  "Pending Admin Verification",
+					Description: "Specific venue details will be released once admin completes venue allocation.",
+				}
+			}
+			bookings[i].AssignedVenue = nil
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -438,7 +487,7 @@ func CancelBooking(c *gin.Context) {
 	})
 }
 
-// GetActiveSlotCheckInStatus checks if the student has an active booking today and whether they are marked Present
+// GetActiveSlotCheckInStatus checks if the student has an active booking today and returns verified venue details
 func GetActiveSlotCheckInStatus(c *gin.Context) {
 	rawUserID, exists := c.Get("userID")
 	if !exists {
@@ -456,6 +505,8 @@ func GetActiveSlotCheckInStatus(c *gin.Context) {
 		Preload("Slot.Venue").
 		Preload("Slot.Faculty").
 		Preload("Slot.Level").
+		Preload("AssignedVenue").
+		Preload("AssignedFaculty").
 		Preload("Track").
 		Order("interview_slots.start_time asc").
 		First(&booking).Error
@@ -473,13 +524,32 @@ func GetActiveSlotCheckInStatus(c *gin.Context) {
 		return
 	}
 
+	isVerified := booking.AllocationStatus == "verified" || (booking.Slot != nil && booking.Slot.AllocationsPublished)
+	if isVerified {
+		if booking.AssignedVenue != nil && booking.Slot != nil {
+			booking.Slot.Venue = booking.AssignedVenue
+		}
+	} else {
+		if booking.Slot != nil {
+			booking.Slot.Venue = &models.Venue{
+				Name:        "Campus Examination Venue",
+				Building:    "Academic Block",
+				RoomNumber:  "Allocation in Progress by Admin",
+				Description: "Venue allocation is in progress. The venue will be revealed once verified by admin.",
+			}
+		}
+		booking.AssignedVenue = nil
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"has_active_booking": true,
-			"can_start":          booking.CanStartInterview && booking.AttendanceStatus == models.AttendancePresent,
-			"attendance_status":  booking.AttendanceStatus,
-			"booking":            booking,
+			"has_active_booking":      true,
+			"can_start":               booking.CanStartInterview && booking.AttendanceStatus == models.AttendancePresent,
+			"attendance_status":       booking.AttendanceStatus,
+			"allocation_status":       booking.AllocationStatus,
+			"venue_details_verified":  isVerified,
+			"booking":                 booking,
 		},
 	})
 }

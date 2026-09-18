@@ -332,14 +332,18 @@ export default function StudentInterviews() {
         <div className={`p-5 rounded-2xl border transition-all ${
           activeCheckIn.can_start
             ? 'bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/30'
-            : 'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/30'
+            : activeCheckIn.venue_details_verified
+            ? 'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/30'
+            : 'bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-transparent border-sky-500/30'
         }`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                 activeCheckIn.can_start
                   ? 'bg-emerald-500/20 text-emerald-500'
-                  : 'bg-amber-500/20 text-amber-500 animate-pulse'
+                  : activeCheckIn.venue_details_verified
+                  ? 'bg-amber-500/20 text-amber-500 animate-pulse'
+                  : 'bg-sky-500/20 text-sky-400 animate-pulse'
               }`}>
                 {activeCheckIn.can_start ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
               </div>
@@ -348,21 +352,27 @@ export default function StudentInterviews() {
                   <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)]">
                     {activeCheckIn.can_start
                       ? 'Attendance Verified — Cleared to Interview!'
-                      : 'Physical In-Venue Attendance Pending'}
+                      : activeCheckIn.venue_details_verified
+                      ? 'Physical In-Venue Attendance Pending'
+                      : 'Slot Reserved — Venue Allocation in Progress'}
                   </h3>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                     activeCheckIn.can_start
                       ? 'bg-emerald-500 text-white'
-                      : 'bg-amber-500 text-white animate-pulse'
+                      : activeCheckIn.venue_details_verified
+                      ? 'bg-amber-500 text-white animate-pulse'
+                      : 'bg-sky-600 text-white'
                   }`}>
-                    {activeCheckIn.attendance_status}
+                    {activeCheckIn.can_start ? activeCheckIn.attendance_status : activeCheckIn.venue_details_verified ? activeCheckIn.attendance_status : 'Allocation Draft'}
                   </span>
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] mt-1">
                   {activeCheckIn.can_start ? (
                     <span>You are checked in at <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. Click below to start your peer assessment.</span>
+                  ) : activeCheckIn.venue_details_verified ? (
+                    <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. The faculty invigilator at the venue will verify your attendance.</span>
                   ) : (
-                    <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. The faculty invigilator at the venue will verify your attendance. (Live updates enabled)</span>
+                    <span>Your session is scheduled for <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.slot_date} ({activeCheckIn.booking.slot?.start_time} - {activeCheckIn.booking.slot?.end_time})</strong>. Lab and room assignments are being finalized by admin and will appear here shortly.</span>
                   )}
                 </p>
               </div>
@@ -372,16 +382,21 @@ export default function StudentInterviews() {
               {activeCheckIn.can_start ? (
                 <button
                   onClick={() => handleStartVerifiedInterview(activeCheckIn.booking.track, { id: activeCheckIn.booking.level_id })}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg transition-all animate-bounce"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg transition-all animate-bounce cursor-pointer"
                 >
                   <Video className="w-4 h-4" />
                   <span>Start Mock Interview</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
-              ) : (
+              ) : activeCheckIn.venue_details_verified ? (
                 <div className="flex items-center gap-2 text-xs font-medium text-amber-500">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Awaiting Faculty Check-in...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs font-medium text-sky-400">
+                  <Clock className="w-4 h-4" />
+                  <span>Awaiting Admin Verification...</span>
                 </div>
               )}
             </div>
@@ -459,134 +474,143 @@ export default function StudentInterviews() {
             </span>
           </div>
 
-          {/* Level Cards Grid */}
-          {(!selectedTrack.levels || selectedTrack.levels.length === 0) ? (
-            <div className="panel-card p-10 text-center space-y-2">
-              <AlertCircle className="w-8 h-8 text-[var(--text-muted)] mx-auto" />
-              <h4 className="text-[15px] font-bold text-[var(--text-primary)]">No levels configured yet</h4>
-              <p className="text-[13px] text-[var(--text-muted)]">Levels for this track will be added soon.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {selectedTrack.levels.map((lvl) => {
-                const duration = lvl.duration_minutes || 45;
-                const modeName = (lvl.mode || 'coding').toUpperCase();
-                const qCount = lvl.questions_count || (lvl.questions ? lvl.questions.length : 3);
+          {/* Levels Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {selectedTrack.levels?.map((lvl) => {
+              const key = `${selectedTrack.id}_${lvl.id}`;
+              const booking = activeBookingMap[key];
+              const isBooked = !!booking;
+              const isPresent = booking?.attendance_status === 'present';
+              const isVerified = booking?.allocation_status === 'verified' || booking?.slot?.allocations_published;
+              const duration = lvl.duration_minutes || 45;
+              const qCount = lvl.questions?.length || lvl.question_count || 0;
+              const modeName = lvl.mode?.toUpperCase() || 'CODING';
 
-                // Check if student has a booking for this level
-                const bookingKey = `${selectedTrack.id}_${lvl.id}`;
-                const booking = activeBookingMap[bookingKey];
-                const isBooked = !!booking;
-                const isPresent = booking?.attendance_status === 'present';
-                const isPending = booking?.attendance_status === 'pending';
-
-                return (
-                  <div
-                    key={lvl.id}
-                    className={`panel-card p-6 flex flex-col justify-between group transition-all border ${
-                      isPresent
-                        ? 'bg-emerald-500/[0.03] border-emerald-500/40 shadow-sm'
-                        : isBooked
-                        ? 'bg-[var(--accent-dim)]/15 border-[var(--accent)]'
-                        : 'bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--border-accent)]'
-                    }`}
-                  >
-                    <div className="space-y-3.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                          Level {lvl.level_number}
-                        </span>
-                        <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
-                          {modeName} MODE
-                        </span>
-                      </div>
-
-                      <div>
-                        <h4 className="text-[17px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
-                          {lvl.name}
-                        </h4>
-                        <p className="text-[13px] text-[var(--text-secondary)] mt-1.5 leading-relaxed line-clamp-3">
-                          {lvl.description || 'Hands-on examination tier in campus laboratory.'}
-                        </p>
-                      </div>
-
-                      <div className="pt-2 flex items-center gap-3 font-mono text-[11px] text-[var(--text-muted)]">
-                        <div className="flex items-center gap-1.5 bg-[var(--bg-raised)] px-2.5 py-1 rounded border border-[var(--border)]">
-                          <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
-                          <span>Duration: <strong>{duration} Mins</strong></span>
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-[var(--bg-raised)] px-2.5 py-1 rounded border border-[var(--border)]">
-                          <Sparkles className="w-3.5 h-3.5 text-[var(--green)]" />
-                          <span>Pool: <strong>{qCount} Questions</strong></span>
-                        </div>
-                      </div>
-
-                      {/* Slot Booking Pass Details (If Booked) */}
-                      {isBooked && (
-                        <div className="mt-3 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs space-y-1">
-                          <div className="flex items-center justify-between font-semibold">
-                            <span className="text-[var(--text-primary)]">{booking.slot?.venue?.name} (Room {booking.slot?.venue?.room_number})</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              isPresent ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'
-                            }`}>
-                              {booking.attendance_status}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-[var(--text-secondary)]">
-                            {booking.slot?.slot_date} • {booking.slot?.start_time} - {booking.slot?.end_time}
-                          </p>
-                        </div>
-                      )}
+              return (
+                <div
+                  key={lvl.id}
+                  className={`panel-card p-6 flex flex-col justify-between group transition-all bg-[var(--bg-card)] border ${
+                    isBooked
+                      ? 'border-[var(--accent)] shadow-[var(--shadow-md)]'
+                      : 'border-[var(--border)] hover:border-[var(--border-accent)] hover:shadow-[var(--shadow-sm)]'
+                  }`}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                        Level {lvl.level_number}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
+                        {modeName} MODE
+                      </span>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="pt-5 mt-5 border-t border-[var(--border)] flex items-center justify-between gap-3">
-                      {isPresent ? (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-bold">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Attendance Verified</span>
-                        </div>
-                      ) : isBooked ? (
-                        <div className="flex items-center gap-1.5 text-xs text-amber-500 font-medium animate-pulse">
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Report to Venue</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)]">
-                          <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
-                          <span>Lab Reservation</span>
-                        </div>
-                      )}
-
-                      {isPresent ? (
-                        <button
-                          onClick={() => handleStartVerifiedInterview(selectedTrack, lvl)}
-                          className="btn btn-primary bg-emerald-600 hover:bg-emerald-500 text-[13px] py-2 px-4 flex items-center gap-2 shadow-md font-bold cursor-pointer transition-transform hover:scale-105"
-                        >
-                          <Video className="w-4 h-4" />
-                          <span>Launch Interview</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      ) : isBooked ? (
-                        <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)]">
-                          <span>Slot Reserved</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleOpenSlotBooking(selectedTrack, lvl)}
-                          className="btn btn-primary text-[13px] py-2 px-4 flex items-center gap-2 shadow-[var(--shadow-sm)] hover:scale-[1.02] active:scale-[0.98] transition-transform font-bold cursor-pointer"
-                        >
-                          <CalendarCheck className="w-4 h-4" />
-                          <span>Book a Slot</span>
-                          <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
-                        </button>
-                      )}
+                    <div>
+                      <h4 className="text-[17px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                        {lvl.name}
+                      </h4>
+                      <p className="text-[13px] text-[var(--text-secondary)] mt-1.5 leading-relaxed line-clamp-3">
+                        {lvl.description || 'Hands-on examination tier in campus laboratory.'}
+                      </p>
                     </div>
+
+                    <div className="pt-2 flex items-center gap-3 font-mono text-[11px] text-[var(--text-muted)]">
+                      <div className="flex items-center gap-1.5 bg-[var(--bg-raised)] px-2.5 py-1 rounded border border-[var(--border)]">
+                        <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        <span>Duration: <strong>{duration} Mins</strong></span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-[var(--bg-raised)] px-2.5 py-1 rounded border border-[var(--border)]">
+                        <Sparkles className="w-3.5 h-3.5 text-[var(--green)]" />
+                        <span>Pool: <strong>{qCount} Questions</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Slot Booking Pass Details (If Booked) */}
+                    {isBooked && (
+                      <div className="mt-3 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs space-y-1">
+                        {isVerified ? (
+                          <>
+                            <div className="flex items-center justify-between font-semibold">
+                              <span className="text-[var(--text-primary)]">{booking.slot?.venue?.name} (Room {booking.slot?.venue?.room_number})</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                isPresent ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'
+                              }`}>
+                                {booking.attendance_status}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[var(--text-secondary)]">
+                              {booking.slot?.slot_date} • {booking.slot?.start_time} - {booking.slot?.end_time}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between font-semibold">
+                              <span className="text-[var(--accent)] font-medium">Session: {booking.slot?.start_time} - {booking.slot?.end_time}</span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                Allocation in Progress
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[var(--text-secondary)]">
+                              {booking.slot?.slot_date} • Room details will be released once verified
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  {/* Action Buttons */}
+                  <div className="pt-5 mt-5 border-t border-[var(--border)] flex items-center justify-between gap-3">
+                    {isPresent ? (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-bold">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Attendance Verified</span>
+                      </div>
+                    ) : isBooked && isVerified ? (
+                      <div className="flex items-center gap-1.5 text-xs text-amber-500 font-medium animate-pulse">
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Report to Venue</span>
+                      </div>
+                    ) : isBooked ? (
+                      <div className="flex items-center gap-1.5 text-xs text-sky-400 font-medium">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Allocation Pending</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)]">
+                        <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        <span>Lab Reservation</span>
+                      </div>
+                    )}
+
+                    {isPresent ? (
+                      <button
+                        onClick={() => handleStartVerifiedInterview(selectedTrack, lvl)}
+                        className="btn btn-primary bg-emerald-600 hover:bg-emerald-500 text-[13px] py-2 px-4 flex items-center gap-2 shadow-md font-bold cursor-pointer transition-transform hover:scale-105"
+                      >
+                        <Video className="w-4 h-4" />
+                        <span>Launch Interview</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    ) : isBooked ? (
+                      <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] font-mono text-[var(--text-muted)]">
+                        <span>Slot Reserved</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenSlotBooking(selectedTrack, lvl)}
+                        className="btn btn-primary text-[13px] py-2 px-4 flex items-center gap-2 shadow-[var(--shadow-sm)] hover:scale-[1.02] active:scale-[0.98] transition-transform font-bold cursor-pointer"
+                      >
+                        <CalendarCheck className="w-4 h-4" />
+                        <span>Book a Slot</span>
+                        <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
         /* VIEW 2: DOMAIN OVERVIEW CARDS */

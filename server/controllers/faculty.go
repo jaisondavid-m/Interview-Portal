@@ -99,10 +99,12 @@ func GetFacultyAssignedSlots(c *gin.Context) {
 	query := database.DB.Model(&models.InterviewSlot{}).
 		Preload("Venue").
 		Preload("Faculty").
-		Preload("Track")
+		Preload("Track").
+		Preload("Venues.Venue").
+		Preload("Venues.Faculty")
 
 	if !isAdmin {
-		query = query.Where("faculty_id = ?", facultyID)
+		query = query.Where("faculty_id = ? OR id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?)", facultyID, facultyID)
 	}
 
 	switch scope {
@@ -158,9 +160,9 @@ func GetFacultySlotRoster(c *gin.Context) {
 	}
 
 	var slot models.InterviewSlot
-	slotQuery := database.DB.Preload("Venue").Preload("Faculty").Preload("Track")
+	slotQuery := database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Venues.Venue").Preload("Venues.Faculty")
 	if !isAdmin {
-		slotQuery = slotQuery.Where("faculty_id = ?", facultyID)
+		slotQuery = slotQuery.Where("faculty_id = ? OR id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?)", facultyID, facultyID)
 	}
 
 	if err := slotQuery.First(&slot, uint(slotID)).Error; err != nil {
@@ -174,7 +176,13 @@ func GetFacultySlotRoster(c *gin.Context) {
 	query := database.DB.Model(&models.SlotBooking{}).
 		Where("slot_id = ? AND slot_bookings.status != 'cancelled'", slot.ID).
 		Preload("Student").
-		Preload("Track")
+		Preload("Track").
+		Preload("AssignedVenue").
+		Preload("AssignedFaculty")
+
+	if !isAdmin {
+		query = query.Where("assigned_faculty_id = ? OR (assigned_faculty_id IS NULL AND slot_id IN (SELECT id FROM interview_slots WHERE faculty_id = ?))", facultyID, facultyID)
+	}
 
 	if attendanceFilter != "" && attendanceFilter != "all" {
 		query = query.Where("attendance_status = ?", attendanceFilter)

@@ -24,7 +24,10 @@ import {
   Globe,
   CheckSquare,
   Square,
-  BookOpen
+  BookOpen,
+  ShieldCheck,
+  Shuffle,
+  ArrowRightLeft
 } from 'lucide-react';
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
@@ -64,10 +67,15 @@ export default function AdminVenues() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null); // { type: 'venue'|'slot', id, name }
 
+  // Roster Modal State
   const [showRosterModal, setShowRosterModal] = useState(false);
   const [selectedSlotRoster, setSelectedSlotRoster] = useState(null);
   const [loadingRoster, setLoadingRoster] = useState(false);
   const [rosterSearch, setRosterSearch] = useState('');
+  const [rosterVenueFilter, setRosterVenueFilter] = useState('all');
+  const [autoBalancing, setAutoBalancing] = useState(false);
+  const [publishingAllocations, setPublishingAllocations] = useState(false);
+  const [reassigningBookingId, setReassigningBookingId] = useState(null);
 
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
@@ -224,6 +232,8 @@ export default function AdminVenues() {
     try {
       setLoadingRoster(true);
       setShowRosterModal(true);
+      setRosterVenueFilter('all');
+      setRosterSearch('');
       const res = await api.get(`/admin/slots/${slotId}/roster`);
       setSelectedSlotRoster(res?.data || res);
     } catch (err) {
@@ -231,6 +241,54 @@ export default function AdminVenues() {
       setShowRosterModal(false);
     } finally {
       setLoadingRoster(false);
+    }
+  };
+
+  const handleAutoBalanceVenues = async () => {
+    if (!selectedSlotRoster?.slot?.id) return;
+    try {
+      setAutoBalancing(true);
+      const res = await api.post(`/admin/slots/${selectedSlotRoster.slot.id}/auto-balance`);
+      setSelectedSlotRoster(res?.data || res);
+      showToast('Students automatically balanced across venues evenly!');
+      fetchSlots();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to auto-balance venues', 'error');
+    } finally {
+      setAutoBalancing(false);
+    }
+  };
+
+  const handlePublishAllocations = async () => {
+    if (!selectedSlotRoster?.slot?.id) return;
+    try {
+      setPublishingAllocations(true);
+      const res = await api.post(`/admin/slots/${selectedSlotRoster.slot.id}/publish-allocations`);
+      setSelectedSlotRoster(res?.data || res);
+      showToast('Venue allocations verified and published! Students can now see their venue & room numbers.');
+      fetchSlots();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to publish allocations', 'error');
+    } finally {
+      setPublishingAllocations(false);
+    }
+  };
+
+  const handleReassignVenue = async (bookingId, newVenueId) => {
+    if (!selectedSlotRoster?.slot?.id || !newVenueId) return;
+    try {
+      setReassigningBookingId(bookingId);
+      const res = await api.post(`/admin/slots/${selectedSlotRoster.slot.id}/reassign-venue`, {
+        booking_id: bookingId,
+        venue_id: Number(newVenueId),
+      });
+      setSelectedSlotRoster(res?.data || res);
+      showToast('Student reassigned to new venue successfully');
+      fetchSlots();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to reassign student venue', 'error');
+    } finally {
+      setReassigningBookingId(null);
     }
   };
 
@@ -449,6 +507,7 @@ export default function AdminVenues() {
                 const isCompleted = s.status === 'completed' || s.status === 'cancelled';
                 const occupancyPercent = s.capacity > 0 ? Math.round((s.booked_count / s.capacity) * 100) : 0;
                 const attendancePercent = s.booked_count > 0 ? Math.round((s.present_count / s.booked_count) * 100) : 0;
+                const venueAssignments = s.venues && s.venues.length > 0 ? s.venues : null;
 
                 return (
                   <div
@@ -458,15 +517,25 @@ export default function AdminVenues() {
                     <div>
                       {/* Top Badges */}
                       <div className="flex items-center justify-between gap-2 mb-3">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          s.status === 'active'
-                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                            : s.status === 'scheduled'
-                            ? 'bg-sky-500/10 text-sky-500 border border-sky-500/20'
-                            : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
-                        }`}>
-                          {s.status}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            s.status === 'active'
+                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                              : s.status === 'scheduled'
+                              ? 'bg-sky-500/10 text-sky-500 border border-sky-500/20'
+                              : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                          }`}>
+                            {s.status}
+                          </span>
+
+                          <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
+                            s.allocations_published
+                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                              : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                          }`}>
+                            {s.allocations_published ? '✓ Published' : 'Draft Allocation'}
+                          </span>
+                        </div>
 
                         <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                           <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -474,38 +543,65 @@ export default function AdminVenues() {
                         </div>
                       </div>
 
-                      {/* Venue & Time Header */}
+                      {/* Time Header */}
                       <div className="space-y-1">
-                        <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                          <span>{s.venue?.name || 'Lab Venue'}</span>
-                        </h3>
-                        <p className="text-xs text-[var(--text-secondary)] flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-secondary)] font-mono text-[11px]">
-                            {s.venue?.room_number || 'Room'} • {s.venue?.building}
-                          </span>
-                          <span className="flex items-center gap-1 text-[var(--accent)] font-semibold">
-                            <Clock className="w-3.5 h-3.5" />
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1 text-[var(--accent)] font-bold text-sm">
+                            <Clock className="w-4 h-4" />
                             {s.start_time} - {s.end_time}
                           </span>
-                        </p>
+                          {s.prevent_same_venue_match && (
+                            <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                              Cross-Venue Match
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Venues Summary */}
+                        {venueAssignments ? (
+                          <div className="mt-2.5 space-y-1.5">
+                            <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                              Assigned Venues ({venueAssignments.length}):
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {venueAssignments.map((va, idx) => (
+                                <div
+                                  key={va.id || idx}
+                                  className="px-2.5 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[11px] flex items-center justify-between gap-2"
+                                >
+                                  <div>
+                                    <span className="font-semibold text-[var(--text-primary)]">{va.venue?.name || `Venue #${va.venue_id}`}</span>
+                                    <span className="text-[10px] text-[var(--text-secondary)] ml-1 font-mono">({va.venue?.room_number || 'Room'})</span>
+                                  </div>
+                                  <div className="text-[10px] text-[var(--accent)] font-medium">
+                                    {va.faculty?.name ? va.faculty.name.split(' ')[0] : 'Faculty'} • {va.capacity} seats
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-1">
+                            <h3 className="text-base font-bold text-[var(--text-primary)]">
+                              {s.venue?.name || 'Lab Venue'}
+                            </h3>
+                            <p className="text-xs text-[var(--text-secondary)] flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-secondary)] font-mono text-[11px]">
+                                {s.venue?.room_number || 'Room'} • {s.venue?.building}
+                              </span>
+                            </p>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Assigned Faculty */}
-                      <div className="mt-4 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center text-xs font-bold">
-                            {s.faculty?.name ? s.faculty.name.charAt(0) : 'F'}
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-[var(--text-primary)]">{s.faculty?.name || 'Assigned Faculty'}</p>
-                            <p className="text-[10px] text-[var(--text-secondary)]">{s.faculty?.department || 'Invigilator'}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 max-w-[60%]">
+                      {/* Domain / Tracks */}
+                      <div className="mt-3 p-2.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between">
+                        <span className="text-[11px] text-[var(--text-secondary)] font-medium">Domains & Levels:</span>
+                        <div className="flex flex-wrap gap-1 justify-end max-w-[70%]">
                           {(() => {
                             if (s.allowed_tracks && s.allowed_tracks.length > 0) {
                               return (
-                                <div className="flex flex-wrap gap-1 justify-end">
+                                <>
                                   {s.allowed_tracks.slice(0, 2).map(trk => {
                                     const trkLevelIds = trk.levels?.map(l => l.id) || [];
                                     const allowedForThisTrk = (s.allowed_level_ids || []).filter(id => trkLevelIds.includes(id));
@@ -524,7 +620,7 @@ export default function AdminVenues() {
                                       +{s.allowed_tracks.length - 2} more
                                     </span>
                                   )}
-                                </div>
+                                </>
                               );
                             }
                             if (s.track) {
@@ -535,7 +631,7 @@ export default function AdminVenues() {
                                   </span>
                                   {s.level && (
                                     <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] font-mono">
-                                      Level {s.level.level_number}: {s.level.name}
+                                      Level {s.level.level_number}
                                     </span>
                                   )}
                                 </>
@@ -554,7 +650,7 @@ export default function AdminVenues() {
                       <div className="mt-4 space-y-2">
                         <div>
                           <div className="flex justify-between text-[11px] mb-1">
-                            <span className="text-[var(--text-secondary)]">Seats Booked</span>
+                            <span className="text-[var(--text-secondary)]">Total Seats Booked</span>
                             <span className="font-semibold text-[var(--text-primary)]">
                               {s.booked_count} / {s.capacity} ({occupancyPercent}%)
                             </span>
@@ -588,26 +684,29 @@ export default function AdminVenues() {
                     <div className="mt-5 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
                       <button
                         onClick={() => handleViewRoster(s.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-hover)] hover:bg-[var(--accent-dim)] text-[var(--text-secondary)] hover:text-[var(--accent)] text-xs font-semibold transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-hover)] hover:bg-[var(--accent-dim)] text-[var(--text-secondary)] hover:text-[var(--accent)] text-xs font-semibold transition-all cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        <span>Roster ({s.booked_count})</span>
+                        <span>Manage Roster ({s.booked_count})</span>
                       </button>
 
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => handleOpenEditSlot(s)}
-                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
+                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
                           title="Edit Slot"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => {
-                            setItemToDelete({ type: 'slot', id: s.id, name: `${s.venue?.name} (${s.slot_date} ${s.start_time})` });
+                            const nameLabel = s.venues && s.venues.length > 0
+                              ? `${s.venues.map(v => v.venue?.name).join(', ')} (${s.slot_date} ${s.start_time})`
+                              : `${s.venue?.name} (${s.slot_date} ${s.start_time})`;
+                            setItemToDelete({ type: 'slot', id: s.id, name: nameLabel });
                             setShowDeleteModal(true);
                           }}
-                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-all"
+                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-all cursor-pointer"
                           title="Delete / Cancel Slot"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -868,52 +967,164 @@ export default function AdminVenues() {
         </div>
       )}
 
-      {/* MODAL: VIEW SLOT ROSTER */}
-      {showRosterModal && (
+      {/* MODAL: VIEW & MANAGE SLOT ROSTER */}
+      {showRosterModal && selectedSlotRoster && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden animate-scaleUp flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between p-5 border-b border-[var(--border)] shrink-0">
-              <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                  <ClipboardList className="w-5 h-5 text-[var(--accent)]" />
-                  <span>Student Roster: {selectedSlotRoster?.slot?.venue?.name}</span>
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  {selectedSlotRoster?.slot?.slot_date} • {selectedSlotRoster?.slot?.start_time} - {selectedSlotRoster?.slot?.end_time} • Faculty: {selectedSlotRoster?.slot?.faculty?.name}
-                </p>
+          <div className="w-full max-w-4xl bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden animate-scaleUp flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-[var(--border)] shrink-0 bg-[var(--bg)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <ClipboardList className="w-5 h-5 text-[var(--accent)]" />
+                      <span>Slot Candidate Roster & Venue Allocation</span>
+                    </h2>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      selectedSlotRoster.slot?.allocations_published
+                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                        : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                    }`}>
+                      {selectedSlotRoster.slot?.allocations_published ? '✓ Allocations Published to Students' : 'Draft Allocation (Hidden from Students)'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-[var(--text-primary)]">{selectedSlotRoster.slot?.slot_date}</span>
+                    <span>•</span>
+                    <span className="text-[var(--accent)] font-mono">{selectedSlotRoster.slot?.start_time} - {selectedSlotRoster.slot?.end_time}</span>
+                    <span>•</span>
+                    <span>Total Booked: <strong className="text-[var(--text-primary)]">{selectedSlotRoster.bookings?.filter(b => b.status !== 'cancelled').length || 0}</strong> / {selectedSlotRoster.slot?.capacity}</span>
+                  </p>
+                </div>
+
+                {/* Top Action Buttons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleAutoBalanceVenues}
+                    disabled={autoBalancing || !selectedSlotRoster.venues || selectedSlotRoster.venues.length <= 1}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold shadow-sm transition-all disabled:opacity-40 cursor-pointer"
+                    title="Evenly distribute booked students across assigned venues"
+                  >
+                    {autoBalancing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" /> : <Shuffle className="w-3.5 h-3.5 text-[var(--accent)]" />}
+                    <span>Auto-Balance Venues</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePublishAllocations}
+                    disabled={publishingAllocations}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                    title="Publish room allocations so candidates can see their assigned rooms"
+                  >
+                    {publishingAllocations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                    <span>{selectedSlotRoster.slot?.allocations_published ? 'Re-Publish / Sync' : 'Verify & Publish'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowRosterModal(false)}
+                    className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] ml-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => setShowRosterModal(false)}
-                className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              {/* Multi-Venue Breakdown Bar */}
+              {selectedSlotRoster.venues && selectedSlotRoster.venues.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-[var(--border)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                  {selectedSlotRoster.venues.map((va) => {
+                    const activeStudentsInThisVenue = (selectedSlotRoster.bookings || []).filter(
+                      b => b.status !== 'cancelled' && b.assigned_venue_id === va.venue_id
+                    ).length;
+
+                    return (
+                      <div
+                        key={va.id || va.venue_id}
+                        className="p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between gap-2"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-[var(--accent)]" />
+                            <span>{va.venue?.name || `Venue #${va.venue_id}`}</span>
+                          </p>
+                          <p className="text-[10px] text-[var(--text-secondary)]">
+                            Room {va.venue?.room_number} • Faculty: <span className="font-semibold text-[var(--text-primary)]">{va.faculty?.name ? va.faculty.name.split(' ')[0] : 'Invigilator'}</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-xs font-bold ${
+                            activeStudentsInThisVenue > va.capacity ? 'text-rose-500 font-extrabold' : 'text-[var(--accent)]'
+                          }`}>
+                            {activeStudentsInThisVenue} / {va.capacity}
+                          </span>
+                          <p className="text-[9px] text-[var(--text-secondary)] uppercase font-semibold">Assigned</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <div className="p-4 border-b border-[var(--border)] shrink-0 flex items-center justify-between gap-3 bg-[var(--bg)]">
+            {/* Filter & Search Bar */}
+            <div className="p-3.5 border-b border-[var(--border)] shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[var(--bg-card)]">
               <div className="relative flex-1 max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-secondary)]" />
                 <input
                   type="text"
-                  placeholder="Filter student by roll no, name..."
+                  placeholder="Search student roll no, name..."
                   value={rosterSearch}
                   onChange={(e) => setRosterSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
 
-              <div className="text-xs text-[var(--text-secondary)]">
-                Active Booked: <span className="font-bold text-[var(--text-primary)]">{selectedSlotRoster?.bookings?.filter(b => b.status !== 'cancelled').length || 0}</span> / {selectedSlotRoster?.slot?.capacity}
-              </div>
+              {/* Venue Filter Pills */}
+              {selectedSlotRoster.venues && selectedSlotRoster.venues.length > 1 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+                  <button
+                    type="button"
+                    onClick={() => setRosterVenueFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
+                      rosterVenueFilter === 'all'
+                        ? 'bg-[var(--accent)] text-white'
+                        : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    All Venues ({selectedSlotRoster.bookings?.filter(b => b.status !== 'cancelled').length || 0})
+                  </button>
+                  {selectedSlotRoster.venues.map((va) => {
+                    const count = (selectedSlotRoster.bookings || []).filter(
+                      b => b.status !== 'cancelled' && b.assigned_venue_id === va.venue_id
+                    ).length;
+                    return (
+                      <button
+                        key={va.venue_id}
+                        type="button"
+                        onClick={() => setRosterVenueFilter(String(va.venue_id))}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
+                          rosterVenueFilter === String(va.venue_id)
+                            ? 'bg-[var(--accent)] text-white'
+                            : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        }`}
+                      >
+                        {va.venue?.name || `Venue #${va.venue_id}`} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
+            {/* Candidate Table */}
+            <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
               {loadingRoster ? (
                 <div className="flex flex-col items-center justify-center py-12 text-[var(--text-secondary)]">
                   <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)] mb-2" />
                   <p className="text-xs">Loading roster data...</p>
                 </div>
-              ) : !selectedSlotRoster?.bookings || selectedSlotRoster.bookings.length === 0 ? (
+              ) : !selectedSlotRoster.bookings || selectedSlotRoster.bookings.length === 0 ? (
                 <div className="text-center py-12 text-[var(--text-secondary)]">
                   <Users className="w-8 h-8 mx-auto mb-2 text-[var(--text-secondary)] opacity-50" />
                   <p className="text-xs">No students have booked this slot yet.</p>
@@ -925,14 +1136,20 @@ export default function AdminVenues() {
                       <th className="pb-2.5">Roll No</th>
                       <th className="pb-2.5">Student Name</th>
                       <th className="pb-2.5">Domain / Level</th>
+                      <th className="pb-2.5">Assigned Venue</th>
+                      <th className="pb-2.5">Allocation</th>
                       <th className="pb-2.5">Attendance</th>
-                      <th className="pb-2.5">Interview Access</th>
                       <th className="pb-2.5 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
                     {selectedSlotRoster.bookings
                       .filter(b => {
+                        // Venue filter
+                        if (rosterVenueFilter !== 'all') {
+                          if (String(b.assigned_venue_id) !== rosterVenueFilter) return false;
+                        }
+                        // Search filter
                         if (!rosterSearch) return true;
                         const q = rosterSearch.toLowerCase();
                         return (
@@ -945,9 +1162,13 @@ export default function AdminVenues() {
                       .map((b) => {
                         const isCancelled = b.status === 'cancelled';
                         const isCancelling = cancellingBookingId === b.id;
+                        const isReassigning = reassigningBookingId === b.id;
+                        const venueOptions = selectedSlotRoster.venues && selectedSlotRoster.venues.length > 0
+                          ? selectedSlotRoster.venues
+                          : (selectedSlotRoster.slot?.venue ? [{ venue_id: selectedSlotRoster.slot.venue.id, venue: selectedSlotRoster.slot.venue }] : []);
 
                         return (
-                          <tr key={b.id} className="hover:bg-[var(--bg-hover)] transition-all">
+                          <tr key={b.id} className={`transition-all ${isCancelled ? 'opacity-50 bg-[var(--bg)]' : 'hover:bg-[var(--bg-hover)]'}`}>
                             <td className="py-2.5 font-mono font-semibold text-[var(--text-primary)]">
                               {b.student?.roll_no || 'N/A'}
                             </td>
@@ -969,11 +1190,55 @@ export default function AdminVenues() {
                                 </span>
                               ) : null}
                             </td>
+
+                            {/* Assigned Venue Selector */}
                             <td className="py-2.5">
                               {isCancelled ? (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
+                                <span className="text-zinc-500 text-[11px]">—</span>
+                              ) : venueOptions.length > 1 ? (
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    value={b.assigned_venue_id || ''}
+                                    disabled={isReassigning}
+                                    onChange={(e) => handleReassignVenue(b.id, e.target.value)}
+                                    className="px-2 py-1 text-[11px] rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium cursor-pointer"
+                                  >
+                                    {venueOptions.map(vo => (
+                                      <option key={vo.venue_id} value={vo.venue_id}>
+                                        {vo.venue?.name || `Venue #${vo.venue_id}`} ({vo.venue?.room_number || 'Room'})
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {isReassigning && <Loader2 className="w-3 h-3 animate-spin text-[var(--accent)]" />}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-[var(--text-primary)]">
+                                  {b.assigned_venue?.name || selectedSlotRoster.slot?.venue?.name || 'Assigned Venue'}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Allocation Status */}
+                            <td className="py-2.5">
+                              {isCancelled ? (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
                                   Cancelled
                                 </span>
+                              ) : (
+                                <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
+                                  b.allocation_status === 'verified'
+                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                    : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                }`}>
+                                  {b.allocation_status === 'verified' ? '✓ Verified' : 'Draft'}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Attendance */}
+                            <td className="py-2.5">
+                              {isCancelled ? (
+                                <span className="text-zinc-500 text-[11px]">—</span>
                               ) : (
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                   b.attendance_status === 'present'
@@ -988,22 +1253,8 @@ export default function AdminVenues() {
                                 </span>
                               )}
                             </td>
-                            <td className="py-2.5">
-                              {isCancelled ? (
-                                <span className="text-zinc-500 text-[11px]">
-                                  Booking Cancelled
-                                </span>
-                              ) : b.can_start_interview ? (
-                                <span className="flex items-center gap-1 text-emerald-500 font-semibold text-[11px]">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Unlocked</span>
-                                </span>
-                              ) : (
-                                <span className="text-[var(--text-secondary)] text-[11px]">
-                                  Locked (Pending Present)
-                                </span>
-                              )}
-                            </td>
+
+                            {/* Actions */}
                             <td className="py-2.5 text-right">
                               {isCancelled ? (
                                 <span className="text-[11px] text-[var(--text-muted)] font-mono">
@@ -1014,7 +1265,7 @@ export default function AdminVenues() {
                                   type="button"
                                   onClick={() => handleAdminCancelBooking(b)}
                                   disabled={isCancelling}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 text-[11px] font-semibold transition-all cursor-pointer disabled:opacity-50"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 text-[10.5px] font-semibold transition-all cursor-pointer disabled:opacity-50"
                                   title="Cancel student booking and free up seat"
                                 >
                                   {isCancelling ? (
@@ -1022,7 +1273,7 @@ export default function AdminVenues() {
                                   ) : (
                                     <Trash2 className="w-3 h-3" />
                                   )}
-                                  <span>Cancel Booking</span>
+                                  <span>Cancel Seat</span>
                                 </button>
                               )}
                             </td>
@@ -1034,10 +1285,14 @@ export default function AdminVenues() {
               )}
             </div>
 
-            <div className="p-4 border-t border-[var(--border)] shrink-0 flex justify-end bg-[var(--bg)]">
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[var(--border)] shrink-0 flex items-center justify-between bg-[var(--bg)]">
+              <div className="text-xs text-[var(--text-secondary)]">
+                Tip: Use <strong>Auto-Balance</strong> to equalize students across venues, or manually change their venue above before publishing.
+              </div>
               <button
                 onClick={() => setShowRosterModal(false)}
-                className="px-4 py-1.5 rounded-xl bg-[var(--bg-hover)] text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--border)]"
+                className="px-4 py-1.5 rounded-xl bg-[var(--bg-hover)] text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--border)] cursor-pointer"
               >
                 Close
               </button>

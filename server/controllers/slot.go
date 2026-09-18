@@ -13,35 +13,47 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// SlotVenueInput represents a venue & faculty mapping within a slot
+type SlotVenueInput struct {
+	VenueID   uint `json:"venue_id"`
+	FacultyID uint `json:"faculty_id"`
+	Capacity  int  `json:"capacity"`
+}
+
 // CreateSlotInput represents the request payload for scheduling a new slot
 type CreateSlotInput struct {
-	VenueID         uint   `json:"venue_id" binding:"required"`
-	FacultyID       uint   `json:"faculty_id" binding:"required"`
-	TrackID         *uint  `json:"track_id"`
-	LevelID         *uint  `json:"level_id"`
-	AllowedTrackIDs []uint `json:"allowed_track_ids"`
-	AllowedLevelIDs []uint `json:"allowed_level_ids"`
-	SlotDate        string `json:"slot_date" binding:"required"` // "YYYY-MM-DD"
-	StartTime       string `json:"start_time" binding:"required"` // "HH:MM" (e.g. "09:00")
-	EndTime         string `json:"end_time" binding:"required"`   // "HH:MM" (e.g. "10:30")
-	Capacity        *int   `json:"capacity"`                      // Optional, defaults to venue capacity
-	Notes           string `json:"notes"`
+	VenueID               *uint            `json:"venue_id"`                 // Optional/legacy fallback if venues array not provided
+	FacultyID             *uint            `json:"faculty_id"`               // Optional/legacy fallback
+	Venues                []SlotVenueInput `json:"venues"`                   // Multi-venue assignments
+	PreventSameVenueMatch *bool            `json:"prevent_same_venue_match"` // Cross-venue matching
+	TrackID               *uint            `json:"track_id"`
+	LevelID               *uint            `json:"level_id"`
+	AllowedTrackIDs       []uint           `json:"allowed_track_ids"`
+	AllowedLevelIDs       []uint           `json:"allowed_level_ids"`
+	SlotDate              string           `json:"slot_date" binding:"required"` // "YYYY-MM-DD"
+	StartTime             string           `json:"start_time" binding:"required"` // "HH:MM" (e.g. "09:00")
+	EndTime               string           `json:"end_time" binding:"required"`   // "HH:MM" (e.g. "10:30")
+	Capacity              *int             `json:"capacity"`                      // Optional, defaults to sum of venue capacities
+	Notes                 string           `json:"notes"`
 }
 
 // UpdateSlotInput represents the request payload for editing a slot
 type UpdateSlotInput struct {
-	VenueID         *uint              `json:"venue_id"`
-	FacultyID       *uint              `json:"faculty_id"`
-	TrackID         *uint              `json:"track_id"`
-	LevelID         *uint              `json:"level_id"`
-	AllowedTrackIDs *[]uint            `json:"allowed_track_ids"`
-	AllowedLevelIDs *[]uint            `json:"allowed_level_ids"`
-	SlotDate        string             `json:"slot_date"`
-	StartTime       string             `json:"start_time"`
-	EndTime         string             `json:"end_time"`
-	Capacity        *int               `json:"capacity"`
-	Status          *models.SlotStatus `json:"status"`
-	Notes           string             `json:"notes"`
+	VenueID               *uint              `json:"venue_id"`
+	FacultyID             *uint              `json:"faculty_id"`
+	Venues                *[]SlotVenueInput  `json:"venues"`
+	PreventSameVenueMatch *bool              `json:"prevent_same_venue_match"`
+	AllocationsPublished  *bool              `json:"allocations_published"`
+	TrackID               *uint              `json:"track_id"`
+	LevelID               *uint              `json:"level_id"`
+	AllowedTrackIDs       *[]uint            `json:"allowed_track_ids"`
+	AllowedLevelIDs       *[]uint            `json:"allowed_level_ids"`
+	SlotDate              string             `json:"slot_date"`
+	StartTime             string             `json:"start_time"`
+	EndTime               string             `json:"end_time"`
+	Capacity              *int               `json:"capacity"`
+	Status                *models.SlotStatus `json:"status"`
+	Notes                 string             `json:"notes"`
 }
 
 // ParseSlotAllowedIDs extracts allowed track and level ID slices from JSON or legacy columns
@@ -126,42 +138,40 @@ func PopulateSlotAllowedEntities(slots []models.InterviewSlot) []models.Intervie
 	return slots
 }
 
-// AdminGetSlots retrieves interview slots with filtering by date range, venue, faculty, track, and status
+// AdminGetSlots retrieves all interview slots with filters
 func AdminGetSlots(c *gin.Context) {
-	venueIDStr := strings.TrimSpace(c.Query("venue_id"))
-	facultyIDStr := strings.TrimSpace(c.Query("faculty_id"))
-	trackIDStr := strings.TrimSpace(c.Query("track_id"))
-	levelIDStr := strings.TrimSpace(c.Query("level_id"))
-	dateStr := strings.TrimSpace(c.Query("date"))
-	status := strings.TrimSpace(c.Query("status"))
-	upcomingOnly := strings.ToLower(strings.TrimSpace(c.Query("upcoming"))) == "true"
+	venueID := c.Query("venue_id")
+	facultyID := c.Query("faculty_id")
+	trackID := c.Query("track_id")
+	levelID := strings.TrimSpace(c.Query("level_id"))
+	dateStr := c.Query("date")
+	status := c.Query("status")
+	upcomingOnly := c.Query("upcoming") == "true"
 
 	query := database.DB.Model(&models.InterviewSlot{}).
 		Preload("Venue").
 		Preload("Faculty").
 		Preload("Track").
-		Preload("Level")
+		Preload("Level").
+		Preload("Venues.Venue").
+		Preload("Venues.Faculty")
 
-	if venueIDStr != "" && venueIDStr != "all" {
-		if vid, err := strconv.ParseUint(venueIDStr, 10, 32); err == nil {
-			query = query.Where("venue_id = ?", uint(vid))
-		}
+	if venueID != "" && venueID != "all" {
+		query = query.Where("id IN (SELECT slot_id FROM slot_venue_assignments WHERE venue_id = ?) OR venue_id = ?", venueID, venueID)
 	}
 
-	if facultyIDStr != "" && facultyIDStr != "all" {
-		if fid, err := strconv.ParseUint(facultyIDStr, 10, 32); err == nil {
-			query = query.Where("faculty_id = ?", uint(fid))
-		}
+	if facultyID != "" && facultyID != "all" {
+		query = query.Where("id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?) OR faculty_id = ?", facultyID, facultyID)
 	}
 
-	if trackIDStr != "" && trackIDStr != "all" {
-		if tid, err := strconv.ParseUint(trackIDStr, 10, 32); err == nil && tid > 0 {
+	if trackID != "" && trackID != "all" {
+		if tid, err := strconv.ParseUint(trackID, 10, 32); err == nil && tid > 0 {
 			query = query.Where("(track_id = ? OR allowed_tracks_json LIKE ?)", uint(tid), fmt.Sprintf("%%%d%%", tid))
 		}
 	}
 
-	if levelIDStr != "" && levelIDStr != "all" {
-		if lid, err := strconv.ParseUint(levelIDStr, 10, 32); err == nil && lid > 0 {
+	if levelID != "" && levelID != "all" {
+		if lid, err := strconv.ParseUint(levelID, 10, 32); err == nil && lid > 0 {
 			query = query.Where("(level_id = ? OR allowed_levels_json LIKE ?)", uint(lid), fmt.Sprintf("%%%d%%", lid))
 		}
 	}
@@ -217,7 +227,14 @@ func AdminGetSlotDetail(c *gin.Context) {
 	}
 
 	var slot models.InterviewSlot
-	if err := database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Level").First(&slot, uint(id)).Error; err != nil {
+	if err := database.DB.
+		Preload("Venue").
+		Preload("Faculty").
+		Preload("Track").
+		Preload("Level").
+		Preload("Venues.Venue").
+		Preload("Venues.Faculty").
+		First(&slot, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Slot not found"})
 		return
 	}
@@ -240,7 +257,7 @@ func AdminGetSlotDetail(c *gin.Context) {
 	})
 }
 
-// AdminCreateSlot creates a new interview time slot and assigns faculty to the venue
+// AdminCreateSlot creates a new interview time slot and assigns multiple venues with distinct faculty
 func AdminCreateSlot(c *gin.Context) {
 	var input CreateSlotInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -252,24 +269,73 @@ func AdminCreateSlot(c *gin.Context) {
 		return
 	}
 
-	// Validate Venue
-	var venue models.Venue
-	if err := database.DB.First(&venue, input.VenueID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Selected venue does not exist",
+	// Determine venues to assign
+	venuesToAssign := input.Venues
+	if len(venuesToAssign) == 0 {
+		// Fallback for single venue
+		vID := uint(0)
+		if input.VenueID != nil {
+			vID = *input.VenueID
+		}
+		fID := uint(0)
+		if input.FacultyID != nil {
+			fID = *input.FacultyID
+		}
+		if vID == 0 || fID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "At least one examination venue and faculty member must be assigned"})
+			return
+		}
+		capVal := 30
+		if input.Capacity != nil && *input.Capacity > 0 {
+			capVal = *input.Capacity
+		}
+		venuesToAssign = append(venuesToAssign, SlotVenueInput{
+			VenueID:   vID,
+			FacultyID: fID,
+			Capacity:  capVal,
 		})
-		return
 	}
 
-	// Validate Faculty
-	var faculty models.User
-	if err := database.DB.First(&faculty, input.FacultyID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Selected faculty user does not exist",
-		})
-		return
+	// Validate distinct venues & distinct faculty members
+	venueMap := make(map[uint]bool)
+	facultyMap := make(map[uint]bool)
+	totalCalculatedCapacity := 0
+
+	for _, vInput := range venuesToAssign {
+		if vInput.VenueID == 0 || vInput.FacultyID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Each assigned venue must have a valid venue and faculty invigilator"})
+			return
+		}
+
+		if venueMap[vInput.VenueID] {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "The same venue cannot be added multiple times to the same time slot"})
+			return
+		}
+		venueMap[vInput.VenueID] = true
+
+		// Rule: Different faculty must be mapped to different venues in the same slot
+		if facultyMap[vInput.FacultyID] {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Different venues in the same time slot must be assigned to different faculty invigilators (no duplicate faculty assignment in the same slot)"})
+			return
+		}
+		facultyMap[vInput.FacultyID] = true
+
+		var v models.Venue
+		if err := database.DB.First(&v, vInput.VenueID).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("Venue ID %d does not exist", vInput.VenueID)})
+			return
+		}
+
+		var f models.User
+		if err := database.DB.First(&f, vInput.FacultyID).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("Faculty ID %d does not exist", vInput.FacultyID)})
+			return
+		}
+
+		if vInput.Capacity <= 0 {
+			vInput.Capacity = v.Capacity
+		}
+		totalCalculatedCapacity += vInput.Capacity
 	}
 
 	// Process Allowed Tracks (Multi-select)
@@ -302,26 +368,33 @@ func AdminCreateSlot(c *gin.Context) {
 		allowedLevelsJSON = string(b)
 	}
 
-	capacity := venue.Capacity
+	capacity := totalCalculatedCapacity
 	if input.Capacity != nil && *input.Capacity > 0 {
 		capacity = *input.Capacity
 	}
 
+	preventSameVenue := true
+	if input.PreventSameVenueMatch != nil {
+		preventSameVenue = *input.PreventSameVenueMatch
+	}
+
 	slot := models.InterviewSlot{
-		VenueID:           input.VenueID,
-		FacultyID:         input.FacultyID,
-		TrackID:           legacyTrackID,
-		LevelID:           legacyLevelID,
-		AllowedTracksJSON: allowedTracksJSON,
-		AllowedLevelsJSON: allowedLevelsJSON,
-		SlotDate:          strings.TrimSpace(input.SlotDate),
-		StartTime:         strings.TrimSpace(input.StartTime),
-		EndTime:           strings.TrimSpace(input.EndTime),
-		Capacity:          capacity,
-		BookedCount:       0,
-		PresentCount:      0,
-		Status:            models.SlotScheduled,
-		Notes:             strings.TrimSpace(input.Notes),
+		VenueID:               venuesToAssign[0].VenueID,
+		FacultyID:             venuesToAssign[0].FacultyID,
+		PreventSameVenueMatch: preventSameVenue,
+		AllocationsPublished:  false,
+		TrackID:               legacyTrackID,
+		LevelID:               legacyLevelID,
+		AllowedTracksJSON:     allowedTracksJSON,
+		AllowedLevelsJSON:     allowedLevelsJSON,
+		SlotDate:              strings.TrimSpace(input.SlotDate),
+		StartTime:             strings.TrimSpace(input.StartTime),
+		EndTime:               strings.TrimSpace(input.EndTime),
+		Capacity:              capacity,
+		BookedCount:           0,
+		PresentCount:          0,
+		Status:                models.SlotScheduled,
+		Notes:                 strings.TrimSpace(input.Notes),
 	}
 
 	if err := database.DB.Create(&slot).Error; err != nil {
@@ -333,8 +406,31 @@ func AdminCreateSlot(c *gin.Context) {
 		return
 	}
 
+	// Create venue assignments
+	for _, vInput := range venuesToAssign {
+		vCap := vInput.Capacity
+		if vCap <= 0 {
+			vCap = 30
+		}
+		assignment := models.SlotVenueAssignment{
+			SlotID:    slot.ID,
+			VenueID:   vInput.VenueID,
+			FacultyID: vInput.FacultyID,
+			Capacity:  vCap,
+			Status:    "active",
+		}
+		database.DB.Create(&assignment)
+	}
+
 	// Load preloads for clean response
-	database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Level").First(&slot, slot.ID)
+	database.DB.
+		Preload("Venue").
+		Preload("Faculty").
+		Preload("Track").
+		Preload("Level").
+		Preload("Venues.Venue").
+		Preload("Venues.Faculty").
+		First(&slot, slot.ID)
 	enriched := PopulateSlotAllowedEntities([]models.InterviewSlot{slot})
 	if len(enriched) > 0 {
 		slot = enriched[0]
@@ -347,7 +443,7 @@ func AdminCreateSlot(c *gin.Context) {
 	})
 }
 
-// AdminUpdateSlot updates slot details, status, track/level, or faculty assignment
+// AdminUpdateSlot updates slot details, multi-venues, status, track/level, or faculty assignment
 func AdminUpdateSlot(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -360,7 +456,7 @@ func AdminUpdateSlot(c *gin.Context) {
 	}
 
 	var slot models.InterviewSlot
-	if err := database.DB.First(&slot, uint(id)).Error; err != nil {
+	if err := database.DB.Preload("Venues").First(&slot, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"status":  "error",
 			"message": "Interview slot not found",
@@ -378,22 +474,79 @@ func AdminUpdateSlot(c *gin.Context) {
 		return
 	}
 
-	if input.VenueID != nil {
-		var venue models.Venue
-		if err := database.DB.First(&venue, *input.VenueID).Error; err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Venue does not exist"})
-			return
+	// Handle multi-venue update if provided
+	if input.Venues != nil && len(*input.Venues) > 0 {
+		venueMap := make(map[uint]bool)
+		facultyMap := make(map[uint]bool)
+		totalCalculatedCapacity := 0
+
+		for _, vInput := range *input.Venues {
+			if vInput.VenueID == 0 || vInput.FacultyID == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Each assigned venue must have a valid venue and faculty invigilator"})
+				return
+			}
+			if venueMap[vInput.VenueID] {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "The same venue cannot be added multiple times to the same time slot"})
+				return
+			}
+			venueMap[vInput.VenueID] = true
+
+			// Rule: Unique faculty per venue in the same slot
+			if facultyMap[vInput.FacultyID] {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Different venues in the same time slot must be assigned to different faculty invigilators (no duplicate faculty assignment in the same slot)"})
+				return
+			}
+			facultyMap[vInput.FacultyID] = true
+
+			vCap := vInput.Capacity
+			if vCap <= 0 {
+				var v models.Venue
+				if err := database.DB.First(&v, vInput.VenueID).Error; err == nil && v.Capacity > 0 {
+					vCap = v.Capacity
+				} else {
+					vCap = 30
+				}
+			}
+			totalCalculatedCapacity += vCap
 		}
-		slot.VenueID = *input.VenueID
+
+		// Delete existing assignments and recreate
+		database.DB.Where("slot_id = ?", slot.ID).Delete(&models.SlotVenueAssignment{})
+		for _, vInput := range *input.Venues {
+			vCap := vInput.Capacity
+			if vCap <= 0 {
+				vCap = 30
+			}
+			assignment := models.SlotVenueAssignment{
+				SlotID:    slot.ID,
+				VenueID:   vInput.VenueID,
+				FacultyID: vInput.FacultyID,
+				Capacity:  vCap,
+				Status:    "active",
+			}
+			database.DB.Create(&assignment)
+		}
+
+		slot.VenueID = (*input.Venues)[0].VenueID
+		slot.FacultyID = (*input.Venues)[0].FacultyID
+		if input.Capacity == nil {
+			slot.Capacity = totalCalculatedCapacity
+		}
+	} else {
+		if input.VenueID != nil {
+			slot.VenueID = *input.VenueID
+		}
+		if input.FacultyID != nil {
+			slot.FacultyID = *input.FacultyID
+		}
 	}
 
-	if input.FacultyID != nil {
-		var faculty models.User
-		if err := database.DB.First(&faculty, *input.FacultyID).Error; err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Faculty does not exist"})
-			return
-		}
-		slot.FacultyID = *input.FacultyID
+	if input.PreventSameVenueMatch != nil {
+		slot.PreventSameVenueMatch = *input.PreventSameVenueMatch
+	}
+
+	if input.AllocationsPublished != nil {
+		slot.AllocationsPublished = *input.AllocationsPublished
 	}
 
 	if input.AllowedTrackIDs != nil {
@@ -472,7 +625,14 @@ func AdminUpdateSlot(c *gin.Context) {
 		return
 	}
 
-	database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Level").First(&slot, slot.ID)
+	database.DB.
+		Preload("Venue").
+		Preload("Faculty").
+		Preload("Track").
+		Preload("Level").
+		Preload("Venues.Venue").
+		Preload("Venues.Faculty").
+		First(&slot, slot.ID)
 	enriched := PopulateSlotAllowedEntities([]models.InterviewSlot{slot})
 	if len(enriched) > 0 {
 		slot = enriched[0]
@@ -519,6 +679,7 @@ func AdminDeleteSlot(c *gin.Context) {
 		return
 	}
 
+	database.DB.Where("slot_id = ?", slot.ID).Delete(&models.SlotVenueAssignment{})
 	if err := database.DB.Delete(&slot).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
@@ -534,7 +695,7 @@ func AdminDeleteSlot(c *gin.Context) {
 	})
 }
 
-// AdminGetSlotRoster retrieves the complete student roster for a specific slot
+// AdminGetSlotRoster retrieves the complete student roster for a specific slot with venue distribution
 func AdminGetSlotRoster(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -547,7 +708,14 @@ func AdminGetSlotRoster(c *gin.Context) {
 	}
 
 	var slot models.InterviewSlot
-	if err := database.DB.Preload("Venue").Preload("Faculty").Preload("Track").Preload("Level").First(&slot, uint(id)).Error; err != nil {
+	if err := database.DB.
+		Preload("Venue").
+		Preload("Faculty").
+		Preload("Track").
+		Preload("Level").
+		Preload("Venues.Venue").
+		Preload("Venues.Faculty").
+		First(&slot, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"status":  "error",
 			"message": "Slot not found",
@@ -561,6 +729,8 @@ func AdminGetSlotRoster(c *gin.Context) {
 		Preload("Student").
 		Preload("Track").
 		Preload("Level").
+		Preload("AssignedVenue").
+		Preload("AssignedFaculty").
 		Order("created_at asc").
 		Find(&bookings).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -577,6 +747,143 @@ func AdminGetSlotRoster(c *gin.Context) {
 			"slot":     slot,
 			"bookings": bookings,
 		},
+	})
+}
+
+// AdminPublishSlotAllocations verifies and publishes venue assignments to all booked students
+func AdminPublishSlotAllocations(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid slot ID"})
+		return
+	}
+
+	var slot models.InterviewSlot
+	if err := database.DB.First(&slot, uint(id)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Slot not found"})
+		return
+	}
+
+	slot.AllocationsPublished = true
+	database.DB.Save(&slot)
+
+	// Update all active bookings in this slot to verified allocation
+	database.DB.Model(&models.SlotBooking{}).
+		Where("slot_id = ? AND status != 'cancelled'", slot.ID).
+		Update("allocation_status", "verified")
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Venue allocations verified and published to all booked students",
+	})
+}
+
+// AdminReassignStudentVenue moves a student to a different venue in the same slot
+func AdminReassignStudentVenue(c *gin.Context) {
+	idParam := c.Param("id")
+	slotID, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid slot ID"})
+		return
+	}
+
+	var req struct {
+		BookingID uint `json:"booking_id" binding:"required"`
+		VenueID   uint `json:"venue_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "booking_id and venue_id are required"})
+		return
+	}
+
+	var booking models.SlotBooking
+	if err := database.DB.Where("id = ? AND slot_id = ?", req.BookingID, uint(slotID)).First(&booking).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Booking not found for this slot"})
+		return
+	}
+
+	// Find the corresponding assigned faculty for this venue in this slot
+	var assignment models.SlotVenueAssignment
+	var facultyID *uint
+	if err := database.DB.Where("slot_id = ? AND venue_id = ?", uint(slotID), req.VenueID).First(&assignment).Error; err == nil {
+		facultyID = &assignment.FacultyID
+	} else {
+		var slot models.InterviewSlot
+		if err := database.DB.First(&slot, uint(slotID)).Error; err == nil && slot.VenueID == req.VenueID {
+			facultyID = &slot.FacultyID
+		}
+	}
+
+	booking.AssignedVenueID = &req.VenueID
+	booking.AssignedFacultyID = facultyID
+	if err := database.DB.Save(&booking).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to reassign venue"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Student venue reassigned successfully",
+		"data":    booking,
+	})
+}
+
+// AdminAutoBalanceSlotVenues evenly balances students across all assigned venues in the slot
+func AdminAutoBalanceSlotVenues(c *gin.Context) {
+	idParam := c.Param("id")
+	slotID, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid slot ID"})
+		return
+	}
+
+	var slot models.InterviewSlot
+	if err := database.DB.Preload("Venues").First(&slot, uint(slotID)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Slot not found"})
+		return
+	}
+
+	venues := slot.Venues
+	if len(venues) == 0 {
+		if slot.VenueID > 0 {
+			venues = append(venues, models.SlotVenueAssignment{
+				SlotID:    slot.ID,
+				VenueID:   slot.VenueID,
+				FacultyID: slot.FacultyID,
+				Capacity:  slot.Capacity,
+			})
+		}
+	}
+
+	if len(venues) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No venues assigned to this slot to balance"})
+		return
+	}
+
+	var bookings []models.SlotBooking
+	database.DB.Where("slot_id = ? AND status != 'cancelled'", slot.ID).Order("id asc").Find(&bookings)
+
+	if len(bookings) == 0 {
+		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "No active bookings to balance"})
+		return
+	}
+
+	// Round-robin distribution across available slot venues
+	for i := range bookings {
+		venueIndex := i % len(venues)
+		targetVenue := venues[venueIndex]
+		bookings[i].AssignedVenueID = &targetVenue.VenueID
+		bookings[i].AssignedFacultyID = &targetVenue.FacultyID
+		database.DB.Model(&bookings[i]).Updates(map[string]interface{}{
+			"assigned_venue_id":   targetVenue.VenueID,
+			"assigned_faculty_id": targetVenue.FacultyID,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": fmt.Sprintf("Successfully auto-balanced %d student(s) across %d venue(s)", len(bookings), len(venues)),
 	})
 }
 
