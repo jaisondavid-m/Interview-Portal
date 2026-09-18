@@ -139,6 +139,7 @@ type MatchmakingQueueEntry struct {
 	TrackID          uint           `gorm:"not null;index" json:"track_id"`
 	Track            *InterviewTrack `gorm:"foreignKey:TrackID" json:"track,omitempty"`
 	LevelID          uint           `gorm:"default:0" json:"level_id"`
+	IsTesting        bool           `gorm:"default:false" json:"is_testing"`
 	Status           string         `gorm:"size:50;default:'waiting';index" json:"status"` // waiting, matched, cancelled
 	MatchedSessionID uint           `gorm:"default:0" json:"matched_session_id"`
 	CreatedAt        time.Time      `json:"created_at"`
@@ -153,6 +154,7 @@ type InterviewSession struct {
 	Track             *InterviewTrack    `gorm:"foreignKey:TrackID" json:"track,omitempty"`
 	LevelID           uint               `gorm:"default:0" json:"level_id"`
 	Level             *InterviewLevel    `gorm:"foreignKey:LevelID" json:"level,omitempty"`
+	IsTesting         bool               `gorm:"default:false" json:"is_testing"`
 	InterviewerID     uint               `gorm:"not null;index" json:"interviewer_id"`
 	Interviewer       *User              `gorm:"foreignKey:InterviewerID" json:"interviewer,omitempty"`
 	IntervieweeID     uint               `gorm:"not null;index" json:"interviewee_id"`

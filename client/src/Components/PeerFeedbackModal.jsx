@@ -28,6 +28,7 @@ export default function PeerFeedbackModal({
   peerUser,
   roundNumber = 1,
   isCompleted = false,
+  allowSkip = true,
   onSubmitted,
 }) {
   const [questions, setQuestions] = useState([]);
@@ -166,7 +167,7 @@ export default function PeerFeedbackModal({
 
   return (
     <div 
-      onClick={onClose}
+      onClick={allowSkip ? onClose : undefined}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
     >
       <div 
@@ -199,13 +200,15 @@ export default function PeerFeedbackModal({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-[var(--radius-xs)] hover:bg-[var(--bg-hover)] transition-colors"
-            title="Dismiss popup"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {allowSkip && (
+            <button
+              onClick={onClose}
+              className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-[var(--radius-xs)] hover:bg-[var(--bg-hover)] transition-colors"
+              title="Dismiss popup"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Modal Body */}
@@ -360,24 +363,33 @@ export default function PeerFeedbackModal({
               </button>
             </div>
           ) : (
-            <>
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-[12px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] underline cursor-pointer"
-              >
-                Skip / Dismiss
-              </button>
-
-              <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-between gap-3 w-full">
+              {allowSkip ? (
                 <button
                   type="button"
                   onClick={onClose}
-                  disabled={submitting}
-                  className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
+                  className="text-[12px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] underline cursor-pointer"
                 >
-                  Cancel
+                  Skip / Dismiss
                 </button>
+              ) : (
+                <span className="text-[11px] font-mono text-amber-500 font-semibold flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Mandatory Peer Feedback
+                </span>
+              )}
+
+              <div className="flex items-center gap-2.5 ml-auto">
+                {allowSkip && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={submitting}
+                    className="btn btn-secondary text-xs py-2 px-4 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
                 <button
                   type="submit"
                   form="peer-feedback-form"
@@ -398,7 +410,7 @@ export default function PeerFeedbackModal({
                   </span>
                 </button>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>

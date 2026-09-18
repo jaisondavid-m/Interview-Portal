@@ -171,6 +171,7 @@ export default function MyBookings() {
 
       const payload = {
         track_id: booking.track_id || booking.track?.id,
+        is_testing: false,
       };
       if (booking.level_id || booking.level?.id) {
         payload.level_id = booking.level_id || booking.level?.id;

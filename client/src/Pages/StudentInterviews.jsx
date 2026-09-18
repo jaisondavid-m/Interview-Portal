@@ -227,7 +227,10 @@ export default function StudentInterviews() {
       });
       setMatchStatus('searching');
 
-      const payload = { track_id: track.id };
+      const payload = {
+        track_id: track.id,
+        is_testing: false,
+      };
       if (level?.id) payload.level_id = level.id;
 
       const res = await api.post('/interviews/matchmake', payload);

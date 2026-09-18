@@ -347,8 +347,9 @@ func JoinMatchmaking(c *gin.Context) {
 	currentUserID := rawUserID.(uint)
 
 	var req struct {
-		TrackID uint `json:"track_id" binding:"required"`
-		LevelID uint `json:"level_id"`
+		TrackID   uint `json:"track_id" binding:"required"`
+		LevelID   uint `json:"level_id"`
+		IsTesting bool `json:"is_testing"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -364,7 +365,7 @@ func JoinMatchmaking(c *gin.Context) {
 
 	// 2. Check if user was ALREADY matched in an active session in the last 5 minutes (prevent accidental double matching)
 	var activeSession models.InterviewSession
-	if err := database.DB.Where("(interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress' AND track_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)", currentUserID, currentUserID, req.TrackID).
+	if err := database.DB.Where("(interviewer_id = ? OR interviewee_id = ?) AND status = 'in_progress' AND track_id = ? AND is_testing = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)", currentUserID, currentUserID, req.TrackID, req.IsTesting).
 		Order("id desc").First(&activeSession).Error; err == nil {
 		role := "interviewee"
 		if activeSession.InterviewerID == currentUserID {
@@ -376,6 +377,7 @@ func JoinMatchmaking(c *gin.Context) {
 			"session_id": activeSession.ID,
 			"track_id":   activeSession.TrackID,
 			"role":       role,
+			"is_testing": activeSession.IsTesting,
 			"message":    "Connecting to active peer interview...",
 		})
 		return
@@ -397,6 +399,10 @@ func JoinMatchmaking(c *gin.Context) {
 	}
 
 	// 4. Cancel old waiting queue entries for this user
+	database.DB.Model(&models.MatchmakingQueueEntry{}).
+		Where("user_id = ? AND status = 'waiting'", currentUserID).
+		Update("status", "cancelled")
+
 	// 5. Check if current user has an active booking today with an assigned venue
 	var currentBooking models.SlotBooking
 	var currentVenueID uint
@@ -413,9 +419,9 @@ func JoinMatchmaking(c *gin.Context) {
 		}
 	}
 
-	// 6. Search for active waiting peer entries in the SAME track (different user)
+	// 6. Search for active waiting peer entries in the SAME track (different user) AND SAME is_testing flag
 	var peerEntries []models.MatchmakingQueueEntry
-	database.DB.Where("track_id = ? AND user_id != ? AND status = 'waiting'", req.TrackID, currentUserID).
+	database.DB.Where("track_id = ? AND user_id != ? AND status = 'waiting' AND is_testing = ?", req.TrackID, currentUserID, req.IsTesting).
 		Order("id asc").
 		Find(&peerEntries)
 
@@ -488,6 +494,7 @@ func JoinMatchmaking(c *gin.Context) {
 		session := models.InterviewSession{
 			TrackID:           req.TrackID,
 			LevelID:           levelID,
+			IsTesting:         req.IsTesting,
 			InterviewerID:     peerEntry.UserID,
 			IntervieweeID:     currentUserID,
 			Status:            "in_progress",
@@ -516,6 +523,7 @@ func JoinMatchmaking(c *gin.Context) {
 			UserID:           currentUserID,
 			TrackID:          req.TrackID,
 			LevelID:          levelID,
+			IsTesting:        req.IsTesting,
 			Status:           "matched",
 			MatchedSessionID: session.ID,
 		}
@@ -528,6 +536,7 @@ func JoinMatchmaking(c *gin.Context) {
 			"queue_id":   userEntry.ID,
 			"track_id":   req.TrackID,
 			"role":       "interviewee",
+			"is_testing": session.IsTesting,
 			"message":    "Peer match found! Connecting to live room...",
 		})
 		return
@@ -535,10 +544,11 @@ func JoinMatchmaking(c *gin.Context) {
 
 	// 6. No peer waiting yet -> Add student to waiting queue
 	newEntry := models.MatchmakingQueueEntry{
-		UserID:  currentUserID,
-		TrackID: req.TrackID,
-		LevelID: levelID,
-		Status:  "waiting",
+		UserID:    currentUserID,
+		TrackID:   req.TrackID,
+		LevelID:   levelID,
+		IsTesting: req.IsTesting,
+		Status:    "waiting",
 	}
 
 	if err := database.DB.Create(&newEntry).Error; err != nil {
@@ -547,11 +557,12 @@ func JoinMatchmaking(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":   "waiting",
-		"matched":  false,
-		"queue_id": newEntry.ID,
-		"track_id": req.TrackID,
-		"message":  "Waiting for another peer to join...",
+		"status":     "waiting",
+		"matched":    false,
+		"queue_id":   newEntry.ID,
+		"track_id":   req.TrackID,
+		"is_testing": newEntry.IsTesting,
+		"message":    "Waiting for another peer to join...",
 	})
 }
 
@@ -919,6 +930,7 @@ func GetInterviewSession(c *gin.Context) {
 				"switch_count":           session.SwitchCount,
 				"switch_requested_by":    session.SwitchRequestedBy,
 				"end_requested_by":       session.EndRequestedBy,
+				"is_testing":             session.IsTesting,
 				"started_at":             session.StartedAt,
 				"ended_at":               session.EndedAt,
 			},
@@ -1706,6 +1718,15 @@ func RequestSessionEndInterview(c *gin.Context) {
 		return
 	}
 
+	// Formal assessment rule: Must complete both Round 1 and Round 2
+	if !session.IsTesting && session.SwitchCount == 0 && session.Round < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Both Round 1 and Round 2 must be completed before concluding a formal assessment.",
+		})
+		return
+	}
+
 	if session.Status == "completed" {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "success",
@@ -1851,6 +1872,15 @@ func EndInterviewSession(c *gin.Context) {
 
 	if session.InterviewerID != currentUserID && session.IntervieweeID != currentUserID {
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Access denied"})
+		return
+	}
+
+	// Formal assessment rule: Must complete both Round 1 and Round 2
+	if !session.IsTesting && session.SwitchCount == 0 && session.Round < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Both Round 1 and Round 2 must be completed before concluding a formal assessment.",
+		})
 		return
 	}
 

@@ -24,7 +24,9 @@ import {
   Lock,
   ChevronLeft,
   ChevronRight,
-  Check
+  Check,
+  Maximize,
+  AlertTriangle
 } from 'lucide-react';
 import api from '../api/axios';
 import CodeEditor from '../Components/CodeEditor';
@@ -76,6 +78,66 @@ export default function InterviewRoom() {
   const payload = question?.payload || {};
   const currentRound = sessionData?.round || 1;
   const switchCount = sessionData?.switch_count || 0;
+  const isTestingSession = Boolean(sessionData?.is_testing);
+
+  // Fullscreen enforcement state for formal assessment sessions
+  const [isFullscreen, setIsFullscreen] = useState(
+    Boolean(
+      typeof document !== 'undefined' &&
+        (document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.mozFullScreenElement ||
+          document.msFullscreenElement)
+    )
+  );
+
+  const requestFullscreen = useCallback(() => {
+    try {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(() => {});
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+    } catch (e) {
+      console.error('Fullscreen request error', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const fs = Boolean(
+        document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.mozFullScreenElement ||
+          document.msFullscreenElement
+      );
+      setIsFullscreen(fs);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Prompt fullscreen automatically upon joining formal assessment session
+  useEffect(() => {
+    if (!isTestingSession && !isCompleted && sessionData && !isFullscreen) {
+      requestFullscreen();
+    }
+  }, [isTestingSession, isCompleted, sessionData, isFullscreen, requestFullscreen]);
 
   // Multi-question per round handling
   const roundQuestions = useMemo(() => {
@@ -735,6 +797,19 @@ export default function InterviewRoom() {
 
   // End Interview Immediately and Exit Room
   const handleDirectEnd = () => {
+    if (!isTestingSession && currentRound < 2 && switchCount === 0) {
+      openModal({
+        title: 'Complete Both Rounds Required',
+        message: 'This is an official assessment. Both Round 1 and Round 2 must be completed before concluding the interview. Please switch roles to proceed with Round 2.',
+        confirmText: 'Understood',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        onConfirm: closeModal,
+      });
+      return;
+    }
+
     openModal({
       title: 'End & Exit Interview',
       message: 'Are you sure you want to conclude and exit this interview session? The room will be closed and marked completed, allowing you to start fresh interviews.',
@@ -764,6 +839,19 @@ export default function InterviewRoom() {
 
   // Request End Interview (Requires mutual peer acceptance - no force end)
   const handleRequestEnd = () => {
+    if (!isTestingSession && currentRound < 2 && switchCount === 0) {
+      openModal({
+        title: 'Complete Both Rounds Required',
+        message: 'This is an official assessment. Both Round 1 and Round 2 must be completed before concluding the interview. Please use "Switch Roles (Round 2)" once Round 1 is finished.',
+        confirmText: 'Understood',
+        variant: 'warning',
+        icon: AlertCircle,
+        showCancel: false,
+        onConfirm: closeModal,
+      });
+      return;
+    }
+
     openModal({
       title: 'Request to Conclude Interview',
       message: 'Both participants must agree to conclude the session. Would you like to send a conclusion request to your peer?',
@@ -992,6 +1080,7 @@ export default function InterviewRoom() {
         {/* Peer Feedback Modal (Can be triggered or reviewed directly from finished view) */}
         <PeerFeedbackModal
           isOpen={showFeedbackModal}
+          allowSkip={isTestingSession}
           onClose={() => {
             setShowFeedbackModal(false);
             if (!hasSecuritySubmitted) {
@@ -1843,6 +1932,7 @@ export default function InterviewRoom() {
       {/* Dynamic Peer Feedback Modal */}
       <PeerFeedbackModal
         isOpen={showFeedbackModal}
+        allowSkip={isTestingSession}
         onClose={() => {
           setShowFeedbackModal(false);
           if (isCompleted && !hasSecuritySubmitted) {
@@ -1884,6 +1974,36 @@ export default function InterviewRoom() {
         onPermissionGranted={() => setMicModalOpen(false)}
         onClose={() => setMicModalOpen(false)}
       />
+
+      {/* Fullscreen Mode Security Barrier for Formal Assessments */}
+      {!isTestingSession && !isCompleted && !isFullscreen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fadeIn text-center">
+          <div className="panel-card max-w-md w-full p-8 border-2 border-[var(--accent)] bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-2xl space-y-5 animate-scaleUp">
+            <div className="w-14 h-14 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] flex items-center justify-center mx-auto">
+              <Maximize className="w-7 h-7" />
+            </div>
+            <div className="space-y-2">
+              <span className="text-[11px] font-mono px-3 py-1 rounded bg-[var(--accent)] text-white uppercase font-bold tracking-wider">
+                Assessment Mode
+              </span>
+              <h2 className="text-[20px] font-bold text-[var(--text-primary)]">
+                Fullscreen Mode Required
+              </h2>
+              <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                This official assessment session requires full screen mode. Please click the button below to resume your assessment in fullscreen.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={requestFullscreen}
+              className="btn btn-primary w-full py-3 px-6 text-sm font-bold flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+            >
+              <Maximize className="w-4 h-4" />
+              <span>Enter Fullscreen Assessment</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
