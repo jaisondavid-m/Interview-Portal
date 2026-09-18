@@ -17,6 +17,10 @@ services:
       - "--character-set-server=utf8mb4"
       - "--collation-server=utf8mb4_unicode_ci"
       - "--default-authentication-plugin=mysql_native_password"
+      - "--max_connections=1000"
+      - "--innodb_buffer_pool_size=2G"
+      - "--table_open_cache=4000"
+      - "--thread_cache_size=64"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-mock_mate}
@@ -56,6 +60,10 @@ services:
       - "--character-set-server=utf8mb4"
       - "--collation-server=utf8mb4_unicode_ci"
       - "--default-authentication-plugin=mysql_native_password"
+      - "--max_connections=1000"
+      - "--innodb_buffer_pool_size=1G"
+      - "--table_open_cache=4000"
+      - "--thread_cache_size=64"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
     ports:
@@ -93,6 +101,10 @@ services:
       - "--character-set-server=utf8mb4"
       - "--collation-server=utf8mb4_unicode_ci"
       - "--default-authentication-plugin=mysql_native_password"
+      - "--max_connections=1000"
+      - "--innodb_buffer_pool_size=1G"
+      - "--table_open_cache=4000"
+      - "--thread_cache_size=64"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
     ports:
@@ -145,6 +157,16 @@ services:
     image: mysql:8.0
     container_name: mockmate-sandbox-db
     restart: unless-stopped
+    command:
+      - "mysqld"
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--max_connections=1000"
+      - "--innodb_buffer_pool_size=4G"
+      - "--table_open_cache=4000"
+      - "--thread_cache_size=64"
+      - "--innodb_flush_log_at_trx_commit=2"
     environment:
       MYSQL_ROOT_PASSWORD: ${SANDBOX_DB_PASSWORD:-sandbox_root_pass_2026}
       MYSQL_DATABASE: sandbox_default
@@ -178,6 +200,8 @@ services:
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
       DB_NAME: ${MYSQL_DATABASE:-mock_mate}
       DB_REPLICA_HOSTS: mysql-replica-1:3306,mysql-replica-2:3306
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-500}
+      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-50}
       SANDBOX_DB_HOST: ${SANDBOX_DB_HOST:-sandbox-db}
       SANDBOX_DB_PORT: ${SANDBOX_DB_PORT:-3306}
       SANDBOX_DB_USER: ${SANDBOX_DB_USER:-root}
@@ -185,6 +209,13 @@ services:
       JWT_SECRET: ${JWT_SECRET:-mock_mate_secure_jwt_secret_2026}
     ports:
       - "${SERVER_PORT:-8080}:8080"
+    tmpfs:
+      - /tmp:rw,size=4G,mode=1777
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+      nproc: 65535
     volumes:
       - audio_recordings:/app/uploads
     depends_on:
