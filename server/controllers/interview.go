@@ -159,10 +159,11 @@ func AdminUpdateTrack(c *gin.Context) {
 	}
 
 	var input struct {
-		Title       string `json:"title"`
-		Category    string `json:"category"`
-		Icon        string `json:"icon"`
-		Description string `json:"description"`
+		Title       string  `json:"title"`
+		Category    string  `json:"category"`
+		Icon        string  `json:"icon"`
+		Description string  `json:"description"`
+		IsActive    *bool   `json:"is_active"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -185,6 +186,9 @@ func AdminUpdateTrack(c *gin.Context) {
 	if input.Description != "" {
 		track.Description = input.Description
 	}
+	if input.IsActive != nil {
+		track.IsActive = *input.IsActive
+	}
 
 	database.DB.Save(&track)
 
@@ -192,6 +196,29 @@ func AdminUpdateTrack(c *gin.Context) {
 		"status":  "success",
 		"message": "Track updated successfully",
 		"data":    track,
+	})
+}
+
+// AdminToggleTrackActive toggles the is_active flag for a track
+func AdminToggleTrackActive(c *gin.Context) {
+	id := c.Param("id")
+	var track models.InterviewTrack
+	if err := database.DB.First(&track, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Interview track not found"})
+		return
+	}
+
+	track.IsActive = !track.IsActive
+	database.DB.Model(&track).Update("is_active", track.IsActive)
+
+	stateMsg := "activated"
+	if !track.IsActive {
+		stateMsg = "deactivated"
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"message":   fmt.Sprintf("Track %s successfully", stateMsg),
+		"is_active": track.IsActive,
 	})
 }
 
@@ -383,6 +410,7 @@ func AdminUpdateLevel(c *gin.Context) {
 		DurationMin   int                  `json:"duration_minutes"`
 		QuestionCount int                  `json:"question_count"`
 		LevelNumber   int                  `json:"level_number"`
+		IsActive      *bool                `json:"is_active"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -414,6 +442,9 @@ func AdminUpdateLevel(c *gin.Context) {
 	if input.LevelNumber > 0 {
 		level.LevelNumber = input.LevelNumber
 	}
+	if input.IsActive != nil {
+		level.IsActive = *input.IsActive
+	}
 
 	database.DB.Save(&level)
 
@@ -421,6 +452,29 @@ func AdminUpdateLevel(c *gin.Context) {
 		"status":  "success",
 		"message": "Level updated successfully",
 		"data":    level,
+	})
+}
+
+// AdminToggleLevelActive toggles the is_active flag for a level
+func AdminToggleLevelActive(c *gin.Context) {
+	id := c.Param("id")
+	var level models.InterviewLevel
+	if err := database.DB.First(&level, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Level not found"})
+		return
+	}
+
+	level.IsActive = !level.IsActive
+	database.DB.Model(&level).Update("is_active", level.IsActive)
+
+	stateMsg := "activated"
+	if !level.IsActive {
+		stateMsg = "deactivated"
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"message":   fmt.Sprintf("Level %s successfully", stateMsg),
+		"is_active": level.IsActive,
 	})
 }
 
@@ -746,6 +800,29 @@ func AdminDeleteQuestion(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "Question deleted successfully",
+	})
+}
+
+// AdminToggleQuestionActive toggles the is_active flag for an individual question
+func AdminToggleQuestionActive(c *gin.Context) {
+	id := c.Param("id")
+	var question models.InterviewQuestion
+	if err := database.DB.First(&question, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Question not found"})
+		return
+	}
+
+	question.IsActive = !question.IsActive
+	database.DB.Model(&question).Update("is_active", question.IsActive)
+
+	stateMsg := "activated"
+	if !question.IsActive {
+		stateMsg = "deactivated"
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"message":   fmt.Sprintf("Question %s successfully", stateMsg),
+		"is_active": question.IsActive,
 	})
 }
 

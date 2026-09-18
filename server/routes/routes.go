@@ -174,6 +174,7 @@ func SetupRouter() *gin.Engine {
 				adminInterviews.GET("/tracks/:id", controllers.AdminGetTrackByID)
 				adminInterviews.POST("/tracks", controllers.AdminCreateTrack)
 				adminInterviews.PUT("/tracks/:id", controllers.AdminUpdateTrack)
+				adminInterviews.PATCH("/tracks/:id/toggle-active", controllers.AdminToggleTrackActive)
 				adminInterviews.DELETE("/tracks/:id", controllers.AdminDeleteTrack)
 
 				// Levels
@@ -181,6 +182,7 @@ func SetupRouter() *gin.Engine {
 				adminInterviews.POST("/tracks/:id/levels", controllers.AdminCreateLevel)
 				adminInterviews.GET("/levels/:id", controllers.AdminGetLevelByID)
 				adminInterviews.PUT("/levels/:id", controllers.AdminUpdateLevel)
+				adminInterviews.PATCH("/levels/:id/toggle-active", controllers.AdminToggleLevelActive)
 				adminInterviews.DELETE("/levels/:id", controllers.AdminDeleteLevel)
 
 				// Questions
@@ -191,6 +193,7 @@ func SetupRouter() *gin.Engine {
 				adminInterviews.POST("/questions/bulk-delete", controllers.AdminBulkDeleteQuestions)
 				adminInterviews.GET("/questions/:id", controllers.AdminGetQuestionByID)
 				adminInterviews.PUT("/questions/:id", controllers.AdminUpdateQuestion)
+				adminInterviews.PATCH("/questions/:id/toggle-active", controllers.AdminToggleQuestionActive)
 				adminInterviews.DELETE("/questions/:id", controllers.AdminDeleteQuestion)
 
 				// History & Sessions

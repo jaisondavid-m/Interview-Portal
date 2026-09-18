@@ -163,6 +163,11 @@ func runMigrations(db *gorm.DB) error {
 
 // syncAppPagesCatalog ensures the app catalog page for My Bookings and System Settings are updated and mapped
 func syncAppPagesCatalog(db *gorm.DB) {
+	// Ensure default is_active for legacy interview tracks, levels, and questions
+	db.Exec("UPDATE interview_tracks SET is_active = true WHERE is_active IS NULL")
+	db.Exec("UPDATE interview_levels SET is_active = true WHERE is_active IS NULL")
+	db.Exec("UPDATE interview_questions SET is_active = true WHERE is_active IS NULL")
+
 	// 1. Seed default quick_login_enabled setting if not present
 	var qlSetting models.SystemSetting
 	if err := db.Where("`key` = 'quick_login_enabled'").First(&qlSetting).Error; err != nil {

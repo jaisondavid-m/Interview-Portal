@@ -427,6 +427,54 @@ export default function AdminInterviewConfig() {
     }
   };
 
+  const handleToggleTrackActive = async (track) => {
+    // Optimistic update
+    setTracks((prev) =>
+      prev.map((t) => (t.id === track.id ? { ...t, is_active: !t.is_active } : t))
+    );
+    try {
+      await api.patch(`/admin/interviews/tracks/${track.id}/toggle-active`);
+    } catch (err) {
+      console.error('Failed to toggle track active state:', err);
+      // Revert on failure
+      setTracks((prev) =>
+        prev.map((t) => (t.id === track.id ? { ...t, is_active: track.is_active } : t))
+      );
+    }
+  };
+
+  const handleToggleLevelActive = async (level) => {
+    // Optimistic update
+    setLevels((prev) =>
+      prev.map((l) => (l.id === level.id ? { ...l, is_active: !l.is_active } : l))
+    );
+    try {
+      await api.patch(`/admin/interviews/levels/${level.id}/toggle-active`);
+    } catch (err) {
+      console.error('Failed to toggle level active state:', err);
+      // Revert on failure
+      setLevels((prev) =>
+        prev.map((l) => (l.id === level.id ? { ...l, is_active: level.is_active } : l))
+      );
+    }
+  };
+
+  const handleToggleQuestionActive = async (question) => {
+    // Optimistic update
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === question.id ? { ...q, is_active: !q.is_active } : q))
+    );
+    try {
+      await api.patch(`/admin/interviews/questions/${question.id}/toggle-active`);
+    } catch (err) {
+      console.error('Failed to toggle question active state:', err);
+      // Revert on failure
+      setQuestions((prev) =>
+        prev.map((q) => (q.id === question.id ? { ...q, is_active: question.is_active } : q))
+      );
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header with Interactive Breadcrumbs */}
@@ -603,6 +651,7 @@ export default function AdminInterviewConfig() {
               setDeleteTarget({ type: 'track', data: track });
               setShowDeleteModal(true);
             }}
+            onToggleTrackActive={handleToggleTrackActive}
           />
         )
       )}
@@ -646,6 +695,7 @@ export default function AdminInterviewConfig() {
               setDeleteTarget({ type: 'level', data: level });
               setShowDeleteModal(true);
             }}
+            onToggleLevelActive={handleToggleLevelActive}
           />
         )
       )}
@@ -669,6 +719,7 @@ export default function AdminInterviewConfig() {
             onOpenBulkModal={() => setShowBulkQuestionModal(true)}
             onExportQuestions={handleExportQuestions}
             onBulkDeleteQuestions={handleBulkDeleteQuestions}
+            onToggleQuestionActive={handleToggleQuestionActive}
           />
         )
       )}

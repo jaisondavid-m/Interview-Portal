@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Clock, Edit2, Trash2, ChevronRight } from 'lucide-react';
+import { Plus, Clock, Edit2, Trash2, ChevronRight, EyeOff } from 'lucide-react';
 import { INTERVIEW_MODES, formatLevelName, formatFullLevelTitle, getModeMeta } from './constants';
 
 export default function LevelListView({
@@ -9,6 +9,7 @@ export default function LevelListView({
   onCreateLevel,
   onEditLevel,
   onDeleteLevel,
+  onToggleLevelActive,
 }) {
   return (
     <div className="space-y-6">
@@ -38,7 +39,7 @@ export default function LevelListView({
         <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center justify-between">
           <span>Configured Progression Tiers</span>
           <span className="text-[11px] font-mono text-[var(--text-muted)]">
-            Click any level to view and upload questions
+            Click any active level to view and upload questions
           </span>
         </h3>
 
@@ -60,15 +61,24 @@ export default function LevelListView({
             const modeMeta = getModeMeta(level.mode);
             const ModeIcon = modeMeta.icon;
             const questionsCount = level.questions_count || 0;
+            const isActive = level.is_active !== false; // default true
 
             return (
               <div
                 key={level.id}
-                onClick={() => onSelectLevel(level)}
-                className="panel-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all group"
+                onClick={() => isActive && onSelectLevel(level)}
+                className={`panel-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all group ${
+                  isActive
+                    ? 'cursor-pointer hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)]'
+                    : 'opacity-60 border-dashed cursor-default'
+                }`}
               >
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-[var(--radius-md)] bg-[var(--bg-input)] border border-[var(--border)] flex flex-col items-center justify-center shrink-0">
+                  <div className={`w-12 h-12 rounded-[var(--radius-md)] border flex flex-col items-center justify-center shrink-0 ${
+                    isActive
+                      ? 'bg-[var(--bg-input)] border-[var(--border)]'
+                      : 'bg-[var(--bg-hover)] border-[var(--border-strong)]'
+                  }`}>
                     <span className="text-[9px] font-mono uppercase text-[var(--text-muted)] font-semibold">Lvl</span>
                     <span className="text-[18px] font-bold font-mono text-[var(--text-primary)] leading-none">
                       {level.level_number}
@@ -77,7 +87,11 @@ export default function LevelListView({
 
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-[15px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                      <h4 className={`text-[15px] font-bold transition-colors ${
+                        isActive
+                          ? 'text-[var(--text-primary)] group-hover:text-[var(--accent)]'
+                          : 'text-[var(--text-muted)]'
+                      }`}>
                         {formatFullLevelTitle(level)}
                       </h4>
 
@@ -86,6 +100,14 @@ export default function LevelListView({
                         <ModeIcon className="w-3 h-3" />
                         <span>{modeMeta.label}</span>
                       </span>
+
+                      {/* Inactive badge */}
+                      {!isActive && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border-strong)] text-[var(--text-muted)]">
+                          <EyeOff className="w-2.5 h-2.5" />
+                          Inactive
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-[12px] text-[var(--text-secondary)] line-clamp-1">
@@ -111,6 +133,28 @@ export default function LevelListView({
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {/* Active Toggle */}
+                    {onToggleLevelActive && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleLevelActive(level);
+                        }}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors border focus:outline-none ${
+                          isActive
+                            ? 'bg-[var(--accent)] border-[var(--accent)]'
+                            : 'bg-[var(--bg-input)] border-[var(--border-strong)]'
+                        }`}
+                        title={isActive ? 'Deactivate level (hide from students)' : 'Activate level (show to students)'}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            isActive ? 'translate-x-4' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -131,7 +175,9 @@ export default function LevelListView({
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <ChevronRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--accent)] group-hover:translate-x-0.5 transition" />
+                    {isActive && (
+                      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--accent)] group-hover:translate-x-0.5 transition" />
+                    )}
                   </div>
                 </div>
               </div>

@@ -242,11 +242,13 @@ func fullQuestionForInterviewer(q models.InterviewQuestion) gin.H {
 func GetStudentTracks(c *gin.Context) {
 	var tracks []models.InterviewTrack
 	err := database.DB.
+		Preload("Levels.Questions", func(db *gorm.DB) *gorm.DB { return db.Where("is_active = ?", true) }).
 		Preload("Levels.Questions.Detail").
 		Preload("Levels.Questions.Templates").
 		Preload("Levels.Questions.TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
 		Preload("Levels.Questions.Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
 		Preload("Levels.Questions.MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		Where("is_active = ?", true).
 		Order("id asc").
 		Find(&tracks).Error
 	if err != nil {
@@ -281,11 +283,15 @@ func GetStudentTracks(c *gin.Context) {
 		Levels         []LevelDTO `json:"levels"`
 	}
 
-	result := make([]TrackDTO, len(tracks))
-	for i, t := range tracks {
+	result := make([]TrackDTO, 0, len(tracks))
+	for _, t := range tracks {
 		totalQ := 0
-		lvlDTOs := make([]LevelDTO, len(t.Levels))
-		for j, l := range t.Levels {
+		var lvlDTOs []LevelDTO
+		for _, l := range t.Levels {
+			// Skip inactive levels
+			if !l.IsActive {
+				continue
+			}
 			qCount := len(l.Questions)
 			totalQ += qCount
 			qLoad := l.QuestionCount
@@ -296,7 +302,7 @@ func GetStudentTracks(c *gin.Context) {
 					qLoad = 1
 				}
 			}
-			lvlDTOs[j] = LevelDTO{
+			lvlDTOs = append(lvlDTOs, LevelDTO{
 				ID:              l.ID,
 				TrackID:         l.TrackID,
 				LevelNumber:     l.LevelNumber,
@@ -306,20 +312,23 @@ func GetStudentTracks(c *gin.Context) {
 				DurationMinutes: l.DurationMin,
 				QuestionCount:   qLoad,
 				QuestionsCount:  qCount,
-			}
+			})
+		}
+		if lvlDTOs == nil {
+			lvlDTOs = []LevelDTO{}
 		}
 
-		result[i] = TrackDTO{
+		result = append(result, TrackDTO{
 			ID:             t.ID,
 			Title:          t.Title,
 			Slug:           t.Slug,
 			Category:       t.Category,
 			Icon:           t.Icon,
 			Description:    t.Description,
-			LevelsCount:    len(t.Levels),
+			LevelsCount:    len(lvlDTOs),
 			QuestionsCount: totalQ,
 			Levels:         lvlDTOs,
-		}
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -465,17 +474,17 @@ func JoinMatchmaking(c *gin.Context) {
 			levelID = peerEntry.LevelID
 		}
 
-		// Preload questions for this level or track
+		// Preload questions for this level or track (active only)
 		var questions []models.InterviewQuestion
 		if levelID > 0 {
 			database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
-				Where("level_id = ?", levelID).
+				Where("level_id = ? AND is_active = ?", levelID, true).
 				Find(&questions)
 		}
 		if len(questions) == 0 {
 			database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
 				Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
-				Where("interview_levels.track_id = ?", req.TrackID).
+				Where("interview_levels.track_id = ? AND interview_questions.is_active = ?", req.TrackID, true).
 				Find(&questions)
 		}
 
@@ -745,16 +754,16 @@ func GetInterviewSession(c *gin.Context) {
 		})
 	}
 
-	// Ensure Round 2 question is strictly different from Round 1 question
+	// Ensure Round 2 question is strictly different from Round 1 question (active only)
 	if session.Round == 2 && (session.CurrentQuestionID == session.Round1QuestionID || session.Round2QuestionID == 0) {
 		var candidateQuestions []models.InterviewQuestion
 		database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
-			Where("level_id = ? AND id != ?", session.LevelID, session.Round1QuestionID).
+			Where("level_id = ? AND id != ? AND is_active = ?", session.LevelID, session.Round1QuestionID, true).
 			Find(&candidateQuestions)
 		if len(candidateQuestions) == 0 {
 			database.DB.Preload("Detail").Preload("Templates").Preload("TestCases").Preload("Hints").Preload("MCQOptions").
 				Joins("JOIN interview_levels ON interview_levels.id = interview_questions.level_id").
-				Where("interview_levels.track_id = ? AND interview_questions.id != ?", session.TrackID, session.Round1QuestionID).
+				Where("interview_levels.track_id = ? AND interview_questions.id != ? AND interview_questions.is_active = ?", session.TrackID, session.Round1QuestionID, true).
 				Find(&candidateQuestions)
 		}
 		if len(candidateQuestions) > 0 {

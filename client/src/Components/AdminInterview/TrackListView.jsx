@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Code, Edit2, Trash2, X } from 'lucide-react';
+import { Search, Code, Edit2, Trash2, X, EyeOff, Eye } from 'lucide-react';
 
 export default function TrackListView({
   tracks,
@@ -8,6 +8,7 @@ export default function TrackListView({
   onSelectTrack,
   onEditTrack,
   onDeleteTrack,
+  onToggleTrackActive,
 }) {
   const filteredTracks = (tracks || []).filter((t) => {
     return (
@@ -47,20 +48,51 @@ export default function TrackListView({
         {filteredTracks.map((track) => {
           const totalQuestions = track.questions_count || 0;
           const levelsCount = track.levels_count || 0;
+          const isActive = track.is_active !== false; // default true
 
           return (
             <div
               key={track.id}
-              className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer"
-              onClick={() => onSelectTrack(track)}
+              className={`data-card p-5 flex flex-col justify-between group cursor-pointer transition-all ${
+                isActive
+                  ? 'data-card-interactive'
+                  : 'opacity-60 border-dashed'
+              }`}
+              onClick={() => isActive && onSelectTrack(track)}
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center text-[var(--accent)]">
-                    <Code className="w-5 h-5" />
+                  <div className={`w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center ${
+                    isActive
+                      ? 'bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)]'
+                      : 'bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)]'
+                  }`}>
+                    {isActive ? <Code className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {/* Active toggle */}
+                    {onToggleTrackActive && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleTrackActive(track);
+                        }}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors border focus:outline-none ${
+                          isActive
+                            ? 'bg-[var(--accent)] border-[var(--accent)]'
+                            : 'bg-[var(--bg-input)] border-[var(--border-strong)]'
+                        }`}
+                        title={isActive ? 'Deactivate domain (hide from students)' : 'Activate domain (show to students)'}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            isActive ? 'translate-x-4' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    )}
                     <div
                       className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition"
                       onClick={(e) => {
@@ -85,9 +117,20 @@ export default function TrackListView({
                 </div>
 
                 <div>
-                  <h3 className="text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
-                    {track.title}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className={`text-[16px] font-bold transition-colors ${
+                      isActive
+                        ? 'text-[var(--text-primary)] group-hover:text-[var(--accent)]'
+                        : 'text-[var(--text-muted)]'
+                    }`}>
+                      {track.title}
+                    </h3>
+                    {!isActive && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border-strong)] text-[var(--text-muted)]">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[12px] text-[var(--text-secondary)] mt-1 line-clamp-2 leading-relaxed">
                     {track.description || 'No description provided.'}
                   </p>
@@ -100,9 +143,16 @@ export default function TrackListView({
                   <span>•</span>
                   <span>{totalQuestions} {totalQuestions === 1 ? 'Question' : 'Questions'}</span>
                 </div>
-                <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                  Configure &rarr;
-                </span>
+                {isActive && (
+                  <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                    Configure &rarr;
+                  </span>
+                )}
+                {!isActive && (
+                  <span className="text-[var(--text-muted)] flex items-center gap-1 text-[10px]">
+                    <EyeOff className="w-3 h-3" /> Hidden from students
+                  </span>
+                )}
               </div>
             </div>
           );

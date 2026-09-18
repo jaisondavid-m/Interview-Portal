@@ -28,6 +28,7 @@ type InterviewTrack struct {
 	Category    string           `gorm:"size:100;default:'Technical'" json:"category"`
 	Icon        string           `gorm:"size:50;default:'Code'" json:"icon"`
 	Description string           `gorm:"type:text" json:"description"`
+	IsActive    bool             `gorm:"default:true" json:"is_active"`
 	Levels      []InterviewLevel `gorm:"foreignKey:TrackID;constraint:OnDelete:CASCADE" json:"levels,omitempty"`
 	CreatedAt   time.Time        `json:"created_at"`
 	UpdatedAt   time.Time        `json:"updated_at"`
@@ -44,6 +45,7 @@ type InterviewLevel struct {
 	Mode        InterviewMode       `gorm:"size:50;default:'coding';not null" json:"mode" binding:"required"`
 	DurationMin   int                 `gorm:"default:45" json:"duration_minutes"`
 	QuestionCount int                 `gorm:"default:1" json:"question_count"`
+	IsActive      bool                `gorm:"default:true" json:"is_active"`
 	Questions     []InterviewQuestion `gorm:"foreignKey:LevelID;constraint:OnDelete:CASCADE" json:"questions,omitempty"`
 	CreatedAt   time.Time           `json:"created_at"`
 	UpdatedAt   time.Time           `json:"updated_at"`
@@ -58,6 +60,7 @@ type InterviewQuestion struct {
 	Prompt      string         `gorm:"type:text;not null" json:"prompt" binding:"required"`
 	Difficulty  string         `gorm:"size:50;default:'Medium'" json:"difficulty"`
 	Type        InterviewMode  `gorm:"size:50;not null" json:"type"`
+	IsActive    bool           `gorm:"default:true" json:"is_active"`
 
 	// Relational associations
 	Detail      *InterviewQuestionDetail        `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE" json:"detail,omitempty"`
