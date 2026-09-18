@@ -191,7 +191,8 @@ func AdminGetSlots(c *gin.Context) {
 	}
 
 	var slots []models.InterviewSlot
-	if err := query.Order("slot_date asc, start_time asc").Find(&slots).Error; err != nil {
+	orderClause := "CASE WHEN status = 'active' THEN 1 WHEN status = 'scheduled' THEN 2 WHEN status = 'completed' THEN 3 WHEN status = 'cancelled' THEN 4 ELSE 5 END asc, slot_date asc, start_time asc"
+	if err := query.Order(orderClause).Find(&slots).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to fetch interview slots",

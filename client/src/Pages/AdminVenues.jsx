@@ -838,15 +838,24 @@ export default function AdminVenues() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {slots.map((s) => {
+                  {[...slots].sort((a, b) => {
+                    const statusOrder = { active: 1, scheduled: 2, completed: 3, cancelled: 4 };
+                    const orderA = statusOrder[a.status] || 5;
+                    const orderB = statusOrder[b.status] || 5;
+                    if (orderA !== orderB) return orderA - orderB;
+                    const dateDiff = (a.slot_date || '').localeCompare(b.slot_date || '');
+                    if (dateDiff !== 0) return dateDiff;
+                    return (a.start_time || '').localeCompare(b.start_time || '');
+                  }).map((s) => {
                     const occupancyPercent = s.capacity > 0 ? Math.round((s.booked_count / s.capacity) * 100) : 0;
                     const venueAssignments = s.venues && s.venues.length > 0 ? s.venues : null;
+                    const isCancelled = s.status === 'cancelled';
 
                     return (
                       <div
                         key={s.id}
                         onClick={() => setSelectedSlotDetails(s)}
-                        className="p-4 bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--accent)] hover:shadow-md rounded-2xl transition-all cursor-pointer flex flex-col justify-between gap-3 group relative select-none"
+                        className={`p-4 bg-[var(--bg-card)] border ${isCancelled ? 'border-[var(--border)] opacity-70 bg-[var(--bg)]/50' : 'border-[var(--border)] hover:border-[var(--accent)]'} hover:shadow-md rounded-2xl transition-all cursor-pointer flex flex-col justify-between gap-3 group relative select-none`}
                       >
                         {/* Top: Status Badges + Date */}
                         <div className="flex items-center justify-between gap-2">
@@ -856,7 +865,9 @@ export default function AdminVenues() {
                                 ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                                 : s.status === 'scheduled'
                                 ? 'bg-sky-500/10 text-sky-500 border border-sky-500/20'
-                                : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                                : s.status === 'completed'
+                                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                             }`}>
                               {s.status}
                             </span>

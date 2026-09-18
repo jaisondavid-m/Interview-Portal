@@ -517,7 +517,12 @@ export default function StudentSlotBooking() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myBookings.map((b) => {
+              {[...myBookings].sort((a, b) => {
+                const isCancelledA = a.status === 'cancelled' ? 1 : 0;
+                const isCancelledB = b.status === 'cancelled' ? 1 : 0;
+                if (isCancelledA !== isCancelledB) return isCancelledA - isCancelledB;
+                return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+              }).map((b) => {
                 const isCancelled = b.status === 'cancelled';
                 const isPresent = b.attendance_status === 'present';
                 const isPending = b.attendance_status === 'pending';

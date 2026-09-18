@@ -420,7 +420,7 @@ func GetMyBookings(c *gin.Context) {
 		Preload("AssignedVenue").
 		Preload("AssignedFaculty").
 		Preload("Track").
-		Order("created_at desc").
+		Order("CASE WHEN status = 'cancelled' THEN 2 ELSE 1 END asc, created_at desc").
 		Find(&bookings).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
