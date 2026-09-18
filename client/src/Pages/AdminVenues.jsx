@@ -27,7 +27,9 @@ import {
   BookOpen,
   ShieldCheck,
   Shuffle,
-  ArrowRightLeft
+  ArrowRightLeft,
+  ChevronRight,
+  ArrowLeft
 } from 'lucide-react';
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
@@ -47,6 +49,13 @@ export default function AdminVenues() {
   const [slotDateFilter, setSlotDateFilter] = useState('');
   const [slotVenueFilter, setSlotVenueFilter] = useState('all');
   const [slotFacultyFilter, setSlotFacultyFilter] = useState('all');
+  const [selectedSlotDetails, setSelectedSlotDetails] = useState(null);
+
+  // Active slot details synchronized with updated slots list
+  const activeSlot = useMemo(() => {
+    if (!selectedSlotDetails) return null;
+    return slots.find(s => s.id === selectedSlotDetails.id) || selectedSlotDetails;
+  }, [slots, selectedSlotDetails]);
   
   // Faculty List & Tracks
   const [facultyList, setFacultyList] = useState([]);
@@ -414,332 +423,563 @@ export default function AdminVenues() {
 
       {/* TAB 1: INTERVIEW SLOTS */}
       {activeTab === 'slots' && (
-        <div className="space-y-4">
-          {/* Filters Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span className="font-medium">Date:</span>
-                <input
-                  type="date"
-                  value={slotDateFilter}
-                  onChange={(e) => setSlotDateFilter(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                />
-                {slotDateFilter && (
+        <>
+          {activeSlot ? (
+            /* FULL SLOT DETAILS VIEW (After clicking a slot card) */
+            <div className="space-y-6 animate-fadeIn pb-10">
+              {/* Back button & Breadcrumb header */}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSlotDetails(null)}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4 text-[var(--accent)]" />
+                  <span>Back to All Slots</span>
+                </button>
+
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setSlotDateFilter('')}
-                    className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent)] underline"
+                    onClick={() => handleViewRoster(activeSlot.id)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition shadow-sm cursor-pointer"
                   >
-                    Clear
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Manage Roster ({activeSlot.booked_count})</span>
                   </button>
-                )}
-              </div>
 
-              <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                <Building2 className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span className="font-medium">Venue:</span>
-                <select
-                  value={slotVenueFilter}
-                  onChange={(e) => setSlotVenueFilter(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="all">All Venues</option>
-                  {venues.map(v => (
-                    <option key={v.id} value={v.id}>{v.name} ({v.room_number})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                <UserCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span className="font-medium">Faculty:</span>
-                <select
-                  value={slotFacultyFilter}
-                  onChange={(e) => setSlotFacultyFilter(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="all">All Faculty</option>
-                  {facultyList.map(f => (
-                    <option key={f.id} value={f.id}>{f.name} ({f.department || 'Staff'})</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <button
-              onClick={fetchSlots}
-              disabled={loadingSlots}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium transition-all"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingSlots ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-          </div>
-
-          {/* Slots Table / Grid */}
-          {loadingSlots ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl text-[var(--text-secondary)]">
-              <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)] mb-3" />
-              <p className="text-sm">Loading interview slots...</p>
-            </div>
-          ) : slots.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl text-center">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center mb-3">
-                <Calendar className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-semibold text-[var(--text-primary)]">No interview slots found</h3>
-              <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
-                Schedule an interview slot to assign faculty to venues.
-              </p>
-              <button
-                onClick={handleOpenCreateSlot}
-                className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Schedule First Slot</span>
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {slots.map((s) => {
-                const isCompleted = s.status === 'completed' || s.status === 'cancelled';
-                const occupancyPercent = s.capacity > 0 ? Math.round((s.booked_count / s.capacity) * 100) : 0;
-                const attendancePercent = s.booked_count > 0 ? Math.round((s.present_count / s.booked_count) * 100) : 0;
-                const venueAssignments = s.venues && s.venues.length > 0 ? s.venues : null;
-
-                return (
-                  <div
-                    key={s.id}
-                    className="p-5 bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-2xl shadow-sm transition-all flex flex-col justify-between"
+                  <button
+                    onClick={() => handleOpenEditSlot(activeSlot)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-semibold text-[var(--text-primary)] transition cursor-pointer"
                   >
-                    <div>
-                      {/* Top Badges */}
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            s.status === 'active'
-                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                              : s.status === 'scheduled'
-                              ? 'bg-sky-500/10 text-sky-500 border border-sky-500/20'
-                              : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
-                          }`}>
-                            {s.status}
-                          </span>
+                    <Edit2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span>Edit Slot</span>
+                  </button>
 
-                          {s.slot_type === 'online' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
-                              <Globe className="w-3 h-3" />
-                              <span>Online Session</span>
-                            </span>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
-                              s.allocations_published
-                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                            }`}>
-                              {s.allocations_published ? '✓ Published' : 'Draft Allocation'}
+                  <button
+                    onClick={() => {
+                      const nameLabel = activeSlot.venues && activeSlot.venues.length > 0
+                        ? `${activeSlot.venues.map(v => v.venue?.name).join(', ')} (${activeSlot.slot_date} ${activeSlot.start_time})`
+                        : `${activeSlot.venue?.name} (${activeSlot.slot_date} ${activeSlot.start_time})`;
+                      setItemToDelete({ type: 'slot', id: activeSlot.id, name: nameLabel });
+                      setShowDeleteModal(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-400 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Slot</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Slot Hero Overview Card */}
+              <div className="p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap pb-4 border-b border-[var(--border)]">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                        activeSlot.status === 'active'
+                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          : activeSlot.status === 'scheduled'
+                          ? 'bg-sky-500/10 text-sky-500 border border-sky-500/20'
+                          : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                      }`}>
+                        {activeSlot.status}
+                      </span>
+
+                      {activeSlot.slot_type === 'online' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>Online Remote Session</span>
+                        </span>
+                      ) : (
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider ${
+                          activeSlot.allocations_published
+                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                        }`}>
+                          {activeSlot.allocations_published ? '✓ Allocations Published' : 'Draft Allocation'}
+                        </span>
+                      )}
+
+                      {activeSlot.prevent_same_venue_match && activeSlot.slot_type !== 'online' && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                          <span>Cross-Venue Matchmaking Enforced</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <h2 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2 pt-1">
+                      <Calendar className="w-5 h-5 text-[var(--accent)]" />
+                      <span>{activeSlot.slot_date}</span>
+                      <span className="text-[var(--text-muted)] font-normal">•</span>
+                      <Clock className="w-5 h-5 text-[var(--accent)] ml-1" />
+                      <span>{activeSlot.start_time} - {activeSlot.end_time}</span>
+                    </h2>
+                  </div>
+
+                  {/* Summary Metric Badges */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-center min-w-[110px]">
+                      <span className="text-[10px] uppercase font-mono text-[var(--text-muted)] block">Capacity</span>
+                      <span className="text-base font-bold text-[var(--text-primary)]">{activeSlot.capacity} Seats</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-center min-w-[110px]">
+                      <span className="text-[10px] uppercase font-mono text-[var(--text-muted)] block">Booked</span>
+                      <span className="text-base font-bold text-[var(--accent)]">{activeSlot.booked_count} Students</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-center min-w-[110px]">
+                      <span className="text-[10px] uppercase font-mono text-[var(--text-muted)] block">Present</span>
+                      <span className="text-base font-bold text-emerald-500">{activeSlot.present_count} Checked-In</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Details Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+                  {/* Left 8-cols: Venues, Faculty, Domains, Notes */}
+                  <div className="lg:col-span-8 space-y-6">
+                    {/* ASSIGNED VENUES & FACULTY SECTION */}
+                    <div className="p-5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+                        <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+                          <Building2 className="w-4 h-4 text-[var(--accent)]" />
+                          <span>
+                            {activeSlot.slot_type === 'online' ? 'Online Session Format' : `Assigned Venues & Faculty (${(activeSlot.venues && activeSlot.venues.length) || 1})`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {activeSlot.slot_type === 'online' ? (
+                        <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 space-y-2 text-xs">
+                          <div className="flex items-center gap-2 font-bold text-indigo-300 text-sm">
+                            <Globe className="w-4 h-4 text-indigo-400" />
+                            <span>Remote Virtual Interview Slot</span>
+                          </div>
+                          <p className="text-indigo-300/80 leading-relaxed text-[11.5px]">
+                            This slot is fully remote and online. No physical venue attendance is required. Students connect from anywhere and start peer interviews directly on schedule.
+                          </p>
+                        </div>
+                      ) : activeSlot.venues && activeSlot.venues.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          {activeSlot.venues.map((va, idx) => (
+                            <div
+                              key={va.id || idx}
+                              className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <h4 className="text-sm font-bold text-[var(--text-primary)]">
+                                    {va.venue?.name || `Venue #${va.venue_id}`}
+                                  </h4>
+                                  <p className="text-xs text-[var(--text-secondary)] font-mono mt-0.5">
+                                    Room {va.venue?.room_number || 'N/A'} • {va.venue?.building || 'Main Campus'}
+                                  </p>
+                                </div>
+                                <span className="px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-mono text-[10.5px] font-bold shrink-0">
+                                  {va.capacity} Seats
+                                </span>
+                              </div>
+
+                              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-xs">
+                                <span className="text-[var(--text-muted)] font-medium">Invigilator:</span>
+                                <span className="font-semibold text-emerald-500 truncate max-w-[160px]" title={va.faculty?.name}>
+                                  {va.faculty?.name || 'Unassigned'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-[var(--text-primary)]">
+                              {activeSlot.venue?.name || 'Assigned Venue'}
+                            </h4>
+                            <p className="text-xs text-[var(--text-secondary)] font-mono">
+                              Room {activeSlot.venue?.room_number || 'N/A'} • {activeSlot.venue?.building || 'Main Campus'}
+                            </p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-mono text-xs font-bold">
+                            {activeSlot.capacity} Seats
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ELIGIBLE DOMAINS & LEVELS SECTION */}
+                    <div className="p-5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-3.5">
+                      <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)] pb-2 border-b border-[var(--border)]">
+                        <Layers className="w-4 h-4 text-[var(--accent)]" />
+                        <span>Eligible Domain Tracks & Levels</span>
+                      </div>
+
+                      {activeSlot.allowed_tracks && activeSlot.allowed_tracks.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {activeSlot.allowed_tracks.map(trk => {
+                            const trkLevelIds = trk.levels?.map(l => l.id) || [];
+                            const allowedLevels = (trk.levels || []).filter(l =>
+                              !activeSlot.allowed_level_ids ||
+                              activeSlot.allowed_level_ids.length === 0 ||
+                              activeSlot.allowed_level_ids.includes(l.id)
+                            );
+
+                            return (
+                              <div key={trk.id} className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-xs font-bold text-[var(--text-primary)]">{trk.title}</h4>
+                                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[var(--bg)] text-[var(--text-secondary)] border border-[var(--border)]">
+                                    {trk.category || 'Domain'}
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {allowedLevels.map(lvl => (
+                                    <span key={lvl.id} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                                      L{lvl.level_number}: {lvl.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : activeSlot.track ? (
+                        <div className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between">
+                          <span className="text-xs font-bold text-[var(--text-primary)]">{activeSlot.track.title}</span>
+                          {activeSlot.level && (
+                            <span className="px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-semibold text-xs">
+                              Level {activeSlot.level.level_number}: {activeSlot.level.name}
                             </span>
                           )}
                         </div>
-
-                        <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                          <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
-                          <span className="font-semibold text-[var(--text-primary)]">{s.slot_date}</span>
+                      ) : (
+                        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-400 flex items-center gap-2">
+                          <Check className="w-4 h-4 shrink-0" />
+                          <span>This slot is open to all domains, tracks, and difficulty tiers.</span>
                         </div>
-                      </div>
+                      )}
+                    </div>
 
-                      {/* Time Header */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-1 text-[var(--accent)] font-bold text-sm">
-                            <Clock className="w-4 h-4" />
-                            {s.start_time} - {s.end_time}
-                          </span>
-                          {s.slot_type === 'online' ? (
-                            <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                              Remote Proctoring
-                            </span>
-                          ) : s.prevent_same_venue_match ? (
-                            <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                              Cross-Venue Match
-                            </span>
-                          ) : null}
+                    {/* SPECIAL NOTES & GUIDANCE */}
+                    {activeSlot.notes && (
+                      <div className="p-5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+                          <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <span>Student Arrival Notes & Guidance</span>
                         </div>
-
-                        {/* Venues Summary */}
-                        {s.slot_type === 'online' ? (
-                          <div className="mt-2.5 p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
-                            <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
-                              <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                              <span>Online Remote Virtual Session</span>
-                            </div>
-                            <p className="text-[10.5px] text-indigo-300/80 mt-0.5">
-                              No physical venue / faculty required • Starts automatically on time
-                            </p>
-                          </div>
-                        ) : venueAssignments ? (
-                          <div className="mt-2.5 space-y-1.5">
-                            <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-                              Assigned Venues ({venueAssignments.length}):
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {venueAssignments.map((va, idx) => (
-                                <div
-                                  key={va.id || idx}
-                                  className="px-2.5 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[11px] flex items-center justify-between gap-2"
-                                >
-                                  <div>
-                                    <span className="font-semibold text-[var(--text-primary)]">{va.venue?.name || `Venue #${va.venue_id}`}</span>
-                                    <span className="text-[10px] text-[var(--text-secondary)] ml-1 font-mono">({va.venue?.room_number || 'Room'})</span>
-                                  </div>
-                                  <div className="text-[10px] text-[var(--accent)] font-medium">
-                                    {va.faculty?.name ? va.faculty.name.split(' ')[0] : 'Faculty'} • {va.capacity} seats
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-1">
-                            <h3 className="text-base font-bold text-[var(--text-primary)]">
-                              {s.venue?.name || 'Lab Venue'}
-                            </h3>
-                            <p className="text-xs text-[var(--text-secondary)] flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-secondary)] font-mono text-[11px]">
-                                {s.venue?.room_number || 'Room'} • {s.venue?.building}
-                              </span>
-                            </p>
-                          </div>
-                        )}
+                        <p className="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
+                          {activeSlot.notes}
+                        </p>
                       </div>
+                    )}
+                  </div>
 
-                      {/* Domain / Tracks */}
-                      <div className="mt-3 p-2.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between">
-                        <span className="text-[11px] text-[var(--text-secondary)] font-medium">Domains & Levels:</span>
-                        <div className="flex flex-wrap gap-1 justify-end max-w-[70%]">
-                          {(() => {
-                            if (s.allowed_tracks && s.allowed_tracks.length > 0) {
-                              return (
-                                <>
-                                  {s.allowed_tracks.slice(0, 2).map(trk => {
-                                    const trkLevelIds = trk.levels?.map(l => l.id) || [];
-                                    const allowedForThisTrk = (s.allowed_level_ids || []).filter(id => trkLevelIds.includes(id));
-                                    const lvlSummary = allowedForThisTrk.length > 0 && allowedForThisTrk.length < trkLevelIds.length
-                                      ? `(${allowedForThisTrk.length} Lvl)`
-                                      : '';
+                  {/* Right 4-cols: Live Occupancy & Quick Actions */}
+                  <div className="lg:col-span-4 space-y-5">
+                    {/* Live Occupancy Gauge Card */}
+                    <div className="p-5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-4">
+                      <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        <span>Live Seat Occupancy</span>
+                      </h3>
 
-                                    return (
-                                      <span key={trk.id} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)]">
-                                        {trk.title} {lvlSummary}
-                                      </span>
-                                    );
-                                  })}
-                                  {s.allowed_tracks.length > 2 && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                                      +{s.allowed_tracks.length - 2} more
-                                    </span>
-                                  )}
-                                </>
-                              );
-                            }
-                            if (s.track) {
-                              return (
-                                <>
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)]">
-                                    {s.track.title}
-                                  </span>
-                                  {s.level && (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] font-mono">
-                                      Level {s.level.level_number}
-                                    </span>
-                                  )}
-                                </>
-                              );
-                            }
-                            return (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                Open to All Domains
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      {/* Capacity & Attendance Meters */}
-                      <div className="mt-4 space-y-2">
+                      <div className="space-y-3 text-xs">
                         <div>
-                          <div className="flex justify-between text-[11px] mb-1">
+                          <div className="flex justify-between mb-1.5">
                             <span className="text-[var(--text-secondary)]">Total Seats Booked</span>
-                            <span className="font-semibold text-[var(--text-primary)]">
+                            <span className="font-bold text-[var(--text-primary)]">
+                              {activeSlot.booked_count} / {activeSlot.capacity} ({activeSlot.capacity > 0 ? Math.round((activeSlot.booked_count / activeSlot.capacity) * 100) : 0}%)
+                            </span>
+                          </div>
+                          <div className="h-2 w-full bg-[var(--bg-hover)] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[var(--accent)] rounded-full transition-all"
+                              style={{ width: `${Math.min((activeSlot.booked_count / (activeSlot.capacity || 1)) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between mb-1.5">
+                            <span className="text-[var(--text-secondary)]">In-Venue Check-in Rate</span>
+                            <span className="font-bold text-emerald-500">
+                              {activeSlot.present_count} / {activeSlot.booked_count} ({activeSlot.booked_count > 0 ? Math.round((activeSlot.present_count / activeSlot.booked_count) * 100) : 0}%)
+                            </span>
+                          </div>
+                          <div className="h-2 w-full bg-[var(--bg-hover)] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-emerald-500 rounded-full transition-all"
+                              style={{ width: `${Math.min((activeSlot.present_count / (activeSlot.booked_count || 1)) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleViewRoster(activeSlot.id)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Manage Live Student Roster</span>
+                      </button>
+                    </div>
+
+                    {/* Quick Disclosure Notice */}
+                    <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-secondary)] space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-[var(--text-primary)]">
+                        <ShieldCheck className="w-4 h-4 text-[var(--accent)]" />
+                        <span>Allocation & Privacy Rules</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed">
+                        {activeSlot.slot_type === 'online'
+                          ? 'Online slots allow students to enter the room immediately when the session starts without faculty physical attendance check.'
+                          : activeSlot.allocations_published
+                          ? 'Venue room numbers and invigilators are published and visible to booked candidates on their portal.'
+                          : 'Specific venue rooms remain hidden from candidates until you review the roster and click Publish Allocations.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* COMPACT OVERVIEW CARDS GRID VIEW */
+            <div className="space-y-4">
+              {/* Filters Bar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span className="font-medium">Date:</span>
+                    <input
+                      type="date"
+                      value={slotDateFilter}
+                      onChange={(e) => setSlotDateFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    />
+                    {slotDateFilter && (
+                      <button
+                        onClick={() => setSlotDateFilter('')}
+                        className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent)] underline cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    <Building2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span className="font-medium">Venue:</span>
+                    <select
+                      value={slotVenueFilter}
+                      onChange={(e) => setSlotVenueFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    >
+                      <option value="all">All Venues</option>
+                      {venues.map(v => (
+                        <option key={v.id} value={v.id}>{v.name} ({v.room_number})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    <UserCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span className="font-medium">Faculty:</span>
+                    <select
+                      value={slotFacultyFilter}
+                      onChange={(e) => setSlotFacultyFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    >
+                      <option value="all">All Faculty</option>
+                      {facultyList.map(f => (
+                        <option key={f.id} value={f.id}>{f.name} ({f.department || 'Staff'})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  onClick={fetchSlots}
+                  disabled={loadingSlots}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium transition-all cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingSlots ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              {/* Slots Table / Grid */}
+              {loadingSlots ? (
+                <div className="flex flex-col items-center justify-center p-12 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl text-[var(--text-secondary)]">
+                  <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)] mb-3" />
+                  <p className="text-sm">Loading interview slots...</p>
+                </div>
+              ) : slots.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center mb-3">
+                    <Calendar className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-semibold text-[var(--text-primary)]">No interview slots found</h3>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
+                    Schedule an interview slot to assign faculty to venues.
+                  </p>
+                  <button
+                    onClick={handleOpenCreateSlot}
+                    className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 shadow-sm cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Schedule First Slot</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {slots.map((s) => {
+                    const occupancyPercent = s.capacity > 0 ? Math.round((s.booked_count / s.capacity) * 100) : 0;
+                    const venueAssignments = s.venues && s.venues.length > 0 ? s.venues : null;
+
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => setSelectedSlotDetails(s)}
+                        className="p-4 bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--accent)] hover:shadow-md rounded-2xl transition-all cursor-pointer flex flex-col justify-between gap-3 group relative select-none"
+                      >
+                        {/* Top: Status Badges + Date */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              s.status === 'active'
+                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                : s.status === 'scheduled'
+                                ? 'bg-sky-500/10 text-sky-500 border border-sky-500/20'
+                                : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                            }`}>
+                              {s.status}
+                            </span>
+
+                            {s.slot_type === 'online' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                                <Globe className="w-3 h-3" />
+                                <span>Online</span>
+                              </span>
+                            ) : (
+                              <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
+                                s.allocations_published
+                                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                              }`}>
+                                {s.allocations_published ? '✓ Published' : 'Draft'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] shrink-0 font-medium">
+                            <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
+                            <span className="font-semibold text-[var(--text-primary)]">{s.slot_date}</span>
+                          </div>
+                        </div>
+
+                        {/* Middle: Timing & Venue Summary */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-[var(--accent)] font-bold text-base group-hover:translate-x-0.5 transition-transform">
+                              <Clock className="w-4 h-4 shrink-0" />
+                              <span>{s.start_time} - {s.end_time}</span>
+                            </span>
+                            {s.prevent_same_venue_match && s.slot_type !== 'online' && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                Cross-Venue
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5 truncate pt-0.5">
+                            {s.slot_type === 'online' ? (
+                              <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
+                                <Globe className="w-3.5 h-3.5 shrink-0" />
+                                <span>Remote Online Session</span>
+                              </span>
+                            ) : venueAssignments && venueAssignments.length > 0 ? (
+                              <span className="flex items-center gap-1.5 truncate font-medium text-[var(--text-primary)]">
+                                <Building2 className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+                                <span className="truncate">
+                                  {venueAssignments[0]?.venue?.name || 'Venue'}
+                                  {venueAssignments.length > 1 && ` (+${venueAssignments.length - 1} more)`}
+                                </span>
+                                <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                                  • {venueAssignments.length} {venueAssignments.length === 1 ? 'Venue' : 'Venues'}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1.5 truncate font-medium text-[var(--text-primary)]">
+                                <Building2 className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+                                <span className="truncate">{s.venue?.name || 'Venue'}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Micro Occupancy Bar */}
+                        <div className="space-y-1 pt-1 border-t border-[var(--border)]/60">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[var(--text-secondary)] flex items-center gap-1">
+                              <Users className="w-3 h-3 text-[var(--accent)]" />
+                              <span>Booked:</span>
+                            </span>
+                            <span className="font-semibold text-[var(--text-primary)] font-mono">
                               {s.booked_count} / {s.capacity} ({occupancyPercent}%)
                             </span>
                           </div>
                           <div className="h-1.5 w-full bg-[var(--bg-hover)] rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-[var(--accent)] rounded-full transition-all"
+                              className={`h-full rounded-full transition-all ${occupancyPercent >= 90 ? 'bg-amber-500' : 'bg-[var(--accent)]'}`}
                               style={{ width: `${Math.min(occupancyPercent, 100)}%` }}
                             />
                           </div>
                         </div>
 
-                        <div>
-                          <div className="flex justify-between text-[11px] mb-1">
-                            <span className="text-[var(--text-secondary)]">Present in Venue</span>
-                            <span className="font-semibold text-emerald-500">
-                              {s.present_count} / {s.booked_count} ({attendancePercent}%)
-                            </span>
+                        {/* Footer: Click Hint + Edit / Delete Actions */}
+                        <div className="pt-2 border-t border-[var(--border)]/70 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1 text-[var(--accent)] font-semibold text-[11.5px] group-hover:translate-x-1 transition-transform">
+                            <span>View Full Details</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </div>
-                          <div className="h-1.5 w-full bg-[var(--bg-hover)] rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-500 rounded-full transition-all"
-                              style={{ width: `${Math.min(attendancePercent, 100)}%` }}
-                            />
+
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditSlot(s);
+                              }}
+                              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition cursor-pointer"
+                              title="Edit Slot"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const nameLabel = s.venues && s.venues.length > 0
+                                  ? `${s.venues.map(v => v.venue?.name).join(', ')} (${s.slot_date} ${s.start_time})`
+                                  : `${s.venue?.name} (${s.slot_date} ${s.start_time})`;
+                                setItemToDelete({ type: 'slot', id: s.id, name: nameLabel });
+                                setShowDeleteModal(true);
+                              }}
+                              className="p-1 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                              title="Delete / Cancel Slot"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Card Actions */}
-                    <div className="mt-5 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => handleViewRoster(s.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-hover)] hover:bg-[var(--accent-dim)] text-[var(--text-secondary)] hover:text-[var(--accent)] text-xs font-semibold transition-all cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Manage Roster ({s.booked_count})</span>
-                      </button>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenEditSlot(s)}
-                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
-                          title="Edit Slot"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            const nameLabel = s.venues && s.venues.length > 0
-                              ? `${s.venues.map(v => v.venue?.name).join(', ')} (${s.slot_date} ${s.start_time})`
-                              : `${s.venue?.name} (${s.slot_date} ${s.start_time})`;
-                            setItemToDelete({ type: 'slot', id: s.id, name: nameLabel });
-                            setShowDeleteModal(true);
-                          }}
-                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-all cursor-pointer"
-                          title="Delete / Cancel Slot"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
 
       {/* TAB 2: VENUES & LABS */}
