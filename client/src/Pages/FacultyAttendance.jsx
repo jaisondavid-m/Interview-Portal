@@ -24,6 +24,7 @@ import {
   CheckCheck
 } from 'lucide-react';
 import api from '../api/axios';
+import SearchableSelect from '../Components/SearchableSelect';
 import { useAuth } from '../context/AuthContext';
 
 export default function FacultyAttendance() {
@@ -235,18 +236,17 @@ export default function FacultyAttendance() {
           <label className="text-xs font-semibold text-[var(--text-secondary)]">
             Active Slot:
           </label>
-          <select
-            value={selectedSlotId}
-            onChange={(e) => setSelectedSlotId(e.target.value)}
-            disabled={loadingSlots}
-            className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] shadow-sm"
-          >
-            {assignedSlots.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.venue?.name} • {s.slot_date} ({s.start_time} - {s.end_time})
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={assignedSlots.map((s) => ({
+              value: String(s.id),
+              label: `${s.venue?.name || 'Venue'} • ${s.slot_date}`,
+              sublabel: `${s.start_time} - ${s.end_time}`,
+            }))}
+            value={String(selectedSlotId)}
+            onChange={(val) => setSelectedSlotId(val)}
+            placeholder="Select Slot..."
+            menuWidth="w-72"
+          />
 
           <button
             onClick={() => fetchSlotRoster(selectedSlotId)}

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
+import SearchableSelect from '../Components/SearchableSelect';
 
 export default function AdminVenues() {
   const navigate = useNavigate();
@@ -775,31 +776,29 @@ export default function AdminVenues() {
                   <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                     <Building2 className="w-3.5 h-3.5 text-[var(--accent)]" />
                     <span className="font-medium">Venue:</span>
-                    <select
+                    <SearchableSelect
+                      options={[
+                        { value: 'all', label: 'All Venues' },
+                        ...venues.map(v => ({ value: String(v.id), label: `${v.name} (${v.room_number})` }))
+                      ]}
                       value={slotVenueFilter}
-                      onChange={(e) => setSlotVenueFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    >
-                      <option value="all">All Venues</option>
-                      {venues.map(v => (
-                        <option key={v.id} value={v.id}>{v.name} ({v.room_number})</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setSlotVenueFilter(val)}
+                      menuWidth="w-56"
+                    />
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                     <UserCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
                     <span className="font-medium">Faculty:</span>
-                    <select
+                    <SearchableSelect
+                      options={[
+                        { value: 'all', label: 'All Faculty' },
+                        ...facultyList.map(f => ({ value: String(f.id), label: `${f.name} (${f.department || 'Staff'})` }))
+                      ]}
                       value={slotFacultyFilter}
-                      onChange={(e) => setSlotFacultyFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    >
-                      <option value="all">All Faculty</option>
-                      {facultyList.map(f => (
-                        <option key={f.id} value={f.id}>{f.name} ({f.department || 'Staff'})</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setSlotFacultyFilter(val)}
+                      menuWidth="w-56"
+                    />
                   </div>
                 </div>
 
@@ -1182,14 +1181,15 @@ export default function AdminVenues() {
                   <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                     Status
                   </label>
-                  <select
+                  <SearchableSelect
+                    options={[
+                      { value: 'active', label: 'Active' },
+                      { value: 'inactive', label: 'Inactive' },
+                    ]}
                     value={venueFormData.is_active ? 'active' : 'inactive'}
-                    onChange={(e) => setVenueFormData({ ...venueFormData, is_active: e.target.value === 'active' })}
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
+                    onChange={(val) => setVenueFormData({ ...venueFormData, is_active: val === 'active' })}
+                    fullWidth
+                  />
                 </div>
               </div>
 
@@ -1481,20 +1481,17 @@ export default function AdminVenues() {
                                   <Globe className="w-3.5 h-3.5 shrink-0" />
                                   <span>Online Remote</span>
                                 </span>
-                              ) : venueOptions.length > 1 ? (
+                              ) : venueOptions.length > 0 ? (
                                 <div className="flex items-center gap-1.5">
-                                  <select
-                                    value={b.assigned_venue_id || ''}
-                                    disabled={isReassigning}
-                                    onChange={(e) => handleReassignVenue(b.id, e.target.value)}
-                                    className="px-2 py-1 text-[11px] rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium cursor-pointer"
-                                  >
-                                    {venueOptions.map(vo => (
-                                      <option key={vo.venue_id} value={vo.venue_id}>
-                                        {vo.venue?.name || `Venue #${vo.venue_id}`} ({vo.venue?.room_number || 'Room'})
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <SearchableSelect
+                                    options={venueOptions.map(vo => ({
+                                      value: String(vo.venue_id),
+                                      label: `${vo.venue?.name || `Venue #${vo.venue_id}`} (${vo.venue?.room_number || 'Room'})`
+                                    }))}
+                                    value={String(b.assigned_venue_id || '')}
+                                    onChange={(val) => handleReassignVenue(b.id, val)}
+                                    menuWidth="w-64"
+                                  />
                                   {isReassigning && <Loader2 className="w-3 h-3 animate-spin text-[var(--accent)]" />}
                                 </div>
                               ) : (

@@ -22,6 +22,7 @@ import {
 
 import api from '../api/axios';
 import ConfirmModal from '../Components/ConfirmModal';
+import SearchableSelect from '../Components/SearchableSelect';
 
 export default function AdminQuestionEditor() {
   const { trackId, levelId, questionId } = useParams();
@@ -507,34 +508,36 @@ export default function AdminQuestionEditor() {
                 <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
                   Difficulty Level
                 </label>
-                <select
+                <SearchableSelect
+                  options={[
+                    { value: 'Easy', label: 'Easy' },
+                    { value: 'Medium', label: 'Medium' },
+                    { value: 'Hard', label: 'Hard' },
+                  ]}
                   value={difficulty}
-                  onChange={(e) => setDifficulty(e.target.value)}
-                  className="custom-input text-[12px] cursor-pointer"
-                >
-                  <option value="Easy">Easy</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Hard">Hard</option>
-                </select>
+                  onChange={(val) => setDifficulty(val)}
+                  fullWidth
+                />
               </div>
 
               <div>
                 <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block mb-1">
                   Evaluation Format
                 </label>
-                <select
+                <SearchableSelect
+                  options={[
+                    { value: 'coding', label: 'Live Coding (STDIN/STDOUT Tests)' },
+                    { value: 'backend', label: 'Backend Service & APIs (Go, Java, Node.js, Python)' },
+                    { value: 'database', label: 'Database (ER Diagram & SQL Query)' },
+                    { value: 'verbal_qa', label: 'Verbal Q&A / Conceptual' },
+                    { value: 'mcq', label: 'Multiple Choice Assessment' },
+                    { value: 'whiteboard', label: 'System Design & Architecture Whiteboard' },
+                    { value: 'frontend', label: 'Frontend (React Live Preview & Responsive)' },
+                  ]}
                   value={type}
-                  onChange={(e) => setType(e.target.value)}
-                  className="custom-input text-[12px] cursor-pointer"
-                >
-                  <option value="coding">Live Coding (STDIN/STDOUT Tests)</option>
-                  <option value="backend">Backend Service & APIs (Go, Java, Node.js, Python)</option>
-                  <option value="database">Database (ER Diagram & SQL Query)</option>
-                  <option value="verbal_qa">Verbal Q&A / Conceptual</option>
-                  <option value="mcq">Multiple Choice Assessment</option>
-                  <option value="whiteboard">System Design & Architecture Whiteboard</option>
-                  <option value="frontend">Frontend (React Live Preview & Responsive)</option>
-                </select>
+                  onChange={(val) => setType(val)}
+                  fullWidth
+                />
               </div>
             </div>
 

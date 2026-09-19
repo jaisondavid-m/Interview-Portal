@@ -11,6 +11,8 @@ import {
   Database,
   ArrowRight
 } from 'lucide-react';
+import api from '../../api/axios';
+import SearchableSelect from '../SearchableSelect';
 
 export default function ERDiagramCanvas({
   diagramData = null,
@@ -175,20 +177,17 @@ export default function ERDiagramCanvas({
 
           {/* Database Selector Dropdown — candidate-only, interviewer observes only */}
           {databases && databases.length > 0 && isEditable && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
-              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
-              <select
+            <div className="flex items-center gap-1.5 font-mono text-[11px]">
+              <SearchableSelect
+                label="DB:"
+                options={databases.map((dbName) => ({
+                  value: dbName,
+                  label: dbName.startsWith('apiportal_sandbox_') ? `${dbName} (Default)` : dbName,
+                }))}
                 value={selectedDatabase}
-                onChange={(e) => onSelectDatabase && onSelectDatabase(e.target.value)}
-                className="bg-transparent text-[var(--text-primary)] font-bold cursor-pointer focus:outline-none text-[11px]"
-                title="Select database for ER Diagram"
-              >
-                {databases.map((dbName) => (
-                  <option key={dbName} value={dbName} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
-                    {dbName.startsWith('apiportal_sandbox_') ? `${dbName} (Default)` : dbName}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => onSelectDatabase && onSelectDatabase(val)}
+                menuWidth="w-60"
+              />
             </div>
           )}
           {/* Interviewer: show selected DB as read-only label */}

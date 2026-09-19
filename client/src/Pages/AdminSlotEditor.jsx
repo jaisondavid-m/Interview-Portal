@@ -34,6 +34,7 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import api from '../api/axios';
+import SearchableSelect from '../Components/SearchableSelect';
 
 export default function AdminSlotEditor() {
   const { slotId } = useParams();
@@ -691,18 +692,17 @@ export default function AdminSlotEditor() {
                           <label className="block text-[11px] font-bold text-[var(--text-primary)]">
                             Select Venue <span className="text-rose-500">*</span>
                           </label>
-                          <select
-                            value={sv.venue_id}
-                            onChange={(e) => handleUpdateVenueRow(idx, 'venue_id', e.target.value)}
-                            className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
-                          >
-                            <option value="" disabled>-- Select Venue --</option>
-                            {venues.map(v => (
-                              <option key={v.id} value={v.id}>
-                                {v.name} (Room {v.room_number}) • {v.building}
-                              </option>
-                            ))}
-                          </select>
+                          <SearchableSelect
+                            options={venues.map(v => ({
+                              value: String(v.id),
+                              label: v.name,
+                              sublabel: `Room ${v.room_number} • ${v.building}`,
+                            }))}
+                            value={String(sv.venue_id)}
+                            onChange={(val) => handleUpdateVenueRow(idx, 'venue_id', val)}
+                            placeholder="-- Select Venue --"
+                            fullWidth
+                          />
                         </div>
 
                         {/* Faculty Dropdown */}
@@ -710,18 +710,17 @@ export default function AdminSlotEditor() {
                           <label className="block text-[11px] font-bold text-[var(--text-primary)]">
                             Assigned Faculty Invigilator <span className="text-rose-500">*</span>
                           </label>
-                          <select
-                            value={sv.faculty_id}
-                            onChange={(e) => handleUpdateVenueRow(idx, 'faculty_id', e.target.value)}
-                            className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
-                          >
-                            <option value="" disabled>-- Select Faculty Member --</option>
-                            {facultyList.map(f => (
-                              <option key={f.id} value={f.id}>
-                                {f.name} ({f.department || 'Faculty'})
-                              </option>
-                            ))}
-                          </select>
+                          <SearchableSelect
+                            options={facultyList.map(f => ({
+                              value: String(f.id),
+                              label: f.name,
+                              sublabel: f.department || 'Faculty',
+                            }))}
+                            value={String(sv.faculty_id)}
+                            onChange={(val) => handleUpdateVenueRow(idx, 'faculty_id', val)}
+                            placeholder="-- Select Faculty Member --"
+                            fullWidth
+                          />
                         </div>
 
                         {/* Capacity */}
@@ -919,16 +918,17 @@ export default function AdminSlotEditor() {
                     <label className="block text-xs font-bold text-[var(--text-primary)]">
                       Slot Lifecycle Status
                     </label>
-                    <select
+                    <SearchableSelect
+                      options={[
+                        { value: 'scheduled', label: 'Scheduled' },
+                        { value: 'active', label: 'Active (In Progress)' },
+                        { value: 'completed', label: 'Completed' },
+                        { value: 'cancelled', label: 'Cancelled' },
+                      ]}
                       value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
-                    >
-                      <option value="scheduled">Scheduled</option>
-                      <option value="active">Active (In Progress)</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
+                      onChange={(val) => setFormData({ ...formData, status: val })}
+                      fullWidth
+                    />
                   </div>
                 )}
               </div>

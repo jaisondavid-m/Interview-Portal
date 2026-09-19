@@ -23,6 +23,7 @@ import {
   Search
 } from 'lucide-react';
 import api from '../../api/axios';
+import SearchableSelect from '../SearchableSelect';
 
 const DEFAULT_QUERY_STARTER = `-- Write your SQL statements below (CREATE TABLE, INSERT, SELECT, ALTER, etc.)
 -- Executing queries will automatically update your database and ER Diagram in real-time.
@@ -299,20 +300,17 @@ export default function SQLEditorConsole({
 
           {/* Database Selector Dropdown — candidate editable, interviewer read-only */}
           {isEditable && databases && databases.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
-              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
-              <select
+            <div className="flex items-center gap-1.5 font-mono text-[11px]">
+              <SearchableSelect
+                label="DB:"
+                options={databases.map((dbName) => ({
+                  value: dbName,
+                  label: dbName.startsWith('apiportal_sandbox_') ? `${dbName} (Default)` : dbName,
+                }))}
                 value={selectedDatabase}
-                onChange={(e) => onSelectDatabase && onSelectDatabase(e.target.value)}
-                className="bg-transparent text-[var(--text-primary)] font-bold cursor-pointer focus:outline-none text-[11px]"
-                title="Select active database"
-              >
-                {databases.map((dbName) => (
-                  <option key={dbName} value={dbName} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
-                    {dbName.startsWith('apiportal_sandbox_') ? `${dbName} (Default)` : dbName}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => onSelectDatabase && onSelectDatabase(val)}
+                menuWidth="w-60"
+              />
             </div>
           )}
 
@@ -554,19 +552,17 @@ export default function SQLEditorConsole({
               {/* Database Context Filter & Search */}
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--border)] text-xs font-mono">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Database:</span>
                   {databases && databases.length > 0 ? (
-                    <select
+                    <SearchableSelect
+                      label="Database:"
+                      options={databases.map((db) => ({
+                        value: db,
+                        label: db.startsWith('apiportal_sandbox_') ? `${db} (Default)` : db,
+                      }))}
                       value={selectedDatabase}
-                      onChange={(e) => onSelectDatabase && onSelectDatabase(e.target.value)}
-                      className="bg-[var(--bg-raised)] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-primary)] font-bold text-[11px]"
-                    >
-                      {databases.map((db) => (
-                        <option key={db} value={db}>
-                          {db.startsWith('apiportal_sandbox_') ? `${db} (Default)` : db}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => onSelectDatabase && onSelectDatabase(val)}
+                      menuWidth="w-60"
+                    />
                   ) : (
                     <span className="font-bold text-[var(--text-primary)]">{selectedDatabase || 'default'}</span>
                   )}
