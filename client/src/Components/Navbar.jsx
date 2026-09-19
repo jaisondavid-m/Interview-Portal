@@ -42,7 +42,6 @@ export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
               <span className="font-ui font-extrabold text-[18px] tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
                 API <span className="text-[var(--accent)]">Portal</span>
               </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mb-0.5 animate-pulse" />
             </div>
           </Link>
         </div>
@@ -80,7 +79,6 @@ export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
               <span className="font-ui font-extrabold text-[16px] tracking-tight text-[var(--text-primary)]">
                 API <span className="text-[var(--accent)]">Portal</span>
               </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mb-0.5" />
             </div>
           </Link>
         </div>
