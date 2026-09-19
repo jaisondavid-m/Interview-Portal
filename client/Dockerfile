@@ -11,6 +11,7 @@ ENV NODE_ENV=development
 COPY package.json package-lock.json* ./
 RUN npm install
 
+
 # Copy client source files
 COPY . .
 
@@ -24,6 +25,9 @@ RUN npm run build
 # Production Stage - Nginx
 # ==========================================
 FROM nginx:alpine
+
+# Remove problematic IPv6 entrypoint script
+RUN rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
 
 # Clean default nginx templates and assets
 RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*

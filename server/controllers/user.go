@@ -184,7 +184,8 @@ func AdminCreateUser(c *gin.Context) {
 		RollNo     string `json:"roll_no"`
 		Department string `json:"department"`
 		Password   string `json:"password" binding:"required,min=4"`
-		Role       string `json:"role"` // 'student' or 'admin'
+		Role       string `json:"role"`        // 'student' or 'admin'
+		AuthMethod string `json:"auth_method"` // 'any' or 'google_only'
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -221,6 +222,11 @@ func AdminCreateUser(c *gin.Context) {
 		role = "student"
 	}
 
+	authMethod := strings.TrimSpace(input.AuthMethod)
+	if authMethod == "" {
+		authMethod = "any"
+	}
+
 	user := models.User{
 		Name:       input.Name,
 		Email:      input.Email,
@@ -228,6 +234,7 @@ func AdminCreateUser(c *gin.Context) {
 		Department: input.Department,
 		Password:   hashedPassword,
 		Role:       role,
+		AuthMethod: authMethod,
 	}
 
 	if err := database.DB.Create(&user).Error; err != nil {
@@ -265,6 +272,7 @@ func AdminUpdateUser(c *gin.Context) {
 		RollNo     string `json:"roll_no"`
 		Department string `json:"department"`
 		Role       string `json:"role"`
+		AuthMethod string `json:"auth_method"`
 		Password   string `json:"password"` // Optional password reset
 	}
 
@@ -292,6 +300,9 @@ func AdminUpdateUser(c *gin.Context) {
 	}
 	if input.Role != "" {
 		updates["role"] = input.Role
+	}
+	if input.AuthMethod != "" {
+		updates["auth_method"] = input.AuthMethod
 	}
 	if input.Password != "" {
 		hashed, err := models.HashPassword(input.Password)
@@ -581,6 +592,7 @@ func AdminBulkUpdateUsers(c *gin.Context) {
 		UserIDs    []uint `json:"user_ids" binding:"required"`
 		Department string `json:"department"`
 		Role       string `json:"role"`
+		AuthMethod string `json:"auth_method"`
 		Password   string `json:"password"`
 	}
 
@@ -598,6 +610,9 @@ func AdminBulkUpdateUsers(c *gin.Context) {
 	}
 	if r := strings.TrimSpace(input.Role); r != "" {
 		updates["role"] = r
+	}
+	if am := strings.TrimSpace(input.AuthMethod); am != "" {
+		updates["auth_method"] = am
 	}
 	if pw := strings.TrimSpace(input.Password); len(pw) >= 4 {
 		if hp, err := models.HashPassword(pw); err == nil {

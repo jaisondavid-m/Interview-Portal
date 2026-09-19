@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
   Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, X,
-  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Database
+  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Database, Headphones
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -22,6 +22,7 @@ const ICON_MAP = {
   CalendarCheck,
   ClipboardCheck,
   FlaskConical,
+  Headphones,
   Settings: SlidersHorizontal,
 };
 
@@ -58,6 +59,7 @@ export default function MobileSidebar({ isOpen, onClose }) {
   const userRole = user?.role?.toLowerCase();
   const isAdmin = userRole === 'admin';
   const isDeveloper = userRole === 'developer';
+  const isFaculty = userRole === 'faculty';
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -80,6 +82,12 @@ export default function MobileSidebar({ isOpen, onClose }) {
         { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
         { name: 'Database Backup', path: '/admin/backup', icon: Database },
         { name: 'System Settings', path: '/developer/settings', icon: SlidersHorizontal },
+      ]
+    : isFaculty
+    ? [
+        { name: 'Faculty Dashboard', path: '/faculty/dashboard', icon: LayoutDashboard },
+        { name: 'Venue Attendance', path: '/faculty/attendance', icon: ClipboardCheck },
+        { name: 'Live Audio Monitor', path: '/faculty/venue-monitor', icon: Headphones },
       ]
     : isAdmin
     ? [

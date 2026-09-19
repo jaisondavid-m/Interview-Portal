@@ -77,6 +77,7 @@ export default function AdminUsers() {
   const [bulkEditFormData, setBulkEditFormData] = useState({
     department: '',
     role: '',
+    auth_method: '',
     password: '',
   });
 
@@ -95,6 +96,7 @@ export default function AdminUsers() {
     department: '',
     password: '',
     role: 'student',
+    auth_method: 'any',
   });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
@@ -326,11 +328,12 @@ export default function AdminUsers() {
         user_ids: userIds,
         department: bulkEditFormData.department || undefined,
         role: bulkEditFormData.role || undefined,
+        auth_method: bulkEditFormData.auth_method || undefined,
         password: bulkEditFormData.password || undefined,
       };
       await api.post('/admin/users/bulk-update', payload);
       setShowBulkEditModal(false);
-      setBulkEditFormData({ department: '', role: '', password: '' });
+      setBulkEditFormData({ department: '', role: '', auth_method: '', password: '' });
       setSelectedIds(new Set());
       showToast(`${userIds.length} users updated successfully`);
       fetchUsers();
@@ -390,6 +393,7 @@ export default function AdminUsers() {
       department: user.department || '',
       password: '',
       role: user.role || 'student',
+      auth_method: user.auth_method === 'google_only' || user.auth_method === 'google' ? 'google_only' : 'any',
     });
     setFormError('');
     setShowEditModal(true);
@@ -408,6 +412,7 @@ export default function AdminUsers() {
       department: '',
       password: '',
       role: 'student',
+      auth_method: 'any',
     });
     setSelectedUser(null);
     setFormError('');
@@ -979,23 +984,25 @@ export default function AdminUsers() {
                 <th className="py-3 px-4">Roll / Reg No</th>
                 <th className="py-3 px-4">Department</th>
                 <th className="py-3 px-4">Role</th>
+                <th className="py-3 px-4">Allowed Auth</th>
                 <th className="py-3 px-4">Session Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)] text-[13px]">
               {loading ? (
-                <SkeletonTableRows rows={8} cols={7} />
+                <SkeletonTableRows rows={8} cols={8} />
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-[var(--text-muted)]">
+                  <td colSpan="8" className="py-8 text-center text-[var(--text-muted)]">
                     No matching users found.
                   </td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => {
                   const isSelected = selectedIds.has(user.id);
-                  const isGoogleUser = user.auth_method === 'google' || !!user.google_id;
+                  const isGoogleUser = user.auth_method === 'google' || user.auth_method === 'google_only' || !!user.google_id;
+                  const isGoogleOnly = user.auth_method === 'google_only' || user.auth_method === 'google';
                   return (
                     <tr
                       key={user.id}
@@ -1070,6 +1077,19 @@ export default function AdminUsers() {
                                     ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
                                     : 'Student')}
                         </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        {isGoogleOnly ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30" title="Only Google Sign-In is allowed for this account">
+                            <Shield className="w-3 h-3 text-amber-500 shrink-0" />
+                            <span>Google Only</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)]" title="Any login method (Email/Password or Google) allowed">
+                            <KeyRound className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                            <span>Any</span>
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         {user.has_active_session ? (
@@ -1681,6 +1701,19 @@ export default function AdminUsers() {
               </label>
 
               <label className="block space-y-1">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Change Allowed Login Method</span>
+                <select
+                  value={bulkEditFormData.auth_method}
+                  onChange={(e) => setBulkEditFormData({ ...bulkEditFormData, auth_method: e.target.value })}
+                  className="custom-input w-full bg-[var(--bg-input)]"
+                >
+                  <option value="">-- Leave Unchanged --</option>
+                  <option value="any">Any (Email / Password or Google)</option>
+                  <option value="google_only">Google Login Only</option>
+                </select>
+              </label>
+
+              <label className="block space-y-1">
                 <span className="text-[12px] font-semibold text-[var(--text-primary)]">Reset Password for Selected</span>
                 <input
                   type="text"
@@ -1906,6 +1939,18 @@ export default function AdminUsers() {
                 </label>
               </div>
 
+              <label>
+                <span>Allowed Login Method</span>
+                <select
+                  value={formData.auth_method}
+                  onChange={(e) => setFormData({ ...formData, auth_method: e.target.value })}
+                  className="custom-input bg-[var(--bg-input)] font-medium"
+                >
+                  <option value="any">Any (Email & Password or Google)</option>
+                  <option value="google_only">Google Login Only (Strict)</option>
+                </select>
+              </label>
+
               <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[var(--border)]">
                 <button
                   type="button"
@@ -2043,6 +2088,18 @@ export default function AdminUsers() {
                   </select>
                 </label>
               </div>
+
+              <label>
+                <span>Allowed Login Method</span>
+                <select
+                  value={formData.auth_method}
+                  onChange={(e) => setFormData({ ...formData, auth_method: e.target.value })}
+                  className="custom-input bg-[var(--bg-input)] font-medium"
+                >
+                  <option value="any">Any (Email & Password or Google)</option>
+                  <option value="google_only">Google Login Only (Strict)</option>
+                </select>
+              </label>
 
               <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[var(--border)]">
                 <button

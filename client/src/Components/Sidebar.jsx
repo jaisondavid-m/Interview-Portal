@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
   Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, Database,
-  Building2, CalendarCheck, ClipboardCheck, FlaskConical
+  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Headphones
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -22,6 +22,7 @@ const ICON_MAP = {
   CalendarCheck,
   ClipboardCheck,
   FlaskConical,
+  Headphones,
   Settings: SlidersHorizontal,
 };
 
@@ -58,6 +59,7 @@ export default function Sidebar() {
     ? [
         { name: 'Faculty Dashboard', path: '/faculty/dashboard', icon: LayoutDashboard },
         { name: 'Venue Attendance', path: '/faculty/attendance', icon: ClipboardCheck },
+        { name: 'Live Audio Monitor', path: '/faculty/venue-monitor', icon: Headphones },
       ]
     : isAdmin
     ? [

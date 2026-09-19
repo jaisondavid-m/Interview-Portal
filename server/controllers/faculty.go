@@ -704,3 +704,181 @@ func BulkUpdateAttendance(c *gin.Context) {
 		"updated": result.RowsAffected,
 	})
 }
+
+// VenueMonitorSessionItem represents live interview session & connected candidate details in a venue
+type VenueMonitorSessionItem struct {
+	SessionID            string               `json:"session_id"`
+	Status               string               `json:"status"`
+	TrackTitle           string               `json:"track_title"`
+	CurrentQuestionTitle string               `json:"current_question_title"`
+	StartedAt            *time.Time           `json:"started_at"`
+	ElapsedSeconds       int64                `json:"elapsed_seconds"`
+	VenueName            string               `json:"venue_name"`
+	RoomNumber           string               `json:"room_number"`
+	Building             string               `json:"building"`
+	Interviewee          *models.User         `json:"interviewee"`
+	Interviewer          *models.User         `json:"interviewer"`
+	IntervieweeConnected bool                 `json:"interviewee_connected"`
+	InterviewerConnected bool                 `json:"interviewer_connected"`
+	AudioStreamURL       string               `json:"audio_stream_url"`
+}
+
+// GetFacultyVenueMonitorData returns live venue interview sessions & connected student statuses for faculty
+func GetFacultyVenueMonitorData(c *gin.Context) {
+	rawUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Authentication required"})
+		return
+	}
+	facultyID := rawUserID.(uint)
+	roleVal, _ := c.Get("userRole")
+	isAdmin := strings.ToLower(fmt.Sprintf("%v", roleVal)) == "admin"
+
+	// 1. Get assigned slots/venues for this faculty (or all slots if admin)
+	var allFacultySlotIDs []uint
+	if isAdmin {
+		database.DB.Model(&models.InterviewSlot{}).Pluck("id", &allFacultySlotIDs)
+	} else {
+		database.DB.Model(&models.InterviewSlot{}).
+			Where("faculty_id = ? OR id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?)", facultyID, facultyID).
+			Pluck("id", &allFacultySlotIDs)
+	}
+
+	if len(allFacultySlotIDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"status":   "success",
+			"count":    0,
+			"sessions": []VenueMonitorSessionItem{},
+		})
+		return
+	}
+
+	// 2. Query active bookings in these faculty slots
+	var activeBookings []models.SlotBooking
+	database.DB.
+		Preload("Slot").
+		Preload("AssignedVenue").
+		Preload("Student").
+		Where("slot_id IN ? AND status != 'cancelled'", allFacultySlotIDs).
+		Find(&activeBookings)
+
+	studentIDMap := make(map[uint]models.SlotBooking)
+	for _, b := range activeBookings {
+		studentIDMap[b.StudentID] = b
+	}
+
+	studentIDs := make([]uint, 0, len(studentIDMap))
+	for sid := range studentIDMap {
+		studentIDs = append(studentIDs, sid)
+	}
+
+	if len(studentIDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"status":   "success",
+			"count":    0,
+			"sessions": []VenueMonitorSessionItem{},
+		})
+		return
+	}
+
+	// 3. Find active interview sessions involving these students
+	var liveSessions []models.InterviewSession
+	database.DB.
+		Preload("Interviewee").
+		Preload("Interviewer").
+		Preload("CurrentQuestion").
+		Preload("Track").
+		Where("(interviewee_id IN ? OR interviewer_id IN ?) AND status = 'in_progress'", studentIDs, studentIDs).
+		Find(&liveSessions)
+
+	resultItems := make([]VenueMonitorSessionItem, 0)
+	now := time.Now()
+
+	for _, s := range liveSessions {
+		booking := studentIDMap[s.IntervieweeID]
+		if booking.ID == 0 {
+			booking = studentIDMap[s.InterviewerID]
+		}
+
+		venueName := "Online / Virtual Venue"
+		roomNum := "N/A"
+		building := "Remote"
+
+		if booking.AssignedVenue != nil && booking.AssignedVenue.Name != "" {
+			venueName = booking.AssignedVenue.Name
+			roomNum = booking.AssignedVenue.RoomNumber
+			building = booking.AssignedVenue.Building
+		} else if booking.Slot != nil && booking.Slot.VenueID > 0 {
+			var v models.Venue
+			if err := database.DB.First(&v, booking.Slot.VenueID).Error; err == nil {
+				venueName = v.Name
+				roomNum = v.RoomNumber
+				building = v.Building
+			}
+		}
+
+		elapsedSecs := int64(0)
+		var startPtr *time.Time
+		if !s.StartedAt.IsZero() {
+			startPtr = &s.StartedAt
+			elapsedSecs = int64(now.Sub(s.StartedAt).Seconds())
+			if elapsedSecs < 0 {
+				elapsedSecs = 0
+			}
+		}
+
+		sessStrID := fmt.Sprintf("%d", s.ID)
+
+		// Check WebRTC WebSocket signaling hub room connection status
+		intervieweeConn := false
+		interviewerConn := false
+		GlobalSignalingHub.Mutex.RLock()
+		if room, exists := GlobalSignalingHub.Rooms[sessStrID]; exists {
+			room.Mutex.RLock()
+			if _, ok := room.Clients[s.IntervieweeID]; ok {
+				intervieweeConn = true
+			}
+			if _, ok := room.Clients[s.InterviewerID]; ok {
+				interviewerConn = true
+			}
+			room.Mutex.RUnlock()
+		}
+		GlobalSignalingHub.Mutex.RUnlock()
+
+		qTitle := "General Assessment Benchmark"
+		if s.CurrentQuestion != nil && s.CurrentQuestion.Title != "" {
+			qTitle = s.CurrentQuestion.Title
+		}
+
+		tTitle := "System Design & Coding"
+		if s.Track != nil && s.Track.Title != "" {
+			tTitle = s.Track.Title
+		}
+
+		audioURL := fmt.Sprintf("/api/v1/interviews/sessions/%d/recording/stream", s.ID)
+
+		item := VenueMonitorSessionItem{
+			SessionID:            sessStrID,
+			Status:               s.Status,
+			TrackTitle:           tTitle,
+			CurrentQuestionTitle: qTitle,
+			StartedAt:            startPtr,
+			ElapsedSeconds:       elapsedSecs,
+			VenueName:            venueName,
+			RoomNumber:           roomNum,
+			Building:             building,
+			Interviewee:          s.Interviewee,
+			Interviewer:          s.Interviewer,
+			IntervieweeConnected: intervieweeConn,
+			InterviewerConnected: interviewerConn,
+			AudioStreamURL:       audioURL,
+		}
+		resultItems = append(resultItems, item)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "success",
+		"count":    len(resultItems),
+		"sessions": resultItems,
+	})
+}

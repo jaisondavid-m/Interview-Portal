@@ -558,17 +558,7 @@ export default function MyBookings() {
                 </div>
 
                 {/* Card Actions */}
-                <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-3">
-                  {!isCancelled && (
-                    <button
-                      onClick={() => setBookingToCancel(b)}
-                      disabled={cancellingBookingId === b.id}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
-                    >
-                      {cancellingBookingId === b.id ? 'Cancelling...' : 'Cancel Reservation'}
-                    </button>
-                  )}
-
+                <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-end gap-3">
                   <div className="ml-auto flex items-center gap-2">
                     {canLaunch ? (
                       <button
@@ -591,19 +581,6 @@ export default function MyBookings() {
           })}
         </div>
       )}
-
-      {/* Cancel Booking Confirmation Modal */}
-      <ConfirmModal
-        isOpen={!!bookingToCancel}
-        title="Cancel Interview Reservation?"
-        message={`Are you sure you want to cancel your reserved seat for ${bookingToCancel?.track?.title || 'this assessment'} on ${bookingToCancel?.slot?.slot_date} (${bookingToCancel?.slot?.start_time} - ${bookingToCancel?.slot?.end_time})? This seat will be released for other students.`}
-        confirmText="Yes, Cancel Booking"
-        cancelText="Keep Reservation"
-        type="danger"
-        confirmLoading={!!cancellingBookingId}
-        onConfirm={handleConfirmCancelBooking}
-        onClose={() => setBookingToCancel(null)}
-      />
     </div>
   );
 }

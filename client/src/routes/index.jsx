@@ -29,6 +29,7 @@ import AdminSlotEditor from '../Pages/AdminSlotEditor';
 import AdminSettings from '../Pages/AdminSettings';
 import FacultyDashboard from '../Pages/FacultyDashboard';
 import FacultyAttendance from '../Pages/FacultyAttendance';
+import FacultyVenueMonitor from '../Pages/FacultyVenueMonitor';
 import MyBookings from '../Pages/MyBookings';
 import NotFound from '../Pages/NotFound';
 
@@ -303,6 +304,14 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="faculty_attendance">
                 <FacultyAttendance />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'faculty/venue-monitor',
+            element: (
+              <DynamicPageRoute pageKey={['faculty_attendance', 'faculty_dashboard']}>
+                <FacultyVenueMonitor />
               </DynamicPageRoute>
             ),
           },

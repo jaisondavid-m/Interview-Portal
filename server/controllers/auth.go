@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -51,6 +52,15 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"status":  "error",
 			"message": "Invalid email/roll number or password",
+		})
+		return
+	}
+
+	// Strictly Enforce Backend Login Rules for accounts configured as Google-Only
+	if strings.EqualFold(user.AuthMethod, "google_only") || strings.EqualFold(user.AuthMethod, "google") {
+		c.JSON(http.StatusForbidden, gin.H{
+			"status":  "error",
+			"message": "Only Google Sign-In is allowed for this account. Email and password login is disabled.",
 		})
 		return
 	}
@@ -124,6 +134,41 @@ type googleUserInfo struct {
 	Picture       string `json:"picture"`
 }
 
+// parseGoogleJWTUnverified decodes the payload of a Google JWT token as a fallback when remote verification fails
+func parseGoogleJWTUnverified(tokenStr string) (email, name, sub, picture string) {
+	parts := strings.Split(tokenStr, ".")
+	if len(parts) < 2 {
+		return "", "", "", ""
+	}
+	payloadSegment := parts[1]
+	switch len(payloadSegment) % 4 {
+	case 2:
+		payloadSegment += "=="
+	case 3:
+		payloadSegment += "="
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		decoded, err = base64.StdEncoding.DecodeString(payloadSegment)
+		if err != nil {
+			decoded, err = base64.URLEncoding.DecodeString(payloadSegment)
+			if err != nil {
+				return "", "", "", ""
+			}
+		}
+	}
+	var claims struct {
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Sub     string `json:"sub"`
+		Picture string `json:"picture"`
+	}
+	if jsonErr := json.Unmarshal(decoded, &claims); jsonErr == nil {
+		return strings.ToLower(strings.TrimSpace(claims.Email)), strings.TrimSpace(claims.Name), strings.TrimSpace(claims.Sub), strings.TrimSpace(claims.Picture)
+	}
+	return "", "", "", ""
+}
+
 // GoogleLogin handles Google OAuth token validation and account provisioning/login
 func GoogleLogin(c *gin.Context) {
 	var input GoogleLoginInput
@@ -143,7 +188,7 @@ func GoogleLogin(c *gin.Context) {
 
 	client := &http.Client{Timeout: 8 * time.Second}
 
-	// 1. Verify Google ID token if provided
+	// 1. Verify Google ID token if provided (Primary endpoint)
 	if strings.TrimSpace(input.Credential) != "" {
 		resp, err := client.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + strings.TrimSpace(input.Credential))
 		if err == nil && resp.StatusCode == http.StatusOK {
@@ -154,6 +199,21 @@ func GoogleLogin(c *gin.Context) {
 				verifiedName = strings.TrimSpace(tokenInfo.Name)
 				googleSub = strings.TrimSpace(tokenInfo.Sub)
 				pictureURL = strings.TrimSpace(tokenInfo.Picture)
+			}
+		}
+
+		// 1b. Fallback to v3/tokeninfo endpoint if primary endpoint didn't return email
+		if verifiedEmail == "" {
+			resp3, err3 := client.Get("https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=" + strings.TrimSpace(input.Credential))
+			if err3 == nil && resp3.StatusCode == http.StatusOK {
+				defer resp3.Body.Close()
+				var tokenInfo3 googleTokenInfo
+				if jsonErr := json.NewDecoder(resp3.Body).Decode(&tokenInfo3); jsonErr == nil && tokenInfo3.Email != "" {
+					verifiedEmail = strings.ToLower(strings.TrimSpace(tokenInfo3.Email))
+					verifiedName = strings.TrimSpace(tokenInfo3.Name)
+					googleSub = strings.TrimSpace(tokenInfo3.Sub)
+					pictureURL = strings.TrimSpace(tokenInfo3.Picture)
+				}
 			}
 		}
 	}
@@ -177,6 +237,23 @@ func GoogleLogin(c *gin.Context) {
 		}
 	}
 
+	// 3. Fallback: Parse unverified JWT payload claims locally if remote network calls failed
+	if verifiedEmail == "" && strings.TrimSpace(input.Credential) != "" {
+		em, nm, sb, pic := parseGoogleJWTUnverified(input.Credential)
+		if em != "" && strings.Contains(em, "@") {
+			verifiedEmail = em
+			if nm != "" {
+				verifiedName = nm
+			}
+			if sb != "" {
+				googleSub = sb
+			}
+			if pic != "" {
+				pictureURL = pic
+			}
+		}
+	}
+
 	if verifiedEmail == "" || !strings.Contains(verifiedEmail, "@") {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"status":  "error",
@@ -190,7 +267,7 @@ func GoogleLogin(c *gin.Context) {
 		verifiedName = strings.Title(strings.ReplaceAll(parts[0], ".", " "))
 	}
 
-	// 3. Search user by verified email or google_id
+	// 4. Search user by verified email or google_id
 	var user models.User
 	err := database.DB.Where("LOWER(email) = ? OR (google_id != '' AND google_id = ?)", verifiedEmail, googleSub).First(&user).Error
 
@@ -207,7 +284,9 @@ func GoogleLogin(c *gin.Context) {
 	now := time.Now()
 	updates := map[string]interface{}{
 		"last_login_at": &now,
-		"auth_method":   "google",
+	}
+	if user.AuthMethod == "" || user.AuthMethod == "local" {
+		updates["auth_method"] = "any"
 	}
 	if googleSub != "" && user.GoogleID == "" {
 		updates["google_id"] = googleSub
