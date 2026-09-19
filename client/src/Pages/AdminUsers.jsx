@@ -66,7 +66,7 @@ export default function AdminUsers() {
   const [bulkRawText, setBulkRawText] = useState('');
   const [bulkDefaultDept, setBulkDefaultDept] = useState('CSE');
   const [bulkDefaultRole, setBulkDefaultRole] = useState('student');
-  const [bulkDefaultPassword, setBulkDefaultPassword] = useState('mockmate-bitsathy-4321');
+  const [bulkDefaultPassword, setBulkDefaultPassword] = useState('apiportal-bitsathy-4321');
   const [bulkPreview, setBulkPreview] = useState([]);
   const [bulkParseError, setBulkParseError] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -477,7 +477,7 @@ export default function AdminUsers() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `mockmate_users_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `apiportal_users_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -488,9 +488,9 @@ export default function AdminUsers() {
   const handleDownloadTemplate = () => {
     const sampleHeaders = 'name,email,roll_no,department,role,password\n';
     const sampleRows = [
-      'Mani M R S,manimozhichelvanmrs.ad25@bitsathy.ac.in,7376252AD230,AI&DS,student,mockmate-bitsathy-4321',
-      'Jagaprasanth P,jagaprasanthp.cs25@bitsathy.ac.in,7376251CS219,CSE,student,mockmate-bitsathy-4321',
-      'Jaison David M,jaisondavidm.cs25@bitsathy.ac.in,7376251CS221,CSE,student,mockmate-bitsathy-4321',
+      'Mani M R S,manimozhichelvanmrs.ad25@bitsathy.ac.in,7376252AD230,AI&DS,student,apiportal-bitsathy-4321',
+      'Jagaprasanth P,jagaprasanthp.cs25@bitsathy.ac.in,7376251CS219,CSE,student,apiportal-bitsathy-4321',
+      'Jaison David M,jaisondavidm.cs25@bitsathy.ac.in,7376251CS221,CSE,student,apiportal-bitsathy-4321',
       'Campus Admin,admin.placement@bitsathy.ac.in,ADMIN02,Administration,admin,Admin@123'
     ].join('\n');
 
@@ -498,7 +498,7 @@ export default function AdminUsers() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'mockmate_users_template.csv');
+    link.setAttribute('download', 'apiportal_users_template.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -574,7 +574,7 @@ export default function AdminUsers() {
       const role = roleIdx !== -1
         ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : 'student')
         : bulkDefaultRole;
-      const password = passIdx !== -1 ? (cols[passIdx] || '') : (bulkDefaultPassword || 'mockmate-bitsathy-4321');
+      const password = passIdx !== -1 ? (cols[passIdx] || '') : (bulkDefaultPassword || 'apiportal-bitsathy-4321');
 
       let status = 'valid';
       let message = 'Ready to create';
@@ -617,7 +617,7 @@ export default function AdminUsers() {
         roll_no: roll_no.trim(),
         department: department.trim() || bulkDefaultDept,
         role: role || bulkDefaultRole,
-        password: password || bulkDefaultPassword || 'mockmate-bitsathy-4321',
+        password: password || bulkDefaultPassword || 'apiportal-bitsathy-4321',
         status,
         message,
       });
@@ -690,7 +690,7 @@ export default function AdminUsers() {
         const batch = allUsers.slice(i, i + CHUNK_SIZE);
         const payload = {
           users: batch,
-          default_password: bulkDefaultPassword || 'mockmate-bitsathy-4321',
+          default_password: bulkDefaultPassword || 'apiportal-bitsathy-4321',
           mode: bulkImportMode,
         };
 
@@ -1373,7 +1373,7 @@ export default function AdminUsers() {
                         rows={5}
                         value={bulkRawText}
                         onChange={(e) => handleTextChange(e.target.value)}
-                        placeholder={`name,email,roll_no,department,role,password\nRahul Sharma,rahul.cs25@bitsathy.ac.in,7376251CS104,CSE,student,mockmate-bitsathy-4321\nSneha Patel,sneha.it25@bitsathy.ac.in,7376251IT201,IT,student,`}
+                        placeholder={`name,email,roll_no,department,role,password\nRahul Sharma,rahul.cs25@bitsathy.ac.in,7376251CS104,CSE,student,apiportal-bitsathy-4321\nSneha Patel,sneha.it25@bitsathy.ac.in,7376251IT201,IT,student,`}
                         className="custom-input font-mono text-[11px] w-full p-3 resize-y"
                       />
                     </div>
@@ -1457,7 +1457,7 @@ export default function AdminUsers() {
                           }
                         }}
                         className="custom-input py-1.5 text-xs font-mono"
-                        placeholder="mockmate-bitsathy-4321"
+                        placeholder="apiportal-bitsathy-4321"
                       />
                     </div>
                     <div>

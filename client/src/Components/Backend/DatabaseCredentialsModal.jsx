@@ -92,7 +92,7 @@ export default function DatabaseCredentialsModal({
   const port = credentials?.port || '3306';
   const user = credentials?.user || 'root';
   const pass = credentials?.password || '';
-  const dbName = credentials?.database || `mockmate_sandbox_${sessionId}`;
+  const dbName = credentials?.database || `apiportal_sandbox_${sessionId}`;
   const dsn = credentials?.dsn || `${user}:${pass}@tcp(${host}:${port})/${dbName}?parseTime=true`;
 
   const CODE_SNIPPETS = {

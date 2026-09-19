@@ -69,7 +69,7 @@ export default function AdminBackup() {
       });
 
       // Extract filename or fallback
-      let filename = `mockmate_backup_${new Date().toISOString().slice(0,10)}.sql`;
+      let filename = `apiportal_backup_${new Date().toISOString().slice(0,10)}.sql`;
       const disposition = response.headers['content-disposition'];
       if (disposition && disposition.indexOf('filename=') !== -1) {
         const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);

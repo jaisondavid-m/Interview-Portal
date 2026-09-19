@@ -1,5 +1,5 @@
-export const APP_NAME = 'MockMate';
-export const COLLEGE_PORTAL_NAME = 'Campus Mock Interview Portal';
+export const APP_NAME = 'API Portal';
+export const COLLEGE_PORTAL_NAME = 'Anonymous Peer Interview Portal';
 
 export const NAV_LINKS = [
   { name: 'Dashboard', path: '/dashboard' },

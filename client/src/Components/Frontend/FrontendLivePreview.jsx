@@ -153,7 +153,7 @@ export default function FrontendLivePreview({
           }
           return String(arg);
         }).join(' ');
-        window.parent.postMessage({ type: 'MOCKMATE_PREVIEW_LOG', level: type, message: text, time: new Date().toLocaleTimeString() }, '*');
+        window.parent.postMessage({ type: 'APIPORTAL_PREVIEW_LOG', level: type, message: text, time: new Date().toLocaleTimeString() }, '*');
       } catch (e) {}
     }
 
@@ -341,7 +341,7 @@ export default function FrontendLivePreview({
   // Listen for console logs emitted from inside the sandbox iframe
   useEffect(() => {
     const handleMessage = (e) => {
-      if (e.data && e.data.type === 'MOCKMATE_PREVIEW_LOG') {
+      if (e.data && e.data.type === 'APIPORTAL_PREVIEW_LOG') {
         setConsoleLogs((prev) => [
           ...prev.slice(-49), // Keep last 50 logs
           {

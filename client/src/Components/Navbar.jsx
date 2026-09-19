@@ -20,7 +20,7 @@ export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
   return (
     <header className="sticky top-0 z-40 bg-[var(--bg-card)]/95 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)] h-16">
       <div className="flex items-center justify-between h-full w-full">
-        {/* Desktop Left Section: MockMate centered directly above the sidebar */}
+        {/* Desktop Left Section: API Portal centered directly above the sidebar */}
         <div className="hidden md:flex w-64 h-full border-r border-[var(--border)] items-center justify-center px-4 shrink-0">
           <Link
             to={targetPath}
@@ -40,7 +40,7 @@ export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
             {/* Site Name */}
             <div className="flex items-baseline gap-1">
               <span className="font-ui font-extrabold text-[18px] tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
-                Mock<span className="text-[var(--accent)]">Mate</span>
+                API <span className="text-[var(--accent)]">Portal</span>
               </span>
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mb-0.5 animate-pulse" />
             </div>
@@ -78,7 +78,7 @@ export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
 
             <div className="flex items-baseline gap-0.5">
               <span className="font-ui font-extrabold text-[16px] tracking-tight text-[var(--text-primary)]">
-                Mock<span className="text-[var(--accent)]">Mate</span>
+                API <span className="text-[var(--accent)]">Portal</span>
               </span>
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mb-0.5" />
             </div>

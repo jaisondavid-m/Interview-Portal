@@ -250,7 +250,7 @@ export default function PostmanWorkspace({
     const respHeaders = {
       'content-type': 'application/json; charset=utf-8',
       'date': new Date().toUTCString(),
-      'server': `mockmate-microservice/${language}`,
+      'server': `apiportal-microservice/${language}`,
       'x-response-time': `${duration}ms`,
       'connection': 'keep-alive',
     };
@@ -286,7 +286,7 @@ export default function PostmanWorkspace({
           status: 'UP',
           uptime: '4h 12m',
           timestamp: new Date().toISOString(),
-          service: 'mockmate-backend-node',
+          service: 'apiportal-backend-node',
           database: 'connected',
         };
       } else {

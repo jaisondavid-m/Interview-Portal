@@ -185,7 +185,7 @@ export default function ERDiagramCanvas({
               >
                 {databases.map((dbName) => (
                   <option key={dbName} value={dbName} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
-                    {dbName.startsWith('mockmate_sandbox_') ? `${dbName} (Default)` : dbName}
+                    {dbName.startsWith('apiportal_sandbox_') ? `${dbName} (Default)` : dbName}
                   </option>
                 ))}
               </select>
@@ -196,7 +196,7 @@ export default function ERDiagramCanvas({
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
               <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">Active DB:</span>
               <span className="text-blue-600 dark:text-blue-400 font-bold">
-                {selectedDatabase.startsWith('mockmate_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
+                {selectedDatabase.startsWith('apiportal_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
               </span>
             </div>
           )}

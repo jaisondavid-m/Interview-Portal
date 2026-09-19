@@ -315,7 +315,7 @@ export default function StudentInterviews() {
       <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
-            <span>Mock Mate Interviews</span>
+            <span>API Portal Interviews</span>
           </h1>
           <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             Book a slot at your campus venue. Faculty at the venue will verify your attendance to start your peer interview.

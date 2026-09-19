@@ -1,5 +1,5 @@
 # ==========================================
-# MockMate Client - High Performance Nginx Production Image
+# API Portal Client - High Performance Nginx Production Image
 # ==========================================
 FROM node:22-alpine AS builder
 

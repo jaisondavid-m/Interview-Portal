@@ -69,7 +69,7 @@ export default function DatabasePlayground({
       const freshStarter = payload?.schema_ddl || payload?.starter_code || '';
       setSqlState(freshStarter);
       setDiagramState({ tables: [], relationships: [] });
-      setSelectedDatabase(`mockmate_sandbox_${sessionId || '1'}`);
+      setSelectedDatabase(`apiportal_sandbox_${sessionId || '1'}`);
       setDatabases([]);
     }
   }, [round, question?.id, payload, sessionId]);
@@ -282,7 +282,7 @@ export default function DatabasePlayground({
             <div className="flex items-center gap-2 text-[var(--text-secondary)]">
               <Server className="w-3.5 h-3.5 text-blue-500" />
               <span>Target Database:</span>
-              <strong className="text-blue-600 dark:text-blue-400">{selectedDatabase || `mockmate_sandbox_${sessionId || '1'}`}</strong>
+              <strong className="text-blue-600 dark:text-blue-400">{selectedDatabase || `apiportal_sandbox_${sessionId || '1'}`}</strong>
             </div>
             {diagramState?.tables?.length > 0 && (
               <span className="text-[11px] text-[var(--text-muted)]">

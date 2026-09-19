@@ -309,7 +309,7 @@ export default function SQLEditorConsole({
               >
                 {databases.map((dbName) => (
                   <option key={dbName} value={dbName} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
-                    {dbName.startsWith('mockmate_sandbox_') ? `${dbName} (Default)` : dbName}
+                    {dbName.startsWith('apiportal_sandbox_') ? `${dbName} (Default)` : dbName}
                   </option>
                 ))}
               </select>
@@ -320,7 +320,7 @@ export default function SQLEditorConsole({
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
               <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">Active DB:</span>
               <span className="text-cyan-600 dark:text-cyan-400 font-bold">
-                {selectedDatabase.startsWith('mockmate_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
+                {selectedDatabase.startsWith('apiportal_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
               </span>
             </div>
           )}
@@ -387,7 +387,7 @@ export default function SQLEditorConsole({
               <span>Query Editor (MySQL 8.0)</span>
               {selectedDatabase && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-primary)] font-bold">
-                  {selectedDatabase.startsWith('mockmate_sandbox_') ? 'default db' : selectedDatabase}
+                  {selectedDatabase.startsWith('apiportal_sandbox_') ? 'default db' : selectedDatabase}
                 </span>
               )}
             </span>
@@ -563,7 +563,7 @@ export default function SQLEditorConsole({
                     >
                       {databases.map((db) => (
                         <option key={db} value={db}>
-                          {db.startsWith('mockmate_sandbox_') ? `${db} (Default)` : db}
+                          {db.startsWith('apiportal_sandbox_') ? `${db} (Default)` : db}
                         </option>
                       ))}
                     </select>

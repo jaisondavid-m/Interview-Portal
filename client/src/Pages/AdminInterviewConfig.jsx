@@ -53,7 +53,7 @@ export default function AdminInterviewConfig() {
       return;
     }
 
-    const filenameBase = `mockmate_${currentTrack?.slug || 'track'}_level_${currentLevel?.level_number || '1'}_questions`;
+    const filenameBase = `apiportal_${currentTrack?.slug || 'track'}_level_${currentLevel?.level_number || '1'}_questions`;
 
     if (format === 'json') {
       const exportData = questionsToExport.map((q) => ({

@@ -211,7 +211,7 @@ export default function Login() {
       <div className="space-y-1.5">
         <span className="badge-kicker">Campus Portal Access</span>
         <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
-          Sign In to MockMate
+          Sign In to API Portal
         </h1>
         <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
           Sign in using your Google Account or College Roll No / Email.
