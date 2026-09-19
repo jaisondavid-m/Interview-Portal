@@ -45,8 +45,10 @@ export default function Login() {
         if (typeof d?.quick_login_enabled === 'boolean') {
           setQuickLoginEnabled(d.quick_login_enabled);
         }
-        if (Array.isArray(d?.quick_accounts)) {
+        if (d?.quick_login_enabled && Array.isArray(d?.quick_accounts)) {
           setQuickAccounts(d.quick_accounts);
+        } else {
+          setQuickAccounts([]);
         }
       } catch (e) {
         // On network error: keep defaults (hidden, empty list)

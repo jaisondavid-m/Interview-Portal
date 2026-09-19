@@ -28,7 +28,7 @@ func parseQuickAccounts() []map[string]interface{} {
 }
 
 // GetPublicQuickLoginStatus returns whether quick 1-click login is enabled without requiring authentication.
-// It also includes the quick_accounts array so the login page only needs one API call.
+// It also includes the quick_accounts array (only when enabled) so the login page only needs one API call.
 func GetPublicQuickLoginStatus(c *gin.Context) {
 	var setting models.SystemSetting
 	isEnabled := true
@@ -37,9 +37,12 @@ func GetPublicQuickLoginStatus(c *gin.Context) {
 		isEnabled = val == "true" || val == "1" || val == "yes" || val == "on"
 	}
 
-	accounts := parseQuickAccounts()
-	if accounts == nil {
-		accounts = []map[string]interface{}{}
+	accounts := []map[string]interface{}{}
+	if isEnabled {
+		accounts = parseQuickAccounts()
+		if accounts == nil {
+			accounts = []map[string]interface{}{}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -51,12 +54,23 @@ func GetPublicQuickLoginStatus(c *gin.Context) {
 	})
 }
 
-// GetPublicQuickAccounts returns just the quick_accounts array for public consumption.
+// GetPublicQuickAccounts returns just the quick_accounts array for public consumption if quick login is enabled.
 func GetPublicQuickAccounts(c *gin.Context) {
-	accounts := parseQuickAccounts()
-	if accounts == nil {
-		accounts = []map[string]interface{}{}
+	var setting models.SystemSetting
+	isEnabled := true
+	if err := database.DB.Where("`key` = 'quick_login_enabled'").First(&setting).Error; err == nil {
+		val := strings.ToLower(strings.TrimSpace(setting.Value))
+		isEnabled = val == "true" || val == "1" || val == "yes" || val == "on"
 	}
+
+	accounts := []map[string]interface{}{}
+	if isEnabled {
+		accounts = parseQuickAccounts()
+		if accounts == nil {
+			accounts = []map[string]interface{}{}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
@@ -74,9 +88,12 @@ func GetPublicSystemSettings(c *gin.Context) {
 		isEnabled = val == "true" || val == "1" || val == "yes" || val == "on"
 	}
 
-	accounts := parseQuickAccounts()
-	if accounts == nil {
-		accounts = []map[string]interface{}{}
+	accounts := []map[string]interface{}{}
+	if isEnabled {
+		accounts = parseQuickAccounts()
+		if accounts == nil {
+			accounts = []map[string]interface{}{}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
