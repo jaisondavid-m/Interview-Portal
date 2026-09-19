@@ -226,7 +226,7 @@ export default function FacultyAttendance() {
             <span>Venue Attendance Console</span>
           </h1>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            Verify students physically present in the lab to authorize their peer mock interview access.
+            Verify students physically present in the venue to authorize their peer mock interview access.
           </p>
         </div>
 
@@ -268,7 +268,7 @@ export default function FacultyAttendance() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-[var(--text-primary)]">{currentSlot.venue?.name || 'Lab Venue'}</h2>
+                <h2 className="text-base font-bold text-[var(--text-primary)]">{currentSlot.venue?.name || 'Venue'}</h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--bg-hover)] text-[var(--text-secondary)]">
                   Room {currentSlot.venue?.room_number} • {currentSlot.venue?.building}
                 </span>

@@ -455,7 +455,7 @@ func GetMyBookings(c *gin.Context) {
 		} else {
 			if bookings[i].Slot != nil {
 				bookings[i].Slot.Venue = &models.Venue{
-					Name:        "Campus Lab (Allocation in Progress)",
+					Name:        "Campus Venue (Allocation in Progress)",
 					Building:    "Academic Block",
 					RoomNumber:  "Pending Admin Verification",
 					Description: "Specific venue details will be released once admin completes venue allocation.",

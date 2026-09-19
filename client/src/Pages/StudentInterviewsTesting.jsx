@@ -196,7 +196,7 @@ export default function StudentInterviewsTesting() {
             Interview - Testing
           </h1>
           <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Instant peer-to-peer sandbox practice without requiring physical lab slot booking or attendance verification.
+            Instant peer-to-peer sandbox practice without requiring physical venue slot booking or attendance verification.
           </p>
         </div>
 

@@ -388,7 +388,7 @@ export default function StudentInterviews() {
                   ) : activeCheckIn.venue_details_verified ? (
                     <span>Please report to <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.venue?.name} (Room {activeCheckIn.booking.slot?.venue?.room_number})</strong>. The faculty invigilator at the venue will verify your attendance.</span>
                   ) : (
-                    <span>Your session is scheduled for <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.slot_date} ({activeCheckIn.booking.slot?.start_time} - {activeCheckIn.booking.slot?.end_time})</strong>. Lab and room assignments are being finalized by admin and will appear here shortly.</span>
+                    <span>Your session is scheduled for <strong className="text-[var(--text-primary)]">{activeCheckIn.booking.slot?.slot_date} ({activeCheckIn.booking.slot?.start_time} - {activeCheckIn.booking.slot?.end_time})</strong>. Venue and room assignments are being finalized by admin and will appear here shortly.</span>
                   )}
                 </p>
               </div>
@@ -491,7 +491,7 @@ export default function StudentInterviews() {
               <span>Available Level Tiers</span>
             </h3>
             <span className="text-[12px] font-mono text-[var(--text-muted)]">
-              Reserve a seat in your campus lab slot to attend
+              Reserve a seat in your campus venue slot to attend
             </span>
           </div>
 
@@ -531,7 +531,7 @@ export default function StudentInterviews() {
                         {lvl.name}
                       </h4>
                       <p className="text-[13px] text-[var(--text-secondary)] mt-1.5 leading-relaxed line-clamp-3">
-                        {lvl.description || 'Hands-on examination tier in campus laboratory.'}
+                        {lvl.description || 'Hands-on examination tier in campus venue.'}
                       </p>
                     </div>
 
@@ -941,7 +941,7 @@ export default function StudentInterviews() {
               <h2 className="text-[20px] font-bold text-[var(--text-primary)]">
                 {matchStatus === 'matched'
                   ? 'Peer Match Found!'
-                  : 'Matching Verified Candidates in Lab...'}
+                  : 'Matching Verified Candidates in Venue...'}
               </h2>
               <div className="space-y-0.5">
                 <p className="text-[14px] font-bold text-[var(--text-primary)]">

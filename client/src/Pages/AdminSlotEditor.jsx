@@ -499,7 +499,7 @@ export default function AdminSlotEditor() {
               className="hover:text-[var(--accent)] transition-colors flex items-center gap-1"
             >
               <Building2 className="w-3.5 h-3.5" />
-              <span>Venues & Lab Slots</span>
+              <span>Venues & Slots</span>
             </Link>
             <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
             <span className="text-[var(--text-primary)] font-semibold">
@@ -1203,7 +1203,7 @@ export default function AdminSlotEditor() {
                   <span>Online Remote Virtual Session</span>
                 </div>
                 <p className="text-[11px] text-indigo-300/80 leading-relaxed">
-                  No physical lab room or faculty invigilator required. Candidates connect remotely and begin on time automatically.
+                  No physical venue room or faculty invigilator required. Candidates connect remotely and begin on time automatically.
                 </p>
               </div>
             ) : (

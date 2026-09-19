@@ -997,7 +997,7 @@ export default function AdminVenues() {
         </>
       )}
 
-      {/* TAB 2: VENUES & LABS */}
+      {/* TAB 2: VENUES */}
       {activeTab === 'venues' && (
         <div className="space-y-4">
           {/* Venues Search Bar */}
@@ -1030,7 +1030,7 @@ export default function AdminVenues() {
               </div>
               <h3 className="text-base font-semibold text-[var(--text-primary)]">No venues found</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
-                Add physical lab venues and exam halls to start scheduling interview slots.
+                Add physical venues and exam halls to start scheduling interview slots.
               </p>
               <button
                 onClick={handleOpenCreateVenue}
@@ -1045,60 +1045,49 @@ export default function AdminVenues() {
               {filteredVenues.map((v) => (
                 <div
                   key={v.id}
-                  className="p-5 bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-2xl shadow-sm transition-all flex flex-col justify-between"
+                  className="p-5 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-sm hover:border-[var(--accent)] transition-all flex flex-col justify-between space-y-4"
                 >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        v.is_active
-                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                          : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-[var(--text-primary)]">{v.name}</h4>
+                          <p className="text-[11px] text-[var(--text-secondary)]">{v.building} • Room {v.room_number}</p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        v.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
                       }`}>
                         {v.is_active ? 'Active' : 'Inactive'}
                       </span>
-                      <span className="text-xs text-[var(--text-secondary)] font-mono">
-                        Room {v.room_number}
-                      </span>
                     </div>
 
-                    <h3 className="text-base font-bold text-[var(--text-primary)]">{v.name}</h3>
-                    <p className="text-xs text-[var(--text-secondary)] mt-0.5 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
-                      {v.building}
-                    </p>
-
                     {v.description && (
-                      <p className="mt-3 text-xs text-[var(--text-secondary)] line-clamp-2 italic">
-                        "{v.description}"
+                      <p className="text-xs text-[var(--text-secondary)] bg-[var(--bg)] p-2.5 rounded-xl border border-[var(--border)] line-clamp-2">
+                        {v.description}
                       </p>
                     )}
 
-                    <div className="mt-4 grid grid-cols-2 gap-2 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-center">
-                      <div>
-                        <p className="text-[10px] text-[var(--text-secondary)]">Max Cap</p>
-                        <p className="text-sm font-bold text-[var(--text-primary)]">{v.capacity}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-[var(--text-secondary)]">Total Slots</p>
-                        <p className="text-sm font-bold text-[var(--text-primary)]">{v.total_slots || 0}</p>
-                      </div>
+                    <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] pt-1 font-mono">
+                      <span>Capacity: <strong className="text-[var(--text-primary)]">{v.capacity} Seats</strong></span>
+                      <span>ID: #{v.id}</span>
                     </div>
                   </div>
 
-                  <div className="mt-5 pt-3 border-t border-[var(--border)] flex items-center justify-end gap-2">
+                  <div className="pt-3 border-t border-[var(--border)] flex items-center justify-end gap-2">
                     <button
                       onClick={() => handleOpenEditVenue(v)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
+                      className="btn btn-secondary text-xs py-1 px-2.5 flex items-center gap-1 cursor-pointer"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                       <span>Edit</span>
                     </button>
                     <button
-                      onClick={() => {
-                        setItemToDelete({ type: 'venue', id: v.id, name: v.name });
-                        setShowDeleteModal(true);
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--red)] hover:bg-[var(--red-bg)] transition-all"
+                      onClick={() => handleDeleteVenue(v.id)}
+                      className="btn text-xs py-1 px-2.5 flex items-center gap-1 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Delete</span>
@@ -1111,15 +1100,15 @@ export default function AdminVenues() {
         </div>
       )}
 
-      {/* MODAL: CREATE / EDIT VENUE */}
+      {/* CREATE / EDIT VENUE MODAL */}
       {showVenueModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden animate-scaleUp">
-            <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
-              <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl animate-scaleUp overflow-hidden">
+            <div className="p-5 border-b border-[var(--border)] flex items-center justify-between">
+              <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-[var(--accent)]" />
                 <span>{editingVenue ? 'Edit Venue' : 'Create New Venue'}</span>
-              </h2>
+              </h3>
               <button
                 onClick={() => setShowVenueModal(false)}
                 className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
@@ -1136,7 +1125,7 @@ export default function AdminVenues() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. AI & Robotics Lab"
+                  placeholder="e.g. AI & Robotics Venue"
                   value={venueFormData.name}
                   onChange={(e) => setVenueFormData({ ...venueFormData, name: e.target.value })}
                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
@@ -1210,7 +1199,7 @@ export default function AdminVenues() {
                 </label>
                 <textarea
                   rows="2"
-                  placeholder="Special lab instructions, systems available, etc."
+                  placeholder="Special venue instructions, systems available, etc."
                   value={venueFormData.description}
                   onChange={(e) => setVenueFormData({ ...venueFormData, description: e.target.value })}
                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
