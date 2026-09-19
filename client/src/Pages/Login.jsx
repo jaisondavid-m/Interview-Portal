@@ -209,13 +209,9 @@ export default function Login() {
     <div className="space-y-6">
       {/* Header / Title */}
       <div className="space-y-1.5">
-        <span className="badge-kicker">Campus Portal Access</span>
         <h1 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight">
           Sign In to API Portal
         </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-          Sign in using your Google Account or College Roll No / Email.
-        </p>
       </div>
 
       {notice && (
@@ -232,11 +228,11 @@ export default function Login() {
         </div>
       )}
 
-      {/* Form: Email or Roll Number + Password */}
+      {/* Form: Email + Password */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <label htmlFor="login-identifier" className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">
-            Email or College Roll No
+            Email
           </label>
           <input
             id="login-identifier"
@@ -247,7 +243,7 @@ export default function Login() {
               setIdentifier(e.target.value);
               setSelectedQuick(null);
             }}
-            placeholder="e.g. 22CS104 or user@bitsathy.ac.in"
+            placeholder="user@bitsathy.ac.in"
             className="custom-input w-full"
           />
         </div>
