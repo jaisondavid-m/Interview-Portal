@@ -20,6 +20,7 @@ export default function ERDiagramCanvas({
   selectedDatabase = '',
   onSelectDatabase = null,
   onSwitchToSQL = null,
+  onTablePositionChange = null, // callback(updatedTables) for real-time sync
 }) {
   const [tables, setTables] = useState(() => {
     if (diagramData && typeof diagramData === 'object' && Array.isArray(diagramData.tables)) {
@@ -112,6 +113,13 @@ export default function ERDiagramCanvas({
   };
 
   const handleMouseUp = () => {
+    if (draggingTableId && onTablePositionChange) {
+      // Emit updated table positions for real-time sync to interviewer
+      setTables((prev) => {
+        onTablePositionChange(prev);
+        return prev;
+      });
+    }
     setDraggingTableId(null);
     setIsPanning(false);
   };
@@ -155,8 +163,8 @@ export default function ERDiagramCanvas({
             <span>Interactive ER Diagram</span>
           </div>
 
-          {/* Database Selector Dropdown */}
-          {databases && databases.length > 0 && (
+          {/* Database Selector Dropdown — candidate-only, interviewer observes only */}
+          {databases && databases.length > 0 && isEditable && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
               <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
               <select
@@ -171,6 +179,15 @@ export default function ERDiagramCanvas({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+          {/* Interviewer: show selected DB as read-only label */}
+          {databases && databases.length > 0 && !isEditable && selectedDatabase && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
+              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
+              <span className="text-[var(--text-primary)] font-bold">
+                {selectedDatabase.startsWith('mockmate_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
+              </span>
             </div>
           )}
 
@@ -377,8 +394,8 @@ export default function ERDiagramCanvas({
               >
                 {/* Table Header */}
                 <div
-                  onMouseDown={(e) => handleTableMouseDown(e, table)}
-                  className="flex items-center justify-between px-3 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] cursor-grab active:cursor-grabbing"
+                  onMouseDown={isEditable ? (e) => handleTableMouseDown(e, table) : undefined}
+                  className={`flex items-center justify-between px-3 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] ${isEditable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
                   style={{ backgroundColor: `${table.color || '#3b82f6'}22` }}
                 >
                   <div className="flex items-center gap-1.5 flex-1 mr-2">

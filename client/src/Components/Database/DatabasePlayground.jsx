@@ -118,9 +118,9 @@ export default function DatabasePlayground({
     emitCombinedChange(diagramState, newSql, selectedDatabase);
   };
 
-  // Switch selected database and fetch its schema
+  // Switch selected database and fetch its schema (candidate only)
   const handleSelectDatabase = async (newDb) => {
-    if (!newDb || !sessionId) return;
+    if (!newDb || !sessionId || !isEditable) return;
     try {
       setSelectedDatabase(newDb);
       const res = await api.get(`/interviews/sessions/${sessionId}/database/schema?db=${encodeURIComponent(newDb)}`);
@@ -133,6 +133,16 @@ export default function DatabasePlayground({
     } catch (err) {
       console.warn('Switch database error:', err);
     }
+  };
+
+  // Sync table positions when candidate drags tables in ER diagram
+  const handleTablePositionChange = (updatedTables) => {
+    if (!isEditable) return;
+    setDiagramState((prev) => {
+      const updated = { ...prev, tables: updatedTables };
+      emitCombinedChange(updated, sqlState, selectedDatabase);
+      return updated;
+    });
   };
 
   // Provision / Sync sandbox database on session load, round transition, or question change
@@ -412,8 +422,9 @@ export default function DatabasePlayground({
                   candidateName={candidateName}
                   databases={databases}
                   selectedDatabase={selectedDatabase}
-                  onSelectDatabase={handleSelectDatabase}
+                  onSelectDatabase={isEditable ? handleSelectDatabase : null}
                   onSwitchToSQL={() => setActiveTab('sql')}
+                  onTablePositionChange={isEditable ? handleTablePositionChange : null}
                 />
               </div>
             )}
