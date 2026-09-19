@@ -590,12 +590,12 @@ export default function AdminSlotEditor() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 space-y-1.5">
-                <div className="flex items-center gap-2 font-bold text-indigo-200">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+              <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-800 dark:text-indigo-300 space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-indigo-950 dark:text-indigo-200">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Automated Remote Proctoring & Instant Access</span>
                 </div>
-                <p className="text-[11.5px] leading-relaxed text-indigo-300/90">
+                <p className="text-[11.5px] leading-relaxed text-indigo-700 dark:text-indigo-300/90 font-medium">
                   Candidates who book this online slot can start their peer interview directly on the scheduled session time from anywhere without waiting for physical faculty attendance check-in.
                 </p>
               </div>
@@ -1198,12 +1198,12 @@ export default function AdminSlotEditor() {
             {/* Format & Venues Summary List */}
             {formData.slot_type === 'online' ? (
               <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
-                  <Globe className="w-4 h-4 text-indigo-400 shrink-0" />
+                <div className="flex items-center gap-2 text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                  <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Online Remote Virtual Session</span>
                 </div>
-                <p className="text-[11px] text-indigo-300/80 leading-relaxed">
-                  No physical venue room or faculty invigilator required. Candidates connect remotely and begin on time automatically.
+                <p className="text-[11px] text-indigo-700 dark:text-indigo-300/80 font-medium leading-relaxed">
+                  No physical venue or faculty invigilator required. Candidates connect remotely and begin on time automatically.
                 </p>
               </div>
             ) : (

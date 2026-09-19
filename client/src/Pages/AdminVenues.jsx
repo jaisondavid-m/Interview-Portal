@@ -556,11 +556,11 @@ export default function AdminVenues() {
 
                       {activeSlot.slot_type === 'online' ? (
                         <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 space-y-2 text-xs">
-                          <div className="flex items-center gap-2 font-bold text-indigo-300 text-sm">
-                            <Globe className="w-4 h-4 text-indigo-400" />
+                          <div className="flex items-center gap-2 font-bold text-indigo-950 dark:text-indigo-200 text-sm">
+                            <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                             <span>Remote Virtual Interview Slot</span>
                           </div>
-                          <p className="text-indigo-300/80 leading-relaxed text-[11.5px]">
+                          <p className="text-indigo-700 dark:text-indigo-300/80 font-medium leading-relaxed text-[11.5px]">
                             This slot is fully remote and online. No physical venue attendance is required. Students connect from anywhere and start peer interviews directly on schedule.
                           </p>
                         </div>
