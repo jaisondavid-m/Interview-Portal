@@ -60,3 +60,10 @@ server/vendor/
 *.sw?
 .DS_Store
 Thumbs.db
+
+# ==========================================
+# Database Dumps (never commit these)
+# ==========================================
+*.sql
+*.sql.gz
+*_dump.sql

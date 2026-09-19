@@ -543,7 +543,10 @@ func GetFacultySlotRoster(c *gin.Context) {
 		Preload("AssignedFaculty")
 
 	if !isAdmin {
-		query = query.Where("assigned_faculty_id = ? OR (assigned_faculty_id IS NULL AND slot_id IN (SELECT id FROM interview_slots WHERE faculty_id = ?))", facultyID, facultyID)
+		query = query.Where(
+			"assigned_faculty_id = ? OR (assigned_faculty_id IS NULL AND slot_id IN (SELECT id FROM interview_slots WHERE faculty_id = ?)) OR (assigned_faculty_id IS NULL AND slot_id IN (SELECT slot_id FROM slot_venue_assignments WHERE faculty_id = ?))",
+			facultyID, facultyID, facultyID,
+		)
 	}
 
 	if attendanceFilter != "" && attendanceFilter != "all" {
