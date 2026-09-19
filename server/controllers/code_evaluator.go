@@ -277,8 +277,16 @@ func normalizeLanguage(lang string) string {
 }
 
 func createSandboxTempDir(prefix string) (string, error) {
-	// First attempt creating within application local sandbox directory so binaries are never placed on noexec-mounted /tmp partitions
-	appSandboxDir := filepath.Join(".", ".sandbox_exec")
+	// Use the absolute path of the application's working directory so that
+	// all tmpDir paths returned are absolute — preventing path duplication when
+	// cmd.Dir is set to the same directory and the script path is passed as an arg.
+	execDir, err := os.Executable()
+	if err != nil {
+		execDir = "."
+	} else {
+		execDir = filepath.Dir(execDir)
+	}
+	appSandboxDir := filepath.Join(execDir, ".sandbox_exec")
 	if err := os.MkdirAll(appSandboxDir, 0777); err == nil {
 		if dir, err := os.MkdirTemp(appSandboxDir, prefix); err == nil {
 			_ = os.Chmod(dir, 0777)
