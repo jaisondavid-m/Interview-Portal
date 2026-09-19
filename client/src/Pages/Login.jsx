@@ -2,43 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, AlertCircle, ShieldCheck, GraduationCap, Eye, EyeOff, Zap, Terminal } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
 
 const DEFAULT_GOOGLE_CLIENT_ID = '956639761791-ihog9nl42s3og1b77u4t47mnb0pfo0op.apps.googleusercontent.com';
 
-const QUICK_ACCOUNTS = [
-  {
-    title: 'Admin',
-    email: 'admin@bitsathy.ac.in',
-    password: 'password',
-    icon: ShieldCheck,
-    badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]',
-    role: 'admin',
-  },
-  {
-    title: 'Developer',
-    email: 'developer@bitsathy.ac.in',
-    password: 'password',
-    icon: Terminal,
-    badgeStyle: 'text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-    role: 'developer',
-  },
-  {
-    title: 'Student 1',
-    email: 'jaisondavidm.cs25@bitsathy.ac.in',
-    password: 'password',
-    icon: GraduationCap,
-    badgeStyle: 'text-[var(--green)] bg-[var(--green-bg)] border-[var(--green)]/30',
-    role: 'student',
-  },
-  {
-    title: 'Student 2',
-    email: 'jagaprasanths.cs25@bitsathy.ac.in',
-    password: 'password',
-    icon: GraduationCap,
-    badgeStyle: 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20',
-    role: 'student',
-  },
-];
+// Role → icon + badge style mapping (used when rendering dynamic accounts from the backend)
+const ROLE_STYLES = {
+  admin:     { icon: ShieldCheck, badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]' },
+  developer: { icon: Terminal,    badgeStyle: 'text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  student:   { icon: GraduationCap, badgeStyle: 'text-[var(--green)] bg-[var(--green-bg)] border-[var(--green)]/30' },
+  faculty:   { icon: GraduationCap, badgeStyle: 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20' },
+};
+const FALLBACK_STYLE = { icon: ShieldCheck, badgeStyle: 'text-zinc-600 bg-zinc-500/10 border-zinc-500/20' };
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -50,7 +25,8 @@ export default function Login() {
   const [error, setError] = useState('');
   const [selectedQuick, setSelectedQuick] = useState(null);
   const [notice, setNotice] = useState('');
-  const [quickLoginEnabled, setQuickLoginEnabled] = useState(true);
+  const [quickLoginEnabled, setQuickLoginEnabled] = useState(false);
+  const [quickAccounts, setQuickAccounts] = useState([]);
 
   const tokenClientRef = useRef(null);
   const { user, login, loginWithGoogle } = useAuth();
@@ -58,19 +34,23 @@ export default function Login() {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
 
-  // Check public dynamic quick login toggle
+  // Fetch quick login toggle + accounts list from the single public endpoint
   useEffect(() => {
     const fetchQuickLoginStatus = async () => {
       try {
         const res = await api.get('/auth/quick-login-status');
-        const data = res?.data || res;
-        if (data?.data && typeof data.data.quick_login_enabled === 'boolean') {
-          setQuickLoginEnabled(data.data.quick_login_enabled);
-        } else if (typeof data?.quick_login_enabled === 'boolean') {
-          setQuickLoginEnabled(data.quick_login_enabled);
+        // axios interceptor unwraps .data already, so res IS the parsed body
+        const body = res?.data ?? res;
+        const d = body?.data ?? body;
+        if (typeof d?.quick_login_enabled === 'boolean') {
+          setQuickLoginEnabled(d.quick_login_enabled);
+        }
+        if (Array.isArray(d?.quick_accounts)) {
+          setQuickAccounts(d.quick_accounts);
         }
       } catch (e) {
-        // Keep default true on transient network errors
+        // On network error: keep defaults (hidden, empty list)
+        console.warn('Could not fetch quick login status:', e);
       }
     };
     fetchQuickLoginStatus();
@@ -368,8 +348,9 @@ export default function Login() {
               <span>Quick 1-Click Login</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {QUICK_ACCOUNTS.map((acc) => {
-                const IconComponent = acc.icon;
+              {quickAccounts.map((acc) => {
+                const role = (acc.role || '').toLowerCase();
+                const { icon: IconComponent, badgeStyle } = ROLE_STYLES[role] || FALLBACK_STYLE;
                 const isSelected = selectedQuick === acc.email || identifier === acc.email;
                 const isLoggingIn = activeQuickLogging === acc.email;
 
@@ -386,7 +367,7 @@ export default function Login() {
                     }`}
                     title={`Instant login as ${acc.title}`}
                   >
-                    <div className={`p-1.5 rounded-full border ${acc.badgeStyle}`}>
+                    <div className={`p-1.5 rounded-full border ${badgeStyle}`}>
                       <IconComponent className="w-4 h-4" />
                     </div>
                     <span className="text-[12px] font-bold text-[var(--text-primary)] truncate max-w-full">

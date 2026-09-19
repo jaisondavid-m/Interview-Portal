@@ -181,6 +181,20 @@ func syncAppPagesCatalog(db *gorm.DB) {
 		})
 	}
 
+	// 1b. Seed default quick_accounts JSON setting if not present
+	var qaSetting models.SystemSetting
+	if err := db.Where("`key` = 'quick_accounts'").First(&qaSetting).Error; err != nil {
+		defaultAccounts := `[{"title":"Admin","email":"admin@bitsathy.ac.in","password":"password","role":"admin"},{"title":"Developer","email":"developer@bitsathy.ac.in","password":"password","role":"developer"},{"title":"Student 1","email":"jaisondavidm.cs25@bitsathy.ac.in","password":"password","role":"student"},{"title":"Student 2","email":"jagaprasanths.cs25@bitsathy.ac.in","password":"password","role":"student"}]`
+		db.Create(&models.SystemSetting{
+			Key:         "quick_accounts",
+			Value:       defaultAccounts,
+			DisplayName: "Quick Login Accounts",
+			Category:    "Authentication",
+			Description: "JSON array of demo accounts shown on the quick 1-click login section",
+			UpdatedAt:   time.Now(),
+		})
+	}
+
 	// 2. Update or migrate any legacy /slots/book or student_slots page to /my-bookings
 	db.Model(&models.AppPage{}).
 		Where("`key` = 'student_slots' OR path = '/slots/book'").

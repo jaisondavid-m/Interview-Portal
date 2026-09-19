@@ -32,6 +32,8 @@ func SetupRouter() *gin.Engine {
 			auth.GET("/permissions", middlewares.AuthMiddleware(), controllers.GetUserPagePermissions)
 			auth.GET("/settings", controllers.GetPublicSystemSettings)
 			auth.GET("/quick-login-status", controllers.GetPublicQuickLoginStatus)
+			auth.GET("/quick-accounts", controllers.GetPublicQuickAccounts)
+
 		}
 
 		// Developer & System Audit Logs (Require JWT + audit_logs permission or Admin)
