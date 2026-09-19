@@ -510,8 +510,8 @@ export default function InterviewRoom() {
       return;
     }
 
-    // Poll session state (1s in whiteboard mode for sub-second interviewer updates, 2s otherwise)
-    const pollInterval = isWhiteboardMode ? 1000 : 2000;
+    // Poll session state (1s in whiteboard/database mode for sub-second interviewer updates, 2s otherwise)
+    const pollInterval = (isWhiteboardMode || isDatabaseMode) ? 1000 : 2000;
     pollRef.current = setInterval(() => {
       fetchSession();
     }, pollInterval);
@@ -519,7 +519,7 @@ export default function InterviewRoom() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchSession, isWhiteboardMode, sessionData?.status]);
+  }, [fetchSession, isWhiteboardMode, isDatabaseMode, sessionData?.status]);
 
   // Session elapsed timer (Synchronized with session.started_at from server for both students)
   useEffect(() => {

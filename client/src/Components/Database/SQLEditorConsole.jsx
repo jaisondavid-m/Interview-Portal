@@ -297,8 +297,8 @@ export default function SQLEditorConsole({
             <span>MySQL 8.0 Sandbox</span>
           </div>
 
-          {/* Database Selector Dropdown */}
-          {databases && databases.length > 0 && (
+          {/* Database Selector Dropdown — candidate editable, interviewer read-only */}
+          {isEditable && databases && databases.length > 0 && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
               <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
               <select
@@ -313,6 +313,15 @@ export default function SQLEditorConsole({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {!isEditable && selectedDatabase && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
+              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">Active DB:</span>
+              <span className="text-cyan-600 dark:text-cyan-400 font-bold">
+                {selectedDatabase.startsWith('mockmate_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
+              </span>
             </div>
           )}
 

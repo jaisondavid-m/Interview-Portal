@@ -36,23 +36,25 @@ export default function ERDiagramCanvas({
     return [];
   });
 
-  // Sync external diagramData updates when SQL query execution returns new schema
+  // Sync external diagramData updates when SQL query execution returns new schema or candidate moves tables
   useEffect(() => {
     if (diagramData && typeof diagramData === 'object') {
       if (Array.isArray(diagramData.tables)) {
-        // Retain user's custom dragged x,y positions for existing tables if already placed
         setTables((prev) => {
           const posMap = {};
-          prev.forEach((t) => {
-            posMap[t.name] = { x: t.x, y: t.y };
-          });
+          // Only preserve local position cache if current user is candidate (isEditable)
+          if (isEditable) {
+            prev.forEach((t) => {
+              posMap[t.name] = { x: t.x, y: t.y };
+            });
+          }
 
           return diagramData.tables.map((t, idx) => {
-            const existingPos = posMap[t.name];
+            const existingPos = isEditable ? posMap[t.name] : null;
             return {
               ...t,
-              x: existingPos ? existingPos.x : (t.x || 60 + (idx % 3) * 360),
-              y: existingPos ? existingPos.y : (t.y || 60 + Math.floor(idx / 3) * 280),
+              x: existingPos && existingPos.x !== undefined ? existingPos.x : (t.x !== undefined ? t.x : 60 + (idx % 3) * 360),
+              y: existingPos && existingPos.y !== undefined ? existingPos.y : (t.y !== undefined ? t.y : 60 + Math.floor(idx / 3) * 280),
               color: t.color || ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'][idx % 6],
             };
           });
@@ -66,7 +68,13 @@ export default function ERDiagramCanvas({
         setRelationships([]);
       }
     }
-  }, [diagramData]);
+  }, [diagramData, isEditable]);
+
+  // Ref to always access latest tables array in async handlers
+  const tablesRef = useRef(tables);
+  useEffect(() => {
+    tablesRef.current = tables;
+  }, [tables]);
 
   // Canvas Transform state (Pan & Zoom)
   const [zoom, setZoom] = useState(1);
@@ -82,6 +90,7 @@ export default function ERDiagramCanvas({
 
   // Table Drag handlers
   const handleTableMouseDown = (e, table) => {
+    if (!isEditable) return;
     e.stopPropagation();
     setDraggingTableId(table.id || table.name);
     const rect = containerRef.current?.getBoundingClientRect();
@@ -113,12 +122,9 @@ export default function ERDiagramCanvas({
   };
 
   const handleMouseUp = () => {
-    if (draggingTableId && onTablePositionChange) {
+    if (draggingTableId && onTablePositionChange && isEditable) {
       // Emit updated table positions for real-time sync to interviewer
-      setTables((prev) => {
-        onTablePositionChange(prev);
-        return prev;
-      });
+      onTablePositionChange(tablesRef.current);
     }
     setDraggingTableId(null);
     setIsPanning(false);
@@ -144,12 +150,16 @@ export default function ERDiagramCanvas({
 
   // Auto-arrange tables in a clean grid layout
   const handleAutoLayout = () => {
+    if (!isEditable) return;
     const updated = tables.map((t, i) => ({
       ...t,
       x: 60 + (i % 3) * 360,
       y: 60 + Math.floor(i / 3) * 280,
     }));
     setTables(updated);
+    if (onTablePositionChange) {
+      onTablePositionChange(updated);
+    }
   };
 
   return (
@@ -182,10 +192,10 @@ export default function ERDiagramCanvas({
             </div>
           )}
           {/* Interviewer: show selected DB as read-only label */}
-          {databases && databases.length > 0 && !isEditable && selectedDatabase && (
+          {!isEditable && selectedDatabase && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
-              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">DB:</span>
-              <span className="text-[var(--text-primary)] font-bold">
+              <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">Active DB:</span>
+              <span className="text-blue-600 dark:text-blue-400 font-bold">
                 {selectedDatabase.startsWith('mockmate_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
               </span>
             </div>
@@ -205,14 +215,16 @@ export default function ERDiagramCanvas({
 
         {/* Right Toolbar: Auto-layout, Zoom Controls */}
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleAutoLayout}
-            className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
-            title="Auto-arrange entity tables in clean grid"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-          </button>
+          {isEditable && (
+            <button
+              type="button"
+              onClick={handleAutoLayout}
+              className="p-1.5 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+              title="Auto-arrange entity tables in clean grid"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           <div className="h-4 w-px bg-[var(--border)] mx-0.5" />
 

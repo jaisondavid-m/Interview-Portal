@@ -74,16 +74,25 @@ export default function DatabasePlayground({
     }
   }, [round, question?.id, payload, sessionId]);
 
-  // Sync external changes
+  // Sync external changes (Interviewer view)
   useEffect(() => {
     if (parsedState.diagram) {
       setDiagramState(parsedState.diagram);
+      if (Array.isArray(parsedState.diagram.databases) && parsedState.diagram.databases.length > 0) {
+        setDatabases(parsedState.diagram.databases);
+      }
     }
     if (parsedState.sql !== undefined && parsedState.sql !== null) {
       setSqlState(parsedState.sql);
     }
     if (parsedState.database) {
       setSelectedDatabase(parsedState.database);
+      setDatabases((prev) => {
+        if (parsedState.database && !prev.includes(parsedState.database)) {
+          return [...prev, parsedState.database];
+        }
+        return prev;
+      });
     }
   }, [parsedState]);
 
@@ -123,6 +132,8 @@ export default function DatabasePlayground({
     if (!newDb || !sessionId || !isEditable) return;
     try {
       setSelectedDatabase(newDb);
+      // Emit immediately so interviewer DB pill updates without delay
+      emitCombinedChange(diagramState, sqlState, newDb);
       const res = await api.get(`/interviews/sessions/${sessionId}/database/schema?db=${encodeURIComponent(newDb)}`);
       const data = res?.data || res;
       if (data?.schema) {
@@ -138,11 +149,9 @@ export default function DatabasePlayground({
   // Sync table positions when candidate drags tables in ER diagram
   const handleTablePositionChange = (updatedTables) => {
     if (!isEditable) return;
-    setDiagramState((prev) => {
-      const updated = { ...prev, tables: updatedTables };
-      emitCombinedChange(updated, sqlState, selectedDatabase);
-      return updated;
-    });
+    const updatedDiagram = { ...diagramState, tables: updatedTables };
+    setDiagramState(updatedDiagram);
+    emitCombinedChange(updatedDiagram, sqlState, selectedDatabase);
   };
 
   // Provision / Sync sandbox database on session load, round transition, or question change
