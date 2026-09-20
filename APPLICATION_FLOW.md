@@ -1,38 +1,5 @@
 # 🎓 MockMate - Project Flow & Interview Modes Guide
 
-> **Reviewer Guide:**  
-> This document details the **MockMate** platform—a smart campus peer-to-peer technical interview system. It breaks down the **MVP core concept**, how **2-round role-swapping interviews** work, distinct **interactive interview modes**, **safety monitoring**, and lastly, **administrator configuration controls**.
-
----
-
-## 📋 Table of Contents
-1. [Core MVP Concept & How Peer Interviews Work](#1-core-mvp-concept--how-peer-interviews-work)
-   - [What is MockMate? (MVP Overview)](#what-is-mockmate-mvp-overview)
-   - [How a Peer Interview Session Works (Rounds & Role Swapping)](#how-a-peer-interview-session-works-rounds--role-swapping)
-2. [Student Journey: Dashboard & Slot Booking](#2-student-journey-dashboard--slot-booking)
-   - [Student Performance Dashboard](#student-performance-dashboard)
-   - [Slot Booking & Attendance Status](#slot-booking--attendance-status)
-3. [Interactive Interview Modes (Mode Breakdown)](#3-interactive-interview-modes-mode-breakdown)
-   - [Mode 1: Multiple-Choice Questions (MCQ) Assessment Mode](#mode-1-multiple-choice-questions-mcq-assessment-mode)
-   - [Mode 2: System Design & Architecture Mode (Whiteboard Studio)](#mode-2-system-design--architecture-mode-whiteboard-studio)
-   - [Mode 3: Database Engineering & SQL Mode (Query Sandbox & ER Modeler)](#mode-3-database-engineering--sql-mode-query-sandbox--er-modeler)
-   - [Mode 4: Frontend Web Development Mode (React & Responsive Emulator)](#mode-4-frontend-web-development-mode-react--responsive-emulator)
-4. [Safety, Monitoring & Student Leaderboard](#4-safety-monitoring--student-leaderboard)
-   - [Faculty Live Interview Monitoring](#faculty-live-interview-monitoring)
-   - [Student Leaderboard & Scorecards](#student-leaderboard--scorecards)
-   - [Interview History & Anonymity Incident Auditing](#interview-history--anonymity-incident-auditing)
-   - [Admin Audio Dialogue Playback & Verification](#admin-audio-dialogue-playback--verification)
-5. [Administrator Operations & System Configuration (Admin Controls)](#5-administrator-operations--system-configuration-admin-controls)
-   - [System Analytics Dashboard](#system-analytics-dashboard)
-   - [Configuring Interview Domains & Progression Levels](#configuring-interview-domains--progression-levels)
-   - [Question Bank Management](#question-bank-management)
-   - [Peer Feedback Questionnaire & Mark Weightage](#peer-feedback-questionnaire--mark-weightage)
-   - [Scheduling Exam Slots & Physical Campus Venues](#scheduling-exam-slots--physical-campus-venues)
-   - [Managing Room Rosters & Capacity](#managing-room-rosters--capacity)
-   - [Faculty Venue Attendance Verification](#faculty-venue-attendance-verification)
-
----
-
 ## 1. Core MVP Concept & How Peer Interviews Work
 
 ### What is MockMate? (MVP Overview)
