@@ -795,6 +795,18 @@ func AdminGetSlotRoster(c *gin.Context) {
 		return
 	}
 
+	// Fallback for single-venue legacy slots
+	if len(slot.Venues) == 0 && slot.VenueID > 0 && slot.Venue != nil {
+		slot.Venues = append(slot.Venues, models.SlotVenueAssignment{
+			SlotID:    slot.ID,
+			VenueID:   slot.VenueID,
+			Venue:     slot.Venue,
+			FacultyID: slot.FacultyID,
+			Faculty:   slot.Faculty,
+			Capacity:  slot.Capacity,
+		})
+	}
+
 	var bookings []models.SlotBooking
 	if err := database.DB.
 		Where("slot_id = ?", slot.ID).
@@ -813,11 +825,16 @@ func AdminGetSlotRoster(c *gin.Context) {
 		return
 	}
 
+	var availableVenues []models.Venue
+	database.DB.Where("is_active = ?", true).Order("building asc, name asc").Find(&availableVenues)
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"slot":     slot,
-			"bookings": bookings,
+			"slot":             slot,
+			"bookings":         bookings,
+			"assigned_venues":  slot.Venues,
+			"available_venues": availableVenues,
 		},
 	})
 }
