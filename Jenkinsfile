@@ -29,8 +29,14 @@ pipeline {
                 script {
                     // Check if server deployment directory exists, create if not
                     sh '''
-                        sudo mkdir -p ${APP_DIR}
-                        sudo chown -R $USER:$USER ${APP_DIR}
+                        if command -v sudo >/dev/null 2>&1; then
+                            sudo mkdir -p "${APP_DIR}"
+                            if [ -n "$USER" ]; then
+                                sudo chown -R "$USER" "${APP_DIR}" || true
+                            fi
+                        else
+                            mkdir -p "${APP_DIR}"
+                        fi
                     '''
 
                     // Sync repo files to deployment target directory
