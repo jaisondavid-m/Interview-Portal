@@ -6,7 +6,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         // Abort pipeline if stuck for more than 15 minutes
         timeout(time: 15, unit: 'MINUTES')
-        ansiColor('xterm')
         disableConcurrentBuilds()
     }
 
