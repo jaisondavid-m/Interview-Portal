@@ -41,11 +41,17 @@ pipeline {
 
                     // Sync repo files to deployment target directory
                     sh '''
-                        rsync -av --delete \
-                            --exclude='.git' \
-                            --exclude='server/uploads' \
-                            --exclude='infrastructure/mysql/*-data' \
-                            ./ ${APP_DIR}/
+                        if command -v rsync >/dev/null 2>&1; then
+                            rsync -av --delete \
+                                --exclude='.git' \
+                                --exclude='server/uploads' \
+                                --exclude='infrastructure/mysql/*-data' \
+                                ./ "${APP_DIR}/"
+                        else
+                            echo "⚠️ rsync not found. Copying workspace files with cp..."
+                            mkdir -p "${APP_DIR}"
+                            cp -R . "${APP_DIR}/"
+                        fi
                     '''
 
                     // Ensure .env file exists in the deployment directory
