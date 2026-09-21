@@ -8,6 +8,7 @@ WORKDIR /app
 ENV GOTOOLCHAIN=auto
 ENV CGO_ENABLED=0
 ENV GOOS=linux
+ENV GOFLAGS="-mod=mod"
 ENV GOPROXY="https://goproxy.io,https://proxy.golang.org,direct"
 
 # Copy module dependency manifests and download Go modules
@@ -17,8 +18,9 @@ RUN go mod download
 # Copy all source files
 COPY . .
 
-# Build lightweight static binary
-RUN go build -ldflags="-w -s" -o /app/server main.go
+# Build lightweight static binary using Go modules
+RUN go build -mod=mod -ldflags="-w -s" -o /app/server main.go
+
 
 # ==========================================
 # Multi-stage Runtime stages
