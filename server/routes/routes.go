@@ -14,6 +14,7 @@ func SetupRouter() *gin.Engine {
 	// Apply Middlewares
 	router.Use(middlewares.CORSMiddleware())
 	router.Use(middlewares.AuditLoggerMiddleware())
+	router.Use(middlewares.RateLimitMiddleware())
 	router.Use(gin.Recovery())
 
 	// Public Health Check
@@ -47,6 +48,12 @@ func SetupRouter() *gin.Engine {
 			developer.GET("/settings", controllers.AdminGetSystemSettings)
 			developer.POST("/settings", controllers.AdminUpdateSystemSetting)
 			developer.PUT("/settings", controllers.AdminUpdateSystemSetting)
+
+			// Rate Limiting Engine Controls
+			developer.GET("/rate-limits", controllers.GetDeveloperRateLimitConfigs)
+			developer.PUT("/rate-limits/:id", controllers.UpdateDeveloperRateLimitConfig)
+			developer.POST("/rate-limits/reset-counters", controllers.ResetDeveloperRateLimitCounters)
+			developer.POST("/rate-limits/test", controllers.TestDeveloperRateLimit)
 		}
 
 		// Student Protected Routes (Require JWT)

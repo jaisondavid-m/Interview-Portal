@@ -23,6 +23,7 @@ import StudentInterviews from '../Pages/StudentInterviews';
 import StudentInterviewsTesting from '../Pages/StudentInterviewsTesting';
 import InterviewRoom from '../Pages/InterviewRoom';
 import DeveloperAuditLogs from '../Pages/DeveloperAuditLogs';
+import DeveloperRateLimits from '../Pages/DeveloperRateLimits';
 import AdminBackup from '../Pages/AdminBackup';
 import AdminVenues from '../Pages/AdminVenues';
 import AdminSlotEditor from '../Pages/AdminSlotEditor';
@@ -331,6 +332,14 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="audit_logs">
                 <DeveloperAuditLogs />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'developer/rate-limits',
+            element: (
+              <DynamicPageRoute pageKey={['rate_limiting', 'audit_logs', 'system_settings']}>
+                <DeveloperRateLimits />
               </DynamicPageRoute>
             ),
           },

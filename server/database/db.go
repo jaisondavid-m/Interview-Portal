@@ -119,6 +119,9 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 	// Clean up duplicate "Level X: " prefix in level names if any exist
 	db.Exec("UPDATE interview_levels SET name = TRIM(SUBSTRING(name, INSTR(name, ':') + 1)) WHERE name LIKE 'Level %:%'")
 
+	// Initialize Redis connection for sliding window rate limiting and caching
+	InitRedis()
+
 	DB = db
 	return db, nil
 }
@@ -153,10 +156,12 @@ func runMigrations(db *gorm.DB) error {
 		&models.SlotVenueAssignment{},
 		&models.SlotBooking{},
 		&models.SystemSetting{},
+		&models.RateLimitConfig{},
 	)
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)
 		syncAppPagesCatalog(db)
+		seedRateLimitConfigs(db)
 	}
 	return err
 }
@@ -269,6 +274,45 @@ func syncAppPagesCatalog(db *gorm.DB) {
 		db.Model(&models.RolePagePermission{}).Where("role_name = 'developer' AND page_key = 'system_settings'").Count(&devPermCount)
 		if devPermCount == 0 {
 			db.Create(&models.RolePagePermission{RoleName: "developer", PageKey: "system_settings", CanAccess: true})
+		}
+	}
+
+	// 4. Ensure Rate Limiting page exists in AppPage catalog and is mapped to admin & developer roles
+	var rlPageCount int64
+	db.Model(&models.AppPage{}).Where("`key` = 'rate_limiting'").Count(&rlPageCount)
+	if rlPageCount == 0 {
+		rlPage := models.AppPage{
+			Key:         "rate_limiting",
+			Name:        "Rate Limiting",
+			Path:        "/developer/rate-limits",
+			Icon:        "Zap",
+			Category:    "System Administration",
+			Description: "Configure Redis-backed rate limiting rules for user roles and unauthenticated endpoints",
+			OrderIndex:  92,
+		}
+		if err := db.Create(&rlPage).Error; err == nil {
+			db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: "rate_limiting", CanAccess: true})
+			db.Create(&models.RolePagePermission{RoleName: "developer", PageKey: "rate_limiting", CanAccess: true})
+		}
+	} else {
+		db.Model(&models.AppPage{}).Where("`key` = 'rate_limiting'").Updates(map[string]interface{}{
+			"name":        "Rate Limiting",
+			"path":        "/developer/rate-limits",
+			"icon":        "Zap",
+			"category":    "System Administration",
+			"description": "Configure Redis-backed rate limiting rules for user roles and unauthenticated endpoints",
+		})
+		// Ensure admin permission
+		var adminPermCount int64
+		db.Model(&models.RolePagePermission{}).Where("role_name = 'admin' AND page_key = 'rate_limiting'").Count(&adminPermCount)
+		if adminPermCount == 0 {
+			db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: "rate_limiting", CanAccess: true})
+		}
+		// Ensure developer permission
+		var devPermCount int64
+		db.Model(&models.RolePagePermission{}).Where("role_name = 'developer' AND page_key = 'rate_limiting'").Count(&devPermCount)
+		if devPermCount == 0 {
+			db.Create(&models.RolePagePermission{RoleName: "developer", PageKey: "rate_limiting", CanAccess: true})
 		}
 	}
 }
@@ -420,6 +464,82 @@ func migrateAndDropLegacyPayloadJSONColumn(db *gorm.DB) {
 		log.Println("[INFO] Permanently dropping payload_json column from interview_questions...")
 		_ = db.Migrator().DropColumn(&models.InterviewQuestion{}, "payload_json")
 		_ = db.Exec("ALTER TABLE interview_questions DROP COLUMN payload_json")
+	}
+}
+
+// seedRateLimitConfigs initializes default role and unauthenticated rate limiting rules in MySQL
+func seedRateLimitConfigs(db *gorm.DB) {
+	defaults := []models.RateLimitConfig{
+		{
+			Scope:             "no_auth",
+			Name:              "Unauthenticated / Public APIs",
+			Description:       "Rate limit applied to login, register, public settings, and unauthenticated requests by Client IP",
+			RequestsPerMinute: 30,
+			BurstLimit:        10,
+			WindowSeconds:     60,
+			Enabled:           true,
+			ActionOnExceed:    "block",
+		},
+		{
+			Scope:             "student",
+			Name:              "Student Account Tier",
+			Description:       "Rate limit applied to authenticated students during mock assessments and slot bookings",
+			RequestsPerMinute: 120,
+			BurstLimit:        25,
+			WindowSeconds:     60,
+			Enabled:           true,
+			ActionOnExceed:    "block",
+		},
+		{
+			Scope:             "faculty",
+			Name:              "Faculty Assessor Tier",
+			Description:       "Rate limit applied to faculty members monitoring venues and conducting evaluations",
+			RequestsPerMinute: 300,
+			BurstLimit:        50,
+			WindowSeconds:     60,
+			Enabled:           true,
+			ActionOnExceed:    "block",
+		},
+		{
+			Scope:             "admin",
+			Name:              "Platform Administrator Tier",
+			Description:       "Rate limit applied to administrator management and analytics endpoints",
+			RequestsPerMinute: 600,
+			BurstLimit:        100,
+			WindowSeconds:     60,
+			Enabled:           true,
+			ActionOnExceed:    "block",
+		},
+		{
+			Scope:             "developer",
+			Name:              "Developer Account Tier",
+			Description:       "Rate limit applied to system developers inspecting logs and system configurations",
+			RequestsPerMinute: 1000,
+			BurstLimit:        200,
+			WindowSeconds:     60,
+			Enabled:           true,
+			ActionOnExceed:    "block",
+		},
+		{
+			Scope:             "system",
+			Name:              "Internal / System API Tier",
+			Description:       "Rate limit for automated system daemons and health reporting services",
+			RequestsPerMinute: 2000,
+			BurstLimit:        500,
+			WindowSeconds:     60,
+			Enabled:           true,
+			ActionOnExceed:    "block",
+		},
+	}
+
+	for _, item := range defaults {
+		var count int64
+		db.Model(&models.RateLimitConfig{}).Where("scope = ?", item.Scope).Count(&count)
+		if count == 0 {
+			item.CreatedAt = time.Now()
+			item.UpdatedAt = time.Now()
+			db.Create(&item)
+		}
 	}
 }
 

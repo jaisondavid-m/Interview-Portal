@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
   Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, X,
-  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Database, Headphones
+  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Database, Headphones, Zap
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -23,6 +23,7 @@ const ICON_MAP = {
   ClipboardCheck,
   FlaskConical,
   Headphones,
+  Zap,
   Settings: SlidersHorizontal,
 };
 
@@ -80,6 +81,7 @@ export default function MobileSidebar({ isOpen, onClose }) {
   const fallbackMenuItems = isDeveloper
     ? [
         { name: 'Audit Logs', path: '/developer/audit-logs', icon: Terminal },
+        { name: 'Rate Limiting', path: '/developer/rate-limits', icon: Zap },
         { name: 'Database Backup', path: '/admin/backup', icon: Database },
         { name: 'System Settings', path: '/developer/settings', icon: SlidersHorizontal },
       ]
@@ -97,6 +99,7 @@ export default function MobileSidebar({ isOpen, onClose }) {
         { name: 'Venues & Slots', path: '/admin/venues', icon: Building2 },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },
         { name: 'Peer Feedback Config', path: '/admin/feedback', icon: MessageSquareCheck },
+        { name: 'Rate Limiting', path: '/developer/rate-limits', icon: Zap },
         { name: 'Leaderboard', path: '/admin/leaderboard', icon: Trophy },
         { name: 'Interview History', path: '/admin/history', icon: History },
         { name: 'Audit Logs', path: '/admin/audit-logs', icon: Terminal },
