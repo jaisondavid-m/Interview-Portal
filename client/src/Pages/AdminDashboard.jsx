@@ -549,7 +549,7 @@ export default function AdminDashboard() {
           return (
             <div className="space-y-6">
               {/* Interactive X-Y Bar Chart with horizontal scroll wrapper on mobile */}
-              <div className="relative pt-6 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)] overflow-x-auto custom-scrollbar">
+              <div className="relative pt-16 pb-2 px-2 sm:px-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/40 border border-[var(--border)] overflow-x-auto custom-scrollbar">
                 <div className="min-w-[480px] sm:min-w-0">
                   {/* Y-Axis Grid Lines & Background */}
                   <div className="relative h-64 flex items-end">
@@ -587,21 +587,23 @@ export default function AdminDashboard() {
                             className="group relative flex-1 h-full flex flex-col justify-end items-center max-w-[90px]"
                           >
                             {/* Hover Tooltip Popover */}
-                            <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 transform -translate-y-1 group-hover:translate-y-0 w-48 text-center">
-                              <div className="p-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-xl text-left space-y-1 text-xs">
-                                <div className="font-bold text-[var(--text-primary)] flex items-center justify-between">
-                                  <span className="truncate">{item.short_label || `Question ${idx + 1}`}</span>
-                                  <span className={`font-mono ${barTextColor} font-extrabold`}>{pct.toFixed(0)}%</span>
+                            <div className="absolute -top-24 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-50 transform group-hover:-translate-y-1 w-56">
+                              <div className="relative p-3 rounded-xl bg-slate-900/95 text-white border border-slate-700/80 shadow-2xl text-left space-y-1.5 backdrop-blur-md">
+                                <div className="font-bold text-white flex items-center justify-between text-xs pb-1 border-b border-slate-800">
+                                  <span className="truncate pr-2 font-semibold text-slate-100">{item.short_label || `Question ${idx + 1}`}</span>
+                                  <span className="font-mono text-purple-400 font-extrabold shrink-0 text-xs">{pct.toFixed(0)}%</span>
                                 </div>
-                                <p className="text-[10px] text-[var(--text-secondary)] line-clamp-2 leading-tight">
+                                <p className="text-[11px] text-slate-200 font-normal leading-snug line-clamp-3">
                                   {item.question_text}
                                 </p>
-                                <div className="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)]">
+                                <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
                                   <span>
-                                    Avg: <strong className="text-[var(--text-primary)]">{avgScore.toFixed(1)} / {item.max_marks}</strong>
+                                    Avg: <strong className="text-white font-bold">{avgScore.toFixed(1)} / {item.max_marks}</strong>
                                   </span>
-                                  <span>{item.responses_count} {item.responses_count === 1 ? 'eval' : 'evals'}</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold">{item.responses_count} {item.responses_count === 1 ? 'eval' : 'evals'}</span>
                                 </div>
+                                {/* Arrow Pointer */}
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-slate-900/95" />
                               </div>
                             </div>
 
