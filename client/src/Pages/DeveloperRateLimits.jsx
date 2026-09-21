@@ -5,22 +5,17 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Clock,
   Activity,
   Sliders,
-  Play,
   RotateCcw,
   Check,
-  X,
   Server,
   Users,
   Key,
   ShieldCheck,
   Database,
   Terminal,
-  Lock,
-  Flame,
-  ArrowRight
+  Lock
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -32,12 +27,6 @@ export default function DeveloperRateLimits() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [savingId, setSavingId] = useState(null);
-
-  // Simulator State
-  const [simScope, setSimScope] = useState('no_auth');
-  const [simCount, setSimCount] = useState(40);
-  const [simRunning, setSimRunning] = useState(false);
-  const [simResult, setSimResult] = useState(null);
 
   // Reset counters state
   const [resetting, setResetting] = useState(false);
@@ -125,23 +114,6 @@ export default function DeveloperRateLimits() {
       showToast(err.response?.data?.message || 'Failed to reset Redis rate limit counters', 'error');
     } finally {
       setResetting(false);
-    }
-  };
-
-  const handleRunSimulation = async () => {
-    try {
-      setSimRunning(true);
-      setSimResult(null);
-      const res = await api.post('/developer/rate-limits/test', {
-        scope: simScope,
-        request_count: Number(simCount),
-      });
-      setSimResult(res?.data || res);
-      showToast('Rate limiter simulation executed successfully!');
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to run rate limit simulation', 'error');
-    } finally {
-      setSimRunning(false);
     }
   };
 
@@ -287,307 +259,210 @@ export default function DeveloperRateLimits() {
           <p className="text-sm font-bold text-purple-500 font-mono">
             Sliding Window
           </p>
-          <p className="text-[11px] text-[var(--text-muted)]">
+          <p className="text-[11px] text-[var(--text-muted)] font-mono">
             Atomic Redis Sorted Set (ZSET)
           </p>
         </div>
       </div>
 
-      {/* Main Grid: Rate Limit Rule Cards + Interactive Simulator */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Rule Cards */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase font-mono tracking-wider flex items-center gap-2">
-              <Lock className="w-4 h-4 text-[var(--accent)]" />
-              <span>Configured Scope Rate Limit Rules</span>
-            </h2>
-            <span className="text-xs text-[var(--text-muted)]">
-              Changes apply dynamically without server restart
-            </span>
-          </div>
+      {/* Configured Rate Limit Rules */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase font-mono tracking-wider flex items-center gap-2">
+            <Lock className="w-4 h-4 text-[var(--accent)]" />
+            <span>Configured Scope Rate Limit Rules</span>
+          </h2>
+          <span className="text-xs text-[var(--text-muted)]">
+            Changes apply dynamically without server restart
+          </span>
+        </div>
 
-          {configs.map((item) => {
-            const isEditing = editingId === item.id;
-            const isSaving = savingId === item.id;
+        {configs.map((item) => {
+          const isEditing = editingId === item.id;
+          const isSaving = savingId === item.id;
 
-            return (
-              <div
-                key={item.id}
-                className={`p-5 bg-[var(--bg-card)] border rounded-2xl shadow-xs transition-all space-y-4 ${
-                  !item.enabled
-                    ? 'opacity-60 border-[var(--border)]'
-                    : item.scope === 'no_auth'
-                    ? 'border-rose-500/30 hover:border-rose-500/60'
-                    : 'border-[var(--border)] hover:border-[var(--accent)]'
-                }`}
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] shrink-0">
-                      {getScopeIcon(item.scope)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-[var(--text-primary)]">
-                          {item.name}
-                        </h3>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border ${getScopeBadgeStyle(item.scope)}`}>
-                          {item.scope}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                        {item.description}
-                      </p>
-                    </div>
+          return (
+            <div
+              key={item.id}
+              className={`p-5 bg-[var(--bg-card)] border rounded-2xl shadow-xs transition-all space-y-4 ${
+                !item.enabled
+                  ? 'opacity-60 border-[var(--border)]'
+                  : item.scope === 'no_auth'
+                  ? 'border-rose-500/30 hover:border-rose-500/60'
+                  : 'border-[var(--border)] hover:border-[var(--accent)]'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] shrink-0">
+                    {getScopeIcon(item.scope)}
                   </div>
-
-                  {/* Toggle Switch */}
-                  <button
-                    onClick={() => handleToggleEnable(item)}
-                    disabled={isSaving}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      item.enabled ? 'bg-emerald-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        item.enabled ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-[var(--text-primary)]">
+                        {item.name}
+                      </h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border ${getScopeBadgeStyle(item.scope)}`}>
+                        {item.scope}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                      {item.description}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Edit Form vs View Mode */}
-                {isEditing ? (
-                  <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
-                          Requests / Minute (RPM)
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="10000"
-                          value={editForm.requests_per_minute}
-                          onChange={(e) => setEditForm({ ...editForm, requests_per_minute: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                        />
-                      </div>
+                {/* Toggle Switch */}
+                <button
+                  onClick={() => handleToggleEnable(item)}
+                  disabled={isSaving}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    item.enabled ? 'bg-emerald-500' : 'bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      item.enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
 
-                      <div>
-                        <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
-                          Burst Capacity Tokens
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="2000"
-                          value={editForm.burst_limit}
-                          onChange={(e) => setEditForm({ ...editForm, burst_limit: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
-                          Window Duration (Seconds)
-                        </label>
-                        <input
-                          type="number"
-                          min="5"
-                          max="3600"
-                          value={editForm.window_seconds}
-                          onChange={(e) => setEditForm({ ...editForm, window_seconds: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                        />
-                      </div>
+              {/* Edit Form vs View Mode */}
+              {isEditing ? (
+                <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
+                        Requests / Minute (RPM)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10000"
+                        value={editForm.requests_per_minute}
+                        onChange={(e) => setEditForm({ ...editForm, requests_per_minute: Number(e.target.value) })}
+                        className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                      />
                     </div>
 
                     <div>
                       <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
-                        Exceed Enforcement Action
+                        Burst Capacity Tokens
                       </label>
-                      <div className="flex items-center gap-3 text-xs">
-                        <label className="flex items-center gap-1.5 cursor-pointer font-medium text-[var(--text-primary)]">
-                          <input
-                            type="radio"
-                            name={`action_${item.id}`}
-                            value="block"
-                            checked={editForm.action_on_exceed === 'block'}
-                            onChange={(e) => setEditForm({ ...editForm, action_on_exceed: e.target.value })}
-                            className="text-rose-500 focus:ring-rose-500"
-                          />
-                          <span>Block Request (HTTP 429 Too Many Requests)</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer font-medium text-[var(--text-primary)]">
-                          <input
-                            type="radio"
-                            name={`action_${item.id}`}
-                            value="log_only"
-                            checked={editForm.action_on_exceed === 'log_only'}
-                            onChange={(e) => setEditForm({ ...editForm, action_on_exceed: e.target.value })}
-                            className="text-amber-500 focus:ring-amber-500"
-                          />
-                          <span>Log Only (Monitor & Audit)</span>
-                        </label>
-                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="2000"
+                        value={editForm.burst_limit}
+                        onChange={(e) => setEditForm({ ...editForm, burst_limit: Number(e.target.value) })}
+                        className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                      />
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
-                      <button
-                        type="button"
-                        onClick={handleCancelEdit}
-                        className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSaveConfig(item.id)}
-                        disabled={isSaving}
-                        className="px-4 py-1.5 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
-                      >
-                        {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        <span>Save Rule</span>
-                      </button>
+                    <div>
+                      <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
+                        Window Duration (Seconds)
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="3600"
+                        value={editForm.window_seconds}
+                        onChange={(e) => setEditForm({ ...editForm, window_seconds: Number(e.target.value) })}
+                        className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                      />
                     </div>
                   </div>
-                ) : (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1 font-mono">
-                      <div>
-                        <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">RPM Limit</span>
-                        <span className="font-bold text-[var(--text-primary)] text-sm">{item.requests_per_minute} req/min</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">Burst Tokens</span>
-                        <span className="font-bold text-sky-500 text-sm">+{item.burst_limit} burst</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">Time Window</span>
-                        <span className="font-bold text-[var(--text-primary)] text-sm">{item.window_seconds}s</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">Enforcement</span>
-                        <span className={`font-bold text-xs uppercase px-1.5 py-0.5 rounded ${
-                          item.action_on_exceed === 'block' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'
-                        }`}>
-                          {item.action_on_exceed}
-                        </span>
-                      </div>
-                    </div>
 
+                  <div>
+                    <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
+                      Exceed Enforcement Action
+                    </label>
+                    <div className="flex items-center gap-3 text-xs">
+                      <label className="flex items-center gap-1.5 cursor-pointer font-medium text-[var(--text-primary)]">
+                        <input
+                          type="radio"
+                          name={`action_${item.id}`}
+                          value="block"
+                          checked={editForm.action_on_exceed === 'block'}
+                          onChange={(e) => setEditForm({ ...editForm, action_on_exceed: e.target.value })}
+                          className="text-rose-500 focus:ring-rose-500"
+                        />
+                        <span>Block Request (HTTP 429 Too Many Requests)</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer font-medium text-[var(--text-primary)]">
+                        <input
+                          type="radio"
+                          name={`action_${item.id}`}
+                          value="log_only"
+                          checked={editForm.action_on_exceed === 'log_only'}
+                          onChange={(e) => setEditForm({ ...editForm, action_on_exceed: e.target.value })}
+                          className="text-amber-500 focus:ring-amber-500"
+                        />
+                        <span>Log Only (Monitor & Audit)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
                     <button
-                      onClick={() => handleStartEdit(item)}
-                      className="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)] text-xs font-semibold text-[var(--text-primary)] cursor-pointer shrink-0 self-end sm:self-center"
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
                     >
-                      Edit Rule
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveConfig(item.id)}
+                      disabled={isSaving}
+                      className="px-4 py-1.5 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      <span>Save Rule</span>
                     </button>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1 font-mono">
+                    <div>
+                      <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">RPM Limit</span>
+                      <span className="font-bold text-[var(--text-primary)] text-sm">{item.requests_per_minute} req/min</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">Burst Tokens</span>
+                      <span className="font-bold text-sky-500 text-sm">+{item.burst_limit} burst</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">Time Window</span>
+                      <span className="font-bold text-[var(--text-primary)] text-sm">{item.window_seconds}s</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[var(--text-muted)] block uppercase">Enforcement</span>
+                      <span className={`font-bold text-xs uppercase px-1.5 py-0.5 rounded ${
+                        item.action_on_exceed === 'block' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'
+                      }`}>
+                        {item.action_on_exceed}
+                      </span>
+                    </div>
+                  </div>
 
-        {/* Right Column: Interactive Rate Limit Simulator */}
-        <div className="space-y-4">
-          <div className="p-5 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl space-y-4 shadow-xs">
-            <div>
-              <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-amber-500 animate-bounce" />
-                <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase font-mono tracking-wider">
-                  Rate Limit Simulator
-                </h3>
-              </div>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">
-                Run synthetic request bursts against the rate limiter engine to verify 429 response behavior and headers.
-              </p>
+                  <button
+                    onClick={() => handleStartEdit(item)}
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)] text-xs font-semibold text-[var(--text-primary)] cursor-pointer shrink-0 self-end sm:self-center"
+                  >
+                    Edit Rule
+                  </button>
+                </div>
+              )}
             </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1">
-                  Target Rate Limit Scope
-                </label>
-                <select
-                  value={simScope}
-                  onChange={(e) => setSimScope(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                >
-                  {configs.map((c) => (
-                    <option key={c.scope} value={c.scope}>
-                      {c.name} ({c.scope})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1 flex justify-between">
-                  <span>Synthetic Request Burst Count</span>
-                  <span className="font-mono text-[var(--accent)] font-bold">{simCount} requests</span>
-                </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="300"
-                  step="10"
-                  value={simCount}
-                  onChange={(e) => setSimCount(e.target.value)}
-                  className="w-full accent-[var(--accent)] cursor-pointer"
-                />
-              </div>
-
-              <button
-                onClick={handleRunSimulation}
-                disabled={simRunning}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
-              >
-                {simRunning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
-                <span>Execute Burst Simulation</span>
-              </button>
-            </div>
-
-            {/* Simulation Results Display */}
-            {simResult && (
-              <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-3 animate-fadeIn">
-                <div className="flex items-center justify-between pb-2 border-b border-[var(--border)] text-xs">
-                  <span className="font-bold text-[var(--text-primary)] font-mono uppercase">Simulation Verdict</span>
-                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold border border-emerald-500/20">
-                    {simResult.action_on_exceed?.toUpperCase()} MODE
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="p-2.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)]">
-                    <span className="text-[10px] text-[var(--text-muted)] block">ALLOWED</span>
-                    <span className="text-base font-bold text-emerald-500">{simResult.allowed_count} reqs</span>
-                  </div>
-                  <div className="p-2.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)]">
-                    <span className="text-[10px] text-[var(--text-muted)] block">BLOCKED (429)</span>
-                    <span className="text-base font-bold text-rose-500">{simResult.blocked_count} reqs</span>
-                  </div>
-                </div>
-
-                {/* Response Preview */}
-                <div className="p-3 rounded-lg bg-slate-950 text-slate-200 text-[11px] font-mono space-y-1 overflow-x-auto">
-                  <div className="text-slate-400 font-bold">HTTP/1.1 429 Too Many Requests</div>
-                  <div className="text-emerald-400">X-RateLimit-Limit: {simResult.max_limit}</div>
-                  <div className="text-amber-400">X-RateLimit-Remaining: 0</div>
-                  <div className="text-sky-400">Retry-After: 60</div>
-                  <div className="text-slate-400 pt-1">
-                    {`{"status":"error","code":429,"message":"Rate limit exceeded for ${simResult.scope} scope"}`}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
 }
+
