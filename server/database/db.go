@@ -337,13 +337,27 @@ func migrateAndDropLegacyPayloadJSONColumn(db *gorm.DB) {
 				db.Model(&models.InterviewQuestionDetail{}).Where("question_id = ?", rq.ID).Count(&detailCount)
 				if detailCount == 0 {
 					detail := models.InterviewQuestionDetail{QuestionID: rq.ID}
-					if v, ok := payload["constraints"].(string); ok { detail.Constraints = v }
-					if v, ok := payload["expected_approach"].(string); ok { detail.ExpectedApproach = v }
-					if v, ok := payload["expected_complexity"].(string); ok { detail.ExpectedComplexity = v }
-					if v, ok := payload["ideal_answer"].(string); ok { detail.IdealAnswer = v }
-					if v, ok := payload["scenario"].(string); ok { detail.Scenario = v }
-					if v, ok := payload["correct_option"].(string); ok { detail.CorrectOption = v }
-					if v, ok := payload["explanation"].(string); ok { detail.Explanation = v }
+					if v, ok := payload["constraints"].(string); ok {
+						detail.Constraints = v
+					}
+					if v, ok := payload["expected_approach"].(string); ok {
+						detail.ExpectedApproach = v
+					}
+					if v, ok := payload["expected_complexity"].(string); ok {
+						detail.ExpectedComplexity = v
+					}
+					if v, ok := payload["ideal_answer"].(string); ok {
+						detail.IdealAnswer = v
+					}
+					if v, ok := payload["scenario"].(string); ok {
+						detail.Scenario = v
+					}
+					if v, ok := payload["correct_option"].(string); ok {
+						detail.CorrectOption = v
+					}
+					if v, ok := payload["explanation"].(string); ok {
+						detail.Explanation = v
+					}
 					db.Create(&detail)
 				}
 
@@ -353,9 +367,13 @@ func migrateAndDropLegacyPayloadJSONColumn(db *gorm.DB) {
 				if tmplCount == 0 && rq.Type == models.ModeCoding {
 					for _, l := range []string{"c", "cpp", "javascript", "python", "java", "go"} {
 						k := "starter_code_" + l
-						if l == "javascript" { k = "starter_code" }
+						if l == "javascript" {
+							k = "starter_code"
+						}
 						sc := ""
-						if v, ok := payload[k].(string); ok && v != "" { sc = v }
+						if v, ok := payload[k].(string); ok && v != "" {
+							sc = v
+						}
 						if sc != "" {
 							db.Create(&models.InterviewQuestionCodeTemplate{QuestionID: rq.ID, Language: l, StarterCode: sc})
 						}
@@ -445,7 +463,9 @@ func migrateAndDropLegacyPayloadJSONColumn(db *gorm.DB) {
 				db.Model(&models.InterviewQuestionMCQOption{}).Where("question_id = ?", rq.ID).Count(&mcqCount)
 				if mcqCount == 0 && rq.Type == models.ModeMCQ {
 					correctOpt := "A"
-					if co, ok := payload["correct_option"].(string); ok { correctOpt = co }
+					if co, ok := payload["correct_option"].(string); ok {
+						correctOpt = co
+					}
 					if opts, ok := payload["options"].([]interface{}); ok {
 						for _, opt := range opts {
 							if optMap, ok := opt.(map[string]interface{}); ok {
@@ -542,5 +562,3 @@ func seedRateLimitConfigs(db *gorm.DB) {
 		}
 	}
 }
-
-
