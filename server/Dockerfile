@@ -10,11 +10,15 @@ ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV GOPROXY="https://goproxy.io,https://proxy.golang.org,direct"
 
-# Copy all source files and vendored dependencies
+# Copy module dependency manifests and download Go modules
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy all source files
 COPY . .
 
-# Build lightweight static binary instantly from vendor directory (zero network dependencies)
-RUN go build -mod=vendor -ldflags="-w -s" -o /app/server main.go
+# Build lightweight static binary
+RUN go build -ldflags="-w -s" -o /app/server main.go
 
 # ==========================================
 # Multi-stage Runtime stages
