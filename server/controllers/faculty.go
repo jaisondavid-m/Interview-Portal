@@ -24,8 +24,16 @@ type BulkAttendanceInput struct {
 	AttendanceStatus models.AttendanceStatus `json:"attendance_status" binding:"required"`
 }
 
+// CleanupStaleInterviewSessions automatically updates sessions that have been in 'in_progress'
+// for over 2 hours without completion to 'completed' with ended_at set to current time.
+func CleanupStaleInterviewSessions() {
+	database.DB.Exec("UPDATE interview_sessions SET status = 'completed', ended_at = NOW() WHERE status = 'in_progress' AND created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)")
+}
+
 // GetFacultyDashboardStats provides summary statistics for the authenticated faculty member
 func GetFacultyDashboardStats(c *gin.Context) {
+	CleanupStaleInterviewSessions()
+
 	rawUserID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Authentication required"})
@@ -191,6 +199,8 @@ func GetFacultyAssignedSlots(c *gin.Context) {
 
 // GetFacultyInterviewSessions retrieves live running sessions and history for students mapped to this faculty's venues
 func GetFacultyInterviewSessions(c *gin.Context) {
+	CleanupStaleInterviewSessions()
+
 	rawUserID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Authentication required"})
@@ -262,11 +272,18 @@ func GetFacultyInterviewSessions(c *gin.Context) {
 	}
 
 	if search != "" {
+		// Clean up search term for room # matching (e.g. "room 10", "room #10", "#10")
+		cleanSearch := strings.TrimPrefix(strings.TrimPrefix(search, "room"), "#")
+		cleanSearch = strings.TrimSpace(cleanSearch)
+
 		s := "%" + search + "%"
+		cs := "%" + cleanSearch + "%"
+
 		query = query.Joins("LEFT JOIN users AS interviewer ON interviewer.id = interview_sessions.interviewer_id").
 			Joins("LEFT JOIN users AS interviewee ON interviewee.id = interview_sessions.interviewee_id").
 			Joins("LEFT JOIN interview_tracks ON interview_tracks.id = interview_sessions.track_id").
-			Where("LOWER(interviewer.name) LIKE ? OR LOWER(interviewer.email) LIKE ? OR LOWER(interviewer.roll_no) LIKE ? OR LOWER(interviewee.name) LIKE ? OR LOWER(interviewee.email) LIKE ? OR LOWER(interviewee.roll_no) LIKE ? OR LOWER(interview_tracks.title) LIKE ?", s, s, s, s, s, s, s)
+			Joins("LEFT JOIN interview_levels ON interview_levels.id = interview_sessions.level_id").
+			Where("CAST(interview_sessions.id AS CHAR) LIKE ? OR CAST(interview_sessions.id AS CHAR) LIKE ? OR LOWER(interviewer.name) LIKE ? OR LOWER(interviewer.email) LIKE ? OR LOWER(interviewer.roll_no) LIKE ? OR LOWER(interviewer.department) LIKE ? OR LOWER(interviewee.name) LIKE ? OR LOWER(interviewee.email) LIKE ? OR LOWER(interviewee.roll_no) LIKE ? OR LOWER(interviewee.department) LIKE ? OR LOWER(interview_tracks.title) LIKE ? OR LOWER(interview_levels.name) LIKE ? OR LOWER(interview_levels.mode) LIKE ?", cs, s, s, s, s, s, s, s, s, s, s, s, s)
 	}
 
 	var totalCount int64
@@ -390,6 +407,11 @@ func GetFacultyInterviewSessions(c *gin.Context) {
 			levelMode = string(s.Level.Mode)
 		}
 
+		startedAt := s.StartedAt
+		if startedAt.IsZero() {
+			startedAt = s.CreatedAt
+		}
+
 		dtoList = append(dtoList, SessionDTO{
 			ID:            s.ID,
 			TrackID:       s.TrackID,
@@ -406,7 +428,7 @@ func GetFacultyInterviewSessions(c *gin.Context) {
 			SwitchCount:   s.SwitchCount,
 			HasRecording:  hasRec > 0,
 			HasReport:     hasSec > 0,
-			StartedAt:     s.StartedAt,
+			StartedAt:     startedAt,
 			EndedAt:       s.EndedAt,
 			CreatedAt:     s.CreatedAt,
 		})
@@ -725,6 +747,8 @@ type VenueMonitorSessionItem struct {
 
 // GetFacultyVenueMonitorData returns live venue interview sessions & connected student statuses for faculty
 func GetFacultyVenueMonitorData(c *gin.Context) {
+	CleanupStaleInterviewSessions()
+
 	rawUserID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Authentication required"})

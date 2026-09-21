@@ -210,6 +210,7 @@ export default function FacultyDashboard() {
   const calculateDuration = (startStr, endStr) => {
     if (!startStr) return '—';
     const start = new Date(startStr);
+    if (isNaN(start.getTime()) || start.getFullYear() <= 1970) return '—';
     const end = endStr ? new Date(endStr) : new Date();
     const diffSecs = Math.max(0, Math.floor((end - start) / 1000));
     const mins = Math.floor(diffSecs / 60);
@@ -217,8 +218,32 @@ export default function FacultyDashboard() {
     return `${mins}m ${secs}s`;
   };
 
-  // Live in-progress sessions count
+  const getSessionStartTime = (s) => {
+    if (s?.started_at && new Date(s.started_at).getFullYear() > 1970) {
+      return s.started_at;
+    }
+    if (s?.created_at && new Date(s.created_at).getFullYear() > 1970) {
+      return s.created_at;
+    }
+    return null;
+  };
+
+  // Live in-progress sessions count & flexible search filtering
   const liveSessions = sessions.filter((s) => s.status === 'in_progress');
+  const filteredLiveSessions = liveSessions.filter((s) => {
+    if (!sessionSearch.trim()) return true;
+    const q = sessionSearch.toLowerCase().trim();
+    const cleanQ = q.replace(/^room\s*/i, '').replace(/^#/, '');
+
+    const roomIdMatch = String(s.id).includes(cleanQ) || `#${s.id}`.toLowerCase().includes(q) || `room #${s.id}`.toLowerCase().includes(q);
+    const trackMatch = s.track_title?.toLowerCase().includes(q) || s.track_category?.toLowerCase().includes(q);
+    const levelMatch = s.level_name?.toLowerCase().includes(q) || s.level_mode?.toLowerCase().includes(q) || `level ${s.level_number}`.includes(q);
+    const interviewerMatch = s.interviewer?.name?.toLowerCase().includes(q) || s.interviewer?.roll_no?.toLowerCase().includes(q) || s.interviewer?.email?.toLowerCase().includes(q) || s.interviewer?.department?.toLowerCase().includes(q);
+    const candidateMatch = s.interviewee?.name?.toLowerCase().includes(q) || s.interviewee?.roll_no?.toLowerCase().includes(q) || s.interviewee?.email?.toLowerCase().includes(q) || s.interviewee?.department?.toLowerCase().includes(q);
+
+    return roomIdMatch || trackMatch || levelMatch || interviewerMatch || candidateMatch;
+  });
+
   const liveCount = stats?.live_sessions_count ?? liveSessions.length;
 
   return (
@@ -352,7 +377,7 @@ export default function FacultyDashboard() {
       {/* ============================================================ */}
       {activeTab === 'live' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
                 <Radio className="w-4 h-4 text-emerald-500 animate-pulse" />
@@ -371,6 +396,54 @@ export default function FacultyDashboard() {
               <RefreshCw className={`w-3.5 h-3.5 ${loadingSessions ? 'animate-spin' : ''}`} />
               <span>Refresh Live Rooms</span>
             </button>
+          </div>
+
+          {/* Flexible Live Search & Monitoring Toolbar */}
+          <div className="p-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl space-y-3 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={sessionSearch}
+                  onChange={(e) => setSessionSearch(e.target.value)}
+                  placeholder="Search live interviews by Room #, student name, roll number, track title, level..."
+                  className="w-full pl-10 pr-9 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                />
+                {sessionSearch && (
+                  <button
+                    onClick={() => setSessionSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Live Filter Status & Quick Tag Badges */}
+            <div className="flex items-center justify-between text-xs gap-2 flex-wrap pt-1 border-t border-[var(--border)]">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-[var(--text-muted)] font-medium">Quick Filters:</span>
+                {['Backend', 'Frontend', 'Round 1', 'Level 1'].map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSessionSearch(sessionSearch === tag ? '' : tag)}
+                    className={`px-2.5 py-0.5 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+                      sessionSearch.toLowerCase() === tag.toLowerCase()
+                        ? 'bg-emerald-500 text-white font-bold shadow-xs'
+                        : 'bg-[var(--bg)] border border-[var(--border)] text-[var(--text-secondary)] hover:border-emerald-500/50'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              <span className="text-[11px] font-mono text-[var(--text-secondary)]">
+                Showing <strong className="text-emerald-500 font-bold">{filteredLiveSessions.length}</strong> of {liveSessions.length} live rooms
+              </span>
+            </div>
           </div>
 
           {loadingSessions ? (
@@ -395,9 +468,23 @@ export default function FacultyDashboard() {
                 <span>View Scheduled Slots</span>
               </button>
             </div>
+          ) : filteredLiveSessions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-10 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl text-center space-y-2">
+              <Search className="w-8 h-8 text-[var(--text-muted)] mb-1" />
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">No live interviews match "{sessionSearch}"</h3>
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm">
+                Try searching by Room #, student name, roll number, or assessment track.
+              </p>
+              <button
+                onClick={() => setSessionSearch('')}
+                className="mt-2 px-3 py-1.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold text-[var(--text-primary)] hover:border-emerald-500 cursor-pointer"
+              >
+                Clear Search Filter
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {liveSessions.map((s) => (
+              {filteredLiveSessions.map((s) => (
                 <div
                   key={s.id}
                   className="p-5 bg-[var(--bg-card)] border-2 border-emerald-500/40 hover:border-emerald-500 rounded-2xl shadow-md transition-all flex flex-col justify-between space-y-4 relative overflow-hidden"
@@ -415,7 +502,7 @@ export default function FacultyDashboard() {
 
                     <span className="text-[11px] font-mono text-[var(--text-secondary)] flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>{calculateDuration(s.started_at || s.created_at, null)}</span>
+                      <span>{calculateDuration(getSessionStartTime(s), null)}</span>
                     </span>
                   </div>
 
