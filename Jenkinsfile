@@ -10,7 +10,7 @@ pipeline {
     }
 
     environment {
-        APP_DIR = "/opt/mock-mate"
+        APP_DIR = "/mnt/e/Projects/mock-mate"
         DOCKER_BUILDKIT = "1"
         COMPOSE_DOCKER_CLI_BUILD = "1"
     }
@@ -27,12 +27,14 @@ pipeline {
             steps {
                 echo '⚙️ Validating deployment environment and secrets...'
                 script {
-                    // Ensure .env file exists in the workspace
                     sh '''
-                        if [ ! -f ".env" ]; then
-                            if [ -f ".env.example" ]; then
-                                echo "⚠️ .env not found. Creating .env from .env.example..."
-                                cp .env.example .env
+                        mkdir -p "${APP_DIR}"
+                        cp -Rf . "${APP_DIR}/" || true
+
+                        if [ ! -f "${APP_DIR}/.env" ]; then
+                            if [ -f "${APP_DIR}/.env.example" ]; then
+                                echo "⚠️ .env not found in ${APP_DIR}. Creating from .env.example..."
+                                cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
                             else
                                 echo "❌ Error: Neither .env nor .env.example found!"
                                 exit 1
@@ -48,10 +50,10 @@ pipeline {
                 echo '🧪 Running Go backend tests...'
                 sh '''
                     if command -v go >/dev/null 2>&1; then
-                        (cd server && GOWORK=off go test -v ./... -timeout 60s)
+                        (cd "${APP_DIR}/server" && GOWORK=off go test -v ./... -timeout 60s)
                     else
-                        echo "⚠️ Go binary not found on Jenkins host. Running tests inside Go Docker container..."
-                        docker run --rm -v "$(pwd)/server:/app" -w /app -e GOWORK=off golang:1.24-alpine go test -v ./... -timeout 60s || true
+                        echo "⚠️ Running tests inside Go Docker container..."
+                        docker run --rm -v "${APP_DIR}/server:/app" -w /app -e GOWORK=off golang:1.24-alpine go test -v ./... -timeout 60s || true
                     fi
                 '''
             }
@@ -61,18 +63,11 @@ pipeline {
             steps {
                 echo '🚀 Building images and rolling out Docker Compose services...'
                 sh '''
-                    run_compose() {
-                        if command -v docker-compose >/dev/null 2>&1; then
-                            docker-compose "$@"
-                        elif docker compose version >/dev/null 2>&1; then
-                            docker compose "$@"
-                        else
-                            echo "⚠️ Neither docker-compose nor 'docker compose' plugin found. Running via Docker image..."
-                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd):/app" -w /app docker/compose:1.29.2 "$@"
-                        fi
-                    }
-
-                    run_compose -f docker-compose.yml up -d --build --remove-orphans
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v "${APP_DIR}:/app" \
+                        -w /app \
+                        docker/compose:1.29.2 up -d --build --remove-orphans
                 '''
             }
         }
@@ -81,21 +76,15 @@ pipeline {
             steps {
                 echo '🩺 Verifying services health status...'
                 sh '''
-                    run_compose() {
-                        if command -v docker-compose >/dev/null 2>&1; then
-                            docker-compose "$@"
-                        elif docker compose version >/dev/null 2>&1; then
-                            docker compose "$@"
-                        else
-                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd):/app" -w /app docker/compose:1.29.2 "$@"
-                        fi
-                    }
-
                     echo "Waiting 15 seconds for containers to stabilize..."
                     sleep 15
 
                     # 1. Check all Docker Compose services status
-                    run_compose ps
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v "${APP_DIR}:/app" \
+                        -w /app \
+                        docker/compose:1.29.2 ps
 
                     # 2. Check Backend API Health
                     echo "Checking Backend API on port 8080..."
@@ -128,9 +117,8 @@ pipeline {
             steps {
                 echo '🧹 Pruning old unused Docker build cache & dangling images...'
                 sh '''
-                    # Clean unused build cache older than 48h to prevent disk exhaustion
                     docker image prune -f
-                    docker builder prune -f --filter "until=48h"
+                    docker builder prune -f --filter "until=48h" || true
                 '''
             }
         }
