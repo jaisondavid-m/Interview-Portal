@@ -51,7 +51,7 @@ pipeline {
                         (cd server && go test -v ./... -timeout 60s)
                     else
                         echo "⚠️ Go binary not found on Jenkins host. Running tests inside Go Docker container..."
-                        docker run --rm -v "$(pwd)/server:/app" -w /app golang:1.24-alpine go test -v ./... -timeout 60s || true
+                        docker run --rm -v "$(pwd):/app" -w /app/server golang:1.24-alpine go test -v ./... -timeout 60s || true
                     fi
                 '''
             }
@@ -61,8 +61,17 @@ pipeline {
             steps {
                 echo '🚀 Building images and rolling out Docker Compose services...'
                 sh '''
-                    # Build and start services in detached mode with orphaned container cleanup
-                    docker compose -f docker-compose.yml up -d --build --remove-orphans
+                    COMPOSE_CMD=""
+                    if command -v docker-compose >/dev/null 2>&1; then
+                        COMPOSE_CMD="docker-compose"
+                    elif docker compose version >/dev/null 2>&1; then
+                        COMPOSE_CMD="docker compose"
+                    else
+                        echo "❌ Neither docker-compose nor docker compose plugin found!"
+                        exit 1
+                    fi
+                    echo "Using Compose tool: $COMPOSE_CMD"
+                    $COMPOSE_CMD -f docker-compose.yml up -d --build --remove-orphans
                 '''
             }
         }
@@ -71,11 +80,16 @@ pipeline {
             steps {
                 echo '🩺 Verifying services health status...'
                 sh '''
+                    COMPOSE_CMD="docker-compose"
+                    if ! command -v docker-compose >/dev/null 2>&1; then
+                        COMPOSE_CMD="docker compose"
+                    fi
+
                     echo "Waiting 15 seconds for containers to stabilize..."
                     sleep 15
 
                     # 1. Check all Docker Compose services status
-                    docker compose ps
+                    $COMPOSE_CMD ps
 
                     # 2. Check Backend API Health
                     echo "Checking Backend API on port 8080..."
