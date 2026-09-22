@@ -33,11 +33,12 @@ export default function AdminBackup() {
     setLoading(true);
     try {
       const res = await api.get('/admin/backup/stats');
-      if (res.data?.data) {
-        setStats(res.data.data);
+      const statsData = res?.data || res;
+      if (statsData) {
+        setStats(statsData);
         // Default select all tables
-        if (res.data.data.tables) {
-          setSelectedTables(res.data.data.tables.map(t => t.name));
+        if (statsData.tables) {
+          setSelectedTables(statsData.tables.map(t => t.name));
         }
       }
     } catch (err) {
