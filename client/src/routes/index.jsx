@@ -40,9 +40,9 @@ import LabDashboard from '../Pages/Labs/LabDashboard';
 import LabWorkspace from '../Pages/Labs/LabWorkspace';
 import LabRecordPreview from '../Pages/Labs/LabRecordPreview';
 import LabInchargeDashboard from '../Pages/Labs/LabInchargeDashboard';
-import AdminLabMapping from '../Pages/Admin/AdminLabMapping';
 import AdminLabPdfViewer from '../Pages/Admin/AdminLabPdfViewer';
 import AdminLabConfig from '../Pages/Admin/AdminLabConfig';
+import AdminLabCourseExperiments from '../Pages/Admin/AdminLabCourseExperiments';
 
 // Route Guards & Error Boundary
 import ProtectedRoute from '../Components/ProtectedRoute';
@@ -386,7 +386,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'admin/labs/mapping',
-            element: <AdminLabMapping />,
+            element: <Navigate to="/admin/labs/config" replace />,
           },
           {
             path: 'admin/labs/pdf-preview',
@@ -395,6 +395,10 @@ export const router = createBrowserRouter([
           {
             path: 'admin/labs/config',
             element: <AdminLabConfig />,
+          },
+          {
+            path: 'admin/labs/courses/:courseId/experiments',
+            element: <AdminLabCourseExperiments />,
           },
           {
             path: 'slots/my-bookings',
