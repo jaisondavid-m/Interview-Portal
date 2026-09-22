@@ -301,10 +301,12 @@ func SetupRouter() *gin.Engine {
 			labs.PUT("/courses/:id", controllers.UpdateLabCourse)
 			labs.DELETE("/courses/:id", controllers.DeleteLabCourse)
 			labs.GET("/courses/:courseId/experiments", controllers.GetCourseExperimentsForStudent)
+			labs.GET("/courses/:courseId/pdf-template", controllers.GetStudentCoursePdfTemplate)
 			labs.GET("/experiment/:expId", controllers.GetExperimentDetails)
 			labs.POST("/experiment/:expId/run", controllers.RunExperimentCode)
 			labs.POST("/experiment/:expId/submit", controllers.SubmitExperimentCode)
 			labs.GET("/record-pdf/:courseId/student/:studentId", controllers.DownloadStudentRecordPDF)
+			labs.POST("/record-pdf/custom", controllers.DownloadCustomLabRecordPDF)
 		}
 
 		// Faculty Lab Incharge Routes
@@ -329,6 +331,9 @@ func SetupRouter() *gin.Engine {
 			adminLabs.DELETE("/courses/:id", controllers.DeleteLabCourse)
 			adminLabs.GET("/courses/:courseId/experiments", controllers.AdminGetCourseExperiments)
 			adminLabs.POST("/courses/:courseId/experiments", controllers.AdminCreateExperiment)
+			adminLabs.GET("/courses/:courseId/pdf-template", controllers.AdminGetCoursePdfTemplate)
+			adminLabs.POST("/courses/:courseId/pdf-template", controllers.AdminSaveCoursePdfTemplate)
+			adminLabs.POST("/record-pdf/custom", controllers.DownloadCustomLabRecordPDF)
 			adminLabs.PUT("/experiments/:id", controllers.AdminUpdateExperiment)
 			adminLabs.DELETE("/experiments/:id", controllers.AdminDeleteExperiment)
 			adminLabs.POST("/mappings", controllers.CreateLabMapping)

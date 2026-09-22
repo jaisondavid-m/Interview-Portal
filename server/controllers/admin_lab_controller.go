@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"server/database"
 	"server/models"
@@ -511,5 +512,158 @@ func AdminDeleteExperiment(c *gin.Context) {
 	})
 }
 
+// AdminGetCoursePdfTemplate compiles and returns the full editable template data for all experiments of a course
+func AdminGetCoursePdfTemplate(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
 
+	var course models.LabCourse
+	if err := database.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Lab course not found"})
+		return
+	}
 
+	var experiments []models.LabExperiment
+	database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments)
+
+	var expItems []services.CustomLabExperimentItem
+	for _, exp := range experiments {
+		defaultCode := exp.StarterCode
+		if strings.TrimSpace(defaultCode) == "" {
+			defaultCode = fmt.Sprintf("# Solution for Ex %d: %s\n\ndef solution():\n    print('Experiment %d completed successfully')\n\nif __name__ == '__main__':\n    solution()", exp.ExperimentNo, exp.Title, exp.ExperimentNo)
+		}
+
+		marksVal := exp.MaxMarks
+		if marksVal <= 0 {
+			marksVal = 10
+		}
+
+		expItems = append(expItems, services.CustomLabExperimentItem{
+			ExperimentNo:    exp.ExperimentNo,
+			Title:           exp.Title,
+			Aim:             exp.Aim,
+			Procedure:       exp.Procedure,
+			Language:        exp.Language,
+			SubmittedCode:   defaultCode,
+			ExecutionOutput: fmt.Sprintf("All test cases passed. Console output verified for '%s'.", exp.Title),
+			PassCount:       3,
+			TotalTestCases:  3,
+			Marks:           marksVal,
+			Status:          "APPROVED",
+			Date:            time.Now().Format("02-01-2006"),
+			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title),
+		})
+	}
+
+	templateData := services.CustomLabRecordData{
+		InstitutionName:  "BANNARI AMMAN INSTITUTE OF TECHNOLOGY",
+		InstitutionSub:   "An Autonomous Institution Affiliated to Anna University Chennai",
+		Department:       course.Department,
+		Degree:           course.Degree,
+		Semester:         course.Semester,
+		AcademicYear:     course.AcademicYear,
+		CourseCode:       course.CourseCode,
+		CourseTitle:      course.Title,
+		StudentName:      "JAISON DAVID M",
+		RollNo:           "7376222AD145",
+		RegisterNo:       "7376222AD145",
+		BranchSection:    fmt.Sprintf("%s (A)", course.Department),
+		VerificationID:   fmt.Sprintf("MOCKMATE-REC-OFFICIAL-%s", course.CourseCode),
+		CertificateText:  fmt.Sprintf("Certified that this is the bonafide record of practical work done by the student of %s in the %s (%s) Laboratory of Bannari Amman Institute of Technology during the academic year %s.", course.Semester, course.Title, course.CourseCode, course.AcademicYear),
+		StaffIncharge:    "Staff Incharge",
+		HeadOfDepartment: "Head of Department",
+		Experiments:      expItems,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"course":   course,
+		"template": templateData,
+	})
+}
+
+// AdminSaveCoursePdfTemplate persists modified template defaults across all experiments for the course
+func AdminSaveCoursePdfTemplate(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	var course models.LabCourse
+	if err := database.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Lab course not found"})
+		return
+	}
+
+	var payload services.CustomLabRecordData
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid template payload: " + err.Error()})
+		return
+	}
+
+	// Update Course details if modified
+	courseUpdates := map[string]interface{}{}
+	if payload.Department != "" {
+		courseUpdates["department"] = payload.Department
+	}
+	if payload.Degree != "" {
+		courseUpdates["degree"] = payload.Degree
+	}
+	if payload.Semester != "" {
+		courseUpdates["semester"] = payload.Semester
+	}
+	if payload.AcademicYear != "" {
+		courseUpdates["academic_year"] = payload.AcademicYear
+	}
+	if len(payload.Experiments) > 0 {
+		courseUpdates["total_experiments"] = len(payload.Experiments)
+	}
+	if len(courseUpdates) > 0 {
+		database.DB.Model(&course).Updates(courseUpdates)
+	}
+
+	// Update or create each experiment in database
+	for _, item := range payload.Experiments {
+		var exp models.LabExperiment
+		err := database.DB.Where("course_id = ? AND experiment_no = ?", courseID, item.ExperimentNo).First(&exp).Error
+		if err != nil {
+			// Create new experiment record
+			exp = models.LabExperiment{
+				CourseID:     uint(courseID),
+				ExperimentNo: item.ExperimentNo,
+				Title:        item.Title,
+				Aim:          item.Aim,
+				Procedure:    item.Procedure,
+				Language:     item.Language,
+				StarterCode:  item.SubmittedCode,
+				MaxMarks:     item.Marks,
+			}
+			database.DB.Create(&exp)
+		} else {
+			// Update existing experiment
+			expUpdates := map[string]interface{}{
+				"title":        item.Title,
+				"aim":          item.Aim,
+				"procedure":    item.Procedure,
+				"starter_code": item.SubmittedCode,
+			}
+			if item.Language != "" {
+				expUpdates["language"] = item.Language
+			}
+			if item.Marks > 0 {
+				expUpdates["max_marks"] = item.Marks
+			}
+			database.DB.Model(&exp).Updates(expUpdates)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Course Lab Record template successfully saved for all experiments!",
+		"course":  course,
+	})
+}

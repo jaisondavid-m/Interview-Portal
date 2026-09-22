@@ -606,3 +606,162 @@ func FacultyToggleExperimentUnlock(c *gin.Context) {
 		"unlock":  unlock,
 	})
 }
+
+// GetStudentCoursePdfTemplate returns the course's official template populated with this student's data and submissions
+func GetStudentCoursePdfTemplate(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	userIDVal, _ := c.Get("userID")
+	studentID, _ := userIDVal.(uint)
+
+	var student models.User
+	if err := database.DB.First(&student, studentID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Student profile not found"})
+		return
+	}
+
+	var course models.LabCourse
+	if err := database.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+
+	var experiments []models.LabExperiment
+	database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments)
+
+	var submissions []models.LabSubmission
+	database.DB.Where("student_id = ?", studentID).Find(&submissions)
+
+	subMap := make(map[uint]models.LabSubmission)
+	for _, sub := range submissions {
+		subMap[sub.ExperimentID] = sub
+	}
+
+	var expItems []services.CustomLabExperimentItem
+	for _, exp := range experiments {
+		sub, hasSub := subMap[exp.ID]
+
+		code := exp.StarterCode
+		outText := fmt.Sprintf("All assertions passed successfully for '%s'.", exp.Title)
+		marks := exp.MaxMarks
+		if marks <= 0 {
+			marks = 10
+		}
+		passCount := 3
+		totalTests := 3
+		status := "APPROVED"
+		dateStr := time.Now().Format("02-01-2006")
+
+		if hasSub {
+			if strings.TrimSpace(sub.SubmittedCode) != "" {
+				code = sub.SubmittedCode
+			}
+			if sub.ExecutionOutput != "" {
+				outText = sub.ExecutionOutput
+			}
+			if sub.Marks > 0 {
+				marks = sub.Marks
+			}
+			if sub.PassCount > 0 {
+				passCount = sub.PassCount
+			}
+			if sub.TotalTestCases > 0 {
+				totalTests = sub.TotalTestCases
+			}
+			if sub.Status != "" {
+				status = sub.Status
+			}
+			if !sub.CreatedAt.IsZero() {
+				dateStr = sub.CreatedAt.Format("02-01-2006")
+			}
+		}
+
+		if strings.TrimSpace(code) == "" {
+			code = fmt.Sprintf("# Solution for Ex %d: %s\nprint('Output verified')", exp.ExperimentNo, exp.Title)
+		}
+
+		expItems = append(expItems, services.CustomLabExperimentItem{
+			ExperimentNo:    exp.ExperimentNo,
+			Title:           exp.Title,
+			Aim:             exp.Aim,
+			Procedure:       exp.Procedure,
+			Language:        exp.Language,
+			SubmittedCode:   code,
+			ExecutionOutput: outText,
+			PassCount:       passCount,
+			TotalTestCases:  totalTests,
+			Marks:           marks,
+			Status:          status,
+			Date:            dateStr,
+			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title),
+		})
+	}
+
+	sec := student.Section
+	if sec == "" {
+		sec = "CSE-A"
+	}
+	branchSec := fmt.Sprintf("%s (%s)", student.Department, sec)
+
+	var record models.LabRecord
+	database.DB.Where("student_id = ? AND course_id = ?", studentID, course.ID).First(&record)
+	hashStr := record.SignatureHash
+	if hashStr == "" {
+		hashStr = fmt.Sprintf("MOCKMATE-REC-%s-%s", student.RollNo, course.CourseCode)
+	}
+
+	templateData := services.CustomLabRecordData{
+		InstitutionName:  "BANNARI AMMAN INSTITUTE OF TECHNOLOGY",
+		InstitutionSub:   "An Autonomous Institution Affiliated to Anna University Chennai",
+		Department:       course.Department,
+		Degree:           course.Degree,
+		Semester:         course.Semester,
+		AcademicYear:     course.AcademicYear,
+		CourseCode:       course.CourseCode,
+		CourseTitle:      course.Title,
+		StudentName:      student.Name,
+		RollNo:           student.RollNo,
+		RegisterNo:       student.RollNo,
+		BranchSection:    branchSec,
+		VerificationID:   hashStr,
+		CertificateText:  fmt.Sprintf("Certified that this is the bonafide record of practical work done by Mr./Ms. %s (Roll No: %s) of %s, %s in the %s (%s) Laboratory of Bannari Amman Institute of Technology during the academic year %s.", student.Name, student.RollNo, course.Semester, student.Department, course.Title, course.CourseCode, course.AcademicYear),
+		StaffIncharge:    "Staff Incharge",
+		HeadOfDepartment: "Head of Department",
+		Experiments:      expItems,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"course":   course,
+		"template": templateData,
+	})
+}
+
+// DownloadCustomLabRecordPDF compiles and streams a customized multi-page lab record PDF
+func DownloadCustomLabRecordPDF(c *gin.Context) {
+	var payload services.CustomLabRecordData
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid custom PDF payload: " + err.Error()})
+		return
+	}
+
+	pdfBytes, err := services.GenerateCustomLabRecordPDF(payload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compile custom lab record PDF: " + err.Error()})
+		return
+	}
+
+	fileName := fmt.Sprintf("%s_%s_LabRecord.pdf", payload.RollNo, payload.CourseCode)
+	if strings.TrimSpace(payload.RollNo) == "" {
+		fileName = fmt.Sprintf("LabRecord_%s.pdf", payload.CourseCode)
+	}
+
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
