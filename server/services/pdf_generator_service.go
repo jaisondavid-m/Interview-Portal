@@ -17,19 +17,22 @@ var bitLogoBytes []byte
 
 // CustomLabExperimentItem holds per-experiment data for customized multi-page PDF generation
 type CustomLabExperimentItem struct {
-	ExperimentNo    int    `json:"experiment_no"`
-	Title           string `json:"title"`
-	Aim             string `json:"aim"`
-	Procedure       string `json:"procedure"`
-	Language        string `json:"language"`
-	SubmittedCode   string `json:"submitted_code"`
-	ExecutionOutput string `json:"execution_output"`
-	PassCount       int    `json:"pass_count"`
-	TotalTestCases  int    `json:"total_test_cases"`
-	Marks           int    `json:"marks"`
-	Status          string `json:"status"`
-	Date            string `json:"date"`
-	ResultText      string `json:"result_text"`
+	ExperimentNo    int      `json:"experiment_no"`
+	PageType        string   `json:"page_type"` // "experiment", "observation", "viva", "notes"
+	Title           string   `json:"title"`
+	Aim             string   `json:"aim"`
+	Procedure       string   `json:"procedure"`
+	Language        string   `json:"language"`
+	SubmittedCode   string   `json:"submitted_code"`
+	ExecutionOutput string   `json:"execution_output"`
+	PassCount       int      `json:"pass_count"`
+	TotalTestCases  int      `json:"total_test_cases"`
+	Marks           int      `json:"marks"`
+	Status          string   `json:"status"`
+	Date            string   `json:"date"`
+	ResultText      string   `json:"result_text"`
+	Notes           string   `json:"notes"`
+	SectionOrder    []string `json:"section_order"`
 }
 
 // CustomLabRecordData holds the complete multi-page document payload
@@ -50,13 +53,13 @@ type CustomLabRecordData struct {
 	CertificateText  string                    `json:"certificate_text"`
 	StaffIncharge    string                    `json:"staff_incharge"`
 	HeadOfDepartment string                    `json:"head_of_department"`
+	IsDuplex         bool                      `json:"is_duplex"`
 	Experiments      []CustomLabExperimentItem `json:"experiments"`
 }
 
 // GenerateCustomLabRecordPDF compiles a full multi-page lab record PDF from a custom payload
 func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(15, 15, 15)
 	pdf.SetAutoPageBreak(true, 15)
 
 	// Register College Banner Logo
@@ -64,26 +67,60 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.RegisterImageOptionsReader("bit_logo", gofpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(bitLogoBytes))
 	}
 
-	// Helper for drawing double page borders
-	drawPageBorder := func() {
-		pdf.SetLineWidth(0.6)
-		pdf.SetDrawColor(40, 60, 90)
-		pdf.Rect(10, 10, 190, 277, "D")
+	pageCount := 0
 
-		pdf.SetLineWidth(0.2)
-		pdf.SetDrawColor(120, 140, 160)
-		pdf.Rect(11.5, 11.5, 187, 274, "D")
+	// Helper for drawing duplex/single-sided page borders
+	drawPageBorder := func() {
+		pageCount++
+		isOdd := pageCount%2 != 0
+
+		if data.IsDuplex {
+			if isOdd {
+				// Right page (Odd): gutter on left
+				pdf.SetMargins(20, 15, 12)
+				pdf.SetLineWidth(0.6)
+				pdf.SetDrawColor(40, 60, 90)
+				pdf.Rect(18, 10, 180, 277, "D")
+
+				pdf.SetLineWidth(0.2)
+				pdf.SetDrawColor(120, 140, 160)
+				pdf.Rect(19.5, 11.5, 177, 274, "D")
+			} else {
+				// Left page (Even): gutter on right
+				pdf.SetMargins(12, 15, 20)
+				pdf.SetLineWidth(0.6)
+				pdf.SetDrawColor(40, 60, 90)
+				pdf.Rect(12, 10, 180, 277, "D")
+
+				pdf.SetLineWidth(0.2)
+				pdf.SetDrawColor(120, 140, 160)
+				pdf.Rect(13.5, 11.5, 177, 274, "D")
+			}
+		} else {
+			pdf.SetMargins(15, 15, 15)
+			pdf.SetLineWidth(0.6)
+			pdf.SetDrawColor(40, 60, 90)
+			pdf.Rect(10, 10, 190, 277, "D")
+
+			pdf.SetLineWidth(0.2)
+			pdf.SetDrawColor(120, 140, 160)
+			pdf.Rect(11.5, 11.5, 187, 274, "D")
+		}
 	}
 
 	// ----------------------------------------------------
-	// PAGE 1: COVER PAGE & BONAFIDE CERTIFICATE
+	// PAGE 1: COVER PAGE & BONAFIDE CERTIFICATE (Odd / Right)
 	// ----------------------------------------------------
 	pdf.AddPage()
 	drawPageBorder()
 
 	// 1. Header Banner Logo
 	if len(bitLogoBytes) > 0 {
-		pdf.ImageOptions("bit_logo", 18, 14, 174, 22, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+		logoX := 18.0
+		if data.IsDuplex {
+			logoX = 22.0
+		}
+		pdf.ImageOptions("bit_logo", logoX, 14, 168, 22, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
 		pdf.SetY(38)
 	} else {
 		pdf.SetY(18)
@@ -147,16 +184,20 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf.Ln(5)
 
 	// Student Profile Box (Classic Clean 2-Column Table)
+	boxX := 20.0
+	if data.IsDuplex {
+		boxX = 22.0
+	}
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(200, 212, 225)
 	pdf.SetLineWidth(0.3)
-	pdf.Rect(20, pdf.GetY(), 170, 44, "FD")
+	pdf.Rect(boxX, pdf.GetY(), 166, 44, "FD")
 
 	boxStartY := pdf.GetY() + 3
 	pdf.SetY(boxStartY)
 
 	drawRow := func(label, val string) {
-		pdf.SetX(24)
+		pdf.SetX(boxX + 4)
 		pdf.SetFont("Arial", "B", 9.5)
 		pdf.SetTextColor(50, 60, 80)
 		pdf.Cell(45, 6, label)
@@ -211,8 +252,8 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 
 	pdf.SetFont("Arial", "", 9.5)
 	pdf.SetTextColor(40, 45, 55)
-	pdf.SetX(22)
-	pdf.MultiCell(166, 5.2, certText, "", "J", false)
+	pdf.SetX(boxX + 2)
+	pdf.MultiCell(162, 5.2, certText, "", "J", false)
 	pdf.Ln(10)
 
 	// Official Signatures Grid
@@ -243,7 +284,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf.CellFormat(45, 4, "(Evaluation)", "", 1, "C", false, 0, "")
 
 	// ----------------------------------------------------
-	// PAGE 2: INDEX / LIST OF EXPERIMENTS
+	// PAGE 2: INDEX / LIST OF EXPERIMENTS (Even / Left)
 	// ----------------------------------------------------
 	pdf.AddPage()
 	drawPageBorder()
@@ -318,11 +359,16 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	}
 
 	// ----------------------------------------------------
-	// PAGES 3+: ALL EXPERIMENTS (1 TO N)
+	// PAGES 3+: EXPERIMENTS & CUSTOM SHEETS (1 TO N)
 	// ----------------------------------------------------
 	for _, exp := range data.Experiments {
 		pdf.AddPage()
 		drawPageBorder()
+
+		pType := strings.ToLower(exp.PageType)
+		if pType == "" {
+			pType = "experiment"
+		}
 
 		// Running Header
 		pdf.SetY(15)
@@ -335,6 +381,62 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
 		pdf.Ln(3)
 
+		if pType == "observation" {
+			// Render Blank Observation Page
+			pdf.SetFont("Arial", "B", 11)
+			pdf.SetFillColor(235, 242, 250)
+			pdf.SetDrawColor(180, 200, 225)
+			pdf.SetTextColor(20, 45, 90)
+			pdf.CellFormat(0, 7.5, fmt.Sprintf("  ROUGH WORK & OBSERVATION SHEET — EX %02d", exp.ExperimentNo), "1", 1, "L", true, 0, "")
+			pdf.Ln(3)
+
+			if exp.Notes != "" {
+				pdf.SetFont("Arial", "", 9.5)
+				pdf.SetTextColor(40, 50, 60)
+				pdf.MultiCell(0, 5, exp.Notes, "", "L", false)
+				pdf.Ln(3)
+			}
+
+			// Draw clean notebook grid lines for calculation
+			pdf.SetDrawColor(220, 230, 240)
+			pdf.SetLineWidth(0.2)
+			for y := pdf.GetY() + 5; y < 260; y += 8 {
+				pdf.Line(20, y, 190, y)
+			}
+			pdf.SetY(262)
+			pdf.SetFont("Arial", "I", 8)
+			pdf.SetTextColor(120, 130, 140)
+			pdf.CellFormat(0, 5, "Staff Signature for Observation: ___________________", "", 1, "R", false, 0, "")
+			continue
+		}
+
+		if pType == "viva" {
+			// Render Viva Voce Questions Page
+			pdf.SetFont("Arial", "B", 11)
+			pdf.SetFillColor(235, 242, 250)
+			pdf.SetDrawColor(180, 200, 225)
+			pdf.SetTextColor(20, 45, 90)
+			pdf.CellFormat(0, 7.5, fmt.Sprintf("  VIVA VOCE QUESTIONS & EVALUATION — EX %02d: %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
+			pdf.Ln(3)
+
+			vivaContent := exp.Notes
+			if vivaContent == "" {
+				vivaContent = fmt.Sprintf("1. What is the time and space complexity of the algorithm used in %s?\n2. Explain edge cases handled in your code.\n3. How can this solution be optimized for larger input constraints?", exp.Title)
+			}
+			pdf.SetFont("Arial", "", 9.5)
+			pdf.SetTextColor(40, 45, 55)
+			pdf.MultiCell(0, 5.5, vivaContent, "", "L", false)
+			pdf.Ln(6)
+
+			pdf.SetFont("Arial", "B", 8)
+			pdf.SetFillColor(245, 248, 252)
+			pdf.SetDrawColor(190, 205, 220)
+			pdf.CellFormat(58, 5.5, fmt.Sprintf("Viva Marks: %d / 10", exp.Marks), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(60, 5.5, "Examiner Sign: VERIFIED [DIGITAL]", "1", 1, "C", true, 0, "")
+			continue
+		}
+
+		// Default Standard Experiment Sheet
 		// Experiment Title Bar
 		pdf.SetFont("Arial", "B", 10.5)
 		pdf.SetFillColor(235, 242, 250)
@@ -481,6 +583,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.CellFormat(58, 5.5, fmt.Sprintf("Marks Awarded: %d / 10", marksAwarded), "1", 0, "C", true, 0, "")
 		pdf.CellFormat(60, 5.5, "Staff Sign: VERIFIED [DIGITAL]", "1", 1, "C", true, 0, "")
 	}
+
 
 	var buf bytes.Buffer
 	err := pdf.Output(&buf)
