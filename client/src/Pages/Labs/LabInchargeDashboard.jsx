@@ -9,7 +9,12 @@ import {
   AlertCircle,
   Code2,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  Unlock,
+  ShieldCheck,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -23,23 +28,111 @@ export default function LabInchargeDashboard() {
   const [toast, setToast] = useState(null);
   const [expandedCode, setExpandedCode] = useState(null);
 
+  // ── Unlock Matrix State (Tab 3) ─────────────────────────────────────────────
+  const [unlockData, setUnlockData] = useState({
+    courses: [],
+    mappings: [],
+    unlocks: [],
+    experiments: [],
+    sections: [],
+  });
+  const [selectedUnlockCourseId, setSelectedUnlockCourseId] = useState('');
+  const [selectedUnlockSection, setSelectedUnlockSection] = useState('ALL');
+  const [loadingUnlocks, setLoadingUnlocks] = useState(false);
+  const [togglingExpId, setTogglingExpId] = useState(null);
+
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
 
-  useEffect(() => { fetchQueue(); }, []);
+  useEffect(() => {
+    fetchQueue();
+    fetchUnlockMatrix();
+  }, []);
 
   const fetchQueue = async () => {
     try {
       setLoading(true);
       const res = await api.get('/lab-incharge/queue');
-      setSubmissions(res.data?.submissions || []);
-      setMappings(res.data?.mappings || []);
+      setSubmissions(res?.submissions || []);
+      setMappings(res?.mappings || []);
     } catch {
       setError('Could not load student lab submissions.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUnlockMatrix = async () => {
+    try {
+      setLoadingUnlocks(true);
+      const res = await api.get('/lab-incharge/unlocks');
+      setUnlockData(res || { courses: [], mappings: [], unlocks: [], experiments: [], sections: [] });
+      if (res?.courses?.length > 0 && !selectedUnlockCourseId) {
+        setSelectedUnlockCourseId(String(res.courses[0].id));
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setLoadingUnlocks(false);
+    }
+  };
+
+  const handleToggleUnlock = async (courseId, expId, section, newStatus) => {
+    try {
+      setTogglingExpId(expId);
+      await api.post('/lab-incharge/unlocks/toggle', {
+        course_id: Number(courseId),
+        experiment_id: Number(expId),
+        section: section || 'ALL',
+        is_unlocked: newStatus,
+      });
+      showToast(
+        newStatus
+          ? `Experiment released for section ${section}!`
+          : `Experiment locked for section ${section}!`,
+        'success'
+      );
+      fetchUnlockMatrix();
+    } catch {
+      showToast('Failed to update unlock status.', 'error');
+    } finally {
+      setTogglingExpId(null);
+    }
+  };
+
+  const handleBulkToggle = async (unlockAll) => {
+    const activeCourseId = Number(selectedUnlockCourseId);
+    const activeSection = selectedUnlockSection;
+    const expList = unlockData.experiments.filter((e) => e.course_id === activeCourseId);
+
+    if (expList.length === 0) {
+      showToast('No experiments to update.', 'error');
+      return;
+    }
+
+    try {
+      setLoadingUnlocks(true);
+      for (const exp of expList) {
+        await api.post('/lab-incharge/unlocks/toggle', {
+          course_id: activeCourseId,
+          experiment_id: exp.id,
+          section: activeSection,
+          is_unlocked: unlockAll,
+        });
+      }
+      showToast(
+        unlockAll
+          ? `All ${expList.length} experiments released for ${activeSection}!`
+          : `All experiments locked for ${activeSection}!`,
+        'success'
+      );
+      fetchUnlockMatrix();
+    } catch {
+      showToast('Failed to bulk update experiment unlock status.', 'error');
+    } finally {
+      setLoadingUnlocks(false);
     }
   };
 
@@ -49,7 +142,7 @@ export default function LabInchargeDashboard() {
         submission_id: subId,
         status,
         marks,
-        faculty_notes: status === 'APPROVED' ? 'Verified by Lab Incharge' : 'Revision required'
+        faculty_notes: status === 'APPROVED' ? 'Verified by Lab Incharge' : 'Revision required',
       });
       showToast('Experiment status updated successfully.', 'success');
       fetchQueue();
@@ -62,7 +155,7 @@ export default function LabInchargeDashboard() {
     try {
       await api.post('/lab-incharge/verify-semester', {
         student_id: studentId,
-        course_id: courseId
+        course_id: courseId,
       });
       showToast('Entire semester record approved!', 'success');
       fetchQueue();
@@ -90,6 +183,7 @@ export default function LabInchargeDashboard() {
   const TABS = [
     { key: 'single', label: 'Individual Experiments' },
     { key: 'semester', label: 'Semester Batch Review' },
+    { key: 'unlocks', label: 'Experiment Release & Unlocking' },
   ];
 
   return (
@@ -134,23 +228,31 @@ export default function LabInchargeDashboard() {
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            {tab.key === 'single' ? <FileText className="w-3.5 h-3.5" /> : <CheckCheck className="w-3.5 h-3.5" />}
+            {tab.key === 'single' ? (
+              <FileText className="w-3.5 h-3.5" />
+            ) : tab.key === 'semester' ? (
+              <CheckCheck className="w-3.5 h-3.5" />
+            ) : (
+              <ShieldCheck className="w-3.5 h-3.5" />
+            )}
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter by student name, roll number, or experiment..."
-          className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-10 pr-4 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
-        />
-      </div>
+      {/* Search (for single & semester modes) */}
+      {activeTab !== 'unlocks' && (
+        <div className="relative">
+          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by student name, roll number, or experiment..."
+            className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-10 pr-4 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
+          />
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (
@@ -305,6 +407,196 @@ export default function LabInchargeDashboard() {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      {/* ================================================================ */}
+      {/* Experiment Release & Unlocking Mode (Tab 3)                      */}
+      {/* ================================================================ */}
+      {!loading && !error && activeTab === 'unlocks' && (
+        <div className="space-y-6">
+          {/* Controls Card */}
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+              <div>
+                <h2 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-[var(--accent)]" />
+                  Student Experiment Unlocking & Release Controls
+                </h2>
+                <p className="text-[12px] text-[var(--text-secondary)]">
+                  Experiments are locked by default for students. Unlock individual experiments or release all experiments for a specific student section.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleBulkToggle(true)}
+                  disabled={loadingUnlocks}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-all cursor-pointer shadow-[var(--shadow-sm)] disabled:opacity-50"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  Unlock All for Section
+                </button>
+                <button
+                  onClick={() => handleBulkToggle(false)}
+                  disabled={loadingUnlocks}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  Lock All
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                  Select Lab Course
+                </label>
+                <select
+                  value={selectedUnlockCourseId}
+                  onChange={(e) => setSelectedUnlockCourseId(e.target.value)}
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
+                >
+                  {unlockData.courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.course_code} - {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                  Target Student Section / Batch
+                </label>
+                <select
+                  value={selectedUnlockSection}
+                  onChange={(e) => setSelectedUnlockSection(e.target.value)}
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)] font-mono"
+                >
+                  <option value="ALL">ALL SECTIONS (Global)</option>
+                  {unlockData.sections.map((sec) => (
+                    <option key={sec} value={sec}>
+                      {sec}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Experiments Table */}
+          {loadingUnlocks ? (
+            <div className="flex items-center justify-center py-16 gap-3 text-[var(--text-muted)]">
+              <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
+              <span className="text-xs">Loading experiment release status...</span>
+            </div>
+          ) : (
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
+              <table className="w-full text-left text-[12px]">
+                <thead>
+                  <tr className="border-b border-[var(--border)] bg-[var(--bg-raised)]">
+                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider w-14 text-center">
+                      Ex #
+                    </th>
+                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                      Experiment Title & Aim
+                    </th>
+                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                      Language
+                    </th>
+                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                      Current Access Status
+                    </th>
+                    <th className="py-3 px-4 text-right text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                      Release Toggle
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {unlockData.experiments
+                    .filter((e) => !selectedUnlockCourseId || e.course_id === Number(selectedUnlockCourseId))
+                    .map((exp) => {
+                      const activeCourseId = Number(selectedUnlockCourseId || exp.course_id);
+                      const isUnlocked = unlockData.unlocks.some(
+                        (u) =>
+                          u.course_id === activeCourseId &&
+                          u.experiment_id === exp.id &&
+                          (u.section === selectedUnlockSection || u.section === 'ALL') &&
+                          u.is_unlocked
+                      );
+
+                      const isToggling = togglingExpId === exp.id;
+
+                      return (
+                        <tr key={exp.id} className="hover:bg-[var(--bg-raised)]/50 transition-colors">
+                          <td className="py-3.5 px-4 text-center font-mono font-bold text-[var(--accent)]">
+                            {exp.experiment_no}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-[var(--text-primary)]">{exp.title}</div>
+                            <div className="text-[11px] text-[var(--text-secondary)] line-clamp-1 mt-0.5">
+                              {exp.aim}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-[11px]">
+                            <span className="px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)] uppercase">
+                              {exp.language || 'python'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            {isUnlocked ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                <Unlock className="w-3.5 h-3.5" />
+                                Unlocked & Live
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                <Lock className="w-3.5 h-3.5" />
+                                Locked for Students
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              onClick={() =>
+                                handleToggleUnlock(
+                                  activeCourseId,
+                                  exp.id,
+                                  selectedUnlockSection,
+                                  !isUnlocked
+                                )
+                              }
+                              disabled={isToggling}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer shadow-[var(--shadow-sm)] ${
+                                isUnlocked
+                                  ? 'bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30 hover:bg-[var(--red)]/15'
+                                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                              }`}
+                            >
+                              {isToggling ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : isUnlocked ? (
+                                <>
+                                  <Lock className="w-3.5 h-3.5" />
+                                  Lock Exp {exp.experiment_no}
+                                </>
+                              ) : (
+                                <>
+                                  <Unlock className="w-3.5 h-3.5" />
+                                  Unlock Exp {exp.experiment_no}
+                                </>
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
