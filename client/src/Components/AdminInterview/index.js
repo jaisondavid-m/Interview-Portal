@@ -7,4 +7,5 @@ export { default as LevelModal } from './LevelModal';
 export { default as QuestionFormModal } from './QuestionFormModal';
 export { default as QuestionBulkModal } from './QuestionBulkModal';
 export { default as DeleteConfirmModal } from './DeleteConfirmModal';
+export { default as AdminRoundArtifactViewer } from './AdminRoundArtifactViewer';
 export * from './constants';

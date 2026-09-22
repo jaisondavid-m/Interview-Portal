@@ -166,8 +166,28 @@ type InterviewSession struct {
 	Round             int                `gorm:"default:1" json:"round"`                            // 1 = Round 1 (Student A interviewing), 2 = Round 2 (Student B interviewing)
 	CurrentQuestionID uint               `gorm:"default:0;index" json:"current_question_id"`
 	CurrentQuestion   *InterviewQuestion `gorm:"foreignKey:CurrentQuestionID" json:"current_question,omitempty"`
-	Round1QuestionID  uint               `gorm:"default:0" json:"round1_question_id"`
-	Round2QuestionID  uint               `gorm:"default:0" json:"round2_question_id"`
+	Round1QuestionID     uint               `gorm:"default:0;index" json:"round1_question_id"`
+	Round1Question       *InterviewQuestion `gorm:"foreignKey:Round1QuestionID" json:"round1_question,omitempty"`
+	Round1CandidateCode  string             `gorm:"type:longtext" json:"round1_candidate_code"`
+	Round1CandidateLang  string             `gorm:"size:50" json:"round1_candidate_lang"`
+	Round1CandidateWhiteboard string        `gorm:"type:longtext" json:"round1_candidate_whiteboard"`
+	Round1Rubrics        string             `gorm:"type:longtext" json:"round1_rubrics"`
+	Round1ExecutionJSON  string             `gorm:"type:longtext" json:"round1_execution_json"`
+	Round1ExecutionVerdict string           `gorm:"size:100" json:"round1_execution_verdict"`
+	Round1ExecutionPassed int               `gorm:"default:0" json:"round1_execution_passed"`
+	Round1ExecutionTotal  int               `gorm:"default:0" json:"round1_execution_total"`
+
+	Round2QuestionID     uint               `gorm:"default:0;index" json:"round2_question_id"`
+	Round2Question       *InterviewQuestion `gorm:"foreignKey:Round2QuestionID" json:"round2_question,omitempty"`
+	Round2CandidateCode  string             `gorm:"type:longtext" json:"round2_candidate_code"`
+	Round2CandidateLang  string             `gorm:"size:50" json:"round2_candidate_lang"`
+	Round2CandidateWhiteboard string        `gorm:"type:longtext" json:"round2_candidate_whiteboard"`
+	Round2Rubrics        string             `gorm:"type:longtext" json:"round2_rubrics"`
+	Round2ExecutionJSON  string             `gorm:"type:longtext" json:"round2_execution_json"`
+	Round2ExecutionVerdict string           `gorm:"size:100" json:"round2_execution_verdict"`
+	Round2ExecutionPassed int               `gorm:"default:0" json:"round2_execution_passed"`
+	Round2ExecutionTotal  int               `gorm:"default:0" json:"round2_execution_total"`
+
 	CandidateCode        string             `gorm:"type:longtext" json:"candidate_code"`
 	CandidateLang        string             `gorm:"size:50;default:'javascript'" json:"candidate_lang"`
 	CandidateWhiteboard  string             `gorm:"type:longtext" json:"candidate_whiteboard"`
@@ -188,6 +208,6 @@ type InterviewSession struct {
 	EndedAt              *time.Time         `json:"ended_at"`
 	CreatedAt            time.Time          `json:"created_at"`
 	UpdatedAt            time.Time          `json:"updated_at"`
-	DeletedAt         gorm.DeletedAt     `gorm:"index" json:"-"`
+	DeletedAt            gorm.DeletedAt     `gorm:"index" json:"-"`
 }
 

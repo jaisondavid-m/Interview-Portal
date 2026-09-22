@@ -988,6 +988,17 @@ func UpdateSessionCode(c *gin.Context) {
 	updates := map[string]interface{}{
 		"candidate_code": input.Code,
 	}
+	if session.Round == 2 {
+		updates["round2_candidate_code"] = input.Code
+		if input.Lang != "" {
+			updates["round2_candidate_lang"] = input.Lang
+		}
+	} else {
+		updates["round1_candidate_code"] = input.Code
+		if input.Lang != "" {
+			updates["round1_candidate_lang"] = input.Lang
+		}
+	}
 	if input.Lang != "" {
 		updates["candidate_lang"] = input.Lang
 	}
@@ -1036,7 +1047,16 @@ func UpdateSessionWhiteboard(c *gin.Context) {
 		return
 	}
 
-	database.DB.Model(&session).Update("candidate_whiteboard", input.Whiteboard)
+	whiteboardUpdates := map[string]interface{}{
+		"candidate_whiteboard": input.Whiteboard,
+	}
+	if session.Round == 2 {
+		whiteboardUpdates["round2_candidate_whiteboard"] = input.Whiteboard
+	} else {
+		whiteboardUpdates["round1_candidate_whiteboard"] = input.Whiteboard
+	}
+
+	database.DB.Model(&session).Updates(whiteboardUpdates)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":               "success",
@@ -1454,28 +1474,61 @@ func SubmitSessionCode(c *gin.Context) {
 		"open_cases":    len(openCases),
 		"hidden_cases":  len(hiddenCases),
 		"results":       sanitizedResults,
+		"all_cases":     caseResults, // Full unmasked test cases for Admin verification
 		"all_passed":    verdict == "Accepted",
-		"runtime_ms":    totalExecMs + rand.Intn(15) + 5,
+		"runtime_ms":    totalExecMs,
 		"memory_mb":     "14.8 MB",
 		"round":         session.Round,
 	}
 	subJSON, _ := json.Marshal(subData)
 	now := time.Now()
 
-	database.DB.Model(&session).Updates(map[string]interface{}{
+	execSubmitUpdates := map[string]interface{}{
 		"last_execution_json":    string(subJSON),
 		"last_execution_type":    "submit",
 		"last_execution_verdict": verdict,
 		"last_execution_passed":  passedCount,
 		"last_execution_total":   len(caseResults),
 		"last_executed_at":       &now,
-	})
+	}
+	if session.Round == 2 {
+		execSubmitUpdates["round2_execution_json"] = string(subJSON)
+		execSubmitUpdates["round2_execution_verdict"] = verdict
+		execSubmitUpdates["round2_execution_passed"] = passedCount
+		execSubmitUpdates["round2_execution_total"] = len(caseResults)
+	} else {
+		execSubmitUpdates["round1_execution_json"] = string(subJSON)
+		execSubmitUpdates["round1_execution_verdict"] = verdict
+		execSubmitUpdates["round1_execution_passed"] = passedCount
+		execSubmitUpdates["round1_execution_total"] = len(caseResults)
+	}
+	database.DB.Model(&session).Updates(execSubmitUpdates)
 
 	c.JSON(http.StatusOK, subData)
 }
 
 // performRoleSwitchInternal executes the actual role swap and selects the next question
 func performRoleSwitchInternal(session *models.InterviewSession) error {
+	// 0. Snapshot Round 1 state so it is never lost or overwritten
+	if session.Round1CandidateCode == "" && session.CandidateCode != "" {
+		session.Round1CandidateCode = session.CandidateCode
+	}
+	if session.Round1CandidateLang == "" && session.CandidateLang != "" {
+		session.Round1CandidateLang = session.CandidateLang
+	}
+	if session.Round1CandidateWhiteboard == "" && session.CandidateWhiteboard != "" {
+		session.Round1CandidateWhiteboard = session.CandidateWhiteboard
+	}
+	if session.Round1Rubrics == "" && session.InterviewerRubrics != "" {
+		session.Round1Rubrics = session.InterviewerRubrics
+	}
+	if session.Round1ExecutionJSON == "" && session.LastExecutionJSON != "" {
+		session.Round1ExecutionJSON = session.LastExecutionJSON
+		session.Round1ExecutionVerdict = session.LastExecutionVerdict
+		session.Round1ExecutionPassed = session.LastExecutionPassed
+		session.Round1ExecutionTotal = session.LastExecutionTotal
+	}
+
 	// 1. Swap participants
 	oldInterviewer := session.InterviewerID
 	session.InterviewerID = session.IntervieweeID
@@ -1522,6 +1575,7 @@ func performRoleSwitchInternal(session *models.InterviewSession) error {
 		session.CurrentQuestionID = nextQ.ID
 		session.Round2QuestionID = nextQ.ID
 		session.CandidateCode = extractStarterCode(nextQ, "")
+		session.Round2CandidateCode = session.CandidateCode
 	}
 
 	// 3. Clear isolated database sandbox for Round 2 so candidate starts with a brand new fresh database
@@ -2194,7 +2248,21 @@ func AdminGetInterviewSessionByID(c *gin.Context) {
 	err := database.DB.
 		Preload("Track").
 		Preload("Level.Questions").
-		Preload("CurrentQuestion").
+		Preload("CurrentQuestion.Detail").
+		Preload("CurrentQuestion.Templates").
+		Preload("CurrentQuestion.TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("CurrentQuestion.Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("CurrentQuestion.MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		Preload("Round1Question.Detail").
+		Preload("Round1Question.Templates").
+		Preload("Round1Question.TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Round1Question.Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Round1Question.MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+		Preload("Round2Question.Detail").
+		Preload("Round2Question.Templates").
+		Preload("Round2Question.TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Round2Question.Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+		Preload("Round2Question.MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
 		Preload("Interviewer").
 		Preload("Interviewee").
 		First(&session, sessionID).Error
@@ -2205,6 +2273,79 @@ func AdminGetInterviewSessionByID(c *gin.Context) {
 			"message": "Interview session not found",
 		})
 		return
+	}
+
+	// Automatic Fallbacks for historical or active sessions
+	if session.Round1Question == nil {
+		if session.Round1QuestionID > 0 {
+			var q models.InterviewQuestion
+			if err := database.DB.
+				Preload("Detail").
+				Preload("Templates").
+				Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+				Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+				Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+				First(&q, session.Round1QuestionID).Error; err == nil {
+				session.Round1Question = &q
+			}
+		} else if session.CurrentQuestion != nil {
+			session.Round1Question = session.CurrentQuestion
+			session.Round1QuestionID = session.CurrentQuestion.ID
+		}
+	}
+
+	if session.Round2Question == nil && session.Round2QuestionID > 0 {
+		var q2 models.InterviewQuestion
+		if err := database.DB.
+			Preload("Detail").
+			Preload("Templates").
+			Preload("TestCases", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+			Preload("Hints", func(db *gorm.DB) *gorm.DB { return db.Order("order_index asc, id asc") }).
+			Preload("MCQOptions", func(db *gorm.DB) *gorm.DB { return db.Order("option_key asc, id asc") }).
+			First(&q2, session.Round2QuestionID).Error; err == nil {
+			session.Round2Question = &q2
+		}
+	}
+
+	// Fallback round artifacts
+	if session.Round1CandidateCode == "" && session.CandidateCode != "" {
+		session.Round1CandidateCode = session.CandidateCode
+	}
+	if session.Round1CandidateWhiteboard == "" && session.CandidateWhiteboard != "" {
+		session.Round1CandidateWhiteboard = session.CandidateWhiteboard
+	}
+	if session.Round1CandidateLang == "" && session.CandidateLang != "" {
+		session.Round1CandidateLang = session.CandidateLang
+	}
+	if session.Round1Rubrics == "" && session.InterviewerRubrics != "" {
+		session.Round1Rubrics = session.InterviewerRubrics
+	}
+	if session.Round1ExecutionJSON == "" && session.LastExecutionJSON != "" {
+		session.Round1ExecutionJSON = session.LastExecutionJSON
+		session.Round1ExecutionVerdict = session.LastExecutionVerdict
+		session.Round1ExecutionPassed = session.LastExecutionPassed
+		session.Round1ExecutionTotal = session.LastExecutionTotal
+	}
+
+	if session.Round == 2 || session.RolesSwitched {
+		if session.Round2CandidateCode == "" && session.CandidateCode != "" {
+			session.Round2CandidateCode = session.CandidateCode
+		}
+		if session.Round2CandidateWhiteboard == "" && session.CandidateWhiteboard != "" {
+			session.Round2CandidateWhiteboard = session.CandidateWhiteboard
+		}
+		if session.Round2CandidateLang == "" && session.CandidateLang != "" {
+			session.Round2CandidateLang = session.CandidateLang
+		}
+		if session.Round2Rubrics == "" && session.InterviewerRubrics != "" {
+			session.Round2Rubrics = session.InterviewerRubrics
+		}
+		if session.Round2ExecutionJSON == "" && session.LastExecutionJSON != "" {
+			session.Round2ExecutionJSON = session.LastExecutionJSON
+			session.Round2ExecutionVerdict = session.LastExecutionVerdict
+			session.Round2ExecutionPassed = session.LastExecutionPassed
+			session.Round2ExecutionTotal = session.LastExecutionTotal
+		}
 	}
 
 	var feedbacks []models.InterviewFeedback
