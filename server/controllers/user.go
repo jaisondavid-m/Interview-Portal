@@ -21,6 +21,7 @@ func AdminGetUsers(c *gin.Context) {
 	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
 	role := strings.TrimSpace(c.Query("role"))
 	department := strings.TrimSpace(c.Query("department"))
+	section := strings.TrimSpace(c.Query("section"))
 	sortBy := strings.ToLower(strings.TrimSpace(c.DefaultQuery("sort_by", "created_at")))
 	order := strings.ToLower(strings.TrimSpace(c.DefaultQuery("order", "desc")))
 
@@ -31,6 +32,13 @@ func AdminGetUsers(c *gin.Context) {
 	}
 	if department != "" && !strings.EqualFold(department, "all") {
 		query = query.Where("LOWER(department) = ?", strings.ToLower(department))
+	}
+	if section != "" && !strings.EqualFold(section, "all") {
+		if strings.EqualFold(section, "unassigned") || section == "none" {
+			query = query.Where("section IS NULL OR section = ''")
+		} else {
+			query = query.Where("LOWER(section) = ?", strings.ToLower(section))
+		}
 	}
 	if search != "" {
 		s := "%" + search + "%"
@@ -267,13 +275,14 @@ func AdminUpdateUser(c *gin.Context) {
 	}
 
 	var input struct {
-		Name       string `json:"name"`
-		Email      string `json:"email"`
-		RollNo     string `json:"roll_no"`
-		Department string `json:"department"`
-		Role       string `json:"role"`
-		AuthMethod string `json:"auth_method"`
-		Password   string `json:"password"` // Optional password reset
+		Name       string  `json:"name"`
+		Email      string  `json:"email"`
+		RollNo     string  `json:"roll_no"`
+		Department string  `json:"department"`
+		Section    *string `json:"section"`
+		Role       string  `json:"role"`
+		AuthMethod string  `json:"auth_method"`
+		Password   string  `json:"password"` // Optional password reset
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -297,6 +306,9 @@ func AdminUpdateUser(c *gin.Context) {
 	}
 	if input.Department != "" {
 		updates["department"] = input.Department
+	}
+	if input.Section != nil {
+		updates["section"] = *input.Section
 	}
 	if input.Role != "" {
 		updates["role"] = input.Role

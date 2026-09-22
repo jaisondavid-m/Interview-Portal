@@ -16,14 +16,91 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// isExperimentUnlockedForStudent checks if an experiment is unlocked for the user's section
+func isExperimentUnlockedForStudent(courseID uint, expID uint, userID uint, userRole string) (bool, string) {
+	role := strings.ToLower(userRole)
+	if role == "admin" || role == "faculty" {
+		return true, "FACULTY/ADMIN"
+	}
+
+	var user models.User
+	if err := database.DB.Select("id, section, role").First(&user, userID).Error; err != nil {
+		return false, "UNKNOWN"
+	}
+
+	section := strings.TrimSpace(user.Section)
+
+	var unlock models.LabExperimentUnlock
+	query := database.DB.Where("course_id = ? AND experiment_id = ? AND is_unlocked = ?", courseID, expID, true)
+	if section != "" {
+		query = query.Where("section IN (?, 'ALL')", section)
+	} else {
+		query = query.Where("section = 'ALL'")
+	}
+
+	if err := query.First(&unlock).Error; err == nil {
+		return true, section
+	}
+
+	return false, section
+}
+
 // GetStudentLabCourses returns active lab courses for student
 func GetStudentLabCourses(c *gin.Context) {
 	var courses []models.LabCourse
-	if err := database.DB.Find(&courses).Error; err != nil {
+	if err := database.DB.Order("title asc").Find(&courses).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch lab courses"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"courses": courses})
+}
+
+// GetCourseExperimentsForStudent returns experiments of a course with student-specific unlock status
+func GetCourseExperimentsForStudent(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	var experiments []models.LabExperiment
+	if err := database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch experiments"})
+		return
+	}
+
+	userIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
+	userID, _ := userIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
+
+	type ExpItem struct {
+		models.LabExperiment
+		IsUnlocked bool                  `json:"is_unlocked"`
+		Submission *models.LabSubmission `json:"submission,omitempty"`
+	}
+
+	var results []ExpItem
+	for _, exp := range experiments {
+		unlocked, _ := isExperimentUnlockedForStudent(uint(courseID), exp.ID, userID, userRole)
+
+		var sub models.LabSubmission
+		var subPtr *models.LabSubmission
+		if err := database.DB.Where("student_id = ? AND experiment_id = ?", userID, exp.ID).Order("created_at desc").First(&sub).Error; err == nil {
+			subPtr = &sub
+		}
+
+		results = append(results, ExpItem{
+			LabExperiment: exp,
+			IsUnlocked:    unlocked,
+			Submission:    subPtr,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"experiments": results,
+	})
 }
 
 // GetExperimentDetails returns problem, procedure, sample test cases for experiment
@@ -35,43 +112,52 @@ func GetExperimentDetails(c *gin.Context) {
 		return
 	}
 
+	userIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
+	userID, _ := userIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
+
+	unlocked, userSection := isExperimentUnlockedForStudent(exp.CourseID, exp.ID, userID, userRole)
+
 	// Fetch student's latest submission if exists
-	studentIDVal, exists := c.Get("userID")
 	var submission models.LabSubmission
-	if exists {
-		database.DB.Where("student_id = ? AND experiment_id = ?", studentIDVal, exp.ID).Order("created_at desc").First(&submission)
+	var subPtr *models.LabSubmission
+	if err := database.DB.Where("student_id = ? AND experiment_id = ?", userID, exp.ID).Order("created_at desc").First(&submission).Error; err == nil {
+		subPtr = &submission
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"experiment": exp,
-		"submission": submission,
+		"experiment":   exp,
+		"submission":   subPtr,
+		"is_unlocked":  unlocked,
+		"user_section": userSection,
 	})
 }
 
-type SubmitCodeRequest struct {
+type CodeExecutionRequest struct {
 	Code     string `json:"code" binding:"required"`
 	Language string `json:"language" binding:"required"`
 }
 
-// TestCaseItem helper struct for parsing hidden test cases
-type TestCaseItem struct {
+type RawTestCase struct {
 	Input          string `json:"input"`
 	ExpectedOutput string `json:"expected_output"`
+	Expected       string `json:"expected"`
 }
 
-// SubmitExperimentCode evaluates student code against hidden test cases
-func SubmitExperimentCode(c *gin.Context) {
-	studentIDVal, _ := c.Get("userID")
-	studentID := studentIDVal.(uint)
-
+// RunExperimentCode executes student code against SAMPLE test cases only without saving submission
+func RunExperimentCode(c *gin.Context) {
 	expIDStr := c.Param("expId")
-	expID, _ := strconv.ParseUint(expIDStr, 10, 64)
-
-	var req SubmitCodeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid code payload"})
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
 		return
 	}
+
+	userIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
+	userID, _ := userIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
 	var exp models.LabExperiment
 	if err := database.DB.First(&exp, expID).Error; err != nil {
@@ -79,31 +165,168 @@ func SubmitExperimentCode(c *gin.Context) {
 		return
 	}
 
-	// Parse hidden test cases
-	var testCases []TestCaseItem
-	if exp.HiddenTestCases != "" {
-		_ = json.Unmarshal([]byte(exp.HiddenTestCases), &testCases)
+	unlocked, _ := isExperimentUnlockedForStudent(exp.CourseID, exp.ID, userID, userRole)
+	if !unlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "This experiment is currently locked by your faculty incharge."})
+		return
 	}
 
-	totalCases := len(testCases)
-	if totalCases == 0 {
-		totalCases = 1
+	var req CodeExecutionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Code and Language are required"})
+		return
 	}
+
+	// Parse Sample Test Cases
+	var rawCases []RawTestCase
+	if exp.SampleTestCases != "" {
+		_ = json.Unmarshal([]byte(exp.SampleTestCases), &rawCases)
+	}
+
+	var evalCases []EvalTestCase
+	if len(rawCases) == 0 {
+		evalCases = append(evalCases, EvalTestCase{
+			Index:          1,
+			IsHidden:       false,
+			Name:           "Sample Case 1",
+			Input:          "",
+			ExpectedOutput: "",
+		})
+	} else {
+		for i, rc := range rawCases {
+			expOut := rc.ExpectedOutput
+			if expOut == "" {
+				expOut = rc.Expected
+			}
+			evalCases = append(evalCases, EvalTestCase{
+				Index:          i + 1,
+				IsHidden:       false,
+				Name:           fmt.Sprintf("Sample Case %d", i+1),
+				Input:          rc.Input,
+				ExpectedOutput: expOut,
+			})
+		}
+	}
+
+	results, execErr := ExecuteTestCases(req.Code, req.Language, evalCases)
+	if execErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Execution error: " + execErr.Error()})
+		return
+	}
+
+	passCount := 0
+	for _, r := range results {
+		if r.Passed {
+			passCount++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":          true,
+		"results":          results,
+		"pass_count":       passCount,
+		"total_test_cases": len(results),
+	})
+}
+
+// SubmitExperimentCode evaluates student code against HIDDEN test cases and creates/updates submission
+func SubmitExperimentCode(c *gin.Context) {
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	userIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
+	studentID, _ := userIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, expID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	unlocked, _ := isExperimentUnlockedForStudent(exp.CourseID, exp.ID, studentID, userRole)
+	if !unlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "This experiment is currently locked by your faculty incharge."})
+		return
+	}
+
+	var req CodeExecutionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Code and Language are required"})
+		return
+	}
+
+	// Parse Hidden Test Cases (fallback to Sample Test Cases if hidden not provided)
+	var rawCases []RawTestCase
+	if exp.HiddenTestCases != "" {
+		_ = json.Unmarshal([]byte(exp.HiddenTestCases), &rawCases)
+	}
+	if len(rawCases) == 0 && exp.SampleTestCases != "" {
+		_ = json.Unmarshal([]byte(exp.SampleTestCases), &rawCases)
+	}
+
+	var evalCases []EvalTestCase
+	if len(rawCases) == 0 {
+		evalCases = append(evalCases, EvalTestCase{
+			Index:          1,
+			IsHidden:       true,
+			Name:           "Hidden Benchmark Case 1",
+			Input:          "",
+			ExpectedOutput: "",
+		})
+	} else {
+		for i, rc := range rawCases {
+			expOut := rc.ExpectedOutput
+			if expOut == "" {
+				expOut = rc.Expected
+			}
+			evalCases = append(evalCases, EvalTestCase{
+				Index:          i + 1,
+				IsHidden:       true,
+				Name:           fmt.Sprintf("Hidden Case %d", i+1),
+				Input:          rc.Input,
+				ExpectedOutput: expOut,
+			})
+		}
+	}
+
+	results, execErr := ExecuteTestCases(req.Code, req.Language, evalCases)
+	if execErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Execution error: " + execErr.Error()})
+		return
+	}
+
+	totalCases := len(results)
 	passCount := 0
 	var logs []string
+	for _, r := range results {
+		if r.Passed {
+			passCount++
+		}
+		if r.Passed {
+			logs = append(logs, fmt.Sprintf("✓ %s Passed (%d ms)", r.Name, r.ExecutionMs))
+		} else {
+			logs = append(logs, fmt.Sprintf("✗ %s Failed: Expected '%s', got '%s'", r.Name, r.Expected, r.Actual))
+		}
+	}
 
-	// Basic execution verification logic
-	if strings.Contains(req.Code, "def ") || strings.Contains(req.Code, "print") || strings.Contains(req.Code, "return") {
-		passCount = totalCases
-		logs = append(logs, fmt.Sprintf("Passed all %d/%d test cases successfully.", totalCases, totalCases))
-	} else {
-		passCount = 0
-		logs = append(logs, "Execution output did not match expected test benchmarks.")
+	maxMarks := exp.MaxMarks
+	if maxMarks <= 0 {
+		maxMarks = 10
+	}
+	marks := 0
+	if totalCases > 0 {
+		marks = int(float64(passCount) / float64(totalCases) * float64(maxMarks))
 	}
 
 	// Save or update LabSubmission
 	var sub models.LabSubmission
-	err := database.DB.Where("student_id = ? AND experiment_id = ?", studentID, exp.ID).First(&sub).Error
+	findErr := database.DB.Where("student_id = ? AND experiment_id = ?", studentID, exp.ID).First(&sub).Error
 
 	sub.StudentID = studentID
 	sub.ExperimentID = exp.ID
@@ -113,20 +336,22 @@ func SubmitExperimentCode(c *gin.Context) {
 	sub.PassCount = passCount
 	sub.TotalTestCases = totalCases
 	sub.Status = "PENDING_APPROVAL"
-	sub.Marks = 10 // Default full marks pending faculty review
+	sub.Marks = marks
 
-	if err != nil {
+	if findErr != nil {
 		database.DB.Create(&sub)
 	} else {
 		database.DB.Save(&sub)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":          "Experiment submitted successfully!",
+		"message":          "Experiment submitted successfully for faculty verification!",
 		"pass_count":       passCount,
 		"total_test_cases": totalCases,
 		"status":           sub.Status,
+		"marks":            marks,
 		"submission":       sub,
+		"results":          results,
 	})
 }
 
@@ -283,4 +508,101 @@ func DownloadStudentRecordPDF(c *gin.Context) {
 	fileName := fmt.Sprintf("%s_%s_LabRecord.pdf", student.RollNo, course.CourseCode)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// FacultyGetCourseReleases returns experiment unlock status matrix for courses & sections mapped to faculty
+func FacultyGetCourseReleases(c *gin.Context) {
+	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
+	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
+
+	var mappings []models.LabMapping
+	var courses []models.LabCourse
+
+	if strings.ToLower(userRole) == "admin" {
+		database.DB.Order("title asc").Find(&courses)
+		database.DB.Preload("Course").Preload("Faculty").Find(&mappings)
+	} else {
+		database.DB.Preload("Course").Where("faculty_id = ?", facultyID).Find(&mappings)
+		var courseIDs []uint
+		for _, m := range mappings {
+			courseIDs = append(courseIDs, m.CourseID)
+		}
+		if len(courseIDs) > 0 {
+			database.DB.Where("id IN ?", courseIDs).Order("title asc").Find(&courses)
+		}
+	}
+
+	var unlocks []models.LabExperimentUnlock
+	database.DB.Preload("Course").Preload("Experiment").Find(&unlocks)
+
+	var allExperiments []models.LabExperiment
+	database.DB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
+
+	// Fetch distinct sections from users
+	var sectionList []string
+	database.DB.Model(&models.User{}).
+		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
+		Distinct().
+		Pluck("section", &sectionList)
+
+	c.JSON(http.StatusOK, gin.H{
+		"courses":     courses,
+		"mappings":    mappings,
+		"unlocks":     unlocks,
+		"experiments": allExperiments,
+		"sections":    sectionList,
+	})
+}
+
+type ToggleUnlockReq struct {
+	CourseID     uint   `json:"course_id" binding:"required"`
+	ExperimentID uint   `json:"experiment_id" binding:"required"`
+	Section      string `json:"section" binding:"required"`
+	IsUnlocked   bool   `json:"is_unlocked"`
+}
+
+// FacultyToggleExperimentUnlock toggles unlock status for a specific course, experiment and section
+func FacultyToggleExperimentUnlock(c *gin.Context) {
+	facultyIDVal, _ := c.Get("userID")
+	facultyID, _ := facultyIDVal.(uint)
+
+	var req ToggleUnlockReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unlock toggle payload"})
+		return
+	}
+
+	var unlock models.LabExperimentUnlock
+	err := database.DB.Where("course_id = ? AND experiment_id = ? AND section = ?", req.CourseID, req.ExperimentID, req.Section).First(&unlock).Error
+
+	now := time.Now()
+	unlock.CourseID = req.CourseID
+	unlock.ExperimentID = req.ExperimentID
+	unlock.Section = req.Section
+	unlock.FacultyID = facultyID
+	unlock.IsUnlocked = req.IsUnlocked
+	if req.IsUnlocked {
+		unlock.UnlockedAt = &now
+	}
+
+	if err != nil {
+		if createErr := database.DB.Create(&unlock).Error; createErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create unlock state: " + createErr.Error()})
+			return
+		}
+	} else {
+		if saveErr := database.DB.Save(&unlock).Error; saveErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update unlock state: " + saveErr.Error()})
+			return
+		}
+	}
+
+	database.DB.Preload("Course").Preload("Experiment").First(&unlock, unlock.ID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Experiment unlock state updated successfully",
+		"unlock":  unlock,
+	})
 }

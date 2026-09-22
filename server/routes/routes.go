@@ -292,12 +292,17 @@ func SetupRouter() *gin.Engine {
 			systemSettings.PUT("", controllers.AdminUpdateSystemSetting)
 		}
 
-		// Academic Practical Labs Routes (Student)
+		// Academic Practical Labs Routes (Student & Courses)
 		labs := g.Group("/labs")
 		labs.Use(middlewares.AuthMiddleware())
 		{
 			labs.GET("/courses", controllers.GetStudentLabCourses)
+			labs.POST("/courses", controllers.CreateLabCourse)
+			labs.PUT("/courses/:id", controllers.UpdateLabCourse)
+			labs.DELETE("/courses/:id", controllers.DeleteLabCourse)
+			labs.GET("/courses/:courseId/experiments", controllers.GetCourseExperimentsForStudent)
 			labs.GET("/experiment/:expId", controllers.GetExperimentDetails)
+			labs.POST("/experiment/:expId/run", controllers.RunExperimentCode)
 			labs.POST("/experiment/:expId/submit", controllers.SubmitExperimentCode)
 			labs.GET("/record-pdf/:courseId/student/:studentId", controllers.DownloadStudentRecordPDF)
 		}
@@ -309,6 +314,8 @@ func SetupRouter() *gin.Engine {
 			facultyLabs.GET("/queue", controllers.GetFacultyQueue)
 			facultyLabs.POST("/verify-single", controllers.VerifySingleExperiment)
 			facultyLabs.POST("/verify-semester", controllers.VerifySemesterRecord)
+			facultyLabs.GET("/unlocks", controllers.FacultyGetCourseReleases)
+			facultyLabs.POST("/unlocks/toggle", controllers.FacultyToggleExperimentUnlock)
 		}
 
 		// Admin Lab Management Routes
@@ -316,9 +323,19 @@ func SetupRouter() *gin.Engine {
 		adminLabs.Use(middlewares.AuthMiddleware())
 		{
 			adminLabs.GET("/data", controllers.GetAdminLabData)
+			adminLabs.GET("/faculty", controllers.AdminGetLabFacultyList)
+			adminLabs.POST("/courses", controllers.CreateLabCourse)
+			adminLabs.PUT("/courses/:id", controllers.UpdateLabCourse)
+			adminLabs.DELETE("/courses/:id", controllers.DeleteLabCourse)
+			adminLabs.GET("/courses/:courseId/experiments", controllers.AdminGetCourseExperiments)
+			adminLabs.POST("/courses/:courseId/experiments", controllers.AdminCreateExperiment)
+			adminLabs.PUT("/experiments/:id", controllers.AdminUpdateExperiment)
+			adminLabs.DELETE("/experiments/:id", controllers.AdminDeleteExperiment)
 			adminLabs.POST("/mappings", controllers.CreateLabMapping)
 			adminLabs.DELETE("/mappings/:id", controllers.DeleteLabMapping)
 			adminLabs.GET("/pdf-preview/:courseId/student/:studentId", controllers.AdminPreviewStudentRecordPDF)
+			adminLabs.POST("/batch-students/assign", controllers.BatchAssignStudentSection)
+			adminLabs.GET("/batch-students/stats", controllers.GetBatchStudentStats)
 		}
 
 		// Faculty Portal & Live In-Venue Attendance (Require JWT + Faculty/Admin Permissions)

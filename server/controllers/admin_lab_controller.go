@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"server/database"
 	"server/models"
@@ -15,20 +16,17 @@ import (
 // GetAdminLabData returns all courses, faculty, students, and mappings for Admin Setup
 func GetAdminLabData(c *gin.Context) {
 	var courses []models.LabCourse
-	database.DB.Find(&courses)
+	database.DB.Order("title asc").Find(&courses)
 
-	var users []models.User
-	database.DB.Find(&users)
-
+	// Fetch only users with role = 'faculty' from users table
 	var facultyList []models.User
+	if err := database.DB.Where("LOWER(role) = ?", "faculty").Order("name asc").Find(&facultyList).Error; err != nil {
+		facultyList = []models.User{}
+	}
+
 	var studentList []models.User
-	for _, u := range users {
-		if u.Role == "admin" || u.Role == "faculty" {
-			facultyList = append(facultyList, u)
-		}
-		if u.Role == "student" || u.Role == "user" {
-			studentList = append(studentList, u)
-		}
+	if err := database.DB.Where("LOWER(role) IN ?", []string{"student", "user"}).Order("name asc").Find(&studentList).Error; err != nil {
+		studentList = []models.User{}
 	}
 
 	var mappings []models.LabMapping
@@ -130,3 +128,388 @@ func AdminPreviewStudentRecordPDF(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=PREVIEW_%s_%s.pdf", student.RollNo, course.CourseCode))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
+
+// AdminGetLabFacultyList queries users table for users where role = 'faculty' with optional search
+func AdminGetLabFacultyList(c *gin.Context) {
+	search := strings.TrimSpace(c.Query("search"))
+	query := database.DB.Model(&models.User{}).Where("LOWER(role) = ?", "faculty")
+
+	if search != "" {
+		s := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(department) LIKE ? OR LOWER(roll_no) LIKE ?", s, s, s, s)
+	}
+
+	var facultyList []models.User
+	if err := query.Order("name asc").Find(&facultyList).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch faculty users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"faculty": facultyList,
+	})
+}
+
+type BatchAssignSectionReq struct {
+	StudentIDs []uint `json:"student_ids" binding:"required"`
+	Section    string `json:"section"` // empty string unassigns/removes
+}
+
+// BatchAssignStudentSection updates section/batch for multiple students
+func BatchAssignStudentSection(c *gin.Context) {
+	var req BatchAssignSectionReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload, student_ids required"})
+		return
+	}
+
+	if len(req.StudentIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No students selected"})
+		return
+	}
+
+	trimmedSection := strings.TrimSpace(req.Section)
+	res := database.DB.Model(&models.User{}).
+		Where("id IN ?", req.StudentIDs).
+		Update("section", trimmedSection)
+
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student sections"})
+		return
+	}
+
+	msg := fmt.Sprintf("Successfully assigned %d student(s) to %s", res.RowsAffected, trimmedSection)
+	if trimmedSection == "" {
+		msg = fmt.Sprintf("Successfully removed %d student(s) from batch", res.RowsAffected)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": msg,
+		"count":   res.RowsAffected,
+		"section": trimmedSection,
+	})
+}
+
+// GetBatchStudentStats returns student count breakdown across all sections
+func GetBatchStudentStats(c *gin.Context) {
+	type SectionCount struct {
+		Section string `json:"section"`
+		Count   int64  `json:"count"`
+	}
+
+	var results []SectionCount
+	database.DB.Model(&models.User{}).
+		Select("COALESCE(NULLIF(section, ''), 'Unassigned') as section, count(*) as count").
+		Where("LOWER(role) IN ?", []string{"student", "user"}).
+		Group("COALESCE(NULLIF(section, ''), 'Unassigned')").
+		Scan(&results)
+
+	c.JSON(http.StatusOK, gin.H{
+		"stats": results,
+	})
+}
+
+type LabCourseInput struct {
+	CourseCode       string `json:"course_code" binding:"required"`
+	Title            string `json:"title" binding:"required"`
+	Department       string `json:"department"`
+	Degree           string `json:"degree"`
+	Semester         string `json:"semester"`
+	AcademicYear     string `json:"academic_year"`
+	TotalExperiments int    `json:"total_experiments"`
+	Description      string `json:"description"`
+}
+
+// CreateLabCourse creates a new lab course
+func CreateLabCourse(c *gin.Context) {
+	var input LabCourseInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Course Code and Title are required"})
+		return
+	}
+
+	if input.TotalExperiments <= 0 {
+		input.TotalExperiments = 7
+	}
+	if input.Degree == "" {
+		input.Degree = "B.Tech"
+	}
+
+	course := models.LabCourse{
+		CourseCode:       strings.TrimSpace(input.CourseCode),
+		Title:            strings.TrimSpace(input.Title),
+		Department:       strings.TrimSpace(input.Department),
+		Degree:           strings.TrimSpace(input.Degree),
+		Semester:         strings.TrimSpace(input.Semester),
+		AcademicYear:     strings.TrimSpace(input.AcademicYear),
+		TotalExperiments: input.TotalExperiments,
+		Description:      strings.TrimSpace(input.Description),
+	}
+
+	if err := database.DB.Create(&course).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create lab course: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Lab course created successfully",
+		"course":  course,
+	})
+}
+
+// UpdateLabCourse updates an existing lab course
+func UpdateLabCourse(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	var course models.LabCourse
+	if err := database.DB.First(&course, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Lab course not found"})
+		return
+	}
+
+	var input LabCourseInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course input data"})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if input.CourseCode != "" {
+		updates["course_code"] = strings.TrimSpace(input.CourseCode)
+	}
+	if input.Title != "" {
+		updates["title"] = strings.TrimSpace(input.Title)
+	}
+	if input.Department != "" {
+		updates["department"] = strings.TrimSpace(input.Department)
+	}
+	if input.Degree != "" {
+		updates["degree"] = strings.TrimSpace(input.Degree)
+	}
+	if input.Semester != "" {
+		updates["semester"] = strings.TrimSpace(input.Semester)
+	}
+	if input.AcademicYear != "" {
+		updates["academic_year"] = strings.TrimSpace(input.AcademicYear)
+	}
+	if input.TotalExperiments > 0 {
+		updates["total_experiments"] = input.TotalExperiments
+	}
+	updates["description"] = strings.TrimSpace(input.Description)
+
+	if err := database.DB.Model(&course).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update lab course: " + err.Error()})
+		return
+	}
+
+	database.DB.First(&course, id)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Lab course updated successfully",
+		"course":  course,
+	})
+}
+
+// DeleteLabCourse removes a lab course
+func DeleteLabCourse(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	if err := database.DB.Delete(&models.LabCourse{}, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete lab course"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Lab course deleted successfully",
+	})
+}
+
+// AdminGetCourseExperiments fetches all experiments for a specific course and its details
+func AdminGetCourseExperiments(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	var course models.LabCourse
+	if err := database.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Lab course not found"})
+		return
+	}
+
+	var experiments []models.LabExperiment
+	if err := database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch experiments"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"course":      course,
+		"experiments": experiments,
+	})
+}
+
+type ExperimentInput struct {
+	ExperimentNo    int    `json:"experiment_no" binding:"required"`
+	Title           string `json:"title" binding:"required"`
+	Aim             string `json:"aim" binding:"required"`
+	Procedure       string `json:"procedure"`
+	Language        string `json:"language"`
+	StarterCode     string `json:"starter_code"`
+	SampleTestCases string `json:"sample_test_cases"`
+	HiddenTestCases string `json:"hidden_test_cases"`
+	MaxMarks        int    `json:"max_marks"`
+}
+
+// AdminCreateExperiment adds a new experiment to a lab course
+func AdminCreateExperiment(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	var input ExperimentInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Experiment Number, Title and Aim are required"})
+		return
+	}
+
+	lang := input.Language
+	if lang == "" {
+		lang = "python"
+	}
+	maxMarks := input.MaxMarks
+	if maxMarks <= 0 {
+		maxMarks = 10
+	}
+
+	exp := models.LabExperiment{
+		CourseID:        uint(courseID),
+		ExperimentNo:    input.ExperimentNo,
+		Title:           strings.TrimSpace(input.Title),
+		Aim:             strings.TrimSpace(input.Aim),
+		Procedure:       strings.TrimSpace(input.Procedure),
+		Language:        lang,
+		StarterCode:     input.StarterCode,
+		SampleTestCases: input.SampleTestCases,
+		HiddenTestCases: input.HiddenTestCases,
+		MaxMarks:        maxMarks,
+	}
+
+	if err := database.DB.Create(&exp).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create experiment: " + err.Error()})
+		return
+	}
+
+	// Also update course's total_experiments count if needed
+	var count int64
+	database.DB.Model(&models.LabExperiment{}).Where("course_id = ?", courseID).Count(&count)
+	database.DB.Model(&models.LabCourse{}).Where("id = ?", courseID).Update("total_experiments", count)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Experiment created successfully",
+		"experiment": exp,
+	})
+}
+
+// AdminUpdateExperiment updates an existing experiment
+func AdminUpdateExperiment(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	var input ExperimentInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment input data"})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if input.ExperimentNo > 0 {
+		updates["experiment_no"] = input.ExperimentNo
+	}
+	if input.Title != "" {
+		updates["title"] = strings.TrimSpace(input.Title)
+	}
+	if input.Aim != "" {
+		updates["aim"] = strings.TrimSpace(input.Aim)
+	}
+	updates["procedure"] = strings.TrimSpace(input.Procedure)
+	if input.Language != "" {
+		updates["language"] = input.Language
+	}
+	updates["starter_code"] = input.StarterCode
+	updates["sample_test_cases"] = input.SampleTestCases
+	updates["hidden_test_cases"] = input.HiddenTestCases
+	if input.MaxMarks > 0 {
+		updates["max_marks"] = input.MaxMarks
+	}
+
+	if err := database.DB.Model(&exp).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update experiment: " + err.Error()})
+		return
+	}
+
+	database.DB.First(&exp, id)
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Experiment updated successfully",
+		"experiment": exp,
+	})
+}
+
+// AdminDeleteExperiment removes an experiment
+func AdminDeleteExperiment(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	courseID := exp.CourseID
+
+	if err := database.DB.Delete(&exp).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete experiment"})
+		return
+	}
+
+	// Update course's total_experiments count
+	var count int64
+	database.DB.Model(&models.LabExperiment{}).Where("course_id = ?", courseID).Count(&count)
+	database.DB.Model(&models.LabCourse{}).Where("id = ?", courseID).Update("total_experiments", count)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Experiment deleted successfully",
+	})
+}
+
+
+
