@@ -37,7 +37,8 @@ import {
   ZoomOut,
   Maximize2,
   Check,
-  X
+  X,
+  GripVertical
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -187,9 +188,31 @@ export default function AdminLabPdfViewer() {
     });
   };
 
-  // -------------------------------------------------------------
-  // INSIDE-THE-PAGE COMPONENT REORDERING & DELETING
-  // -------------------------------------------------------------
+  // Drag and Drop state for inside-page sections
+  const [draggedItem, setDraggedItem] = useState(null); // { expIndex, secName }
+  const [dragOverItem, setDragOverItem] = useState(null); // { expIndex, secName }
+
+  const handleDropSection = (expIndex, sourceSec, targetSec) => {
+    if (!sourceSec || !targetSec || sourceSec === targetSec) return;
+    setTemplate(prev => {
+      const updated = [...prev.experiments];
+      const exp = { ...updated[expIndex] };
+      const order = [...(exp.section_order || ['aim', 'procedure', 'code', 'output', 'result', 'signature'])];
+      const srcIdx = order.indexOf(sourceSec);
+      const tgtIdx = order.indexOf(targetSec);
+      if (srcIdx === -1 || tgtIdx === -1) return prev;
+
+      // Remove from source position
+      const [moved] = order.splice(srcIdx, 1);
+      // Insert at target position
+      order.splice(tgtIdx, 0, moved);
+
+      exp.section_order = order;
+      updated[expIndex] = exp;
+      return { ...prev, experiments: updated };
+    });
+    showToast(`Placed "${sourceSec.toUpperCase()}" before "${targetSec.toUpperCase()}"!`);
+  };
 
   const moveSectionWithinExp = (expIndex, secName, direction) => {
     setTemplate(prev => {
@@ -607,7 +630,7 @@ export default function AdminLabPdfViewer() {
                         {/* LEFT PAGE */}
                         <div className="w-1/2 flex justify-end">
                           {left ? (
-                            <div className="w-full relative shadow-2xl">
+                            <div className="w-full relative shadow-2xl max-w-[560px]">
                               <div className="absolute top-1.5 left-2 text-[9px] font-mono font-bold text-slate-400 select-none z-20">
                                 📖 Left (P{left.pageNum})
                               </div>
@@ -625,11 +648,16 @@ export default function AdminLabPdfViewer() {
                                   onDeleteSection={deleteSectionWithinExp}
                                   onAddSection={addSectionToExp}
                                   onDeletePage={handleDeletePage}
+                                  onDropSection={handleDropSection}
+                                  draggedItem={draggedItem}
+                                  setDraggedItem={setDraggedItem}
+                                  dragOverItem={dragOverItem}
+                                  setDragOverItem={setDragOverItem}
                                 />
                               )}
                             </div>
                           ) : (
-                            <div className="w-full bg-slate-900 border-2 border-dashed border-slate-800 rounded p-8 min-h-[600px] flex flex-col items-center justify-center text-center text-slate-500 space-y-2" style={{ aspectRatio: '1 / 1.414' }}>
+                            <div className="w-full bg-slate-900 border-2 border-dashed border-slate-800 rounded p-8 min-h-[500px] flex flex-col items-center justify-center text-center text-slate-500 space-y-2 max-w-[560px]" style={{ aspectRatio: '1 / 1.414' }}>
                               <BookOpen className="w-10 h-10 text-slate-700" />
                               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Front Hardcover Backing</h4>
                               <p className="text-[11px] text-slate-600 max-w-xs">Front cover page starts on the right page.</p>
@@ -645,7 +673,7 @@ export default function AdminLabPdfViewer() {
                         {/* RIGHT PAGE */}
                         <div className="w-1/2 flex justify-start">
                           {right ? (
-                            <div className="w-full relative shadow-2xl">
+                            <div className="w-full relative shadow-2xl max-w-[560px]">
                               <div className="absolute top-1.5 right-2 text-[9px] font-mono font-bold text-slate-400 select-none z-20">
                                 📖 Right (P{right.pageNum})
                               </div>
@@ -663,11 +691,16 @@ export default function AdminLabPdfViewer() {
                                   onDeleteSection={deleteSectionWithinExp}
                                   onAddSection={addSectionToExp}
                                   onDeletePage={handleDeletePage}
+                                  onDropSection={handleDropSection}
+                                  draggedItem={draggedItem}
+                                  setDraggedItem={setDraggedItem}
+                                  dragOverItem={dragOverItem}
+                                  setDragOverItem={setDragOverItem}
                                 />
                               )}
                             </div>
                           ) : (
-                            <div className="w-full bg-slate-900 border-2 border-dashed border-slate-800 rounded p-8 min-h-[600px] flex flex-col items-center justify-center text-center text-slate-500 space-y-2" style={{ aspectRatio: '1 / 1.414' }}>
+                            <div className="w-full bg-slate-900 border-2 border-dashed border-slate-800 rounded p-8 min-h-[500px] flex flex-col items-center justify-center text-center text-slate-500 space-y-2 max-w-[560px]" style={{ aspectRatio: '1 / 1.414' }}>
                               <Award className="w-10 h-10 text-slate-700" />
                               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">End of Document</h4>
                             </div>
@@ -760,25 +793,32 @@ export default function AdminLabPdfViewer() {
                 )}
               </div>
 
-              {/* 2-Column Split */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                <div className="lg:col-span-7">
-                  {activePageIndex === 'cover' && <InteractiveA4Sheet pageType="cover" template={template} setTemplate={setTemplate} isLeft={false} />}
-                  {activePageIndex === 'index' && <InteractiveA4Sheet pageType="index" template={template} setTemplate={setTemplate} isLeft={false} />}
-                  {typeof activePageIndex === 'number' && template.experiments[activePageIndex] && (
-                    <InteractiveA4Sheet
-                      pageType="exp"
-                      exp={template.experiments[activePageIndex]}
-                      expIndex={activePageIndex}
-                      template={template}
-                      setTemplate={setTemplate}
-                      isLeft={false}
-                      onMoveSection={moveSectionWithinExp}
-                      onDeleteSection={deleteSectionWithinExp}
-                      onAddSection={addSectionToExp}
-                      onDeletePage={handleDeletePage}
-                    />
-                  )}
+              {/* 2-Column Split: Sheet Preview on Left & Inspector on Right */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                <div className="lg:col-span-7 flex justify-center">
+                  <div className="w-full max-w-[620px] shadow-2xl">
+                    {activePageIndex === 'cover' && <InteractiveA4Sheet pageType="cover" template={template} setTemplate={setTemplate} isLeft={false} />}
+                    {activePageIndex === 'index' && <InteractiveA4Sheet pageType="index" template={template} setTemplate={setTemplate} isLeft={false} />}
+                    {typeof activePageIndex === 'number' && template.experiments[activePageIndex] && (
+                      <InteractiveA4Sheet
+                        pageType="exp"
+                        exp={template.experiments[activePageIndex]}
+                        expIndex={activePageIndex}
+                        template={template}
+                        setTemplate={setTemplate}
+                        isLeft={false}
+                        onMoveSection={moveSectionWithinExp}
+                        onDeleteSection={deleteSectionWithinExp}
+                        onAddSection={addSectionToExp}
+                        onDeletePage={handleDeletePage}
+                        onDropSection={handleDropSection}
+                        draggedItem={draggedItem}
+                        setDraggedItem={setDraggedItem}
+                        dragOverItem={dragOverItem}
+                        setDragOverItem={setDragOverItem}
+                      />
+                    )}
+                  </div>
                 </div>
 
                 {/* Right Inspector Controls */}
@@ -842,15 +882,23 @@ export default function AdminLabPdfViewer() {
 
                     {typeof activePageIndex === 'number' && template.experiments[activePageIndex] && (
                       <div className="space-y-3">
-                        <p className="text-[11px] text-[var(--text-secondary)]">
-                          Rearrange, shift to last, or remove any block inside this experiment sheet:
-                        </p>
+                        <div className="p-2.5 rounded bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/50 text-[11px] text-indigo-900 dark:text-indigo-300 flex items-start gap-2">
+                          <GripVertical className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="block font-bold">Drag & Drop Any Component:</strong>
+                            Grab the handles directly on the A4 page preview, or use the list controls below to reorder / send to last.
+                          </div>
+                        </div>
+
                         <div className="space-y-1.5">
                           {(template.experiments[activePageIndex].section_order || ['aim', 'procedure', 'code', 'output', 'result', 'signature']).map((sec, sIdx, arr) => (
-                            <div key={sec} className="p-2 rounded bg-[var(--bg-input)] border border-[var(--border)] flex items-center justify-between text-xs">
-                              <span className="font-bold text-[var(--text-primary)] uppercase font-mono text-[11px]">
-                                {sIdx + 1}. {sec}
-                              </span>
+                            <div key={sec} className="p-2 rounded bg-[var(--bg-input)] border border-[var(--border)] flex items-center justify-between text-xs hover:border-[var(--border-strong)] transition-all">
+                              <div className="flex items-center gap-2">
+                                <GripVertical className="w-3 h-3 text-[var(--text-muted)] cursor-grab" />
+                                <span className="font-bold text-[var(--text-primary)] uppercase font-mono text-[11px]">
+                                  {sIdx + 1}. {sec}
+                                </span>
+                              </div>
                               <div className="flex items-center gap-1">
                                 <button
                                   onClick={() => moveSectionWithinExp(activePageIndex, sec, 'up')}
@@ -871,9 +919,9 @@ export default function AdminLabPdfViewer() {
                                 <button
                                   onClick={() => moveSectionWithinExp(activePageIndex, sec, 'last')}
                                   title="Move this block to the very LAST position"
-                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer"
+                                  className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer text-[10px] font-mono"
                                 >
-                                  <ArrowDownToLine className="w-3.5 h-3.5" />
+                                  to-last
                                 </button>
                                 <button
                                   onClick={() => deleteSectionWithinExp(activePageIndex, sec)}
@@ -918,7 +966,7 @@ export default function AdminLabPdfViewer() {
           {/* VIEW 3: CONTINUOUS SCROLL VIEW                           */}
           {/* ========================================================= */}
           {viewMode === 'scroll' && (
-            <div className="space-y-6 max-w-3xl mx-auto">
+            <div className="space-y-6 max-w-2xl mx-auto">
               <InteractiveA4Sheet pageType="cover" template={template} setTemplate={setTemplate} isLeft={false} />
               <InteractiveA4Sheet pageType="index" template={template} setTemplate={setTemplate} isLeft={false} />
               {template.experiments?.map((exp, idx) => (
@@ -934,6 +982,11 @@ export default function AdminLabPdfViewer() {
                   onDeleteSection={deleteSectionWithinExp}
                   onAddSection={addSectionToExp}
                   onDeletePage={handleDeletePage}
+                  onDropSection={handleDropSection}
+                  draggedItem={draggedItem}
+                  setDraggedItem={setDraggedItem}
+                  dragOverItem={dragOverItem}
+                  setDragOverItem={setDragOverItem}
                 />
               ))}
             </div>
@@ -958,7 +1011,12 @@ function InteractiveA4Sheet({
   onMoveSection,
   onDeleteSection,
   onAddSection,
-  onDeletePage
+  onDeletePage,
+  onDropSection,
+  draggedItem,
+  setDraggedItem,
+  dragOverItem,
+  setDragOverItem
 }) {
   // 1. Cover Page
   if (pageType === 'cover') {
@@ -1065,15 +1123,15 @@ function InteractiveA4Sheet({
     );
   }
 
-  // 3. Experiment / Custom Page with Component Level Controls
+  // 3. Experiment / Custom Page with Component Level Controls & Drag Drop
   const codeLines = (exp.submitted_code || '').split('\n');
   const pType = exp.page_type || 'experiment';
   const order = exp.section_order || ['aim', 'procedure', 'code', 'output', 'result', 'signature'];
 
   return (
     <div className={`bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-xl p-5 sm:p-7 w-full relative font-[system-ui] flex flex-col justify-between ${isLeft ? 'pr-7 pl-4' : 'pl-7 pr-4'}`} style={{ aspectRatio: '1 / 1.414' }}>
-      <div className="border border-slate-400 p-4 sm:p-6 h-full flex flex-col justify-between space-y-3">
-        <div className="space-y-2.5">
+      <div className="border border-slate-400 p-4 sm:p-6 h-full flex flex-col justify-between space-y-2.5">
+        <div className="space-y-2">
           {/* Header & Delete Page Button */}
           <div className="flex items-center justify-between text-[9px] text-slate-500 font-semibold border-b border-slate-200 pb-0.5">
             <span>BIT — {template.course_code}</span>
@@ -1113,19 +1171,27 @@ function InteractiveA4Sheet({
             </div>
           ) : (
             /* MODULAR COMPONENT BLOCKS ACCORDING TO SECTION ORDER */
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {order.map((secName) => {
-                // RENDER EACH SECTION AS A REORDERABLE COMPONENT CARD
+                const commonProps = {
+                  expIndex,
+                  secName,
+                  onMove: onMoveSection,
+                  onDelete: onDeleteSection,
+                  onDropSection,
+                  draggedItem,
+                  setDraggedItem,
+                  dragOverItem,
+                  setDragOverItem
+                };
+
                 switch (secName) {
                   case 'aim':
                     return (
                       <ComponentBlockWrapper
                         key="aim"
                         title="AIM"
-                        expIndex={expIndex}
-                        secName="aim"
-                        onMove={onMoveSection}
-                        onDelete={onDeleteSection}
+                        {...commonProps}
                       >
                         <p className="text-[10px] sm:text-[10.5px] text-slate-700 leading-relaxed pl-2 border-l-2 border-slate-400">
                           {exp.aim || `To design and implement a program for ${exp.title}.`}
@@ -1137,10 +1203,7 @@ function InteractiveA4Sheet({
                       <ComponentBlockWrapper
                         key="procedure"
                         title="PROCEDURE / ALGORITHM"
-                        expIndex={expIndex}
-                        secName="procedure"
-                        onMove={onMoveSection}
-                        onDelete={onDeleteSection}
+                        {...commonProps}
                       >
                         <p className="text-[9.5px] sm:text-[10px] text-slate-700 whitespace-pre-line leading-relaxed pl-2 border-l-2 border-slate-400">
                           {exp.procedure}
@@ -1152,12 +1215,9 @@ function InteractiveA4Sheet({
                       <ComponentBlockWrapper
                         key="code"
                         title={`VERIFIED SOURCE CODE (${exp.language?.toUpperCase() || 'PYTHON 3'})`}
-                        expIndex={expIndex}
-                        secName="code"
-                        onMove={onMoveSection}
-                        onDelete={onDeleteSection}
+                        {...commonProps}
                       >
-                        <div className="bg-slate-900 text-slate-100 p-2.5 rounded font-mono text-[9px] sm:text-[9.5px] leading-snug overflow-x-auto border border-slate-700 max-h-52">
+                        <div className="bg-slate-900 text-slate-100 p-2 rounded font-mono text-[9px] sm:text-[9.5px] leading-snug overflow-x-auto border border-slate-700 max-h-48">
                           {codeLines.map((line, lIdx) => (
                             <div key={lIdx} className="flex">
                               <span className="text-slate-500 w-6 select-none text-right pr-2">{lIdx + 1}</span>
@@ -1172,10 +1232,7 @@ function InteractiveA4Sheet({
                       <ComponentBlockWrapper
                         key="output"
                         title="EXECUTION OUTPUT & TEST VERIFICATION"
-                        expIndex={expIndex}
-                        secName="output"
-                        onMove={onMoveSection}
-                        onDelete={onDeleteSection}
+                        {...commonProps}
                       >
                         <div className="bg-emerald-50 border border-emerald-300 p-1.5 rounded text-[9.5px] font-mono text-emerald-900 space-y-0.5">
                           <div className="font-bold text-emerald-800">
@@ -1192,10 +1249,7 @@ function InteractiveA4Sheet({
                       <ComponentBlockWrapper
                         key="result"
                         title="RESULT"
-                        expIndex={expIndex}
-                        secName="result"
-                        onMove={onMoveSection}
-                        onDelete={onDeleteSection}
+                        {...commonProps}
                       >
                         <p className="text-[10px] sm:text-[10.5px] text-slate-700 italic pl-2 border-l-2 border-slate-400">
                           {exp.result_text || `Thus the program for '${exp.title}' was successfully developed, executed, tested against all verification test cases, and evaluated.`}
@@ -1207,10 +1261,7 @@ function InteractiveA4Sheet({
                       <ComponentBlockWrapper
                         key="signature"
                         title="STAFF SIGNATURE & EVALUATION"
-                        expIndex={expIndex}
-                        secName="signature"
-                        onMove={onMoveSection}
-                        onDelete={onDeleteSection}
+                        {...commonProps}
                       >
                         <div className="grid grid-cols-3 gap-2 border border-slate-400 p-1.5 text-center text-[9px] sm:text-[9.5px] font-bold bg-slate-50">
                           <div>Date: {exp.date || '22-09-2026'}</div>
@@ -1236,37 +1287,118 @@ function InteractiveA4Sheet({
 }
 
 // -------------------------------------------------------------
-// COMPONENT BLOCK WRAPPER WITH DIRECT HOVER MOVE & DELETE CONTROLS
+// COMPONENT BLOCK WRAPPER WITH FLUID DRAG & DROP + HOVER ACTIONS
 // -------------------------------------------------------------
 
-function ComponentBlockWrapper({ title, expIndex, secName, onMove, onDelete, children }) {
+function ComponentBlockWrapper({
+  title,
+  expIndex,
+  secName,
+  onMove,
+  onDelete,
+  onDropSection,
+  draggedItem,
+  setDraggedItem,
+  dragOverItem,
+  setDragOverItem,
+  children
+}) {
+  const isDragging = draggedItem?.expIndex === expIndex && draggedItem?.secName === secName;
+  const isDragOver = dragOverItem?.expIndex === expIndex && dragOverItem?.secName === secName && !isDragging;
+
+  const handleDragStart = (e) => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({ expIndex, secName }));
+    e.dataTransfer.effectAllowed = 'move';
+    if (setDraggedItem) {
+      setDraggedItem({ expIndex, secName });
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    if (setDragOverItem && draggedItem && (draggedItem.secName !== secName || draggedItem.expIndex !== expIndex)) {
+      setDragOverItem({ expIndex, secName });
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (onDropSection && draggedItem) {
+      onDropSection(expIndex, draggedItem.secName, secName);
+    }
+    if (setDraggedItem) setDraggedItem(null);
+    if (setDragOverItem) setDragOverItem(null);
+  };
+
+  const handleDragEnd = () => {
+    if (setDraggedItem) setDraggedItem(null);
+    if (setDragOverItem) setDragOverItem(null);
+  };
+
   return (
-    <div className="group relative border border-transparent hover:border-slate-300 rounded p-1 transition-all">
-      {/* Component Title & Move/Delete Controls Toolbar */}
-      <div className="flex items-center justify-between mb-0.5">
-        <h5 className="text-[10px] sm:text-[10.5px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
-          {title}
-        </h5>
+    <div
+      draggable={true}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onDragEnd={handleDragEnd}
+      className={`group relative rounded p-1 transition-all duration-150 select-none ${
+        isDragging
+          ? 'opacity-40 border-2 border-dashed border-indigo-500 bg-indigo-50/50 scale-[0.98]'
+          : isDragOver
+          ? 'border-2 border-indigo-500 bg-indigo-50/40 ring-2 ring-indigo-400/60 shadow-lg -translate-y-0.5'
+          : 'border border-transparent hover:border-slate-300 hover:bg-slate-50/50'
+      }`}
+    >
+      {/* Drop indicator bar */}
+      {isDragOver && (
+        <div className="absolute -top-1 left-0 right-0 h-1 bg-indigo-600 rounded-full shadow z-30 animate-pulse" />
+      )}
+
+      {/* Title Bar & Drag Handle */}
+      <div className="flex items-center justify-between mb-0.5 cursor-grab active:cursor-grabbing">
+        <div className="flex items-center gap-1">
+          <span
+            title="Drag and drop to place this section anywhere"
+            className="text-slate-400 group-hover:text-indigo-600 transition-colors cursor-grab active:cursor-grabbing p-0.5"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </span>
+          <h5 className="text-[10px] sm:text-[10.5px] font-bold text-slate-800 uppercase tracking-wider">
+            {title}
+          </h5>
+        </div>
 
         {/* Action Controls on Hover */}
         {onMove && (
-          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 bg-slate-800 text-white px-1.5 py-0.5 rounded text-[8px] transition-all z-20">
+          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 bg-slate-900 text-white px-1.5 py-0.5 rounded text-[8px] transition-all z-20 shadow-sm">
             <button
-              onClick={() => onMove(expIndex, secName, 'up')}
+              onClick={(e) => { e.stopPropagation(); onMove(expIndex, secName, 'up'); }}
               title="Move this block UP"
               className="hover:text-[var(--accent)] p-0.5 cursor-pointer"
             >
               <ArrowUp className="w-2.5 h-2.5" />
             </button>
             <button
-              onClick={() => onMove(expIndex, secName, 'down')}
+              onClick={(e) => { e.stopPropagation(); onMove(expIndex, secName, 'down'); }}
               title="Move this block DOWN"
               className="hover:text-[var(--accent)] p-0.5 cursor-pointer"
             >
               <ArrowDown className="w-2.5 h-2.5" />
             </button>
             <button
-              onClick={() => onMove(expIndex, secName, 'last')}
+              onClick={(e) => { e.stopPropagation(); onMove(expIndex, secName, 'last'); }}
               title="Move this block to the very LAST position of the page"
               className="hover:text-[var(--accent)] p-0.5 cursor-pointer text-[8px] font-mono"
             >
@@ -1274,7 +1406,7 @@ function ComponentBlockWrapper({ title, expIndex, secName, onMove, onDelete, chi
             </button>
             {onDelete && (
               <button
-                onClick={() => onDelete(expIndex, secName)}
+                onClick={(e) => { e.stopPropagation(); onDelete(expIndex, secName); }}
                 title="Delete this block"
                 className="hover:text-rose-400 p-0.5 cursor-pointer"
               >
@@ -1285,7 +1417,10 @@ function ComponentBlockWrapper({ title, expIndex, secName, onMove, onDelete, chi
         )}
       </div>
 
-      {children}
+      <div className="cursor-default select-text">
+        {children}
+      </div>
     </div>
   );
 }
+
