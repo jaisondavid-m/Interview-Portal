@@ -14,6 +14,7 @@ type User struct {
 	Email            string         `gorm:"size:100;uniqueIndex;not null" json:"email" binding:"required,email"`
 	RollNo           string         `gorm:"size:50;index" json:"roll_no"`
 	Department       string         `gorm:"size:100" json:"department"`
+	Section          string         `gorm:"size:50;index" json:"section"`
 	Password         string         `gorm:"size:255;not null" json:"-"`
 	Role             string         `gorm:"size:20;default:'student';not null" json:"role"` // 'admin' or 'student'
 	GoogleID         string         `gorm:"size:100;index" json:"google_id,omitempty"`

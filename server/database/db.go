@@ -159,6 +159,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.RateLimitConfig{},
 		&models.LabCourse{},
 		&models.LabExperiment{},
+		&models.LabExperimentUnlock{},
 		&models.LabMapping{},
 		&models.LabSubmission{},
 		&models.LabRecord{},
@@ -547,17 +548,8 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			Path:        "/admin/labs/config",
 			Icon:        "FlaskConical",
 			Category:    "Academic Labs",
-			Description: "Add lab courses, manage sections/semesters/academic years, and map students to faculty lab incharges",
+			Description: "Add lab courses, configure experiments & test cases, manage sections/semesters/academic years, and map students to faculty lab incharges",
 			OrderIndex:  32,
-		},
-		{
-			Key:         "admin_lab_mapping",
-			Name:        "Lab Course Mappings (Legacy)",
-			Path:        "/admin/labs/mapping",
-			Icon:        "Building2",
-			Category:    "Academic Labs",
-			Description: "Legacy: Map faculty members to lab courses (use Lab Configuration instead)",
-			OrderIndex:  33,
 		},
 		{
 			Key:         "admin_lab_pdf_audit",
@@ -566,9 +558,13 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			Icon:        "FileCode2",
 			Category:    "Academic Labs",
 			Description: "Preview and audit official server-generated student PDF lab records",
-			OrderIndex:  34,
+			OrderIndex:  33,
 		},
 	}
+
+	// Clean up legacy admin_lab_mapping page if present
+	db.Exec("DELETE FROM role_page_permissions WHERE page_key = 'admin_lab_mapping'")
+	db.Exec("DELETE FROM app_pages WHERE `key` = 'admin_lab_mapping'")
 
 	for _, page := range labPages {
 		var pageCount int64
@@ -584,7 +580,7 @@ func syncAppPagesCatalog(db *gorm.DB) {
 					db.Create(&models.RolePagePermission{RoleName: "faculty", PageKey: page.Key, CanAccess: true})
 					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
 				}
-				if page.Key == "admin_lab_mapping" || page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" {
+				if page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" {
 					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
 				}
 			}
