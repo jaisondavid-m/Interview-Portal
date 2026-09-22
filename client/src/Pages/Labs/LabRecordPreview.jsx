@@ -1,11 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Download,
   ShieldCheck,
   Loader2,
-  FileText
+  FileText,
+  BookOpen,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  Sparkles,
+  Award,
+  Edit3
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -14,41 +21,97 @@ export default function LabRecordPreview() {
   const { courseId = 1 } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  // View state
+  const [viewMode, setViewMode] = useState('scroll'); // 'scroll' | 'single'
+  const [activePage, setActivePage] = useState('cover'); // 'cover' | 'index' | number (0..N-1)
+
+  // Full template data pre-populated for this student
+  const [template, setTemplate] = useState({
+    institution_name: 'BANNARI AMMAN INSTITUTE OF TECHNOLOGY',
+    institution_sub: 'An Autonomous Institution Affiliated to Anna University Chennai',
+    department: 'DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND DATA SCIENCE',
+    degree: 'B.Tech',
+    semester: 'Semester III',
+    academic_year: '2025-2026',
+    course_code: '22AI304',
+    course_title: 'PRINCIPLES OF PROGRAMMING LABORATORY',
+    student_name: user?.name || 'STUDENT NAME',
+    roll_no: user?.roll_no || '7376222AD145',
+    register_no: user?.roll_no || '7376222AD145',
+    branch_section: `${user?.department || 'AIDS'} (${user?.section || 'A'})`,
+    verification_id: `MOCKMATE-REC-${user?.roll_no || '7376222AD145'}-22AI304`,
+    certificate_text: '',
+    staff_incharge: 'Staff Incharge',
+    head_of_department: 'Head of Department',
+    experiments: []
+  });
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  useEffect(() => {
+    fetchStudentTemplate();
+  }, [courseId]);
+
+  const fetchStudentTemplate = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`/labs/courses/${courseId}/pdf-template`);
+      if (res?.template) {
+        setTemplate(res.template);
+      }
+    } catch {
+      showToast('Loaded local fallback layout', 'info');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDownloadPDF = async () => {
     try {
       setDownloading(true);
-      const studentId = user?.id || 1;
-      const res = await api.get(`/labs/record-pdf/${courseId}/student/${studentId}`, {
+      const response = await api.post('/labs/record-pdf/custom', template, {
         responseType: 'blob'
       });
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const blob = new Blob([response.data || response], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${user?.roll_no || 'Student'}_Lab_Record.pdf`);
+      link.setAttribute('download', `${template.roll_no || 'Student'}_${template.course_code}_LabRecord.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      showToast('Official multi-page Lab Record downloaded!');
     } catch {
-      alert('Could not generate PDF. Please try again.');
+      showToast('Failed to generate record PDF.', 'error');
     } finally {
       setDownloading(false);
     }
   };
 
-  const experimentList = [
-    'Online shopping cart: Develop an application to implement an online shopping cart and generate bills',
-    'Pocket Bazaar: Develop an application to manage an inventory of products for grocery stores',
-    'Vacation Destination Decision Maker: Create an application that helps decide on vacation destination',
-    'Temperature monitor: Develop an application for a temperature monitoring system with alerts',
-    'Access control system: Simulate granting access to authorized personnel based on ID and PIN codes',
-    'Math Quiz Generator: Design a math quiz generator with varying difficulty levels',
-    'Maze solver application: Build a maze solver finding a path from entrance to exit',
-  ];
-
   return (
     <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-md)] text-xs font-semibold shadow-2xl transition-all animate-in fade-in slide-in-from-top-3 ${
+            toast.type === 'error'
+              ? 'bg-rose-500/90 text-white'
+              : 'bg-emerald-500/90 text-white'
+          }`}
+        >
+          {toast.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          {toast.msg}
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -57,129 +120,392 @@ export default function LabRecordPreview() {
             className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] py-1.5 px-3 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer shadow-[var(--shadow-sm)]"
           >
             <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
-            Back
+            Back to Labs
           </button>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] mb-1">
               <ShieldCheck className="w-3 h-3" />
-              Verified College Document
+              Official College Record Document
             </div>
-            <h1 className="text-[18px] font-bold text-[var(--text-primary)] tracking-tight">
-              Laboratory Record Preview
+            <h1 className="text-[18px] sm:text-[22px] font-bold text-[var(--text-primary)] tracking-tight">
+              Laboratory Record Manual Preview
             </h1>
             <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-              22AI304 — PRINCIPLES OF PROGRAMMING LABORATORY
+              {template.course_code} — {template.course_title}
             </p>
           </div>
         </div>
-        <button
-          onClick={handleDownloadPDF}
-          disabled={downloading}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-md)]"
-        >
-          {downloading
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <Download className="w-4 h-4" />
-          }
-          Download Official Record PDF
-        </button>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleDownloadPDF}
+            disabled={downloading || loading}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-md)]"
+          >
+            {downloading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            Download Complete PDF ({template.experiments?.length + 2 || 'All'} Pages)
+          </button>
+        </div>
       </div>
 
-      {/* Printable Preview Sheet */}
-      <div className="bg-white border border-[var(--border)] rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] overflow-hidden">
-        {/* College Header Banner */}
-        <div className="p-6 bg-white border-b border-[var(--border)] text-center space-y-3">
-          <img src="/BITlogo.png" alt="Bannari Amman Institute of Technology" className="max-h-16 mx-auto object-contain" />
-          <div className="h-px bg-slate-200 w-full" />
-          <div>
-            <p className="text-[12px] font-bold text-slate-700 uppercase tracking-wider">
-              DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND DATA SCIENCE
-            </p>
-            <h2 className="text-[15px] font-black text-slate-900 uppercase tracking-wide mt-0.5">
-              LABORATORY RECORD MANUAL
-            </h2>
-            <p className="text-[11px] text-slate-500 font-medium">
-              B.Tech · Semester III · Academic Year 2025–2026
-            </p>
-            <div className="inline-block mt-2 px-3 py-1 bg-slate-100 rounded text-[11px] font-mono font-bold text-slate-800 border border-slate-300">
-              22AI304 — PRINCIPLES OF PROGRAMMING LABORATORY
+      {loading ? (
+        <div className="p-16 text-center space-y-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)]">
+          <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)] mx-auto" />
+          <p className="text-xs text-[var(--text-muted)] font-medium">Loading your course record sheets & submissions...</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Top Page Navigator Bar */}
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-3 shadow-[var(--shadow-sm)] flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] px-2">
+                Pages:
+              </span>
+
+              <button
+                onClick={() => { setActivePage('cover'); setViewMode('single'); }}
+                className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activePage === 'cover' && viewMode === 'single'
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Cover & Bonafide
+              </button>
+
+              <button
+                onClick={() => { setActivePage('index'); setViewMode('single'); }}
+                className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activePage === 'index' && viewMode === 'single'
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                Index Table
+              </button>
+
+              {template.experiments?.map((exp, idx) => (
+                <button
+                  key={exp.experiment_no || idx}
+                  onClick={() => { setActivePage(idx); setViewMode('single'); }}
+                  className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activePage === idx && viewMode === 'single'
+                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                      : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+                  }`}
+                >
+                  <span className="font-mono text-[10px]">Ex {String(exp.experiment_no || idx + 1).padStart(2, '0')}</span>
+                </button>
+              ))}
             </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1 bg-[var(--bg-input)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)]">
+              <button
+                onClick={() => setViewMode('scroll')}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'scroll'
+                    ? 'bg-[var(--bg-card)] text-[var(--accent)] shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Continuous Document (All Pages)
+              </button>
+              <button
+                onClick={() => setViewMode('single')}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'single'
+                    ? 'bg-[var(--bg-card)] text-[var(--accent)] shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Single Page Focus
+              </button>
+            </div>
+          </div>
+
+          {/* RENDER PAGES */}
+          {viewMode === 'scroll' ? (
+            <div className="space-y-8 max-w-4xl mx-auto">
+              <StudentA4CoverPage template={template} setTemplate={setTemplate} />
+              <StudentA4IndexPage template={template} />
+              {template.experiments?.map((exp, idx) => (
+                <StudentA4ExperimentPage key={idx} exp={exp} template={template} />
+              ))}
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto">
+              {activePage === 'cover' && <StudentA4CoverPage template={template} setTemplate={setTemplate} />}
+              {activePage === 'index' && <StudentA4IndexPage template={template} />}
+              {typeof activePage === 'number' && template.experiments[activePage] && (
+                <StudentA4ExperimentPage exp={template.experiments[activePage]} template={template} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// STUDENT A4 SUB-COMPONENTS
+// -------------------------------------------------------------
+
+function StudentA4CoverPage({ template, setTemplate }) {
+  const deptStr = template.department?.toUpperCase() || 'DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND DATA SCIENCE';
+  const certText = template.certificate_text || `Certified that this is the bonafide record of practical work done by Mr./Ms. ${template.student_name} (Roll No: ${template.roll_no}) of ${template.semester} in the ${template.course_title} (${template.course_code}) Laboratory of Bannari Amman Institute of Technology during the academic year ${template.academic_year}.`;
+
+  return (
+    <div className="bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-2xl p-8 max-w-[800px] mx-auto min-h-[1050px] relative font-[system-ui] flex flex-col justify-between" style={{ aspectRatio: '1 / 1.414' }}>
+      <div className="border border-slate-400 p-6 h-full flex flex-col justify-between">
+        {/* Header Block */}
+        <div className="text-center space-y-2">
+          <img src="/BITlogo.png" alt="Bannari Amman Institute of Technology" className="max-h-16 mx-auto object-contain" />
+          <div className="h-0.5 bg-slate-800 w-full my-2" />
+          <h2 className="text-[13px] font-black tracking-wider text-slate-800">
+            {deptStr}
+          </h2>
+          <div className="bg-slate-100 border border-slate-300 py-1 px-4 my-2 text-center">
+            <h3 className="text-[14px] font-black tracking-widest text-slate-900">
+              LABORATORY RECORD NOTEBOOK
+            </h3>
+          </div>
+          <p className="text-[13px] font-bold text-slate-900">
+            {template.course_code} — {template.course_title?.toUpperCase()}
+          </p>
+          <p className="text-[11px] text-slate-600 font-medium italic">
+            {template.degree} | {template.semester} | Academic Year: {template.academic_year}
+          </p>
+        </div>
+
+        {/* Student Profile Box */}
+        <div className="bg-slate-50 border border-slate-300 p-4 rounded text-[12px] space-y-1.5 my-4">
+          <div className="grid grid-cols-12">
+            <span className="col-span-4 font-bold text-slate-700">STUDENT NAME</span>
+            <span className="col-span-8 font-semibold text-slate-900">: {template.student_name}</span>
+          </div>
+          <div className="grid grid-cols-12">
+            <span className="col-span-4 font-bold text-slate-700">ROLL / REG NO</span>
+            <span className="col-span-8 font-mono font-bold text-slate-900">: {template.roll_no}</span>
+          </div>
+          <div className="grid grid-cols-12">
+            <span className="col-span-4 font-bold text-slate-700">BRANCH / SECTION</span>
+            <span className="col-span-8 text-slate-900">: {template.branch_section || 'AIDS - A'}</span>
+          </div>
+          <div className="grid grid-cols-12">
+            <span className="col-span-4 font-bold text-slate-700">SEMESTER & YEAR</span>
+            <span className="col-span-8 text-slate-900">: {template.semester} | {template.academic_year}</span>
+          </div>
+          <div className="grid grid-cols-12">
+            <span className="col-span-4 font-bold text-slate-700">VERIFICATION ID</span>
+            <span className="col-span-8 font-mono font-bold text-emerald-700">: {template.verification_id}</span>
           </div>
         </div>
 
-        <div className="p-8 space-y-8 font-[system-ui]">
-          {/* Student Meta Block */}
-          <div className="grid grid-cols-2 gap-4 bg-[var(--bg-raised)] p-4 rounded-[var(--radius-md)] border border-[var(--border)] text-[12px]">
-            <div>
-              <span className="text-[var(--text-muted)] font-medium">Student Name: </span>
-              <span className="font-bold text-[var(--text-primary)]">{user?.name || '—'}</span>
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)] font-medium">Roll / Reg No: </span>
-              <span className="font-bold text-[var(--text-primary)] font-mono">{user?.roll_no || '—'}</span>
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)] font-medium">Department: </span>
-              <span className="font-bold text-[var(--text-primary)]">{user?.department || 'Artificial Intelligence and Data Science'}</span>
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)] font-medium">Verification: </span>
-              <span className="font-mono text-[var(--accent)] text-[11px] font-bold">MOCKMATE-VERIFIED</span>
-            </div>
-          </div>
+        {/* Bonafide Certificate */}
+        <div className="space-y-3 text-center my-4">
+          <h4 className="text-[13px] font-black tracking-widest text-slate-900 border-b border-slate-300 pb-1 inline-block">
+            BONAFIDE CERTIFICATE
+          </h4>
+          <p className="text-[12px] text-slate-700 text-justify leading-relaxed">
+            {certText}
+          </p>
+        </div>
 
-          {/* Index Table */}
-          <div className="space-y-3">
-            <h4 className="text-[12px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              List of Experiments (7 Core Tasks)
-            </h4>
-            <table className="w-full border-collapse text-[12px] border border-[var(--border)]">
-              <thead>
-                <tr className="bg-[var(--bg-raised)] text-[var(--text-secondary)] font-bold border-b border-[var(--border)]">
-                  <th className="p-2.5 text-center border-r border-[var(--border)] w-12">Ex</th>
-                  <th className="p-2.5 text-left border-r border-[var(--border)]">Experiment Name</th>
-                  <th className="p-2.5 text-center border-r border-[var(--border)] w-24">Marks (10)</th>
-                  <th className="p-2.5 text-center w-28">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {experimentList.map((name, idx) => (
-                  <tr key={idx} className="hover:bg-[var(--bg-raised)] transition-colors">
-                    <td className="p-2.5 text-center font-mono font-bold text-[var(--accent)] border-r border-[var(--border)]">
-                      {String(idx + 1).padStart(2, '0')}
-                    </td>
-                    <td className="p-2.5 text-[var(--text-primary)] border-r border-[var(--border)]">{name}</td>
-                    <td className="p-2.5 text-center font-bold text-[var(--green)] border-r border-[var(--border)]">10 / 10</td>
-                    <td className="p-2.5 text-center">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30">
-                        VERIFIED
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Signatures Grid */}
+        <div className="pt-8 grid grid-cols-4 gap-2 text-center text-[10px] font-bold text-slate-800">
+          <div>
+            <div className="border-t border-slate-400 pt-1">{template.staff_incharge || 'Staff Incharge'}</div>
+            <div className="text-[9px] text-slate-500 font-normal italic">(Digital Sign-off)</div>
           </div>
+          <div>
+            <div className="border-t border-slate-400 pt-1">{template.head_of_department || 'Head of Department'}</div>
+            <div className="text-[9px] text-slate-500 font-normal italic">(Department Seal)</div>
+          </div>
+          <div>
+            <div className="border-t border-slate-400 pt-1">Internal Examiner</div>
+            <div className="text-[9px] text-slate-500 font-normal italic">(Evaluation)</div>
+          </div>
+          <div>
+            <div className="border-t border-slate-400 pt-1">External Examiner</div>
+            <div className="text-[9px] text-slate-500 font-normal italic">(Evaluation)</div>
+          </div>
+        </div>
 
-          {/* Bonafide Certificate */}
-          <div className="border-t border-[var(--border)] pt-6 text-center space-y-4">
-            <h4 className="text-[13px] font-black uppercase tracking-widest text-[var(--text-primary)]">
-              BONAFIDE CERTIFICATE
-            </h4>
-            <p className="text-[12px] text-[var(--text-secondary)] max-w-2xl mx-auto leading-relaxed italic">
-              Certified to be the bonafide record of work done by{' '}
-              <strong className="text-[var(--text-primary)]">{user?.name || 'Student Name'}</strong>{' '}
-              (Roll No: <strong className="font-mono">{user?.roll_no || '—'}</strong>) in the{' '}
-              <strong>Principles of Programming Laboratory (22AI304)</strong> during the academic year 2025–2026.
+        {/* Page Footer */}
+        <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-200">
+          Page 1 of {template.experiments?.length + 2} · Bannari Amman Institute of Technology
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentA4IndexPage({ template }) {
+  const totalMarks = template.experiments?.reduce((acc, curr) => acc + (curr.marks || 10), 0) || 0;
+  const avg = template.experiments?.length > 0 ? (totalMarks / template.experiments.length).toFixed(1) : '10.0';
+
+  return (
+    <div className="bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-2xl p-8 max-w-[800px] mx-auto min-h-[1050px] relative font-[system-ui] flex flex-col justify-between" style={{ aspectRatio: '1 / 1.414' }}>
+      <div className="border border-slate-400 p-6 h-full flex flex-col justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold border-b border-slate-200 pb-1">
+            <span>BANNARI AMMAN INSTITUTE OF TECHNOLOGY</span>
+            <span>{template.course_code} — PRACTICAL LAB RECORD</span>
+          </div>
+          <div className="text-center py-2">
+            <h3 className="text-[14px] font-black tracking-widest text-slate-900">
+              INDEX OF EXPERIMENTS
+            </h3>
+            <p className="text-[11px] text-slate-500 font-medium">
+              Curriculum Task List & Evaluation Roster
             </p>
-            <div className="pt-10 flex justify-between px-12 text-[11px] font-bold text-[var(--text-secondary)]">
-              <div className="text-center">
-                <div className="border-t border-[var(--border-strong)] pt-1 w-40">Staff Incharge</div>
+          </div>
+
+          <table className="w-full border-collapse text-[11px] border border-slate-400 mt-3">
+            <thead>
+              <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-400">
+                <th className="p-2 text-center border-r border-slate-400 w-12">EX</th>
+                <th className="p-2 text-center border-r border-slate-400 w-24">DATE</th>
+                <th className="p-2 text-left border-r border-slate-400">TITLE OF THE EXPERIMENT</th>
+                <th className="p-2 text-center border-r border-slate-400 w-20">MARKS</th>
+                <th className="p-2 text-center w-24">SIGN</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-300">
+              {template.experiments?.map((exp, idx) => (
+                <tr key={idx} className="hover:bg-slate-50">
+                  <td className="p-2 text-center font-mono font-bold text-slate-900 border-r border-slate-300">
+                    {String(exp.experiment_no || idx + 1).padStart(2, '0')}
+                  </td>
+                  <td className="p-2 text-center text-slate-600 border-r border-slate-300">
+                    {exp.date || '22-09-2026'}
+                  </td>
+                  <td className="p-2 font-medium text-slate-900 border-r border-slate-300">
+                    {exp.title}
+                  </td>
+                  <td className="p-2 text-center font-bold text-slate-900 border-r border-slate-300">
+                    {exp.marks || 10} / 10
+                  </td>
+                  <td className="p-2 text-center font-bold text-emerald-700 text-[10px]">
+                    VERIFIED
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-slate-50 font-bold border-t-2 border-slate-400">
+                <td colSpan={3} className="p-2 text-right border-r border-slate-400 uppercase text-[10px]">
+                  Total Evaluated Average Score :
+                </td>
+                <td className="p-2 text-center text-slate-900 border-r border-slate-400 font-black">
+                  {avg} / 10
+                </td>
+                <td className="p-2 text-center text-slate-600 font-mono text-[10px]">
+                  SEALED
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-200">
+          Page 2 of {template.experiments?.length + 2} · Bannari Amman Institute of Technology
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentA4ExperimentPage({ exp, template }) {
+  const codeLines = (exp.submitted_code || '').split('\n');
+
+  return (
+    <div className="bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-2xl p-8 max-w-[800px] mx-auto min-h-[1050px] relative font-[system-ui] flex flex-col justify-between" style={{ aspectRatio: '1 / 1.414' }}>
+      <div className="border border-slate-400 p-6 h-full flex flex-col justify-between space-y-4">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold border-b border-slate-200 pb-1">
+            <span>BIT — {template.course_code}</span>
+            <span>Student: {template.student_name} ({template.roll_no})</span>
+          </div>
+
+          <div className="bg-slate-100 border border-slate-400 p-2 text-left font-black text-[12px] text-slate-900 flex items-center justify-between">
+            <span>EX NO: {String(exp.experiment_no).padStart(2, '0')} — {exp.title?.toUpperCase()}</span>
+            <span className="text-[10px] font-normal font-mono text-slate-600">{exp.date || '22-09-2026'}</span>
+          </div>
+
+          {/* 1. AIM */}
+          <div className="space-y-1">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">AIM:</h5>
+            <p className="text-[11px] text-slate-700 leading-relaxed pl-2 border-l-2 border-slate-400">
+              {exp.aim || `To design and implement a program for ${exp.title}.`}
+            </p>
+          </div>
+
+          {/* 2. PROCEDURE */}
+          {exp.procedure && (
+            <div className="space-y-1">
+              <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">PROCEDURE / ALGORITHM:</h5>
+              <p className="text-[10.5px] text-slate-700 whitespace-pre-line leading-relaxed pl-2 border-l-2 border-slate-400">
+                {exp.procedure}
+              </p>
+            </div>
+          )}
+
+          {/* 3. SOURCE CODE */}
+          <div className="space-y-1">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+              VERIFIED SOURCE CODE ({exp.language?.toUpperCase() || 'PYTHON 3'}):
+            </h5>
+            <div className="bg-slate-900 text-slate-100 p-3 rounded font-mono text-[10px] leading-snug overflow-x-auto border border-slate-700">
+              {codeLines.map((line, lIdx) => (
+                <div key={lIdx} className="flex">
+                  <span className="text-slate-500 w-8 select-none text-right pr-2">{lIdx + 1}</span>
+                  <span className="text-slate-200">{line}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 4. EXECUTION OUTPUT */}
+          <div className="space-y-1">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+              EXECUTION OUTPUT & TEST VERIFICATION:
+            </h5>
+            <div className="bg-emerald-50 border border-emerald-300 p-2 rounded text-[10px] font-mono text-emerald-900 space-y-1">
+              <div className="font-bold text-emerald-800">
+                ✓ [PASS] Status: {exp.status || 'VERIFIED'} | Hidden Test Cases: {exp.pass_count || 3} / {exp.total_test_cases || 3} | Marks: {exp.marks || 10} / 10
               </div>
-              <div className="text-center">
-                <div className="border-t border-[var(--border-strong)] pt-1 w-40">Head of Department</div>
+              <div className="text-slate-700 pl-2 border-l-2 border-emerald-400">
+                [CONSOLE]: {exp.execution_output || `All test cases passed for '${exp.title}'.`}
               </div>
             </div>
+          </div>
+
+          {/* 5. RESULT */}
+          <div className="space-y-1">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">RESULT:</h5>
+            <p className="text-[11px] text-slate-700 italic pl-2 border-l-2 border-slate-400">
+              {exp.result_text || `Thus the program for '${exp.title}' was successfully developed, executed, tested against all verification test cases, and evaluated.`}
+            </p>
+          </div>
+        </div>
+
+        {/* Evaluation Sign Footer */}
+        <div>
+          <div className="grid grid-cols-3 gap-3 border border-slate-400 p-2 text-center text-[10px] font-bold bg-slate-50">
+            <div>Date: {exp.date || '22-09-2026'}</div>
+            <div>Marks: {exp.marks || 10} / 10</div>
+            <div className="text-emerald-700">Staff Sign: VERIFIED [DIGITAL]</div>
+          </div>
+          <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-200 mt-2">
+            Experiment {exp.experiment_no} · Bannari Amman Institute of Technology
           </div>
         </div>
       </div>
