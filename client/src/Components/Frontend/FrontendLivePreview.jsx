@@ -562,7 +562,7 @@ export default function FrontendLivePreview({
         <div className="h-40 bg-slate-950 border-t border-slate-800 flex flex-col shrink-0 font-mono text-xs z-30 animate-in slide-in-from-bottom duration-150">
           <div className="px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-slate-400">
             <div className="flex items-center gap-2">
-              <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+              <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span className="font-bold text-[11px] text-slate-200 uppercase tracking-wider">
                 Preview Console Logs
               </span>

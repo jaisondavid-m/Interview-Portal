@@ -235,9 +235,9 @@ export default function FrontendPlayground({
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-bold shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-[#6e56cf] animate-pulse" />
               <span className="text-[var(--text-primary)]">Live Observer</span>
-              <span className="text-[10px] bg-[var(--green-bg)] text-[var(--green)] px-1.5 py-0.5 rounded font-bold uppercase border border-[var(--green)]/30">
+              <span className="text-[10px] bg-[var(--accent-dim)] text-[var(--accent)] px-1.5 py-0.5 rounded font-bold uppercase border border-[var(--border-accent)]">
                 {candidateName}
               </span>
             </div>
@@ -255,10 +255,10 @@ export default function FrontendPlayground({
               }`}
               title="View Challenge Guidelines & Specifications"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+              <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span className="hidden sm:inline">Requirements</span>
               {payload?.scenario && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#6e56cf] animate-pulse" />
               )}
             </button>
           )}
@@ -388,12 +388,12 @@ export default function FrontendPlayground({
                     <span>App.jsx</span>
                   </div>
                   <span className="text-gray-400 text-[11px] hidden sm:flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#6e56cf] animate-pulse" />
                     <span>Live JSX • React 18</span>
                   </span>
                 </div>
                 {!isEditable && (
-                  <span className="text-amber-400 text-[10px] bg-amber-950/40 px-2.5 py-1 rounded-md border border-amber-500/30 font-bold">
+                  <span className="text-[var(--accent)] text-[10px] bg-[var(--accent-dim)] px-2.5 py-1 rounded-md border border-[var(--border-accent)] font-bold">
                     Live Observer View
                   </span>
                 )}
@@ -448,7 +448,7 @@ export default function FrontendPlayground({
           <div className="w-80 md:w-96 bg-[var(--bg-card)] border-l border-[var(--border)] flex flex-col h-full shadow-2xl z-40 animate-in slide-in-from-right duration-200">
             <div className="p-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-cyan-500" />
+                <BookOpen className="w-4 h-4 text-[var(--accent)]" />
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   Frontend Challenge Criteria
                 </h3>
@@ -466,7 +466,7 @@ export default function FrontendPlayground({
             <div className="p-4 space-y-4 overflow-y-auto flex-1 text-xs">
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-500">
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)]">
                     {question.difficulty || 'Medium'}
                   </span>
                   <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
@@ -482,13 +482,13 @@ export default function FrontendPlayground({
               <div className="p-3 bg-[var(--bg-raised)] rounded-[var(--radius-sm)] border border-[var(--border)] space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[var(--text-primary)] text-xs flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-cyan-500" />
+                    <Package className="w-3.5 h-3.5 text-[var(--accent)]" />
                     <span>Pre-Installed Packages ({INSTALLED_FRONTEND_PACKAGES.length}):</span>
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowPackagesModal(true)}
-                    className="text-[10px] text-cyan-500 font-bold hover:underline cursor-pointer"
+                    className="text-[10px] text-[var(--accent)] font-bold hover:underline cursor-pointer"
                   >
                     View All →
                   </button>
@@ -533,8 +533,8 @@ export default function FrontendPlayground({
 
               {/* Evaluator Rubrics (Interviewer only) */}
               {currentUserRole === 'interviewer' && payload?.rubrics && (
-                <div className="p-3 bg-cyan-500/10 rounded-[var(--radius-sm)] border border-cyan-500/30 space-y-1">
-                  <span className="font-bold text-cyan-600 dark:text-cyan-400 block text-xs">
+                <div className="p-3 bg-[var(--accent-dim)] rounded-[var(--radius-sm)] border border-[var(--border-accent)] space-y-1">
+                  <span className="font-bold text-[var(--accent)] block text-xs">
                     Evaluation Rubrics:
                   </span>
                   <ul className="list-disc pl-4 space-y-1 text-[11px] text-[var(--text-secondary)]">

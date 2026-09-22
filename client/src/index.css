@@ -22,18 +22,15 @@
   --text-muted:     #a89fc4; /* Captions / placeholders */
   --text-accent:    #6e56cf; /* Accent highlight text */
 
-  /* Primary Accent & Brand (Purple Violet) */
+  /* Primary Accent & Brand (Purple Violet #6E56CF) */
   --accent:       #6e56cf;
-  --accent-dim:   rgba(110, 86, 207, 0.10);
-  --accent-glow:  rgba(110, 86, 207, 0.20);
+  --accent-dim:   rgba(110, 86, 207, 0.08);
+  --accent-glow:  rgba(110, 86, 207, 0.16);
 
-  /* Semantic Feedback Colors */
-  --red:       #d14d72;
-  --red-bg:    rgba(209, 77, 114, 0.08);
-  --amber:     #c47d1e;
-  --amber-bg:  rgba(196, 125, 30, 0.08);
-  --green:     #2ea043;
-  --green-bg:  rgba(46, 160, 67, 0.08);
+  /* Semantic Destructive / Delete Red (#E5484D) */
+  --red:          #e5484d;
+  --red-bg:       rgba(229, 72, 77, 0.08);
+  --red-border:   rgba(229, 72, 77, 0.20);
 
   /* Font Families */
   --font-ui:   'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
@@ -148,24 +145,22 @@
   line-height: 1.2;
 }
 
-.status-active, .status-green {
-  background: var(--green-bg);
-  color: var(--green);
+.status-active, .status-accent {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--border-strong);
 }
 
-.status-pending, .status-amber {
-  background: var(--amber-bg);
-  color: var(--amber);
+.status-pending, .status-neutral {
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
 .status-error, .status-red {
   background: var(--red-bg);
   color: var(--red);
-}
-
-.status-accent {
-  background: var(--accent-dim);
-  color: var(--accent);
+  border: 1px solid var(--red-border);
 }
 
 .badge-kicker {

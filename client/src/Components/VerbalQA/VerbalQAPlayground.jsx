@@ -238,18 +238,18 @@ export default function VerbalQAPlayground({
       {/* ============================================================ */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-3 flex-wrap">
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 px-3 py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20 font-mono text-xs shadow-xs">
-            <Mic className="w-3.5 h-3.5 animate-pulse text-purple-500" />
+          <div className="flex items-center gap-2 px-3 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)] font-mono text-xs shadow-xs">
+            <Mic className="w-3.5 h-3.5 animate-pulse text-[var(--accent)]" />
             <span>Verbal Q&A Discussion • Round {round}</span>
           </div>
 
           {isInterviewer ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-mono font-bold border border-purple-500/20">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-xs font-mono font-bold border border-[var(--border-accent)]">
               <Eye className="w-3.5 h-3.5" />
               <span>Assessor Perspective • Observing {candidateName}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-bold border border-emerald-500/20">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-xs font-mono font-bold border border-[var(--border-accent)]">
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Candidate Discussion Workspace</span>
             </div>
@@ -261,12 +261,12 @@ export default function VerbalQAPlayground({
           {isInterviewer && (
             <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] mr-2">
               {isSavingRubrics ? (
-                <span className="flex items-center gap-1 text-amber-500">
+                <span className="flex items-center gap-1 text-[var(--accent)]">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   <span>Saving rubrics...</span>
                 </span>
               ) : lastSavedTime ? (
-                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                <span className="flex items-center gap-1 text-[var(--accent)] font-medium">
                   <Check className="w-3 h-3" />
                   <span>Rubrics Saved</span>
                 </span>
@@ -275,7 +275,7 @@ export default function VerbalQAPlayground({
           )}
 
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono text-[var(--text-muted)]">
-            <MessageSquare className="w-3.5 h-3.5 text-purple-500" />
+            <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Interactive Dialogue Mode</span>
           </div>
 
@@ -333,7 +333,7 @@ export default function VerbalQAPlayground({
           {constraints && (
             <div className="p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] space-y-1.5">
               <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)] font-mono">
-                <Info className="w-4 h-4 text-amber-500" />
+                <Info className="w-4 h-4 text-[var(--accent)]" />
                 <span>Discussion Scope & Key Constraints:</span>
               </div>
               <div className="text-xs font-mono text-[var(--text-muted)] whitespace-pre-line leading-relaxed">
@@ -346,7 +346,7 @@ export default function VerbalQAPlayground({
           <div className="flex-1 flex flex-col space-y-2 pt-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-purple-500" />
+                <FileText className="w-4 h-4 text-[var(--accent)]" />
                 <span className="text-xs font-mono font-bold uppercase text-[var(--text-muted)] tracking-wider">
                   {isEditable ? 'Your Discussion Notes & Talking Points' : `${candidateName}'s Live Discussion Notes`}
                 </span>
@@ -389,7 +389,7 @@ export default function VerbalQAPlayground({
                   : `${candidateName} has not written any notes yet.`
               }
               rows={8}
-              className={`w-full p-4 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] leading-relaxed resize-y outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 ${
+              className={`w-full p-4 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] leading-relaxed resize-y outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-dim)] ${
                 !isEditable ? 'cursor-default bg-[var(--bg-raised)]/30' : ''
               }`}
             />
@@ -409,7 +409,7 @@ export default function VerbalQAPlayground({
                 onClick={() => setInterviewerTab('benchmark')}
                 className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   interviewerTab === 'benchmark'
-                    ? 'bg-purple-600 text-white shadow-xs'
+                    ? 'bg-[var(--accent)] text-white shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -422,7 +422,7 @@ export default function VerbalQAPlayground({
                 onClick={() => setInterviewerTab('rubrics')}
                 className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   interviewerTab === 'rubrics'
-                    ? 'bg-purple-600 text-white shadow-xs'
+                    ? 'bg-[var(--accent)] text-white shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -435,7 +435,7 @@ export default function VerbalQAPlayground({
                 onClick={() => setInterviewerTab('probing')}
                 className={`px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   interviewerTab === 'probing'
-                    ? 'bg-purple-600 text-white shadow-xs'
+                    ? 'bg-[var(--accent)] text-white shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -448,7 +448,7 @@ export default function VerbalQAPlayground({
             {interviewerTab === 'benchmark' && (
               <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                  <span className="font-mono font-bold uppercase text-[11px] text-[var(--accent)] flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>Exemplary Model Response</span>
                   </span>
@@ -459,7 +459,7 @@ export default function VerbalQAPlayground({
                       onClick={handleCopyBenchmark}
                       className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 text-[11px] font-mono cursor-pointer"
                     >
-                      {copiedBenchmark ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedBenchmark ? <Check className="w-3.5 h-3.5 text-[var(--accent)]" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedBenchmark ? 'Copied' : 'Copy'}</span>
                     </button>
                   )}
@@ -477,8 +477,8 @@ export default function VerbalQAPlayground({
 
                 {/* Tradeoffs Card */}
                 {tradeoffs.length > 0 && (
-                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
-                    <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 font-mono text-xs">
+                  <div className="p-4 bg-[var(--accent-dim)] border border-[var(--border-accent)] rounded-xl space-y-2">
+                    <span className="font-bold text-[var(--accent)] flex items-center gap-1.5 font-mono text-xs">
                       <Flame className="w-3.5 h-3.5" />
                       <span>Key Tradeoffs to Expect</span>
                     </span>
@@ -497,7 +497,7 @@ export default function VerbalQAPlayground({
               <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
                 <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-[var(--border)]">
                   <div>
-                    <span className="font-mono font-bold uppercase text-[11px] text-purple-600 dark:text-purple-400 block">
+                    <span className="font-mono font-bold uppercase text-[11px] text-[var(--accent)] block">
                       Assessor Rubrics Evaluation
                     </span>
                     <span className="text-[11px] text-[var(--text-muted)]">
@@ -529,7 +529,7 @@ export default function VerbalQAPlayground({
                         key={idx}
                         className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
                           isChecked
-                            ? 'bg-purple-500/5 border-purple-500/40 shadow-xs'
+                            ? 'bg-[var(--accent-dim)]/50 border-[var(--border-accent)] shadow-xs'
                             : 'bg-[var(--bg-card)] border-[var(--border)]'
                         }`}
                       >
@@ -539,7 +539,7 @@ export default function VerbalQAPlayground({
                             className="flex items-start gap-2.5 cursor-pointer flex-1 select-none"
                           >
                             {isChecked ? (
-                              <CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                              <CheckSquare className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" />
                             ) : (
                               <Square className="w-4 h-4 text-[var(--text-muted)] shrink-0 mt-0.5" />
                             )}
@@ -557,9 +557,9 @@ export default function VerbalQAPlayground({
                                 Rating:
                               </span>
                               {[
-                                { id: 'needs_work', label: 'Needs Improvement', color: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
-                                { id: 'met', label: 'Competent / Met', color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' },
-                                { id: 'exceeded', label: 'Strong / Exceeded', color: 'bg-purple-500/15 text-purple-600 border-purple-500/30' },
+                                { id: 'needs_work', label: 'Needs Improvement', color: 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-border)]' },
+                                { id: 'met', label: 'Competent / Met', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]' },
+                                { id: 'exceeded', label: 'Strong / Exceeded', color: 'bg-[var(--accent)] text-white border-[var(--accent)]' },
                               ].map((pill) => (
                                 <button
                                   key={pill.id}
@@ -567,7 +567,7 @@ export default function VerbalQAPlayground({
                                   onClick={() => setRubricRating(key, pill.id)}
                                   className={`text-[10px] font-mono px-2 py-0.5 rounded border transition cursor-pointer font-bold ${
                                     rating === pill.id
-                                      ? pill.color + ' ring-1 ring-purple-500'
+                                      ? pill.color + ' ring-1 ring-[var(--accent)]'
                                       : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'
                                   }`}
                                 >

@@ -823,7 +823,7 @@ export default function MCQPlayground({
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(true)}
-                className="btn text-xs py-2 px-5 flex items-center gap-1.5 font-bold cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-sm"
+                className="btn btn-primary text-xs py-2 px-5 flex items-center gap-1.5 font-bold cursor-pointer bg-[var(--accent)] hover:opacity-90 text-white border-none shadow-sm"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Finish MCQ Round</span>

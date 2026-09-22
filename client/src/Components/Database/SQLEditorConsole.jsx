@@ -293,7 +293,7 @@ export default function SQLEditorConsole({
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] gap-2 flex-wrap text-xs">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-bold border border-cyan-500/20 font-mono text-[11px]">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)] font-mono text-[11px]">
             <Database className="w-3.5 h-3.5" />
             <span>MySQL 8.0 Sandbox</span>
           </div>
@@ -317,14 +317,14 @@ export default function SQLEditorConsole({
           {!isEditable && selectedDatabase && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
               <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">Active DB:</span>
-              <span className="text-cyan-600 dark:text-cyan-400 font-bold">
+              <span className="text-[var(--accent)] font-bold">
                 {selectedDatabase.startsWith('apiportal_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
               </span>
             </div>
           )}
 
           {!isEditable && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-mono font-bold border border-amber-500/20">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-[10px] font-mono font-bold border border-[var(--border-accent)]">
               <Info className="w-3 h-3" />
               <span>Observing {candidateName}'s Query Console (View-Only)</span>
             </div>
@@ -339,7 +339,7 @@ export default function SQLEditorConsole({
             className="btn btn-secondary text-xs py-1 px-2.5 flex items-center gap-1 cursor-pointer"
             title="Copy SQL Query"
           >
-            {copiedQuery ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+            {copiedQuery ? <Check className="w-3.5 h-3.5 text-[var(--accent)]" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copiedQuery ? 'Copied' : 'Copy'}</span>
           </button>
 
@@ -360,7 +360,7 @@ export default function SQLEditorConsole({
                 type="button"
                 onClick={handleExecuteQuery}
                 disabled={isRunning}
-                className="btn btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 font-bold shadow-md cursor-pointer bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-none disabled:opacity-50"
+                className="btn btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 font-bold shadow-md cursor-pointer bg-[var(--accent)] hover:opacity-90 text-white border-none disabled:opacity-50"
                 title="Execute SQL Query in Sandbox (Ctrl + Enter)"
               >
                 {isRunning ? (
@@ -414,7 +414,7 @@ export default function SQLEditorConsole({
                 onClick={() => setActiveTab('results')}
                 className={`px-2.5 py-1 rounded transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'results'
-                    ? 'bg-[var(--bg-card)] text-cyan-600 dark:text-cyan-400 border border-[var(--border)] shadow-xs'
+                    ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -429,7 +429,7 @@ export default function SQLEditorConsole({
                 onClick={() => setActiveTab('schema')}
                 className={`px-2.5 py-1 rounded transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'schema'
-                    ? 'bg-[var(--bg-card)] text-cyan-600 dark:text-cyan-400 border border-[var(--border)] shadow-xs'
+                    ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -442,7 +442,7 @@ export default function SQLEditorConsole({
                 onClick={() => setActiveTab('history')}
                 className={`px-2.5 py-1 rounded transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'history'
-                    ? 'bg-[var(--bg-card)] text-cyan-600 dark:text-cyan-400 border border-[var(--border)] shadow-xs'
+                    ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -454,7 +454,7 @@ export default function SQLEditorConsole({
             {/* Execution Telemetry Pill */}
             {executionTimeMs > 0 && (
               <div className="flex items-center gap-1 text-[11px] font-mono text-[var(--text-muted)]">
-                <Clock className="w-3 h-3 text-cyan-500" />
+                <Clock className="w-3 h-3 text-[var(--accent)]" />
                 <span>{executionTimeMs}ms</span>
               </div>
             )}
@@ -464,7 +464,7 @@ export default function SQLEditorConsole({
           {activeTab === 'results' && (
             <div className="flex-1 flex flex-col p-3 overflow-auto">
               {errorMsg ? (
-                <div className="p-4 rounded-[var(--radius-md)] bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-mono space-y-2">
+                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--red-bg)] border border-[var(--red-border)] text-[var(--red)] text-xs font-mono space-y-2">
                   <div className="flex items-center gap-2 font-bold">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>SQL Execution Error</span>
@@ -474,7 +474,7 @@ export default function SQLEditorConsole({
               ) : queryResults ? (
                 <div className="space-y-2 flex-1 flex flex-col">
                   {queryResults.columns?.[0] === 'Status' ? (
-                    <div className="p-4 rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-mono space-y-1">
+                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] text-xs font-mono space-y-1">
                       <div className="flex items-center gap-2 font-bold">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />
                         <span>Execution Complete</span>
@@ -582,7 +582,7 @@ export default function SQLEditorConsole({
 
               {filteredTables.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center py-10 space-y-2 text-[var(--text-muted)]">
-                  <TableIcon className="w-8 h-8 text-cyan-500/30" />
+                  <TableIcon className="w-8 h-8 text-[var(--accent)]/30" />
                   <p className="text-xs">No tables found in this database.</p>
                   <p className="text-[11px]">Run a <code>CREATE TABLE</code> query to define tables and see them listed here.</p>
                 </div>
@@ -596,10 +596,10 @@ export default function SQLEditorConsole({
                         className="flex items-center justify-between p-2.5 bg-[var(--bg-raised)] cursor-pointer hover:bg-[var(--bg-card)] transition font-mono"
                       >
                         <div className="flex items-center gap-2">
-                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-cyan-500" /> : <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
-                          <TableIcon className="w-4 h-4 text-cyan-500" />
+                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-[var(--accent)]" /> : <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
+                          <TableIcon className="w-4 h-4 text-[var(--accent)]" />
                           <span className="font-bold text-xs text-[var(--text-primary)]">{table.name}</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-500 border border-cyan-500/20">
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
                             {table.rowCount !== undefined ? table.rowCount : 0} rows
                           </span>
                         </div>
@@ -613,7 +613,7 @@ export default function SQLEditorConsole({
                               setQueryCode(newQ);
                               if (onCodeChange) onCodeChange(newQ);
                             }}
-                            className="text-[10px] text-cyan-500 hover:underline cursor-pointer"
+                            className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer font-bold"
                           >
                             SELECT *
                           </button>
@@ -626,12 +626,12 @@ export default function SQLEditorConsole({
                             <div key={idx} className="flex items-center justify-between py-1 px-2 hover:bg-[var(--bg-card)]">
                               <div className="flex items-center gap-1.5">
                                 {col.isPk && (
-                                  <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30">
+                                  <span className="text-[9px] px-1 rounded bg-[var(--accent)] text-white font-bold">
                                     PK
                                   </span>
                                 )}
                                 {col.isFk && (
-                                  <span className="text-[9px] px-1 rounded bg-blue-500/20 text-blue-500 font-bold border border-blue-500/30">
+                                  <span className="text-[9px] px-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] font-bold border border-[var(--border-accent)]">
                                     FK
                                   </span>
                                 )}
@@ -654,7 +654,7 @@ export default function SQLEditorConsole({
             <div className="flex-1 p-3 overflow-auto space-y-2.5">
               {queryHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center py-10 space-y-2 text-[var(--text-muted)]">
-                  <History className="w-8 h-8 text-cyan-500/30" />
+                  <History className="w-8 h-8 text-[var(--accent)]/30" />
                   <p className="text-xs">No queries executed yet.</p>
                 </div>
               ) : (
@@ -663,11 +663,11 @@ export default function SQLEditorConsole({
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="flex items-center gap-1.5">
                         {item.status === 'success' ? (
-                          <span className="px-1.5 py-0.2 rounded bg-green-500/10 text-green-500 text-[10px] font-bold">
+                          <span className="px-1.5 py-0.2 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] text-[10px] font-bold">
                             SUCCESS
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.2 rounded bg-red-500/10 text-red-500 text-[10px] font-bold">
+                          <span className="px-1.5 py-0.2 rounded bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red-border)] text-[10px] font-bold">
                             ERROR
                           </span>
                         )}
@@ -681,7 +681,7 @@ export default function SQLEditorConsole({
                     </pre>
 
                     {item.error && (
-                      <p className="text-[11px] text-red-500">{item.error}</p>
+                      <p className="text-[11px] text-[var(--red)]">{item.error}</p>
                     )}
 
                     {isEditable && (
@@ -691,7 +691,7 @@ export default function SQLEditorConsole({
                           setQueryCode(item.query);
                           if (onCodeChange) onCodeChange(item.query);
                         }}
-                        className="text-[10px] text-cyan-500 hover:underline font-bold cursor-pointer"
+                        className="text-[10px] text-[var(--accent)] hover:underline font-bold cursor-pointer"
                       >
                         Restore Query
                       </button>

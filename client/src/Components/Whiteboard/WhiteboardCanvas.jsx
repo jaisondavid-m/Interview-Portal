@@ -837,9 +837,9 @@ export default function WhiteboardCanvas({
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs font-mono font-semibold shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-[#6e56cf] animate-pulse" />
               <span className="text-[var(--text-primary)] font-bold">Live Observer</span>
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase border border-emerald-500/20">
+              <span className="text-[10px] bg-[var(--accent-dim)] text-[var(--accent)] px-1.5 py-0.5 rounded font-bold uppercase border border-[var(--border-accent)]">
                 {candidateName}
               </span>
             </div>
@@ -852,15 +852,15 @@ export default function WhiteboardCanvas({
               onClick={() => setShowRequirements((prev) => !prev)}
               className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border shadow-xs ${
                 showRequirements
-                  ? 'bg-blue-600 text-white border-blue-600'
+                  ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
                   : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
               }`}
               title="View Challenge Scenario & Scale Requirements"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+              <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span className="hidden sm:inline">Requirements</span>
               {payload?.scenario && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#6e56cf] animate-pulse" />
               )}
             </button>
           )}
@@ -872,7 +872,7 @@ export default function WhiteboardCanvas({
             <button
               type="button"
               onClick={() => setShowCatalogModal(true)}
-              className="h-7.5 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              className="h-7.5 px-3 rounded-md bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
               title="Add New Component (or browse catalog)"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -887,7 +887,7 @@ export default function WhiteboardCanvas({
               }}
               className={`h-7.5 px-2.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
                 activeTool === 'connect'
-                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                  ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-xs'
                   : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]'
               }`}
               title="Click two components to draw a directional connection arrow"
@@ -1027,7 +1027,7 @@ export default function WhiteboardCanvas({
           <button
             type="button"
             onClick={() => setIsFullscreen(false)}
-            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:bg-blue-700 transition cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:opacity-90 transition cursor-pointer"
             title="Exit Studio Mode (Press Esc or F)"
           >
             <Minimize2 className="w-3.5 h-3.5" />
@@ -1041,7 +1041,7 @@ export default function WhiteboardCanvas({
 
       {/* Helper Bar / Banner for Active Connect Action */}
       {isEditable && activeTool === 'connect' && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between font-mono z-10 shrink-0">
+        <div className="bg-[var(--accent-dim)] border-b border-[var(--border-accent)] px-4 py-1.5 text-xs text-[var(--accent)] flex items-center justify-between font-mono z-10 shrink-0">
           <div className="flex items-center gap-2">
             <Link2 className="w-3.5 h-3.5 animate-pulse" />
             <span>
@@ -1208,10 +1208,10 @@ export default function WhiteboardCanvas({
                   }}
                   className={`absolute w-[190px] rounded-xl border-2 shadow-sm transition-shadow z-10 cursor-move ${
                     isSelected
-                      ? 'border-blue-500 ring-4 ring-blue-500/20 shadow-lg'
+                      ? 'border-[var(--accent)] ring-4 ring-[var(--accent-dim)] shadow-lg'
                       : isConnectSource
-                      ? 'border-amber-500 ring-4 ring-amber-500/30 animate-pulse'
-                      : 'border-[var(--border)] hover:border-blue-400'
+                      ? 'border-[var(--accent)] ring-4 ring-[var(--accent-dim)] animate-pulse'
+                      : 'border-[var(--border)] hover:border-[var(--border-accent)]'
                   }`}
                   style={{
                     left: `${node.x}px`,
@@ -1223,8 +1223,8 @@ export default function WhiteboardCanvas({
                   <div
                     className="px-3 py-2 rounded-t-[10px] flex items-center justify-between gap-1.5 border-b border-[var(--border)]"
                     style={{
-                      backgroundColor: node.bg || '#eff6ff',
-                      color: node.color || '#1e40af',
+                      backgroundColor: node.bg || 'var(--accent-dim)',
+                      color: node.color || 'var(--accent)',
                     }}
                   >
                     <div className="flex items-center gap-1.5 truncate">
@@ -1249,7 +1249,7 @@ export default function WhiteboardCanvas({
 
                   {/* Node Body Details */}
                   <div className="p-2.5 space-y-1 bg-[var(--bg-card)] rounded-b-[10px]">
-                    <div className="text-[11px] font-mono font-semibold text-blue-600 dark:text-blue-400 truncate">
+                    <div className="text-[11px] font-mono font-semibold text-[var(--accent)] truncate">
                       {node.tech || 'Generic Component'}
                     </div>
                     {node.description && (
@@ -1263,7 +1263,7 @@ export default function WhiteboardCanvas({
                   {isEditable && (
                     <>
                       <div
-                        className="absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-blue-500 hover:scale-125 transition cursor-crosshair shadow-sm"
+                        className="absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-[var(--accent)] hover:scale-125 transition cursor-crosshair shadow-sm"
                         title="Click to connect"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1276,7 +1276,7 @@ export default function WhiteboardCanvas({
                         }}
                       />
                       <div
-                        className="absolute -right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-blue-500 hover:scale-125 transition cursor-crosshair shadow-sm"
+                        className="absolute -right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--bg-card)] border-2 border-[var(--accent)] hover:scale-125 transition cursor-crosshair shadow-sm"
                         title="Click to connect"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1326,7 +1326,7 @@ export default function WhiteboardCanvas({
                 <button
                   type="button"
                   onClick={() => setShowCatalogModal(true)}
-                  className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition flex items-center gap-2 text-xs font-bold cursor-pointer mt-1"
+                  className="p-1.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition flex items-center gap-2 text-xs font-bold cursor-pointer mt-1"
                   title="Browse All Components"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -1342,10 +1342,10 @@ export default function WhiteboardCanvas({
               <button
                 type="button"
                 onClick={() => setIsFullscreen(true)}
-                className="px-3 py-2 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--text-primary)] hover:border-blue-500 hover:text-blue-500 shadow-xl transition flex items-center gap-2 font-mono text-xs font-bold cursor-pointer hover:scale-105 active:scale-95"
+                className="px-3 py-2 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] shadow-xl transition flex items-center gap-2 font-mono text-xs font-bold cursor-pointer hover:scale-105 active:scale-95"
                 title="Enter Fullscreen (F)"
               >
-                <Maximize2 className="w-4 h-4 text-blue-500" />
+                <Maximize2 className="w-4 h-4 text-[var(--accent)]" />
                 <span>Expand Fullscreen</span>
               </button>
             </div>
@@ -1358,7 +1358,7 @@ export default function WhiteboardCanvas({
             {/* Drawer Header */}
             <div className="p-4 bg-[var(--bg-raised)] border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-blue-500" />
+                <BookOpen className="w-4 h-4 text-[var(--accent)]" />
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   Architecture Challenge
                 </h3>
@@ -1377,7 +1377,7 @@ export default function WhiteboardCanvas({
             <div className="p-4 space-y-4 overflow-y-auto flex-1 text-xs">
               <div className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)]">
                     {question.difficulty || 'Medium'}
                   </span>
                   <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
@@ -1420,8 +1420,8 @@ export default function WhiteboardCanvas({
 
               {/* Evaluation Rubrics for Interviewer */}
               {currentUserRole === 'interviewer' && payload?.rubrics && (
-                <div className="p-3 bg-blue-500/10 rounded-[var(--radius-sm)] border border-blue-500/30 space-y-1">
-                  <span className="font-bold text-blue-600 dark:text-blue-400 block text-xs">
+                <div className="p-3 bg-[var(--accent-dim)] rounded-[var(--radius-sm)] border border-[var(--border-accent)] space-y-1">
+                  <span className="font-bold text-[var(--accent)] block text-xs">
                     Evaluation Rubrics:
                   </span>
                   <ul className="list-disc pl-4 space-y-1 text-[11px] text-[var(--text-secondary)]">
@@ -1434,8 +1434,8 @@ export default function WhiteboardCanvas({
 
               {/* Expected Architecture for Interviewer */}
               {currentUserRole === 'interviewer' && payload?.expected_approach && (
-                <div className="p-3 bg-emerald-500/10 rounded-[var(--radius-sm)] border border-emerald-500/30 space-y-1">
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 block text-xs">
+                <div className="p-3 bg-[var(--accent-dim)] rounded-[var(--radius-sm)] border border-[var(--border-accent)] space-y-1">
+                  <span className="font-bold text-[var(--accent)] block text-xs">
                     Expected Approach:
                   </span>
                   <div className="text-[11px] text-[var(--text-secondary)] whitespace-pre-line">
@@ -1451,7 +1451,7 @@ export default function WhiteboardCanvas({
       {/* CONNECTION PROPERTY DRAWER (When connection selected) */}
       {selectedConnection && isEditable && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-3 shadow-2xl flex items-center gap-3 z-30 animate-in fade-in slide-in-from-bottom-2">
-          <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
+          <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-[var(--accent)]">
             <Link2 className="w-4 h-4" />
             <span>Link Protocol:</span>
           </div>

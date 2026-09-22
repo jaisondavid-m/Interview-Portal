@@ -9,11 +9,11 @@ const DEFAULT_GOOGLE_CLIENT_ID = '956639761791-ihog9nl42s3og1b77u4t47mnb0pfo0op.
 // Role → icon + badge style mapping (used when rendering dynamic accounts from the backend)
 const ROLE_STYLES = {
   admin:     { icon: ShieldCheck, badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]' },
-  developer: { icon: Terminal,    badgeStyle: 'text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
-  student:   { icon: GraduationCap, badgeStyle: 'text-[var(--green)] bg-[var(--green-bg)] border-[var(--green)]/30' },
-  faculty:   { icon: GraduationCap, badgeStyle: 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  developer: { icon: Terminal,    badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]' },
+  student:   { icon: GraduationCap, badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]' },
+  faculty:   { icon: GraduationCap, badgeStyle: 'text-[var(--accent)] bg-[var(--accent-dim)] border-[var(--border-accent)]' },
 };
-const FALLBACK_STYLE = { icon: ShieldCheck, badgeStyle: 'text-zinc-600 bg-zinc-500/10 border-zinc-500/20' };
+const FALLBACK_STYLE = { icon: ShieldCheck, badgeStyle: 'text-[var(--text-secondary)] bg-[var(--bg-input)] border-[var(--border)]' };
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -215,7 +215,7 @@ export default function Login() {
       </div>
 
       {notice && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-[var(--radius-sm)] flex items-start gap-2.5 text-[12px] text-amber-700 dark:text-amber-300 font-medium">
+        <div className="p-3 bg-[var(--accent-dim)] border border-[var(--border-accent)] rounded-[var(--radius-sm)] flex items-start gap-2.5 text-[12px] text-[var(--accent)] font-medium">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{notice}</span>
         </div>

@@ -137,7 +137,7 @@ export default function CredentialAuditModal({
             </div>
           ) : submittedSuccess ? (
             <div className="py-8 text-center space-y-4">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div className="space-y-1">
@@ -187,13 +187,13 @@ export default function CredentialAuditModal({
                   onClick={() => setAskedCredentials(false)}
                   className={`p-4 rounded-[var(--radius-md)] border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
                     askedCredentials === false
-                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-950 dark:text-emerald-200 ring-1 ring-emerald-500 shadow-xs'
+                      ? 'bg-[var(--accent-dim)] border-[var(--accent)] text-[var(--accent)] ring-1 ring-[var(--accent)] shadow-xs'
                       : 'bg-[var(--bg-raised)] border-[var(--border)] hover:border-[var(--border-accent)] text-[var(--text-secondary)]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[14px]">No</span>
-                    <ShieldCheck className={`w-4 h-4 ${askedCredentials === false ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`} />
+                    <ShieldCheck className={`w-4 h-4 ${askedCredentials === false ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`} />
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] leading-tight">
                     Anonymity was maintained. No identity details were requested.

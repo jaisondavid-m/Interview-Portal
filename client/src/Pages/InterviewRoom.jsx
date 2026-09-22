@@ -955,13 +955,13 @@ export default function InterviewRoom() {
     return (
       <div className="max-w-lg mx-auto panel-card p-8 text-center space-y-5 border-2 border-[var(--border)] shadow-xl mt-12 animate-fadeIn">
         <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto border ${
-          isForbidden ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+          isForbidden ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-border)]' : 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
         }`}>
           {isForbidden ? <ShieldAlert className="w-7 h-7" /> : <AlertCircle className="w-7 h-7" />}
         </div>
         <div className="space-y-2">
           <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded uppercase font-bold border ${
-            isForbidden ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+            isForbidden ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-border)]' : 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
           }`}>
             {isForbidden ? '403 Forbidden' : 'Session Notice'}
           </span>
@@ -1164,7 +1164,7 @@ export default function InterviewRoom() {
                 switchCount >= 1
                   ? 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)] opacity-60 cursor-not-allowed'
                   : isSwitchRequestedByMe
-                  ? 'bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 animate-pulse'
+                  ? 'bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] animate-pulse'
                   : 'btn-secondary text-[var(--accent)] hover:border-[var(--accent)] cursor-pointer'
               }`}
               title={
@@ -1440,15 +1440,15 @@ export default function InterviewRoom() {
         )}
 
         {currentUserRole === 'interviewer' && isWhiteboardMode && (
-          <div className="px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/40 shrink-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)] shrink-0">
+            <span className="w-2 h-2 rounded-full bg-[#6e56cf] animate-pulse" />
             <span>Live Whiteboard Sync Active</span>
           </div>
         )}
 
         {currentUserRole === 'interviewer' && isVerbalQAMode && (
-          <div className="px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 shrink-0">
-            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+          <div className="px-2.5 py-1 rounded font-mono text-[11px] font-bold flex items-center gap-1.5 self-start sm:self-auto border bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)] shrink-0">
+            <span className="w-2 h-2 rounded-full bg-[#6e56cf] animate-pulse" />
             <span>Live Verbal Discussion Active</span>
           </div>
         )}

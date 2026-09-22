@@ -317,7 +317,7 @@ export default function PeerFeedbackModal({
                                 className={`flex-1 py-2 px-4 rounded-[var(--radius-sm)] text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
                                   isSelected
                                     ? isYes
-                                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                                      ? 'bg-[#6e56cf] text-white border-[#6e56cf] shadow-md'
                                       : 'bg-rose-600 text-white border-rose-600 shadow-md'
                                     : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--border-strong)]'
                                 }`}
@@ -373,7 +373,7 @@ export default function PeerFeedbackModal({
                   Skip / Dismiss
                 </button>
               ) : (
-                <span className="text-[11px] font-mono text-amber-500 font-semibold flex items-center gap-1.5">
+                <span className="text-[11px] font-mono text-[var(--accent)] font-semibold flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5" />
                   Mandatory Peer Feedback
                 </span>

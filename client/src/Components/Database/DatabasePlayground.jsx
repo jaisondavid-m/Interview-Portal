@@ -352,7 +352,7 @@ export default function DatabasePlayground({
 
           {/* Role Status Tag */}
           {!isEditable && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-mono font-bold border border-amber-500/20">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-xs font-mono font-bold border border-[var(--border-accent)]">
               <Eye className="w-3.5 h-3.5" />
               <span>Interviewer Live Observer</span>
             </div>
@@ -367,14 +367,14 @@ export default function DatabasePlayground({
             className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold cursor-pointer"
             title="View Database Requirements, Scenario, and Specs"
           >
-            <BookOpen className="w-3.5 h-3.5 text-blue-500" />
+            <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Specifications & Context</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsFullscreen(false)}
-            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:bg-blue-700 transition cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:opacity-90 transition cursor-pointer"
             title="Exit Fullscreen Mode (Press Esc or F)"
           >
             <Minimize2 className="w-3.5 h-3.5" />
@@ -390,9 +390,9 @@ export default function DatabasePlayground({
       <div className="flex-1 overflow-hidden relative">
         {isProvisioning ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-[var(--bg-card)] space-y-4 text-center z-20">
-            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500 shadow-xl relative animate-pulse">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center text-[var(--accent)] shadow-xl relative animate-pulse">
               <Server className="w-8 h-8" />
-              <Loader2 className="w-4 h-4 animate-spin absolute -bottom-1 -right-1 text-cyan-400" />
+              <Loader2 className="w-4 h-4 animate-spin absolute -bottom-1 -right-1 text-[var(--accent)]" />
             </div>
             <div className="space-y-1.5">
               <h3 className="text-base font-bold text-[var(--text-primary)]">
@@ -453,7 +453,7 @@ export default function DatabasePlayground({
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
               <div className="flex items-center gap-2">
-                <Database className="w-5 h-5 text-blue-500" />
+                <Database className="w-5 h-5 text-[var(--accent)]" />
                 <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
                   {question?.title || 'Database Assessment Benchmark'}
                 </h3>
@@ -492,7 +492,7 @@ export default function DatabasePlayground({
                 <span className="text-[11px] font-mono font-bold uppercase text-[var(--text-muted)] block">
                   Starter Schema DDL
                 </span>
-                <pre className="p-3 bg-slate-950 text-cyan-300 font-mono text-xs rounded border border-slate-800 overflow-x-auto">
+                <pre className="p-3 bg-slate-950 text-purple-200 font-mono text-xs rounded border border-slate-800 overflow-x-auto">
                   {schemaDDL}
                 </pre>
               </div>
@@ -512,12 +512,12 @@ export default function DatabasePlayground({
 
             {/* Interviewer Only: Solution Query & Rubrics */}
             {currentUserRole === 'interviewer' && payload?.expected_approach && (
-              <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-[var(--radius-md)] space-y-2">
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+              <div className="p-4 bg-[var(--accent-dim)] border border-[var(--border-accent)] rounded-[var(--radius-md)] space-y-2">
+                <span className="text-xs font-bold text-[var(--accent)] flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
                   <span>Optimal Solution SQL Query (Assessor Benchmark)</span>
                 </span>
-                <pre className="text-xs font-mono text-emerald-700 dark:text-emerald-300 whitespace-pre-line bg-emerald-950/40 p-2.5 rounded">
+                <pre className="text-xs font-mono text-[var(--accent)] whitespace-pre-line bg-[var(--accent-dim)] p-2.5 rounded">
                   {payload.expected_approach}
                 </pre>
               </div>

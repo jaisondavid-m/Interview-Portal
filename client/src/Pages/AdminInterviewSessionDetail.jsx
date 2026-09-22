@@ -198,14 +198,14 @@ export default function AdminInterviewSessionDetail() {
   const displayMode = modeKey === 'discussion' ? 'whiteboard' : modeKey;
 
   const modeBadgeInfo = {
-    whiteboard: { label: 'System Design (Whiteboard)', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-    database: { label: 'Database & SQL Sandbox', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-    mcq: { label: 'Multiple Choice (MCQ)', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
-    frontend: { label: 'Frontend UI (React)', color: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20' },
-    backend: { label: 'Backend API Service', color: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20' },
-    verbal_qa: { label: 'Verbal Technical Q&A', color: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
-    coding: { label: 'Algorithmic Coding (DSA)', color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
-  }[displayMode] || { label: displayMode.toUpperCase(), color: 'bg-gray-500/10 text-gray-600 border-gray-500/20' };
+    whiteboard: { label: 'System Design (Whiteboard)', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' },
+    database: { label: 'Database & SQL Sandbox', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' },
+    mcq: { label: 'Multiple Choice (MCQ)', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' },
+    frontend: { label: 'Frontend UI (React)', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' },
+    backend: { label: 'Backend API Service', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' },
+    verbal_qa: { label: 'Verbal Technical Q&A', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' },
+    coding: { label: 'Algorithmic Coding (DSA)', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' },
+  }[displayMode] || { label: displayMode.toUpperCase(), color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]' };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -235,13 +235,13 @@ export default function AdminInterviewSessionDetail() {
             </h1>
 
             {isLive ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 animate-pulse shadow-xs">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-strong)] animate-pulse shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-ping" />
                 <span>LIVE MONITOR ACTIVE (ROUND {session.round})</span>
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-[var(--accent)]" />
                 <span>COMPLETED ARCHIVE</span>
               </span>
             )}
@@ -267,12 +267,12 @@ export default function AdminInterviewSessionDetail() {
               onClick={() => setLivePolling(!livePolling)}
               className={`text-xs py-1.5 px-3 rounded-[var(--radius-sm)] border font-mono font-bold flex items-center gap-1.5 cursor-pointer transition ${
                 livePolling
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                  ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]'
                   : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border-[var(--border)]'
               }`}
               title="Toggle automatic live syncing"
             >
-              {livePolling ? <Play className="w-3.5 h-3.5 text-emerald-500" /> : <Pause className="w-3.5 h-3.5" />}
+              {livePolling ? <Play className="w-3.5 h-3.5 text-[var(--accent)]" /> : <Pause className="w-3.5 h-3.5" />}
               <span>{livePolling ? 'Live Sync: ON (2s)' : 'Live Sync: PAUSED'}</span>
             </button>
           )}
@@ -315,7 +315,7 @@ export default function AdminInterviewSessionDetail() {
             Round Progress & Switch
           </span>
           <span className="text-[14px] font-bold font-mono text-[var(--text-primary)] flex items-center gap-1.5">
-            <Repeat className="w-4 h-4 text-purple-500" />
+            <Repeat className="w-4 h-4 text-[var(--accent)]" />
             <span>{session.round === 2 || session.roles_switched ? 'Round 2 (Swapped)' : 'Round 1 Active'}</span>
           </span>
         </div>
@@ -325,8 +325,8 @@ export default function AdminInterviewSessionDetail() {
             Dialogue Audio Recording
           </span>
           <span className="text-[14px] font-bold font-mono flex items-center gap-1.5">
-            <FileAudio className="w-4 h-4 text-emerald-500" />
-            <span className={session.recording ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--text-muted)]'}>
+            <FileAudio className="w-4 h-4 text-[var(--accent)]" />
+            <span className={session.recording ? 'text-[var(--accent)] font-semibold' : 'text-[var(--text-muted)]'}>
               {session.recording ? 'Audio Available' : 'No Recording'}
             </span>
           </span>
@@ -343,7 +343,7 @@ export default function AdminInterviewSessionDetail() {
                 <span>Flagged (Review)</span>
               </span>
             ) : (
-              <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <span className="text-[var(--accent)] flex items-center gap-1">
                 <ShieldCheck className="w-4 h-4" />
                 <span>Clean / Compliant</span>
               </span>
@@ -361,8 +361,8 @@ export default function AdminInterviewSessionDetail() {
           onClick={() => setSelectedModule('r1')}
           className={`text-[12px] sm:text-[13px] font-mono font-bold px-4 py-2 rounded-lg transition-all cursor-pointer shadow-xs ${
             selectedModule === 'r1'
-              ? 'bg-emerald-500 text-white shadow-sm'
-              : 'bg-white dark:bg-[var(--bg-card)] text-slate-700 dark:text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-indigo-100 dark:border-[var(--border)] hover:bg-slate-50 dark:hover:bg-[var(--bg-raised)]'
+              ? 'bg-[#6e56cf] text-white shadow-sm'
+              : 'bg-white text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] hover:bg-[#faf9ff]'
           }`}
         >
           1. Round 1
@@ -373,8 +373,8 @@ export default function AdminInterviewSessionDetail() {
           onClick={() => setSelectedModule('r2')}
           className={`text-[12px] sm:text-[13px] font-mono font-bold px-4 py-2 rounded-lg transition-all cursor-pointer shadow-xs ${
             selectedModule === 'r2'
-              ? 'bg-emerald-500 text-white shadow-sm'
-              : 'bg-white dark:bg-[var(--bg-card)] text-slate-700 dark:text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-indigo-100 dark:border-[var(--border)] hover:bg-slate-50 dark:hover:bg-[var(--bg-raised)]'
+              ? 'bg-[#6e56cf] text-white shadow-sm'
+              : 'bg-white text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] hover:bg-[#faf9ff]'
           }`}
         >
           2. Round 2
@@ -385,8 +385,8 @@ export default function AdminInterviewSessionDetail() {
           onClick={() => setSelectedModule('audio')}
           className={`text-[12px] sm:text-[13px] font-mono font-bold px-4 py-2 rounded-lg transition-all cursor-pointer shadow-xs ${
             selectedModule === 'audio'
-              ? 'bg-emerald-500 text-white shadow-sm'
-              : 'bg-white dark:bg-[var(--bg-card)] text-slate-700 dark:text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-indigo-100 dark:border-[var(--border)] hover:bg-slate-50 dark:hover:bg-[var(--bg-raised)]'
+              ? 'bg-[#6e56cf] text-white shadow-sm'
+              : 'bg-white text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] hover:bg-[#faf9ff]'
           }`}
         >
           3. Audio & Safety
@@ -397,8 +397,8 @@ export default function AdminInterviewSessionDetail() {
           onClick={() => setSelectedModule('feedback')}
           className={`text-[12px] sm:text-[13px] font-mono font-bold px-4 py-2 rounded-lg transition-all cursor-pointer shadow-xs ${
             selectedModule === 'feedback'
-              ? 'bg-emerald-500 text-white shadow-sm'
-              : 'bg-white dark:bg-[var(--bg-card)] text-slate-700 dark:text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-indigo-100 dark:border-[var(--border)] hover:bg-slate-50 dark:hover:bg-[var(--bg-raised)]'
+              ? 'bg-[#6e56cf] text-white shadow-sm'
+              : 'bg-white text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] hover:bg-[#faf9ff]'
           }`}
         >
           4. Peer Feedback

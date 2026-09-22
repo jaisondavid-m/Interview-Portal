@@ -194,7 +194,7 @@ export default function ERDiagramCanvas({
           {!isEditable && selectedDatabase && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-mono text-[11px]">
               <span className="text-[var(--text-muted)] font-bold text-[10px] uppercase">Active DB:</span>
-              <span className="text-blue-600 dark:text-blue-400 font-bold">
+              <span className="text-[var(--accent)] font-bold">
                 {selectedDatabase.startsWith('apiportal_sandbox_') ? `${selectedDatabase} (Default)` : selectedDatabase}
               </span>
             </div>
@@ -205,7 +205,7 @@ export default function ERDiagramCanvas({
           </span>
 
           {!isEditable && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-mono font-bold border border-amber-500/20">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-[10px] font-mono font-bold border border-[var(--border-accent)]">
               <Eye className="w-3 h-3" />
               <span>Observing {candidateName}'s Schema (View-Only)</span>
             </div>
@@ -431,22 +431,22 @@ export default function ERDiagramCanvas({
                       {/* Column Name & Key Badges */}
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
                         {col.isPk && (
-                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 shrink-0" title="Primary Key">
+                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[var(--accent)] text-white shrink-0" title="Primary Key">
                             PK
                           </span>
                         )}
                         {col.isFk && (
-                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-blue-500/20 text-blue-500 border border-blue-500/30 shrink-0" title="Foreign Key">
+                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0" title="Foreign Key">
                             FK
                           </span>
                         )}
                         {col.isUnique && !col.isPk && (
-                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-500 border border-purple-500/30 shrink-0" title="Unique Constraint">
+                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0" title="Unique Constraint">
                             UQ
                           </span>
                         )}
                         {!col.isNullable && !col.isPk && (
-                          <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-slate-500/20 text-slate-400 border border-slate-500/30 shrink-0" title="Not Null">
+                          <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0" title="Not Null">
                             NN
                           </span>
                         )}

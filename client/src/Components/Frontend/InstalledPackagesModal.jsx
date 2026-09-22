@@ -19,7 +19,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Core Framework',
     description: 'Component engine with complete hook suite (useState, useEffect, useMemo, useRef, useCallback, useReducer, useContext, createContext, useId, useTransition, useDeferredValue).',
     importExample: "import React, { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext } from 'react';",
-    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'react-dom',
@@ -28,7 +28,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Core Framework',
     description: 'Concurrent React DOM root rendering engine for browser mounts.',
     importExample: "import ReactDOM from 'react-dom';",
-    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'tailwindcss',
@@ -37,7 +37,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Styling',
     description: 'Full-featured utility-first CSS engine with flexbox, grid, gradients, arbitrary values, animations, and responsive breakpoints.',
     importExample: '<div className="flex items-center justify-between p-6 bg-white rounded-2xl shadow-xl border border-[var(--border)]">',
-    badgeColor: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'lucide-react',
@@ -46,7 +46,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Icons',
     description: 'Over 1,000 clean vector SVG icons with customizable size, strokeWidth, color, and className props.',
     importExample: "import { Sparkles, Heart, Search, Check, Plus, Trash2, Star, ChevronRight, ArrowLeft, User, Bell } from 'lucide-react';",
-    badgeColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'chart.js',
@@ -55,7 +55,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Data & Charts',
     description: 'Interactive HTML5 canvas data charting engine supporting Line, Bar, Pie, Doughnut, Radar, and Scatter charts for dashboards & telemetry.',
     importExample: "import { Chart } from 'chart.js';\nnew Chart(canvasRef.current, { type: 'line', data: { labels: ['Q1', 'Q2'], datasets: [{ data: [12, 19] }] } });",
-    badgeColor: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'zod',
@@ -64,7 +64,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Validation',
     description: 'TypeScript-first schema declaration and validation library with nested object validation, custom refine rules, and error formatting.',
     importExample: "import { z } from 'zod';\nconst UserSchema = z.object({ email: z.string().email(), age: z.number().min(18) });\nconst result = UserSchema.safeParse(formData);",
-    badgeColor: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'dayjs',
@@ -73,7 +73,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Date & Time',
     description: 'Fast 2KB immutable date & time library with relative time formatting (e.g., "3 hours ago"), parsing, countdowns, and duration math.',
     importExample: "import dayjs from 'dayjs';\nconst formatted = dayjs().format('YYYY-MM-DD HH:mm:ss');\nconst fromNow = dayjs(timestamp).fromNow();",
-    badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'sortablejs',
@@ -82,7 +82,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Drag & Drop',
     description: 'Zero-dependency drag-and-drop library for reorderable Kanban boards, sortable lists, grids, and multi-column workflows.',
     importExample: "import Sortable from 'sortablejs';\nuseEffect(() => { Sortable.create(listRef.current, { animation: 150, onEnd: (evt) => handleReorder(evt) }); }, []);",
-    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'framer-motion',
@@ -91,7 +91,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Animation',
     description: 'Declarative animation and gesture library for React with motion components and AnimatePresence.',
     importExample: "import { motion, AnimatePresence } from 'framer-motion';\n<motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} />",
-    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'lodash',
@@ -100,7 +100,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Utility',
     description: 'Utility library providing debounce, throttle, cloneDeep, groupBy, sortBy, uniq, range, and shuffle.',
     importExample: "import _ from 'lodash';\n// or: import { debounce, throttle, cloneDeep, groupBy } from 'lodash';",
-    badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'marked',
@@ -109,7 +109,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Markdown & Security',
     description: 'High-speed compiler for parsing markdown into HTML for real-time markdown editors and rich note apps.',
     importExample: "import { marked } from 'marked';\nconst htmlOutput = marked.parse('# Hello World');",
-    badgeColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'dompurify',
@@ -118,7 +118,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Markdown & Security',
     description: 'DOM-only, super-fast, ultra-tolerant XSS sanitizer for HTML to safely inject formatted content via dangerouslySetInnerHTML.',
     importExample: "import DOMPurify from 'dompurify';\nconst cleanHtml = DOMPurify.sanitize(dirtyHtml);\n<div dangerouslySetInnerHTML={{ __html: cleanHtml }} />",
-    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'zustand',
@@ -127,7 +127,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'State Management',
     description: 'Lightweight reactive global state management hook creator without Context provider boilerplate, supporting actions & selectors.',
     importExample: "import { create } from 'zustand';\nconst useStore = create((set) => ({ count: 0, inc: () => set((s) => ({ count: s.count + 1 })) }));\nconst count = useStore((s) => s.count);",
-    badgeColor: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'axios',
@@ -136,7 +136,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'HTTP & Networking',
     description: 'Promise-based HTTP client for mocking and handling asynchronous REST API requests.',
     importExample: "import axios from 'axios';\nconst response = await axios.get('https://api.example.com/items');",
-    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'canvas-confetti',
@@ -145,7 +145,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Visual Effects',
     description: 'High performance canvas-based confetti and celebratory particle burst generator.',
     importExample: "import confetti from 'canvas-confetti';\nconfetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });",
-    badgeColor: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
   {
     id: 'clsx',
@@ -154,7 +154,7 @@ export const INSTALLED_FRONTEND_PACKAGES = [
     category: 'Utility',
     description: 'Fast utility for constructing conditional className strings based on state and props.',
     importExample: "import clsx from 'clsx';\nclassName={clsx('btn-base', isActive && 'btn-active', isError && 'border-red-500')}",
-    badgeColor: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+    badgeColor: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]',
   },
 ];
 

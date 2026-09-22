@@ -206,8 +206,8 @@ export default function History() {
 
                       <span className={`px-2 py-0.5 rounded font-bold capitalize border ${
                         sess.status === 'completed'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                          ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-strong)]'
+                          : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border-[var(--border)]'
                       }`}>
                         {sess.status}
                       </span>
@@ -229,7 +229,7 @@ export default function History() {
 
                       {sess.duration_seconds > 0 && (
                         <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-purple-500" />
+                          <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
                           <span>Duration: {formatDuration(sess.duration_seconds)}</span>
                         </span>
                       )}
@@ -239,9 +239,9 @@ export default function History() {
                   {/* Right Score & Toggle Section */}
                   <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
                     {sess.has_scorecard ? (
-                      <div className="text-right font-mono bg-emerald-500/5 px-3.5 py-2 rounded-[var(--radius-md)] border border-emerald-500/20">
-                        <div className="flex items-center gap-1 text-[15px] font-bold text-emerald-600 dark:text-emerald-400">
-                          <Star className="w-4 h-4 fill-emerald-500/20" />
+                      <div className="text-right font-mono bg-[var(--accent-dim)] px-3.5 py-2 rounded-[var(--radius-md)] border border-[var(--border-strong)]">
+                        <div className="flex items-center gap-1 text-[15px] font-bold text-[var(--accent)]">
+                          <Star className="w-4 h-4 fill-[var(--accent)]/20" />
                           <span>+{sess.total_score} / {sess.max_score} pts</span>
                         </div>
                         <div className="text-[11px] text-[var(--text-muted)] font-semibold">
@@ -276,7 +276,7 @@ export default function History() {
                       <span className="font-bold text-[var(--text-primary)] uppercase tracking-wider text-[11px]">
                         Evaluation Scorecard Breakdown:
                       </span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span className="text-[var(--accent)] font-bold">
                         Score: {sess.total_score} of {sess.max_score} Total Points ({pct}%)
                       </span>
                     </div>
@@ -295,7 +295,7 @@ export default function History() {
                                 {q.question_text || `Question #${resp.question_id}`}
                               </span>
                               {resp.max_marks > 0 && (
-                                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                <span className="text-[10px] font-mono text-[var(--accent)] font-bold bg-[var(--accent-dim)] px-1.5 py-0.5 rounded border border-[var(--border-strong)] shrink-0">
                                   +{resp.awarded_marks} / {resp.max_marks} pts
                                 </span>
                               )}

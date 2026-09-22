@@ -25,22 +25,12 @@ export default function ConfirmModal({
     switch (effectiveVariant) {
       case 'danger':
         return {
-          iconBg: 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--accent)]',
-          confirmBtn: 'bg-[var(--accent)] hover:opacity-90 text-white shadow-md',
+          iconBg: 'bg-[var(--red-bg)] border-[var(--red-border)] text-[var(--red)]',
+          confirmBtn: 'bg-[var(--red)] hover:opacity-90 text-white shadow-md',
           defaultIcon: AlertTriangle,
         };
       case 'warning':
-        return {
-          iconBg: 'bg-amber-500/10 border-amber-500/30 text-amber-500',
-          confirmBtn: 'bg-[var(--accent)] hover:opacity-90 text-white shadow-md',
-          defaultIcon: AlertTriangle,
-        };
       case 'info':
-        return {
-          iconBg: 'bg-blue-500/10 border-blue-500/30 text-blue-500',
-          confirmBtn: 'bg-[var(--accent)] hover:opacity-90 text-white shadow-md',
-          defaultIcon: AlertTriangle,
-        };
       case 'primary':
       default:
         return {

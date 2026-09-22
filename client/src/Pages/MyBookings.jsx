@@ -251,7 +251,7 @@ export default function MyBookings() {
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl shadow-lg border text-xs font-semibold flex items-center gap-2 animate-slideUp ${
-          toast.type === 'error' ? 'bg-rose-500 text-white border-rose-600' : 'bg-emerald-600 text-white border-emerald-700'
+          toast.type === 'error' ? 'bg-rose-500 text-white border-rose-600' : 'bg-[#6e56cf] text-white border-[var(--border-strong)]'
         }`}>
           {toast.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
           <span>{toast.msg}</span>
@@ -264,7 +264,7 @@ export default function MyBookings() {
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md p-6 text-center space-y-5 shadow-2xl animate-scaleUp">
             {matchStatus === 'searching' && (
               <>
-                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-[var(--accent)] flex items-center justify-center mx-auto animate-pulse">
+                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center mx-auto animate-pulse">
                   <Video className="w-8 h-8" />
                 </div>
                 <div>
@@ -294,7 +294,7 @@ export default function MyBookings() {
 
             {matchStatus === 'matched' && (
               <>
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
@@ -453,13 +453,7 @@ export default function MyBookings() {
             return (
               <div
                 key={b.id}
-                className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
-                  isCancelled
-                    ? 'bg-[var(--bg-card)]/40 border-[var(--border)]/50 opacity-70'
-                    : isPresent
-                    ? 'bg-gradient-to-br from-emerald-500/5 via-[var(--bg-card)] to-[var(--bg-card)] border-emerald-500/30 hover:border-emerald-500 shadow-sm'
-                    : 'bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--accent)] shadow-sm'
-                }`}
+                className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--accent)] shadow-sm rounded-2xl p-5 flex flex-col justify-between transition-all"
               >
                 <div>
                   {/* Top Status Badges */}
@@ -473,7 +467,7 @@ export default function MyBookings() {
                           Cancelled
                         </span>
                       ) : isPresent ? (
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-md bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-strong)] text-[10px] font-bold uppercase flex items-center gap-1">
                           <CheckCircle className="w-3 h-3" />
                           Attendance Verified
                         </span>
@@ -482,7 +476,7 @@ export default function MyBookings() {
                           Marked Absent
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold uppercase flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-md bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)] text-[10px] font-bold uppercase flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           Attendance Pending
                         </span>
@@ -509,7 +503,7 @@ export default function MyBookings() {
                   <div className="mt-4 p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-2 text-xs">
                     <div className="flex items-center justify-between text-[var(--text-secondary)]">
                       <span className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                        <Calendar className="w-3.5 h-3.5 text-[var(--accent)]" />
                         <span>Date:</span>
                       </span>
                       <span className="font-semibold text-[var(--text-primary)]">
@@ -519,7 +513,7 @@ export default function MyBookings() {
 
                     <div className="flex items-center justify-between text-[var(--text-secondary)]">
                       <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                        <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
                         <span>Time Slot:</span>
                       </span>
                       <span className="font-semibold text-[var(--text-primary)] font-mono">
@@ -529,7 +523,7 @@ export default function MyBookings() {
 
                     <div className="flex items-center justify-between text-[var(--text-secondary)]">
                       <span className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                        <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
                         <span>Venue / Location:</span>
                       </span>
                       <span className="font-semibold text-[var(--text-primary)] text-right">
@@ -546,7 +540,7 @@ export default function MyBookings() {
                     {b.assigned_faculty && (
                       <div className="flex items-center justify-between text-[var(--text-secondary)] pt-1 border-t border-[var(--border)]">
                         <span className="flex items-center gap-1.5">
-                          <UserCheck className="w-3.5 h-3.5 text-purple-400" />
+                          <UserCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
                           <span>Assigned Faculty:</span>
                         </span>
                         <span className="font-semibold text-[var(--text-primary)]">
@@ -563,14 +557,14 @@ export default function MyBookings() {
                     {canLaunch ? (
                       <button
                         onClick={() => handleStartInterview(b)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                        className="btn btn-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold shadow-md cursor-pointer"
                       >
                         <Video className="w-3.5 h-3.5" />
                         <span>Start Interview</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     ) : !isCancelled ? (
-                      <span className="text-[11px] text-[var(--text-muted)] italic">
+                      <span className="text-[11px] text-[var(--text-muted)] italic font-mono">
                         Report to venue for verification
                       </span>
                     ) : null}
