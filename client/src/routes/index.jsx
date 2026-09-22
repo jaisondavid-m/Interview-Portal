@@ -35,6 +35,15 @@ import FacultyVenueMonitor from '../Pages/FacultyVenueMonitor';
 import MyBookings from '../Pages/MyBookings';
 import NotFound from '../Pages/NotFound';
 
+// Academic Practical Labs Pages
+import LabDashboard from '../Pages/Labs/LabDashboard';
+import LabWorkspace from '../Pages/Labs/LabWorkspace';
+import LabRecordPreview from '../Pages/Labs/LabRecordPreview';
+import LabInchargeDashboard from '../Pages/Labs/LabInchargeDashboard';
+import AdminLabMapping from '../Pages/Admin/AdminLabMapping';
+import AdminLabPdfViewer from '../Pages/Admin/AdminLabPdfViewer';
+import AdminLabConfig from '../Pages/Admin/AdminLabConfig';
+
 // Route Guards & Error Boundary
 import ProtectedRoute from '../Components/ProtectedRoute';
 import DynamicPageRoute from '../Components/DynamicPageRoute';
@@ -352,10 +361,40 @@ export const router = createBrowserRouter([
           {
             path: 'my-bookings',
             element: (
-              <DynamicPageRoute pageKey={['student_bookings', 'student_slots', 'student_interviews']}>
+              <DynamicPageRoute pageKey="my_bookings">
                 <MyBookings />
               </DynamicPageRoute>
             ),
+          },
+
+          // Academic Practical Labs Routes
+          {
+            path: 'labs',
+            element: <LabDashboard />,
+          },
+          {
+            path: 'labs/:courseId/experiment/:expId',
+            element: <LabWorkspace />,
+          },
+          {
+            path: 'labs/:courseId/record',
+            element: <LabRecordPreview />,
+          },
+          {
+            path: 'lab-incharge',
+            element: <LabInchargeDashboard />,
+          },
+          {
+            path: 'admin/labs/mapping',
+            element: <AdminLabMapping />,
+          },
+          {
+            path: 'admin/labs/pdf-preview',
+            element: <AdminLabPdfViewer />,
+          },
+          {
+            path: 'admin/labs/config',
+            element: <AdminLabConfig />,
           },
           {
             path: 'slots/my-bookings',

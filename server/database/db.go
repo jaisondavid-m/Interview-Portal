@@ -157,13 +157,218 @@ func runMigrations(db *gorm.DB) error {
 		&models.SlotBooking{},
 		&models.SystemSetting{},
 		&models.RateLimitConfig{},
+		&models.LabCourse{},
+		&models.LabExperiment{},
+		&models.LabMapping{},
+		&models.LabSubmission{},
+		&models.LabRecord{},
 	)
 	if err == nil {
 		migrateAndDropLegacyPayloadJSONColumn(db)
 		syncAppPagesCatalog(db)
 		seedRateLimitConfigs(db)
+		seedLabCourseAndExperiments(db)
 	}
 	return err
+}
+
+func seedLabCourseAndExperiments(db *gorm.DB) {
+	var count int64
+	db.Model(&models.LabCourse{}).Where("course_code = ?", "22AI304").Count(&count)
+	if count > 0 {
+		return
+	}
+
+	course := models.LabCourse{
+		CourseCode:       "22AI304",
+		Title:            "PRINCIPLES OF PROGRAMMING LABORATORY",
+		Department:       "ARTIFICIAL INTELLIGENCE AND DATA SCIENCE",
+		Degree:           "B.Tech",
+		Semester:         "Semester III",
+		AcademicYear:     "2025-2026",
+		TotalExperiments: 7,
+		Description:      "Official laboratory course for AI & DS covering algorithmic problem solving, Python application development, security controls, and dynamic solver algorithms.",
+	}
+	if err := db.Create(&course).Error; err != nil {
+		log.Printf("[ERROR] Failed to seed lab course 22AI304: %v", err)
+		return
+	}
+
+	experiments := []models.LabExperiment{
+		{
+			CourseID:     course.ID,
+			ExperimentNo: 1,
+			Title:        "Online Shopping Cart & Bill Generator",
+			Aim:          "The aim of this experiment is to develop an application using Python to implement an online shopping cart and generate bills for the purchased products.",
+			Procedure:    "Step 1: Initialize an empty shopping cart list/dictionary.\nStep 2: Display available products with prices.\nStep 3: Allow user to add or remove items with quantity.\nStep 4: Calculate subtotals, apply percentage discounts, and compute taxes.\nStep 5: Output an itemized bill with final payable total.",
+			Language:     "python",
+			StarterCode: `# Shopping cart with bill generation
+items = {"Apple": 50, "Banana": 20, "Milk": 30, "Bread": 40}
+cart = {"Apple": 2, "Milk": 1}
+
+def calculate_bill(cart_items):
+    subtotal = sum(items[item] * qty for item, qty in cart_items.items() if item in items)
+    tax = subtotal * 0.05
+    total = subtotal + tax
+    return round(total, 2)
+
+print("Total Bill:", calculate_bill(cart))
+`,
+			SampleTestCases: `[{"input": "Apple: 2, Milk: 1", "expected_output": "136.5"}]`,
+			HiddenTestCases: `[{"input": "Apple: 1, Banana: 5, Bread: 2", "expected_output": "241.5"}, {"input": "Milk: 3", "expected_output": "94.5"}]`,
+			MaxMarks:        10,
+		},
+		{
+			CourseID:     course.ID,
+			ExperimentNo: 2,
+			Title:        "Pocket Bazaar: Inventory Management System",
+			Aim:          "To develop an application using Python to manage an inventory of products for grocery stores including stock addition, updates, and low-stock alerts.",
+			Procedure:    "Step 1: Define an inventory database dictionary storing product details (ID, Name, Stock, Price).\nStep 2: Implement functions to add new products and restock existing stock.\nStep 3: Implement stock deduction on sales.\nStep 4: Generate low-stock warning alerts when quantity falls below threshold.",
+			Language:     "python",
+			StarterCode: `# Inventory management system
+inventory = {}
+
+def add_product(name, qty, price):
+    inventory[name] = {"qty": qty, "price": price}
+
+def check_low_stock(threshold=5):
+    return [name for name, data in inventory.items() if data["qty"] < threshold]
+
+add_product("Rice", 10, 60)
+add_product("Sugar", 2, 45)
+print("Low Stock:", check_low_stock(5))
+`,
+			SampleTestCases: `[{"input": "Sugar: 2", "expected_output": "['Sugar']"}]`,
+			HiddenTestCases: `[{"input": "Salt: 1", "expected_output": "['Sugar', 'Salt']"}]`,
+			MaxMarks:        10,
+		},
+		{
+			CourseID:     course.ID,
+			ExperimentNo: 3,
+			Title:        "Vacation Destination Decision Maker",
+			Aim:          "Create an application program that helps a user decide on their next vacation destination based on budget, climate preferences, and activities.",
+			Procedure:    "Step 1: Accept user preferences (Max Budget, Preferred Climate e.g. Tropical/Cold, Preferred Activity e.g. Beach/Trekking).\nStep 2: Filter destination database against user criteria.\nStep 3: Return top matching vacation spots sorted by budget compatibility.",
+			Language:     "python",
+			StarterCode: `destinations = [
+    {"name": "Goa", "budget": 15000, "climate": "tropical", "activity": "beach"},
+    {"name": "Manali", "budget": 20000, "climate": "cold", "activity": "trekking"},
+    {"name": "Kerala", "budget": 18000, "climate": "tropical", "activity": "nature"}
+]
+
+def recommend(max_budget, climate):
+    return [d["name"] for d in destinations if d["budget"] <= max_budget and d["climate"] == climate]
+
+print("Recommendations:", recommend(19000, "tropical"))
+`,
+			SampleTestCases: `[{"input": "19000, tropical", "expected_output": "['Goa', 'Kerala']"}]`,
+			HiddenTestCases: `[{"input": "25000, cold", "expected_output": "['Manali']"}]`,
+			MaxMarks:        10,
+		},
+		{
+			CourseID:     course.ID,
+			ExperimentNo: 4,
+			Title:        "Temperature Monitor & Alert System",
+			Aim:          "Develop an application for a temperature monitoring system and provide an alert message when temperatures exceed safety thresholds.",
+			Procedure:    "Step 1: Read a series of temperature sensor values.\nStep 2: Calculate average, maximum, and minimum temperatures.\nStep 3: Flag CRITICAL ALERT if temp > 40C or FREEZING ALERT if temp < 0C.",
+			Language:     "python",
+			StarterCode: `def monitor_temperatures(readings):
+    alerts = []
+    for temp in readings:
+        if temp > 40:
+            alerts.append(f"CRITICAL: {temp}C")
+        elif temp < 0:
+            alerts.append(f"FREEZING: {temp}C")
+    return alerts
+
+print(monitor_temperatures([32, 42, 15, -2, 38]))
+`,
+			SampleTestCases: `[{"input": "[32, 42, 15, -2, 38]", "expected_output": "['CRITICAL: 42C', 'FREEZING: -2C']"}]`,
+			HiddenTestCases: `[{"input": "[45, 50, -5]", "expected_output": "['CRITICAL: 45C', 'CRITICAL: 50C', 'FREEZING: -5C']"}]`,
+			MaxMarks:        10,
+		},
+		{
+			CourseID:     course.ID,
+			ExperimentNo: 5,
+			Title:        "Access Control System (Credential & PIN Verification)",
+			Aim:          "Develop an access control system that simulates granting access to authorized personnel based on credentials such as ID cards and PIN codes.",
+			Procedure:    "Step 1: Maintain authorized (ID, PIN) key-value records.\nStep 2: Accept user ID and PIN input.\nStep 3: Validate against database and enforce maximum 3 failed attempts lock-out penalty.",
+			Language:     "python",
+			StarterCode: `users_db = {"ADMIN01": "1234", "USER02": "9999"}
+
+def authenticate(user_id, pin):
+    if user_id in users_db and users_db[user_id] == pin:
+        return "ACCESS GRANTED"
+    return "ACCESS DENIED"
+
+print(authenticate("ADMIN01", "1234"))
+print(authenticate("ADMIN01", "0000"))
+`,
+			SampleTestCases: `[{"input": "ADMIN01, 1234", "expected_output": "ACCESS GRANTED"}]`,
+			HiddenTestCases: `[{"input": "USER02, 9999", "expected_output": "ACCESS GRANTED"}, {"input": "HACKER, 0000", "expected_output": "ACCESS DENIED"}]`,
+			MaxMarks:        10,
+		},
+		{
+			CourseID:     course.ID,
+			ExperimentNo: 6,
+			Title:        "Math Quiz Generator",
+			Aim:          "Design a math quiz generator that generates questions of various difficulty levels (Easy, Medium, Hard) and arithmetic operations.",
+			Procedure:    "Step 1: Generate arithmetic problems (addition, subtraction, multiplication, division).\nStep 2: Evaluate candidate response against computed result.\nStep 3: Track score and calculate final accuracy percentage.",
+			Language:     "python",
+			StarterCode: `def evaluate_quiz(answers):
+    score = 0
+    for question, correct_ans, user_ans in answers:
+        if correct_ans == user_ans:
+            score += 1
+    return f"{score}/{len(answers)}"
+
+quiz_data = [("5 + 3", 8, 8), ("10 - 4", 6, 6), ("7 * 2", 14, 12)]
+print("Score:", evaluate_quiz(quiz_data))
+`,
+			SampleTestCases: `[{"input": "3 questions with 2 correct", "expected_output": "2/3"}]`,
+			HiddenTestCases: `[{"input": "5 questions with 5 correct", "expected_output": "5/5"}]`,
+			MaxMarks:        10,
+		},
+		{
+			CourseID:     course.ID,
+			ExperimentNo: 7,
+			Title:        "Maze Solver Application (Pathfinder)",
+			Aim:          "Build a maze solver application that finds a path from the entrance (S) to the exit (E) of a 2D grid maze.",
+			Procedure:    "Step 1: Represent 2D grid maze with open paths (0) and walls (1).\nStep 2: Implement BFS/DFS graph traversal to discover valid path from Start (0,0) to Exit (N-1, M-1).\nStep 3: Return coordinate path array.",
+			Language:     "python",
+			StarterCode: `def solve_maze(grid):
+    # Simple BFS grid pathfinder
+    rows, cols = len(grid), len(grid[0])
+    queue = [(0, 0, [(0, 0)])]
+    visited = set([(0, 0)])
+    
+    while queue:
+        r, c, path = queue.pop(0)
+        if r == rows - 1 and c == cols - 1:
+            return path
+        for dr, dc in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] == 0 and (nr, nc) not in visited:
+                visited.add((nr, nc))
+                queue.append((nr, nc, path + [(nr, nc)]))
+    return []
+
+maze = [
+    [0, 1, 0],
+    [0, 0, 0],
+    [1, 0, 0]
+]
+print("Path Found:", solve_maze(maze))
+`,
+			SampleTestCases: `[{"input": "3x3 maze", "expected_output": "[(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)]"}]`,
+			HiddenTestCases: `[{"input": "3x3 blocked maze", "expected_output": "[]"}]`,
+			MaxMarks:        10,
+		},
+	}
+
+	for _, exp := range experiments {
+		db.Create(&exp)
+	}
+	log.Println("[INFO] Successfully seeded 22AI304 PPL Lab course and 7 experiments into database!")
 }
 
 // syncAppPagesCatalog ensures the app catalog page for My Bookings and System Settings are updated and mapped
@@ -313,6 +518,76 @@ func syncAppPagesCatalog(db *gorm.DB) {
 		db.Model(&models.RolePagePermission{}).Where("role_name = 'developer' AND page_key = 'rate_limiting'").Count(&devPermCount)
 		if devPermCount == 0 {
 			db.Create(&models.RolePagePermission{RoleName: "developer", PageKey: "rate_limiting", CanAccess: true})
+		}
+	}
+
+	// 5. Ensure Practical Lab pages exist in AppPage catalog
+	labPages := []models.AppPage{
+		{
+			Key:         "practical_labs",
+			Name:        "Practical Labs",
+			Path:        "/labs",
+			Icon:        "FlaskConical",
+			Category:    "Academic Labs",
+			Description: "Complete mandatory college practical lab experiments online with automated test case execution",
+			OrderIndex:  30,
+		},
+		{
+			Key:         "lab_incharge_verification",
+			Name:        "Lab Incharge Verification",
+			Path:        "/lab-incharge",
+			Icon:        "UserCheck",
+			Category:    "Academic Labs",
+			Description: "Review student lab submissions and grant single-experiment or semester record approvals",
+			OrderIndex:  31,
+		},
+		{
+			Key:         "admin_lab_mapping",
+			Name:        "Lab Course Mappings",
+			Path:        "/admin/labs/mapping",
+			Icon:        "Building2",
+			Category:    "Academic Labs",
+			Description: "Map faculty members to lab courses, semesters, and student sections",
+			OrderIndex:  32,
+		},
+		{
+			Key:         "admin_lab_pdf_audit",
+			Name:        "Student Lab PDF Audit",
+			Path:        "/admin/labs/pdf-preview",
+			Icon:        "FileCode2",
+			Category:    "Academic Labs",
+			Description: "Preview and audit official server-generated student PDF lab records",
+			OrderIndex:  33,
+		},
+	}
+
+	for _, page := range labPages {
+		var pageCount int64
+		db.Model(&models.AppPage{}).Where("`key` = ?", page.Key).Count(&pageCount)
+		if pageCount == 0 {
+			if err := db.Create(&page).Error; err == nil {
+				// Default role mappings
+				if page.Key == "practical_labs" {
+					db.Create(&models.RolePagePermission{RoleName: "student", PageKey: page.Key, CanAccess: true})
+					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
+				}
+				if page.Key == "lab_incharge_verification" {
+					db.Create(&models.RolePagePermission{RoleName: "faculty", PageKey: page.Key, CanAccess: true})
+					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
+				}
+				if page.Key == "admin_lab_mapping" || page.Key == "admin_lab_pdf_audit" {
+					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
+				}
+			}
+		} else {
+			db.Model(&models.AppPage{}).Where("`key` = ?", page.Key).Updates(map[string]interface{}{
+				"name":        page.Name,
+				"path":        page.Path,
+				"icon":        page.Icon,
+				"category":    page.Category,
+				"description": page.Description,
+				"order_index": page.OrderIndex,
+			})
 		}
 	}
 }

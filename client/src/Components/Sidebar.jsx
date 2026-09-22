@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
   Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, Database,
-  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Headphones, Zap
+  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Headphones, Zap, Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,6 +24,7 @@ const ICON_MAP = {
   FlaskConical,
   Headphones,
   Zap,
+  Settings,
   Settings: SlidersHorizontal,
 };
 
@@ -60,12 +61,15 @@ export default function Sidebar() {
     : isFaculty
     ? [
         { name: 'Faculty Dashboard', path: '/faculty/dashboard', icon: LayoutDashboard },
+        { name: 'Lab Incharge Verification', path: '/lab-incharge', icon: FlaskConical },
         { name: 'Venue Attendance', path: '/faculty/attendance', icon: ClipboardCheck },
         { name: 'Live Audio Monitor', path: '/faculty/venue-monitor', icon: Headphones },
       ]
     : isAdmin
     ? [
         { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+        { name: 'Lab Configuration', path: '/admin/labs/config', icon: FlaskConical },
+        { name: 'Student Lab PDF Audit', path: '/admin/labs/pdf-preview', icon: FileCode2 },
         { name: 'User Management', path: '/admin/users', icon: Users },
         { name: 'Role Management', path: '/admin/roles', icon: ShieldCheck },
         { name: 'Venues & Slots', path: '/admin/venues', icon: Building2 },
@@ -80,9 +84,9 @@ export default function Sidebar() {
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Practical Labs', path: '/labs', icon: FlaskConical },
         { name: 'Interviews', path: '/interviews', icon: Video },
         { name: 'My Bookings', path: '/my-bookings', icon: CalendarCheck },
-        { name: 'Interview - Testing', path: '/interviews/testing', icon: FlaskConical },
         { name: 'Interview History', path: '/history', icon: History },
       ];
 

@@ -292,6 +292,35 @@ func SetupRouter() *gin.Engine {
 			systemSettings.PUT("", controllers.AdminUpdateSystemSetting)
 		}
 
+		// Academic Practical Labs Routes (Student)
+		labs := g.Group("/labs")
+		labs.Use(middlewares.AuthMiddleware())
+		{
+			labs.GET("/courses", controllers.GetStudentLabCourses)
+			labs.GET("/experiment/:expId", controllers.GetExperimentDetails)
+			labs.POST("/experiment/:expId/submit", controllers.SubmitExperimentCode)
+			labs.GET("/record-pdf/:courseId/student/:studentId", controllers.DownloadStudentRecordPDF)
+		}
+
+		// Faculty Lab Incharge Routes
+		facultyLabs := g.Group("/lab-incharge")
+		facultyLabs.Use(middlewares.AuthMiddleware())
+		{
+			facultyLabs.GET("/queue", controllers.GetFacultyQueue)
+			facultyLabs.POST("/verify-single", controllers.VerifySingleExperiment)
+			facultyLabs.POST("/verify-semester", controllers.VerifySemesterRecord)
+		}
+
+		// Admin Lab Management Routes
+		adminLabs := g.Group("/admin/labs")
+		adminLabs.Use(middlewares.AuthMiddleware())
+		{
+			adminLabs.GET("/data", controllers.GetAdminLabData)
+			adminLabs.POST("/mappings", controllers.CreateLabMapping)
+			adminLabs.DELETE("/mappings/:id", controllers.DeleteLabMapping)
+			adminLabs.GET("/pdf-preview/:courseId/student/:studentId", controllers.AdminPreviewStudentRecordPDF)
+		}
+
 		// Faculty Portal & Live In-Venue Attendance (Require JWT + Faculty/Admin Permissions)
 		faculty := g.Group("/faculty")
 		faculty.Use(middlewares.AuthMiddleware(), middlewares.RequirePermission("faculty_dashboard", "faculty_attendance"))
