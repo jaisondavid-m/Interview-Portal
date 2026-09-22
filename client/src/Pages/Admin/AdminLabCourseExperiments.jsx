@@ -304,10 +304,19 @@ export default function AdminLabCourseExperiments() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <span className="text-xs text-[var(--text-muted)] font-mono hidden md:inline">
             {experiments.length} Experiment{experiments.length !== 1 ? 's' : ''} Configured
           </span>
+
+          <button
+            onClick={() => navigate(`/admin/labs/courses/${courseId}/pdf-designer`)}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-bold hover:border-[var(--border-accent)] hover:text-[var(--accent)] transition-all cursor-pointer shadow-[var(--shadow-sm)]"
+          >
+            <BookOpen className="w-4 h-4 text-[var(--accent)]" />
+            Record PDF Designer
+          </button>
+
           <button
             onClick={() => startNewExperiment()}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"

@@ -393,6 +393,10 @@ export const router = createBrowserRouter([
             element: <AdminLabPdfViewer />,
           },
           {
+            path: 'admin/labs/courses/:courseId/pdf-designer',
+            element: <AdminLabPdfViewer />,
+          },
+          {
             path: 'admin/labs/config',
             element: <AdminLabConfig />,
           },
