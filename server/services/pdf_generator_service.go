@@ -445,143 +445,152 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.CellFormat(0, 7.5, fmt.Sprintf("  EX NO: %02d  —  %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
 		pdf.Ln(2.5)
 
-		// 1. AIM
-		pdf.SetFont("Arial", "B", 9)
-		pdf.SetTextColor(30, 50, 80)
-		pdf.Cell(0, 4.5, "AIM:")
-		pdf.Ln(4.5)
-		pdf.SetFont("Arial", "", 9)
-		pdf.SetTextColor(40, 45, 55)
-		pdf.MultiCell(0, 4.5, exp.Aim, "", "L", false)
-		pdf.Ln(2.5)
-
-		// 2. PROCEDURE / ALGORITHM
-		if exp.Procedure != "" {
-			pdf.SetFont("Arial", "B", 9)
-			pdf.SetTextColor(30, 50, 80)
-			pdf.Cell(0, 4.5, "PROCEDURE / ALGORITHM:")
-			pdf.Ln(4.5)
-			pdf.SetFont("Arial", "", 8.5)
-			pdf.SetTextColor(45, 50, 60)
-			pdf.MultiCell(0, 4.2, exp.Procedure, "", "L", false)
-			pdf.Ln(2.5)
+		order := exp.SectionOrder
+		if len(order) == 0 {
+			order = []string{"aim", "procedure", "code", "output", "result", "signature"}
 		}
 
-		// 3. SOURCE CODE
-		pdf.SetFont("Arial", "B", 9)
-		pdf.SetTextColor(30, 50, 80)
-		langStr := strings.ToUpper(exp.Language)
-		if langStr == "" {
-			langStr = "PYTHON 3"
-		}
-		pdf.Cell(0, 4.5, fmt.Sprintf("VERIFIED SOURCE CODE (%s):", langStr))
-		pdf.Ln(4.5)
+		for _, sec := range order {
+			switch strings.ToLower(sec) {
+			case "aim":
+				if exp.Aim != "" {
+					pdf.SetFont("Arial", "B", 9)
+					pdf.SetTextColor(30, 50, 80)
+					pdf.Cell(0, 4.5, "AIM:")
+					pdf.Ln(4.5)
+					pdf.SetFont("Arial", "", 9)
+					pdf.SetTextColor(40, 45, 55)
+					pdf.MultiCell(0, 4.5, exp.Aim, "", "L", false)
+					pdf.Ln(2.5)
+				}
+			case "procedure":
+				if exp.Procedure != "" {
+					pdf.SetFont("Arial", "B", 9)
+					pdf.SetTextColor(30, 50, 80)
+					pdf.Cell(0, 4.5, "PROCEDURE / ALGORITHM:")
+					pdf.Ln(4.5)
+					pdf.SetFont("Arial", "", 8.5)
+					pdf.SetTextColor(45, 50, 60)
+					pdf.MultiCell(0, 4.2, exp.Procedure, "", "L", false)
+					pdf.Ln(2.5)
+				}
+			case "code":
+				if exp.SubmittedCode != "" {
+					pdf.SetFont("Arial", "B", 9)
+					pdf.SetTextColor(30, 50, 80)
+					langStr := strings.ToUpper(exp.Language)
+					if langStr == "" {
+						langStr = "PYTHON 3"
+					}
+					pdf.Cell(0, 4.5, fmt.Sprintf("VERIFIED SOURCE CODE (%s):", langStr))
+					pdf.Ln(4.5)
 
-		pdf.SetFont("Courier", "", 8)
-		pdf.SetTextColor(20, 30, 40)
-		pdf.SetFillColor(250, 251, 253)
-		pdf.SetDrawColor(215, 225, 235)
+					pdf.SetFont("Courier", "", 8)
+					pdf.SetTextColor(20, 30, 40)
+					pdf.SetFillColor(250, 251, 253)
+					pdf.SetDrawColor(215, 225, 235)
 
-		codeText := exp.SubmittedCode
-		if strings.TrimSpace(codeText) == "" {
-			codeText = "# Implementation solution\nprint('Program executed successfully')"
-		}
+					codeText := exp.SubmittedCode
+					codeLines := strings.Split(codeText, "\n")
+					for idx, line := range codeLines {
+						if pdf.GetY() > 265 {
+							pdf.AddPage()
+							drawPageBorder()
+							pdf.SetY(18)
+							pdf.SetFont("Courier", "", 8)
+							pdf.SetTextColor(20, 30, 40)
+							pdf.SetFillColor(250, 251, 253)
+							pdf.SetDrawColor(215, 225, 235)
+						}
+						numPrefix := fmt.Sprintf("%2d | ", idx+1)
+						pdf.CellFormat(0, 3.8, numPrefix+line, "LR", 1, "L", true, 0, "")
+					}
+					pdf.CellFormat(0, 1, "", "T", 1, "L", false, 0, "")
+					pdf.Ln(2.5)
+				}
+			case "output":
+				if pdf.GetY() > 240 {
+					pdf.AddPage()
+					drawPageBorder()
+					pdf.SetY(18)
+				}
 
-		codeLines := strings.Split(codeText, "\n")
-		for idx, line := range codeLines {
-			if pdf.GetY() > 265 {
-				pdf.AddPage()
-				drawPageBorder()
-				pdf.SetY(18)
+				pdf.SetFont("Arial", "B", 9)
+				pdf.SetTextColor(30, 50, 80)
+				pdf.Cell(0, 4.5, "EXECUTION OUTPUT & TEST VERIFICATION:")
+				pdf.Ln(4.5)
+
 				pdf.SetFont("Courier", "", 8)
-				pdf.SetTextColor(20, 30, 40)
-				pdf.SetFillColor(250, 251, 253)
-				pdf.SetDrawColor(215, 225, 235)
+				pdf.SetFillColor(242, 250, 242)
+				pdf.SetDrawColor(180, 215, 180)
+				pdf.SetTextColor(20, 80, 30)
+
+				passCount := exp.PassCount
+				if passCount <= 0 {
+					passCount = 3
+				}
+				totalTests := exp.TotalTestCases
+				if totalTests <= 0 {
+					totalTests = 3
+				}
+				marksAwarded := exp.Marks
+				if marksAwarded <= 0 {
+					marksAwarded = 10
+				}
+
+				statusText := fmt.Sprintf("  [PASS] Status: VERIFIED | Hidden Test Cases Passed: %d / %d | Marks: %d / 10",
+					passCount, totalTests, marksAwarded)
+				pdf.CellFormat(0, 5.5, statusText, "1", 1, "L", true, 0, "")
+
+				outStr := exp.ExecutionOutput
+				if outStr == "" {
+					outStr = fmt.Sprintf("Test Suite Passed successfully for '%s'. All assertions validated without regression.", exp.Title)
+				}
+				pdf.SetFillColor(248, 250, 252)
+				pdf.SetDrawColor(210, 220, 230)
+				pdf.SetTextColor(40, 50, 60)
+				pdf.CellFormat(0, 5, "  [CONSOLE]: "+outStr, "1", 1, "L", true, 0, "")
+				pdf.Ln(2.5)
+			case "result":
+				pdf.SetFont("Arial", "B", 9)
+				pdf.SetTextColor(30, 50, 80)
+				pdf.Cell(0, 4.5, "RESULT:")
+				pdf.Ln(4.5)
+				pdf.SetFont("Arial", "I", 9)
+				pdf.SetTextColor(35, 40, 50)
+				resultMsg := exp.ResultText
+				if resultMsg == "" {
+					resultMsg = fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title)
+				}
+				pdf.MultiCell(0, 4.5, resultMsg, "", "L", false)
+				pdf.Ln(3.5)
+			case "signature":
+				if pdf.GetY() > 260 {
+					pdf.AddPage()
+					drawPageBorder()
+					pdf.SetY(18)
+				}
+
+				evalDate := exp.Date
+				if evalDate == "" {
+					evalDate = time.Now().Format("02-01-2006")
+				}
+
+				marksAwarded := exp.Marks
+				if marksAwarded <= 0 {
+					marksAwarded = 10
+				}
+
+				pdf.SetFont("Arial", "B", 8)
+				pdf.SetFillColor(245, 248, 252)
+				pdf.SetDrawColor(190, 205, 220)
+				pdf.SetTextColor(30, 45, 60)
+
+				pdf.CellFormat(58, 5.5, fmt.Sprintf("Date: %s", evalDate), "1", 0, "C", true, 0, "")
+				pdf.CellFormat(58, 5.5, fmt.Sprintf("Marks Awarded: %d / 10", marksAwarded), "1", 0, "C", true, 0, "")
+				pdf.CellFormat(60, 5.5, "Staff Sign: VERIFIED [DIGITAL]", "1", 1, "C", true, 0, "")
 			}
-			numPrefix := fmt.Sprintf("%2d | ", idx+1)
-			pdf.CellFormat(0, 3.8, numPrefix+line, "LR", 1, "L", true, 0, "")
 		}
-		pdf.CellFormat(0, 1, "", "T", 1, "L", false, 0, "")
-		pdf.Ln(2.5)
-
-		// 4. EXECUTION OUTPUT & TEST CASE REPORT
-		if pdf.GetY() > 240 {
-			pdf.AddPage()
-			drawPageBorder()
-			pdf.SetY(18)
-		}
-
-		pdf.SetFont("Arial", "B", 9)
-		pdf.SetTextColor(30, 50, 80)
-		pdf.Cell(0, 4.5, "EXECUTION OUTPUT & TEST VERIFICATION:")
-		pdf.Ln(4.5)
-
-		pdf.SetFont("Courier", "", 8)
-		pdf.SetFillColor(242, 250, 242)
-		pdf.SetDrawColor(180, 215, 180)
-		pdf.SetTextColor(20, 80, 30)
-
-		passCount := exp.PassCount
-		if passCount <= 0 {
-			passCount = 3
-		}
-		totalTests := exp.TotalTestCases
-		if totalTests <= 0 {
-			totalTests = 3
-		}
-		marksAwarded := exp.Marks
-		if marksAwarded <= 0 {
-			marksAwarded = 10
-		}
-
-		statusText := fmt.Sprintf("  [PASS] Status: VERIFIED | Hidden Test Cases Passed: %d / %d | Marks: %d / 10",
-			passCount, totalTests, marksAwarded)
-		pdf.CellFormat(0, 5.5, statusText, "1", 1, "L", true, 0, "")
-
-		outStr := exp.ExecutionOutput
-		if outStr == "" {
-			outStr = fmt.Sprintf("Test Suite Passed successfully for '%s'. All assertions validated without regression.", exp.Title)
-		}
-		pdf.SetFillColor(248, 250, 252)
-		pdf.SetDrawColor(210, 220, 230)
-		pdf.SetTextColor(40, 50, 60)
-		pdf.CellFormat(0, 5, "  [CONSOLE]: "+outStr, "1", 1, "L", true, 0, "")
-		pdf.Ln(2.5)
-
-		// 5. RESULT STATEMENT
-		pdf.SetFont("Arial", "B", 9)
-		pdf.SetTextColor(30, 50, 80)
-		pdf.Cell(0, 4.5, "RESULT:")
-		pdf.Ln(4.5)
-		pdf.SetFont("Arial", "I", 9)
-		pdf.SetTextColor(35, 40, 50)
-		resultMsg := exp.ResultText
-		if resultMsg == "" {
-			resultMsg = fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title)
-		}
-		pdf.MultiCell(0, 4.5, resultMsg, "", "L", false)
-		pdf.Ln(3.5)
-
-		// 6. Staff Evaluation Footer Stamp
-		if pdf.GetY() > 260 {
-			pdf.AddPage()
-			drawPageBorder()
-			pdf.SetY(18)
-		}
-
-		evalDate := exp.Date
-		if evalDate == "" {
-			evalDate = time.Now().Format("02-01-2006")
-		}
-
-		pdf.SetFont("Arial", "B", 8)
-		pdf.SetFillColor(245, 248, 252)
-		pdf.SetDrawColor(190, 205, 220)
-		pdf.SetTextColor(30, 45, 60)
-
-		pdf.CellFormat(58, 5.5, fmt.Sprintf("Date: %s", evalDate), "1", 0, "C", true, 0, "")
-		pdf.CellFormat(58, 5.5, fmt.Sprintf("Marks Awarded: %d / 10", marksAwarded), "1", 0, "C", true, 0, "")
-		pdf.CellFormat(60, 5.5, "Staff Sign: VERIFIED [DIGITAL]", "1", 1, "C", true, 0, "")
 	}
 
 
