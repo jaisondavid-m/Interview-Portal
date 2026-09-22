@@ -25,10 +25,10 @@ export default function AdminLabPdfViewer() {
     try {
       setLoading(true);
       const res = await api.get('/admin/labs/data');
-      setStudents(res.data.students || []);
-      setCourses(res.data.courses || []);
-      if (res.data.students?.length > 0) setSelectedStudent(res.data.students[0].id);
-      if (res.data.courses?.length > 0) setSelectedCourse(res.data.courses[0].id);
+      setStudents(res.students || []);
+      setCourses(res.courses || []);
+      if (res.students?.length > 0) setSelectedStudent(res.students[0].id);
+      if (res.courses?.length > 0) setSelectedCourse(res.courses[0].id);
     } catch {
       // silently handle
     } finally {

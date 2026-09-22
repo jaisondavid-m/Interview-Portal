@@ -87,19 +87,23 @@ export default function LabRecordPreview() {
 
       {/* Printable Preview Sheet */}
       <div className="bg-white border border-[var(--border)] rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] overflow-hidden">
-        {/* College Header Band */}
-        <div className="bg-[var(--accent)] px-8 py-5 text-white text-center space-y-0.5">
-          <p className="text-[11px] font-semibold uppercase tracking-widest opacity-80">
-            DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND DATA SCIENCE
-          </p>
-          <h2 className="text-[16px] font-black uppercase tracking-wide">
-            LABORATORY RECORD MANUAL
-          </h2>
-          <p className="text-[11px] opacity-70">
-            B.Tech · Semester III · Academic Year 2025–2026
-          </p>
-          <div className="inline-block mt-2 px-3 py-1 bg-white/15 rounded text-[11px] font-mono font-bold tracking-wider border border-white/20">
-            22AI304 — PRINCIPLES OF PROGRAMMING LABORATORY
+        {/* College Header Banner */}
+        <div className="p-6 bg-white border-b border-[var(--border)] text-center space-y-3">
+          <img src="/BITlogo.png" alt="Bannari Amman Institute of Technology" className="max-h-16 mx-auto object-contain" />
+          <div className="h-px bg-slate-200 w-full" />
+          <div>
+            <p className="text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+              DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND DATA SCIENCE
+            </p>
+            <h2 className="text-[15px] font-black text-slate-900 uppercase tracking-wide mt-0.5">
+              LABORATORY RECORD MANUAL
+            </h2>
+            <p className="text-[11px] text-slate-500 font-medium">
+              B.Tech · Semester III · Academic Year 2025–2026
+            </p>
+            <div className="inline-block mt-2 px-3 py-1 bg-slate-100 rounded text-[11px] font-mono font-bold text-slate-800 border border-slate-300">
+              22AI304 — PRINCIPLES OF PROGRAMMING LABORATORY
+            </div>
           </div>
         </div>
 

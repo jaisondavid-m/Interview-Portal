@@ -31,7 +31,7 @@ export default function LabDashboard() {
     try {
       setLoading(true);
       const res = await api.get('/labs/courses');
-      setCourses(res.data?.courses || []);
+      setCourses(res?.courses || []);
     } catch (err) {
       setError('Failed to load practical lab courses.');
     } finally {
