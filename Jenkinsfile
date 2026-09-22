@@ -48,10 +48,10 @@ pipeline {
                 echo '🧪 Running Go backend tests...'
                 sh '''
                     if command -v go >/dev/null 2>&1; then
-                        (cd server && go test -v ./... -timeout 60s)
+                        (cd server && GOWORK=off go test -v ./... -timeout 60s)
                     else
                         echo "⚠️ Go binary not found on Jenkins host. Running tests inside Go Docker container..."
-                        docker run --rm -v "$(pwd):/app" -w /app/server golang:1.24-alpine go test -v ./... -timeout 60s || true
+                        docker run --rm -v "$(pwd)/server:/app" -w /app -e GOWORK=off golang:1.24-alpine go test -v ./... -timeout 60s || true
                     fi
                 '''
             }
@@ -61,17 +61,18 @@ pipeline {
             steps {
                 echo '🚀 Building images and rolling out Docker Compose services...'
                 sh '''
-                    COMPOSE_CMD=""
-                    if command -v docker-compose >/dev/null 2>&1; then
-                        COMPOSE_CMD="docker-compose"
-                    elif docker compose version >/dev/null 2>&1; then
-                        COMPOSE_CMD="docker compose"
-                    else
-                        echo "❌ Neither docker-compose nor docker compose plugin found!"
-                        exit 1
-                    fi
-                    echo "Using Compose tool: $COMPOSE_CMD"
-                    $COMPOSE_CMD -f docker-compose.yml up -d --build --remove-orphans
+                    run_compose() {
+                        if command -v docker-compose >/dev/null 2>&1; then
+                            docker-compose "$@"
+                        elif docker compose version >/dev/null 2>&1; then
+                            docker compose "$@"
+                        else
+                            echo "⚠️ Neither docker-compose nor 'docker compose' plugin found. Running via Docker image..."
+                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd):/app" -w /app docker/compose:1.29.2 "$@"
+                        fi
+                    }
+
+                    run_compose -f docker-compose.yml up -d --build --remove-orphans
                 '''
             }
         }
@@ -80,16 +81,21 @@ pipeline {
             steps {
                 echo '🩺 Verifying services health status...'
                 sh '''
-                    COMPOSE_CMD="docker-compose"
-                    if ! command -v docker-compose >/dev/null 2>&1; then
-                        COMPOSE_CMD="docker compose"
-                    fi
+                    run_compose() {
+                        if command -v docker-compose >/dev/null 2>&1; then
+                            docker-compose "$@"
+                        elif docker compose version >/dev/null 2>&1; then
+                            docker compose "$@"
+                        else
+                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd):/app" -w /app docker/compose:1.29.2 "$@"
+                        fi
+                    }
 
                     echo "Waiting 15 seconds for containers to stabilize..."
                     sleep 15
 
                     # 1. Check all Docker Compose services status
-                    $COMPOSE_CMD ps
+                    run_compose ps
 
                     # 2. Check Backend API Health
                     echo "Checking Backend API on port 8080..."
