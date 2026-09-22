@@ -56,7 +56,7 @@ export default function AdminRoundArtifactViewer({
 }) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [dbTab, setDbTab] = useState('sql'); // 'sql' | 'er'
-  const [frontendTab, setFrontendTab] = useState('split'); // 'split' | 'preview' | 'code'
+  const [frontendTab, setFrontendTab] = useState('preview'); // 'preview' | 'code'
   const [showPromptDetails, setShowPromptDetails] = useState(true);
 
   // Determine mode
@@ -329,81 +329,38 @@ export default function AdminRoundArtifactViewer({
               </h3>
             </div>
 
-            {/* View Modes Switcher: Split | Preview | Code */}
-            <div className="flex items-center gap-1 bg-[var(--bg-card)] p-1 rounded border border-[var(--border)]">
-              <button
-                type="button"
-                onClick={() => setFrontendTab('split')}
-                className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded transition cursor-pointer ${
-                  frontendTab === 'split'
-                    ? 'bg-[var(--accent)] text-white shadow-xs'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                Split View
-              </button>
+            {/* Separate Tabs Switcher: Preview | Code */}
+            <div className="flex items-center gap-1.5 bg-[var(--bg-card)] p-1 rounded-lg border border-[var(--border)]">
               <button
                 type="button"
                 onClick={() => setFrontendTab('preview')}
-                className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded transition cursor-pointer ${
+                className={`text-[11px] font-mono font-bold px-3 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
                   frontendTab === 'preview'
-                    ? 'bg-[var(--accent)] text-white shadow-xs'
+                    ? 'bg-emerald-500 text-white shadow-xs'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                Interactive UI Preview
+                <Monitor className="w-3.5 h-3.5" />
+                <span>Interactive UI Preview</span>
               </button>
               <button
                 type="button"
                 onClick={() => setFrontendTab('code')}
-                className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded transition cursor-pointer ${
+                className={`text-[11px] font-mono font-bold px-3 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
                   frontendTab === 'code'
-                    ? 'bg-[var(--accent)] text-white shadow-xs'
+                    ? 'bg-emerald-500 text-white shadow-xs'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                Source Code
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Source Code (App.jsx)</span>
               </button>
             </div>
           </div>
 
           <div className="p-0">
-            {frontendTab === 'split' ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[var(--border)] min-h-[520px]">
-                {/* Code Side */}
-                <div className="flex flex-col h-[520px]">
-                  <div className="p-2.5 bg-[var(--bg-raised)]/40 border-b border-[var(--border)] flex items-center justify-between text-xs font-mono text-[var(--text-muted)]">
-                    <span className="font-bold text-[var(--text-primary)]">App.jsx (Candidate Code)</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(code)}
-                      className="btn btn-secondary text-[10px] py-0.5 px-2 flex items-center gap-1"
-                    >
-                      {copiedCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedCode ? 'Copied' : 'Copy'}</span>
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <CodeEditor
-                      code={code || '// No frontend code submitted'}
-                      language="javascript"
-                      readOnly={true}
-                      height="100%"
-                    />
-                  </div>
-                </div>
-
-                {/* Preview Side */}
-                <div className="h-[520px] bg-[var(--bg-canvas)] relative overflow-hidden flex flex-col">
-                  <FrontendLivePreview
-                    code={code || ''}
-                    title="Live Rendered UI Preview"
-                    candidateName={candidate?.name || 'Candidate'}
-                  />
-                </div>
-              </div>
-            ) : frontendTab === 'preview' ? (
-              <div className="h-[580px] bg-[var(--bg-canvas)] relative overflow-hidden">
+            {frontendTab === 'preview' ? (
+              <div className="h-[600px] bg-[var(--bg-canvas)] relative overflow-hidden">
                 <FrontendLivePreview
                   code={code || ''}
                   title="Live Rendered UI Preview"
@@ -411,13 +368,26 @@ export default function AdminRoundArtifactViewer({
                 />
               </div>
             ) : (
-              <div className="h-[500px]">
-                <CodeEditor
-                  code={code || '// No frontend code submitted'}
-                  language="javascript"
-                  readOnly={true}
-                  height="100%"
-                />
+              <div className="flex flex-col">
+                <div className="p-2.5 bg-[var(--bg-raised)]/40 border-b border-[var(--border)] flex items-center justify-between text-xs font-mono text-[var(--text-muted)]">
+                  <span className="font-bold text-[var(--text-primary)]">App.jsx (Candidate React Code)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(code)}
+                    className="btn btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 font-mono cursor-pointer"
+                  >
+                    {copiedCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
+                  </button>
+                </div>
+                <div className="h-[560px]">
+                  <CodeEditor
+                    code={code || '// No frontend code submitted'}
+                    language="javascript"
+                    readOnly={true}
+                    height="100%"
+                  />
+                </div>
               </div>
             )}
           </div>
