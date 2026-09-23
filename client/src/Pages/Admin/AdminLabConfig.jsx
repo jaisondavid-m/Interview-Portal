@@ -286,7 +286,7 @@ export default function AdminLabConfig() {
     department: '',
     degree: 'B.Tech',
     semester: '',
-    academic_year: '',
+    regulation: '2022',
     total_experiments: 7,
     description: '',
   };
@@ -1008,9 +1008,9 @@ export default function AdminLabConfig() {
                             {c.semester}
                           </span>
                         )}
-                        {c.academic_year && (
-                          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-                            {c.academic_year}
+                        {(c.regulation || c.academic_year) && (
+                          <span className="text-[10px] font-mono text-[var(--accent)] font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)]">
+                            {c.regulation ? `R${c.regulation}` : c.academic_year}
                           </span>
                         )}
                       </div>
@@ -2275,12 +2275,16 @@ export default function AdminLabConfig() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Academic Year</label>
+                  <label className={labelCls}>Regulation</label>
                   <SearchableSelect
-                    options={acYearOptions}
-                    value={courseForm.academic_year}
-                    onChange={(v) => setCourseForm((p) => ({ ...p, academic_year: v }))}
-                    placeholder="Select year..."
+                    options={[
+                      { value: '2022', label: '2022' },
+                      { value: '2026', label: '2026' },
+                      { value: '2018', label: '2018' },
+                    ]}
+                    value={courseForm.regulation || '2022'}
+                    onChange={(v) => setCourseForm((p) => ({ ...p, regulation: v }))}
+                    placeholder="Select regulation (e.g. 2022, 2026)..."
                     fullWidth
                     clearable
                   />

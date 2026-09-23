@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Upload,
   Download,
@@ -355,10 +355,12 @@ export default function LabBulkModal({
     reader.readAsText(file);
   };
 
-  // Handle Direct Paste Parsing
-  const handleParsePaste = () => {
+  // Auto-parse Direct Paste Content in real-time
+  useEffect(() => {
+    if (activeTab !== 'paste') return;
     if (!pasteContent.trim()) {
-      setErrorMsg('Please enter or paste JSON / CSV content first.');
+      setParsedItems([]);
+      setErrorMsg('');
       return;
     }
 
@@ -367,7 +369,7 @@ export default function LabBulkModal({
         const json = JSON.parse(pasteContent);
         validateAndSetItems(Array.isArray(json) ? json : [json]);
       } catch (err) {
-        setErrorMsg('JSON Parse Error: ' + err.message);
+        setErrorMsg('Invalid JSON format: ' + err.message);
         setParsedItems([]);
       }
     } else {
@@ -375,11 +377,11 @@ export default function LabBulkModal({
         const csvData = parseCSV(pasteContent);
         validateAndSetItems(csvData);
       } catch (err) {
-        setErrorMsg('CSV Parse Error: ' + err.message);
+        setErrorMsg('Invalid CSV format: ' + err.message);
         setParsedItems([]);
       }
     }
-  };
+  }, [pasteContent, pasteFormat, activeTab, isExp]);
 
   // Submit Bulk Upload to Backend
   const handleSubmit = async () => {
@@ -400,7 +402,11 @@ export default function LabBulkModal({
         if (onSuccess) onSuccess(res);
         onClose();
       } else {
-        const payload = validItems.map(({ _errors, _valid, ...rest }) => rest);
+        const payload = validItems.map(({ _errors, _valid, ...rest }) => ({
+          ...rest,
+          experiment_id: Number(targetId || 0),
+          course_id: Number(targetMetadata?.courseId || 0),
+        }));
         const res = await api.post(`/admin/labs/experiments/${targetId}/variants/bulk`, payload);
         if (onSuccess) onSuccess(res);
         onClose();
@@ -557,13 +563,10 @@ export default function LabBulkModal({
                   </button>
                 </div>
 
-                <button
-                  onClick={handleParsePaste}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Parse Content
-                </button>
+                <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] font-mono">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Auto-parsing</span>
+                </div>
               </div>
 
               <textarea

@@ -664,6 +664,14 @@ func GetFacultySubmissionDetail(c *gin.Context) {
 		database.DB.Where("experiment_id = ?", sub.ExperimentID).Order("id asc").First(&question)
 	}
 
+	// Fetch course details & rubric
+	var course models.LabCourse
+	if sub.Experiment.CourseID > 0 {
+		database.DB.First(&course, sub.Experiment.CourseID)
+	} else if question.CourseID > 0 {
+		database.DB.First(&course, question.CourseID)
+	}
+
 	// Parse Viva questions asked
 	var vivas []models.LabVivaQuestion
 	if sub.VivaQuestionsAsked != "" {
@@ -677,6 +685,7 @@ func GetFacultySubmissionDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"submission":         sub,
 		"student":            sub.Student,
+		"course":             course,
 		"experiment":         sub.Experiment,
 		"question":           question,
 		"reference_solution": question.SolutionCode,
@@ -686,12 +695,13 @@ func GetFacultySubmissionDetail(c *gin.Context) {
 }
 
 type VerifySingleReq struct {
-	SubmissionID uint   `json:"submission_id" binding:"required"`
-	Status       string `json:"status" binding:"required"` // APPROVED, REVISION_REQUIRED
-	CodeMarks    int    `json:"code_marks"`
-	VivaMarks    int    `json:"viva_marks"`
-	Marks        int    `json:"marks"` // Total Marks
-	FacultyNotes string `json:"faculty_notes"`
+	SubmissionID   uint                   `json:"submission_id" binding:"required"`
+	Status         string                 `json:"status" binding:"required"` // APPROVED, REVISION_REQUIRED
+	CodeMarks      int                    `json:"code_marks"`
+	VivaMarks      int                    `json:"viva_marks"`
+	Marks          int                    `json:"marks"` // Total Marks (out of 100)
+	MarksBreakdown map[string]interface{} `json:"marks_breakdown"`
+	FacultyNotes   string                 `json:"faculty_notes"`
 }
 
 // VerifySingleExperiment allows faculty to evaluate viva, award marks, and approve experiment
@@ -720,13 +730,19 @@ func VerifySingleExperiment(c *gin.Context) {
 		totalMarks = req.CodeMarks + req.VivaMarks
 	}
 	sub.Marks = totalMarks
+	if req.MarksBreakdown != nil {
+		breakdownJSON, err := json.Marshal(req.MarksBreakdown)
+		if err == nil {
+			sub.MarksBreakdown = string(breakdownJSON)
+		}
+	}
 	sub.FacultyNotes = req.FacultyNotes
 	sub.VerifiedBy = &facultyID
 	sub.VerifiedAt = &now
 	database.DB.Save(&sub)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":    "Experiment verification & viva evaluation saved successfully!",
+		"message":    "Experiment verification & marks evaluation saved successfully!",
 		"submission": sub,
 	})
 }

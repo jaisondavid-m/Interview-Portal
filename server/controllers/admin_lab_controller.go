@@ -217,6 +217,7 @@ type LabCourseInput struct {
 	Department       string `json:"department"`
 	Degree           string `json:"degree"`
 	Semester         string `json:"semester"`
+	Regulation       string `json:"regulation"`
 	AcademicYear     string `json:"academic_year"`
 	TotalExperiments int    `json:"total_experiments"`
 	Description      string `json:"description"`
@@ -236,6 +237,10 @@ func CreateLabCourse(c *gin.Context) {
 	if input.Degree == "" {
 		input.Degree = "B.Tech"
 	}
+	reg := strings.TrimSpace(input.Regulation)
+	if reg == "" {
+		reg = "2022"
+	}
 
 	course := models.LabCourse{
 		CourseCode:       strings.TrimSpace(input.CourseCode),
@@ -243,6 +248,7 @@ func CreateLabCourse(c *gin.Context) {
 		Department:       strings.TrimSpace(input.Department),
 		Degree:           strings.TrimSpace(input.Degree),
 		Semester:         strings.TrimSpace(input.Semester),
+		Regulation:       reg,
 		AcademicYear:     strings.TrimSpace(input.AcademicYear),
 		TotalExperiments: input.TotalExperiments,
 		Description:      strings.TrimSpace(input.Description),
@@ -295,6 +301,9 @@ func UpdateLabCourse(c *gin.Context) {
 	}
 	if input.Semester != "" {
 		updates["semester"] = strings.TrimSpace(input.Semester)
+	}
+	if input.Regulation != "" {
+		updates["regulation"] = strings.TrimSpace(input.Regulation)
 	}
 	if input.AcademicYear != "" {
 		updates["academic_year"] = strings.TrimSpace(input.AcademicYear)
@@ -704,9 +713,9 @@ func AdminGetExperimentQuestionVariants(c *gin.Context) {
 
 type SaveQuestionVariantReq struct {
 	ID                 uint                     `json:"id"`
-	ExperimentID       uint                     `json:"experiment_id" binding:"required"`
-	CourseID           uint                     `json:"course_id" binding:"required"`
-	QuestionCode       string                   `json:"question_code" binding:"required"`
+	ExperimentID       uint                     `json:"experiment_id"`
+	CourseID           uint                     `json:"course_id"`
+	QuestionCode       string                   `json:"question_code"`
 	Title              string                   `json:"title" binding:"required"`
 	Aim                string                   `json:"aim" binding:"required"`
 	ReferenceAlgorithm string                   `json:"reference_algorithm"`
@@ -726,6 +735,18 @@ func AdminSaveExperimentQuestionVariant(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid question variant payload: " + err.Error()})
 		return
+	}
+
+	expIDStr := c.Param("expId")
+	expID, _ := strconv.ParseUint(expIDStr, 10, 64)
+	if req.ExperimentID == 0 && expID > 0 {
+		req.ExperimentID = uint(expID)
+	}
+	if req.CourseID == 0 && req.ExperimentID > 0 {
+		var exp models.LabExperiment
+		if err := database.DB.First(&exp, req.ExperimentID).Error; err == nil {
+			req.CourseID = exp.CourseID
+		}
 	}
 
 	lang := req.Language

@@ -24,7 +24,8 @@ type LabSubmission struct {
 	Status             string                 `gorm:"size:50;default:'DRAFT'" json:"status"` // DRAFT, TEST_PASSED, SUBMITTED_FOR_VERIFICATION, APPROVED, REVISION_REQUIRED
 	CodeMarks          int                    `gorm:"default:0" json:"code_marks"`
 	VivaMarks          int                    `gorm:"default:0" json:"viva_marks"`
-	Marks              int                    `gorm:"default:0" json:"marks"` // Total Marks (CodeMarks + VivaMarks)
+	Marks              int                    `gorm:"default:0" json:"marks"` // Total Marks (out of 100 or course scale)
+	MarksBreakdown     string                 `gorm:"type:text" json:"marks_breakdown"` // JSON object of rubric criteria marks
 	VivaQuestionsAsked string                 `gorm:"type:text" json:"viva_questions_asked"` // JSON array of drawn viva questions and answers
 	FacultyNotes       string                 `gorm:"type:text" json:"faculty_notes"`
 	VerifiedBy         *uint                  `json:"verified_by,omitempty"`

@@ -25,6 +25,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import api from '../../api/axios';
+import LabMarkEntryModal from '../../Components/AdminLabs/LabMarkEntryModal';
 
 export default function LabInchargeDashboard() {
   const [submissions, setSubmissions] = useState([]);
@@ -100,6 +101,8 @@ export default function LabInchargeDashboard() {
     }
   };
 
+  const [isMarkModalOpen, setIsMarkModalOpen] = useState(false);
+
   const openEvaluationModal = async (subId) => {
     setSelectedSubId(subId);
     setEvalLoading(true);
@@ -123,24 +126,26 @@ export default function LabInchargeDashboard() {
     }
   };
 
-  const handleSaveEvaluation = async (status) => {
+  const handleSaveEvaluation = async (evalPayload) => {
     if (!selectedSubId) return;
     try {
       setEvalSubmitting(true);
       await api.post('/lab-incharge/verify-single', {
         submission_id: selectedSubId,
-        status,
+        status: evalPayload.status || 'APPROVED',
+        marks: evalPayload.marks !== undefined ? evalPayload.marks : evalTotalMarks,
+        marks_breakdown: evalPayload.marks_breakdown || null,
         code_marks: Number(evalCodeMarks) || 0,
         viva_marks: Number(evalVivaMarks) || 0,
-        marks: Number(evalTotalMarks) || (Number(evalCodeMarks) + Number(evalVivaMarks)),
-        faculty_notes: evalNotes,
+        faculty_notes: evalPayload.faculty_notes || evalNotes,
       });
       showToast(
-        status === 'APPROVED'
-          ? 'Experiment verified and signed successfully!'
+        evalPayload.status === 'APPROVED'
+          ? 'Experiment verified, graded, and signed successfully!'
           : 'Revision requested from student.',
         'success'
       );
+      setIsMarkModalOpen(false);
       setSelectedSubId(null);
       setEvalDetail(null);
       fetchQueue();
@@ -718,74 +723,26 @@ export default function LabInchargeDashboard() {
                 </div>
 
                 {/* Marking & Verification Cockpit Footer */}
-                <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-raised)] space-y-3 shrink-0">
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
-                    <div>
-                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
-                        Code & Tests Marks (Max 6)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="6"
-                        value={evalCodeMarks}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setEvalCodeMarks(val);
-                          setEvalTotalMarks(val + Number(evalVivaMarks));
-                        }}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
-                        Oral Viva Marks (Max 4)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="4"
-                        value={evalVivaMarks}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setEvalVivaMarks(val);
-                          setEvalTotalMarks(Number(evalCodeMarks) + val);
-                        }}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
-                        Total Marks (out of 10)
-                      </label>
-                      <input
-                        type="number"
-                        value={evalTotalMarks}
-                        onChange={(e) => setEvalTotalMarks(Number(e.target.value))}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-accent)] rounded px-3 py-1.5 text-xs font-mono text-[var(--accent)] font-bold"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-1">
-                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
-                        Faculty Remarks / Notes
-                      </label>
-                      <input
-                        type="text"
-                        value={evalNotes}
-                        onChange={(e) => setEvalNotes(e.target.value)}
-                        placeholder="e.g. Good verbal explanation"
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-3 py-1.5 text-xs text-[var(--text-primary)]"
-                      />
-                    </div>
+                <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between gap-3 shrink-0 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono font-bold text-[var(--text-secondary)] px-2.5 py-1 rounded bg-[var(--bg-input)] border border-[var(--border)]">
+                      Tests: {evalDetail?.submission?.pass_count || 0} / {evalDetail?.submission?.total_test_cases || 0} Passed
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      Status: <strong className="text-[var(--text-primary)]">{evalDetail?.submission?.status || 'SUBMITTED'}</strong>
+                    </span>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-1">
+                  <div className="flex items-center gap-2.5">
                     <button
                       type="button"
-                      onClick={() => handleSaveEvaluation('REVISION_REQUIRED')}
+                      onClick={() =>
+                        handleSaveEvaluation({
+                          status: 'REVISION_REQUIRED',
+                          marks: 0,
+                          faculty_notes: 'Revision requested by Lab Incharge',
+                        })
+                      }
                       disabled={evalSubmitting}
                       className="px-4 py-2 rounded-[var(--radius-sm)] bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
                     >
@@ -793,16 +750,11 @@ export default function LabInchargeDashboard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleSaveEvaluation('APPROVED')}
-                      disabled={evalSubmitting}
-                      className="px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--green)] hover:bg-[var(--green)]/90 text-white text-xs font-bold transition-all cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                      onClick={() => setIsMarkModalOpen(true)}
+                      className="px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-2"
                     >
-                      {evalSubmitting ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      )}
-                      Approve & Digitally Sign ({evalTotalMarks}/10)
+                      <Award className="w-4 h-4" />
+                      Award Rubric Marks & Sign Record &rarr;
                     </button>
                   </div>
                 </div>
@@ -811,6 +763,15 @@ export default function LabInchargeDashboard() {
           </div>
         </div>
       )}
+
+      {/* Course-Configured Rubric Mark Entry Modal */}
+      <LabMarkEntryModal
+        isOpen={isMarkModalOpen}
+        onClose={() => setIsMarkModalOpen(false)}
+        submissionDetail={evalDetail}
+        onSave={handleSaveEvaluation}
+        submitting={evalSubmitting}
+      />
     </div>
   );
 }
