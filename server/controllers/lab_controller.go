@@ -115,6 +115,7 @@ func GetCourseExperimentsForStudent(c *gin.Context) {
 
 // getOrAllocateQuestionForStudent deterministically retrieves or allocates a question variant for a student
 func getOrAllocateQuestionForStudent(courseID uint, expID uint, studentID uint) (*models.LabExperimentQuestion, error) {
+	database.EnsureLabTables(database.DB)
 	// Check if already allocated
 	var alloc models.LabQuestionAllocation
 	err := database.DB.Where("student_id = ? AND course_id = ? AND experiment_id = ?", studentID, courseID, expID).First(&alloc).Error

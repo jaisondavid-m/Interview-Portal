@@ -126,10 +126,31 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 	return db, nil
 }
 
+// EnsureLabTables ensures all academic lab module tables exist and are properly migrated
+func EnsureLabTables(db *gorm.DB) error {
+	labModels := []interface{}{
+		&models.LabCourse{},
+		&models.LabExperiment{},
+		&models.LabExperimentQuestion{},
+		&models.LabVivaQuestion{},
+		&models.LabQuestionAllocation{},
+		&models.LabExperimentUnlock{},
+		&models.LabMapping{},
+		&models.LabSubmission{},
+		&models.LabRecord{},
+	}
+	for _, m := range labModels {
+		if err := db.AutoMigrate(m); err != nil {
+			log.Printf("[WARN] AutoMigrate for lab model %T: %v\n", m, err)
+		}
+	}
+	return nil
+}
+
 // runMigrations automatically migrates defined schemas
 func runMigrations(db *gorm.DB) error {
 	log.Println("[INFO] Running database migrations...")
-	err := db.AutoMigrate(
+	modelsToMigrate := []interface{}{
 		&models.User{},
 		&models.InterviewTrack{},
 		&models.InterviewLevel{},
@@ -166,17 +187,24 @@ func runMigrations(db *gorm.DB) error {
 		&models.LabMapping{},
 		&models.LabSubmission{},
 		&models.LabRecord{},
-	)
-	if err == nil {
-		migrateAndDropLegacyPayloadJSONColumn(db)
-		syncAppPagesCatalog(db)
-		seedRateLimitConfigs(db)
-		// Backfill regulation for legacy courses
-		db.Model(&models.LabCourse{}).Where("regulation IS NULL OR regulation = ''").Update("regulation", "2022")
-		seedLabCourseAndExperiments(db)
-		syncLabQuestionVariantsAndVivas(db)
 	}
-	return err
+
+	for _, m := range modelsToMigrate {
+		if err := db.AutoMigrate(m); err != nil {
+			log.Printf("[WARN] AutoMigrate for %T: %v\n", m, err)
+		}
+	}
+
+	EnsureLabTables(db)
+
+	migrateAndDropLegacyPayloadJSONColumn(db)
+	syncAppPagesCatalog(db)
+	seedRateLimitConfigs(db)
+	// Backfill regulation for legacy courses
+	db.Model(&models.LabCourse{}).Where("regulation IS NULL OR regulation = ''").Update("regulation", "2022")
+	seedLabCourseAndExperiments(db)
+	syncLabQuestionVariantsAndVivas(db)
+	return nil
 }
 
 func seedLabCourseAndExperiments(db *gorm.DB) {

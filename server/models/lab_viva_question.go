@@ -18,3 +18,7 @@ type LabVivaQuestion struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+func (LabVivaQuestion) TableName() string {
+	return "lab_viva_questions"
+}

@@ -20,3 +20,7 @@ type LabMapping struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+func (LabMapping) TableName() string {
+	return "lab_mappings"
+}

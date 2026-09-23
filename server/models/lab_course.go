@@ -23,3 +23,7 @@ type LabCourse struct {
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+func (LabCourse) TableName() string {
+	return "lab_courses"
+}

@@ -689,6 +689,7 @@ func AdminSaveCoursePdfTemplate(c *gin.Context) {
 
 // AdminGetExperimentQuestionVariants returns all question variants with viva questions for an experiment
 func AdminGetExperimentQuestionVariants(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
 	expIDStr := c.Param("expId")
 	expID, err := strconv.ParseUint(expIDStr, 10, 64)
 	if err != nil {
@@ -740,6 +741,7 @@ type SaveQuestionVariantReq struct {
 
 // AdminSaveExperimentQuestionVariant creates or updates a question variant along with its viva questions pool
 func AdminSaveExperimentQuestionVariant(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
 	var req SaveQuestionVariantReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid question variant payload: " + err.Error()})
@@ -1080,6 +1082,7 @@ func AdminBulkCreateExperiments(c *gin.Context) {
 
 // AdminBulkCreateQuestionVariants handles batch insertion/updating of question variants for an experiment
 func AdminBulkCreateQuestionVariants(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
 	expIDStr := c.Param("expId")
 	expID, err := strconv.ParseUint(expIDStr, 10, 64)
 	if err != nil {

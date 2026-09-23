@@ -19,3 +19,7 @@ type LabQuestionAllocation struct {
 	UpdatedAt    time.Time             `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt        `gorm:"index" json:"-"`
 }
+
+func (LabQuestionAllocation) TableName() string {
+	return "lab_question_allocations"
+}

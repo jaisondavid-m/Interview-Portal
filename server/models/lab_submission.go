@@ -34,3 +34,7 @@ type LabSubmission struct {
 	UpdatedAt          time.Time              `json:"updated_at"`
 	DeletedAt          gorm.DeletedAt         `gorm:"index" json:"-"`
 }
+
+func (LabSubmission) TableName() string {
+	return "lab_submissions"
+}
