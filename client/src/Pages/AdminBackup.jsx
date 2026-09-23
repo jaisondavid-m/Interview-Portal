@@ -16,7 +16,9 @@ import {
   Terminal,
   Activity,
   ArrowDownToLine,
-  Table as TableIcon
+  Table as TableIcon,
+  Archive,
+  FileText
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -24,6 +26,7 @@ export default function AdminBackup() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState('gzip'); // 'gzip' | 'sql'
   const [selectedTables, setSelectedTables] = useState([]);
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [searchFilter, setSearchFilter] = useState('');
@@ -45,7 +48,7 @@ export default function AdminBackup() {
       console.error('Failed to fetch DB stats:', err);
       setMessage({
         type: 'error',
-        text: err.response?.data?.message || 'Failed to fetch database stats.'
+        text: err.response?.data?.message || err.message || 'Failed to fetch database stats.'
       });
     } finally {
       setLoading(false);
@@ -56,22 +59,48 @@ export default function AdminBackup() {
     fetchStats();
   }, []);
 
-  const handleDownload = async (isFull = true) => {
+  const handleDownload = async (isFull = true, formatOverride = null) => {
+    const format = formatOverride || downloadFormat;
     setDownloading(true);
-    setMessage(null);
+    setMessage({
+      type: 'info',
+      text: `Generating and streaming ${format === 'gzip' ? 'GZIP-compressed (.sql.gz)' : 'Plain SQL (.sql)'} dump... Please wait.`
+    });
+
     try {
-      let url = '/admin/backup/dump';
+      const params = new URLSearchParams();
       if (!isFull && selectedTables.length > 0) {
-        url += `?tables=${selectedTables.join(',')}`;
+        params.append('tables', selectedTables.join(','));
+      }
+      if (format === 'gzip') {
+        params.append('gzip', 'true');
       }
 
-      const response = await api.get(url, {
-        responseType: 'blob',
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const baseApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1').replace(/\/$/, '');
+      const fullUrl = `${baseApiUrl}/admin/backup/dump${queryString}`;
+
+      // Use native fetch to bypass Axios 10s timeout and stream large files reliably
+      const response = await fetch(fullUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': format === 'gzip' ? 'application/gzip, application/octet-stream' : 'application/sql, text/plain',
+        },
       });
 
-      // Extract filename or fallback
-      let filename = `apiportal_backup_${new Date().toISOString().slice(0,10)}.sql`;
-      const disposition = response.headers['content-disposition'];
+      if (!response.ok) {
+        let errDetail = `HTTP ${response.status}`;
+        try {
+          const errJson = await response.json();
+          errDetail = errJson.message || errDetail;
+        } catch (_) {}
+        throw new Error(errDetail);
+      }
+
+      // Extract filename from Content-Disposition header if present
+      let filename = `mockmate_backup_${new Date().toISOString().slice(0, 10)}.${format === 'gzip' ? 'sql.gz' : 'sql'}`;
+      const disposition = response.headers.get('content-disposition');
       if (disposition && disposition.indexOf('filename=') !== -1) {
         const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
         if (matches != null && matches[1]) {
@@ -79,8 +108,8 @@ export default function AdminBackup() {
         }
       }
 
-      // Trigger browser download
-      const blob = new Blob([response.data], { type: 'application/sql' });
+      // Stream the response blob into memory and trigger download
+      const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
@@ -90,15 +119,16 @@ export default function AdminBackup() {
       link.remove();
       window.URL.revokeObjectURL(downloadUrl);
 
+      const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
       setMessage({
         type: 'success',
-        text: `Successfully downloaded SQL backup: ${filename}`
+        text: `Successfully downloaded SQL backup: ${filename} (${sizeMB} MB)`
       });
     } catch (err) {
       console.error('Download error:', err);
       setMessage({
         type: 'error',
-        text: 'Failed to generate and download SQL dump.'
+        text: `Failed to download SQL dump: ${err.message || 'Network error'}`
       });
     } finally {
       setDownloading(false);
@@ -134,19 +164,24 @@ export default function AdminBackup() {
 
   const cliSnippets = [
     {
-      title: 'Full Docker mysqldump (WSL / Linux Host)',
-      cmd: 'docker exec mockmate-mysql-primary mysqldump -uroot -pjaison --routines --triggers --single-transaction mock_mate > ./mockmate_backup_$(date +%Y%m%d_%H%M%S).sql',
-      desc: 'Creates a clean, consistent snapshot dump directly on the host machine.'
+      title: 'Fast Compressed Dump (GZIP - Recommended)',
+      cmd: 'docker exec mockmate-mysql-primary mysqldump -uroot -pjaison --single-transaction --quick --set-gtid-purged=OFF mock_mate | gzip > ./mockmate_backup_$(date +%Y%m%d_%H%M%S).sql.gz',
+      desc: 'Creates a lightweight compressed backup dump (shrinks 300MB+ down to ~15MB).'
     },
     {
-      title: 'Restore Database from .sql Dump File',
+      title: 'Restore Database from .sql.gz (Compressed File)',
+      cmd: 'gunzip < ./mockmate_backup.sql.gz | docker exec -i mockmate-mysql-primary mysql -uroot -pjaison mock_mate',
+      desc: 'Restores compressed snapshot dump directly without unzipping to disk.'
+    },
+    {
+      title: 'Standard Uncompressed mysqldump',
+      cmd: 'docker exec mockmate-mysql-primary mysqldump -uroot -pjaison --single-transaction --quick --set-gtid-purged=OFF mock_mate > ./mockmate_backup_$(date +%Y%m%d_%H%M%S).sql',
+      desc: 'Creates an uncompressed raw .sql file directly on the host machine.'
+    },
+    {
+      title: 'Restore Database from Plain .sql File',
       cmd: 'docker exec -i mockmate-mysql-primary mysql -uroot -pjaison mock_mate < ./mockmate_backup.sql',
-      desc: 'Restores the database state from an existing backup dump file.'
-    },
-    {
-      title: 'Monitor Failover Manager & Replica Cluster Health',
-      cmd: 'docker logs mockmate-failover-manager --tail 25 -f',
-      desc: 'Streams real-time heartbeat and replication topology status.'
+      desc: 'Restores the database state from a plain .sql backup file.'
     }
   ];
 
@@ -168,7 +203,35 @@ export default function AdminBackup() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Format Selector */}
+          <div className="flex items-center bg-[var(--bg)] p-1 rounded-xl border border-[var(--border)] text-xs">
+            <button
+              onClick={() => setDownloadFormat('gzip')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-medium transition-all ${
+                downloadFormat === 'gzip'
+                  ? 'bg-[var(--accent)] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+              title="Compresses dump using GZIP (10x faster download)"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>.sql.gz (Fast)</span>
+            </button>
+            <button
+              onClick={() => setDownloadFormat('sql')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-medium transition-all ${
+                downloadFormat === 'sql'
+                  ? 'bg-[var(--accent)] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+              title="Plain uncompressed SQL dump"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>.sql (Plain)</span>
+            </button>
+          </div>
+
           <button
             onClick={fetchStats}
             disabled={loading}
@@ -188,7 +251,7 @@ export default function AdminBackup() {
             ) : (
               <Download className="w-4 h-4" />
             )}
-            <span>{downloading ? 'Exporting SQL...' : 'Download Full SQL Dump'}</span>
+            <span>{downloading ? 'Downloading Dump...' : `Download Full Dump (${downloadFormat === 'gzip' ? '.sql.gz' : '.sql'})`}</span>
           </button>
         </div>
       </div>

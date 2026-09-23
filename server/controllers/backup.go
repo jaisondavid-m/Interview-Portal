@@ -1,9 +1,11 @@
 package controllers
 
 import (
-	"bytes"
+	"bufio"
+	"compress/gzip"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -183,13 +185,14 @@ func AdminGetDatabaseStats(c *gin.Context) {
 	})
 }
 
-// AdminExportDatabaseDump creates and streams a complete or selective MySQL .sql dump
+// AdminExportDatabaseDump creates and streams a complete or selective MySQL .sql dump (plain or gzip compressed)
 func AdminExportDatabaseDump(c *gin.Context) {
 	dbName := getEffectiveDBName()
 
 	selectedTablesParam := strings.TrimSpace(c.Query("tables"))
-	var targetTables []string
+	isGzip := c.Query("gzip") == "true" || c.Query("gz") == "1" || c.Query("compress") == "1"
 
+	var targetTables []string
 	if selectedTablesParam != "" {
 		for _, t := range strings.Split(selectedTablesParam, ",") {
 			tbl := strings.TrimSpace(t)
@@ -204,43 +207,91 @@ func AdminExportDatabaseDump(c *gin.Context) {
 		targetTables = getClusterTableNames(dbName)
 	}
 
-	var buf bytes.Buffer
+	timestamp := time.Now().Format("20060102_150405")
+	var filename string
+	if isGzip {
+		filename = fmt.Sprintf("mockmate_backup_%s_%s.sql.gz", dbName, timestamp)
+		c.Header("Content-Type", "application/gzip")
+	} else {
+		filename = fmt.Sprintf("mockmate_backup_%s_%s.sql", dbName, timestamp)
+		c.Header("Content-Type", "application/sql; charset=utf-8")
+	}
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Expires", "0")
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
+
+	// Set status before streaming
+	c.Status(http.StatusOK)
+
+	var outWriter io.Writer = c.Writer
+	var gzWriter *gzip.Writer
+
+	if isGzip {
+		gzWriter = gzip.NewWriter(c.Writer)
+		outWriter = gzWriter
+		defer func() {
+			if gzWriter != nil {
+				_ = gzWriter.Close()
+			}
+		}()
+	}
+
+	bufWriter := bufio.NewWriterSize(outWriter, 64*1024)
+	defer func() {
+		_ = bufWriter.Flush()
+		if gzWriter != nil {
+			_ = gzWriter.Flush()
+			_ = gzWriter.Close()
+		}
+		c.Writer.Flush()
+	}()
+
+	writeStr := func(s string) {
+		_, _ = bufWriter.WriteString(s)
+	}
 
 	// 1. SQL Dump Header
 	now := time.Now().UTC()
-	buf.WriteString("-- ============================================================\n")
-	buf.WriteString(fmt.Sprintf("-- MockMate Platform SQL Database Backup\n"))
-	buf.WriteString(fmt.Sprintf("-- Export Date (UTC): %s\n", now.Format("2006-01-02 15:04:05")))
-	buf.WriteString(fmt.Sprintf("-- Database: %s\n", dbName))
+	writeStr("-- ============================================================\n")
+	writeStr(fmt.Sprintf("-- MockMate Platform SQL Database Backup\n"))
+	writeStr(fmt.Sprintf("-- Export Date (UTC): %s\n", now.Format("2006-01-02 15:04:05")))
+	writeStr(fmt.Sprintf("-- Database: %s\n", dbName))
 	if config.AppConfig != nil {
-		buf.WriteString(fmt.Sprintf("-- Host: %s:%s\n", config.AppConfig.DBHost, config.AppConfig.DBPort))
+		writeStr(fmt.Sprintf("-- Host: %s:%s\n", config.AppConfig.DBHost, config.AppConfig.DBPort))
 	}
-	buf.WriteString("-- ============================================================\n\n")
-	buf.WriteString("SET NAMES utf8mb4;\n")
-	buf.WriteString("SET FOREIGN_KEY_CHECKS = 0;\n")
-	buf.WriteString("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';\n")
-	buf.WriteString("SET time_zone = '+00:00';\n\n")
+	writeStr("-- ============================================================\n\n")
+	writeStr("SET NAMES utf8mb4;\n")
+	writeStr("SET FOREIGN_KEY_CHECKS = 0;\n")
+	writeStr("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';\n")
+	writeStr("SET time_zone = '+00:00';\n\n")
+
+	_ = bufWriter.Flush()
+	c.Writer.Flush()
 
 	// 2. Iterate through tables
 	for _, tableName := range targetTables {
 		cleanTable := strings.ReplaceAll(tableName, "`", "")
 
 		// Table Structure
-		buf.WriteString(fmt.Sprintf("-- ------------------------------------------------------------\n"))
-		buf.WriteString(fmt.Sprintf("-- Table structure for `%s`\n", cleanTable))
-		buf.WriteString(fmt.Sprintf("-- ------------------------------------------------------------\n"))
-		buf.WriteString(fmt.Sprintf("DROP TABLE IF EXISTS `%s`;\n", cleanTable))
+		writeStr(fmt.Sprintf("-- ------------------------------------------------------------\n"))
+		writeStr(fmt.Sprintf("-- Table structure for `%s`\n", cleanTable))
+		writeStr(fmt.Sprintf("-- ------------------------------------------------------------\n"))
+		writeStr(fmt.Sprintf("DROP TABLE IF EXISTS `%s`;\n", cleanTable))
 
 		var tblNameResult, createSQL string
 		err := database.DB.Raw(fmt.Sprintf("SHOW CREATE TABLE `%s`", cleanTable)).Row().Scan(&tblNameResult, &createSQL)
 		if err != nil {
 			continue
 		}
-		buf.WriteString(createSQL)
-		buf.WriteString(";\n\n")
+		writeStr(createSQL)
+		writeStr(";\n\n")
 
 		// Table Data Dump
-		buf.WriteString(fmt.Sprintf("-- Dumping data for table `%s`\n", cleanTable))
+		writeStr(fmt.Sprintf("-- Dumping data for table `%s`\n", cleanTable))
 		rows, err := database.DB.Raw(fmt.Sprintf("SELECT * FROM `%s`", cleanTable)).Rows()
 		if err != nil {
 			continue
@@ -254,7 +305,7 @@ func AdminExportDatabaseDump(c *gin.Context) {
 
 		colCount := len(cols)
 		var insertValues []string
-		batchSize := 100
+		batchSize := 200
 
 		colHeaders := make([]string, colCount)
 		for i, col := range cols {
@@ -311,42 +362,53 @@ func AdminExportDatabaseDump(c *gin.Context) {
 
 			// Flush batch
 			if len(insertValues) >= batchSize {
-				buf.WriteString(fmt.Sprintf("INSERT INTO `%s` (%s) VALUES\n%s;\n", cleanTable, colListStr, strings.Join(insertValues, ",\n")))
+				writeStr(fmt.Sprintf("INSERT INTO `%s` (%s) VALUES\n%s;\n", cleanTable, colListStr, strings.Join(insertValues, ",\n")))
 				insertValues = nil
+				_ = bufWriter.Flush()
+				c.Writer.Flush()
 			}
 		}
 		_ = rows.Close()
 
 		if len(insertValues) > 0 {
-			buf.WriteString(fmt.Sprintf("INSERT INTO `%s` (%s) VALUES\n%s;\n", cleanTable, colListStr, strings.Join(insertValues, ",\n")))
+			writeStr(fmt.Sprintf("INSERT INTO `%s` (%s) VALUES\n%s;\n", cleanTable, colListStr, strings.Join(insertValues, ",\n")))
 		}
-		buf.WriteString("\n")
+		writeStr("\n")
+		_ = bufWriter.Flush()
+		c.Writer.Flush()
 	}
 
 	// 3. SQL Footer
-	buf.WriteString("SET FOREIGN_KEY_CHECKS = 1;\n")
-	buf.WriteString(fmt.Sprintf("-- Dump completed on %s UTC\n", time.Now().UTC().Format("2006-01-02 15:04:05")))
-
-	filename := fmt.Sprintf("mockmate_backup_%s_%s.sql", dbName, time.Now().Format("20060102_150405"))
-
-	c.Header("Content-Description", "File Transfer")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	c.Header("Content-Type", "application/sql")
-	c.Header("Content-Transfer-Encoding", "binary")
-	c.Header("Expires", "0")
-	c.Header("Cache-Control", "must-revalidate")
-	c.Header("Pragma", "public")
-
-	c.Data(http.StatusOK, "application/sql; charset=utf-8", buf.Bytes())
+	writeStr("SET FOREIGN_KEY_CHECKS = 1;\n")
+	writeStr(fmt.Sprintf("-- Dump completed on %s UTC\n", time.Now().UTC().Format("2006-01-02 15:04:05")))
 }
 
-// escapeSQLString escapes single quotes and backslashes for SQL literals
+// escapeSQLString escapes special characters for SQL literals
 func escapeSQLString(str string) string {
-	str = strings.ReplaceAll(str, "\\", "\\\\")
-	str = strings.ReplaceAll(str, "'", "\\'")
-	str = strings.ReplaceAll(str, "\n", "\\n")
-	str = strings.ReplaceAll(str, "\r", "\\r")
-	return str
+	var sb strings.Builder
+	sb.Grow(len(str) + 16)
+	for i := 0; i < len(str); i++ {
+		c := str[i]
+		switch c {
+		case 0:
+			sb.WriteString("\\0")
+		case '\n':
+			sb.WriteString("\\n")
+		case '\r':
+			sb.WriteString("\\r")
+		case '\\':
+			sb.WriteString("\\\\")
+		case '\'':
+			sb.WriteString("\\'")
+		case '"':
+			sb.WriteString("\\\"")
+		case '\032': // Control-Z
+			sb.WriteString("\\Z")
+		default:
+			sb.WriteByte(c)
+		}
+	}
+	return sb.String()
 }
 
 // formatBytes formats byte sizes into readable KB, MB, GB
