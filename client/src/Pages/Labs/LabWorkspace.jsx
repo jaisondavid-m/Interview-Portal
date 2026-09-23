@@ -17,27 +17,55 @@ import {
   Clock,
   Sparkles,
   ShieldCheck,
+  ListPlus,
+  Trash2,
+  CheckCheck,
+  Award,
+  MessageSquareCheck,
+  Save,
 } from 'lucide-react';
 import api from '../../api/axios';
 import CodeEditor from '../../Components/CodeEditor';
+import ConfirmModal from '../../Components/ConfirmModal';
 
 export default function LabWorkspace() {
   const { courseId = 1, expId = 1 } = useParams();
   const navigate = useNavigate();
 
   const [experiment, setExperiment] = useState(null);
+  const [assignedQuestion, setAssignedQuestion] = useState(null);
   const [courseExperiments, setCourseExperiments] = useState([]);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
+  const [procedureSteps, setProcedureSteps] = useState([
+    'Step 1: Read input parameters and initialize core data structures.',
+    'Step 2: Implement logic rules and computational transforms.',
+    'Step 3: Generate and display the required output result.',
+  ]);
   const [submission, setSubmission] = useState(null);
   const [isUnlocked, setIsUnlocked] = useState(true);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [savingProcedure, setSavingProcedure] = useState(false);
   const [runResult, setRunResult] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState('');
-  const [activeConsoleTab, setActiveConsoleTab] = useState('run'); // 'run' | 'submit'
+  const [toast, setToast] = useState(null);
+
+  // Left Pane Tabs: 'aim' | 'procedure' | 'testcases'
+  const [leftTab, setLeftTab] = useState('aim');
+  // Console Tabs: 'run' | 'submit'
+  const [activeConsoleTab, setActiveConsoleTab] = useState('run');
+
+  // Finish Confirmation Modal
+  const [showFinishModal, setShowFinishModal] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   useEffect(() => {
     fetchExperiment();
@@ -61,17 +89,35 @@ export default function LabWorkspace() {
       setTestResult(null);
       const res = await api.get(`/labs/experiment/${expId}`);
       const data = res?.experiment;
+      const assignedQ = res?.assigned_question;
       const sub = res?.submission;
+
       setExperiment(data);
+      setAssignedQuestion(assignedQ);
       setIsUnlocked(res?.is_unlocked !== false);
 
-      if (sub && sub.submitted_code) {
+      if (sub) {
         setSubmission(sub);
-        setCode(sub.submitted_code);
-        setLanguage(sub.language || data?.language || 'python');
+        if (sub.submitted_code) {
+          setCode(sub.submitted_code);
+        } else {
+          setCode('# Write your solution below\n\ndef solution():\n    pass\n');
+        }
+        setLanguage(sub.language || assignedQ?.language || 'python');
+
+        if (sub.student_procedure) {
+          try {
+            const parsed = JSON.parse(sub.student_procedure);
+            if (Array.isArray(parsed)) setProcedureSteps(parsed);
+          } catch {
+            setProcedureSteps(
+              sub.student_procedure.split('\n').filter((l) => l.trim().length > 0)
+            );
+          }
+        }
       } else {
-        setCode(data?.starter_code || '');
-        setLanguage(data?.language || 'python');
+        setCode('# Write your solution below\n\ndef solution():\n    pass\n');
+        setLanguage(assignedQ?.language || data?.language || 'python');
       }
     } catch (err) {
       setError('Could not load experiment details.');
@@ -80,7 +126,46 @@ export default function LabWorkspace() {
     }
   };
 
-  // Run against sample test cases (No submission created)
+  // ── Step-by-Step Procedure Helpers ──────────────────────────────────────────
+  const handleAddProcedureStep = () => {
+    setProcedureSteps((prev) => [
+      ...prev,
+      `Step ${prev.length + 1}: Explain execution logic operation`,
+    ]);
+  };
+
+  const handleEditProcedureStep = (index, value) => {
+    const updated = [...procedureSteps];
+    updated[index] = value;
+    setProcedureSteps(updated);
+  };
+
+  const handleDeleteProcedureStep = (index) => {
+    if (procedureSteps.length <= 1) {
+      showToast('Algorithm must contain at least one step.', 'error');
+      return;
+    }
+    const updated = procedureSteps.filter((_, i) => i !== index);
+    setProcedureSteps(updated);
+  };
+
+  const handleSaveProcedure = async () => {
+    try {
+      setSavingProcedure(true);
+      const res = await api.post(`/labs/experiment/${expId}/procedure`, {
+        procedure: JSON.stringify(procedureSteps, null, 2),
+      });
+      if (res?.submission) setSubmission(res.submission);
+      showToast('Step-by-step algorithm saved successfully!', 'success');
+    } catch {
+      showToast('Failed to save procedure steps.', 'error');
+    } finally {
+      setSavingProcedure(false);
+    }
+  };
+
+  // ── Execution Handlers ──────────────────────────────────────────────────────
+  // 1. Run against sample test cases (instant feedback only)
   const handleRun = async () => {
     try {
       setRunning(true);
@@ -88,29 +173,36 @@ export default function LabWorkspace() {
       setActiveConsoleTab('run');
       const res = await api.post(`/labs/experiment/${expId}/run`, { code, language });
       setRunResult(res);
+      showToast(`Sample test executed: ${res.pass_count}/${res.total_test_cases} passed.`, 'success');
     } catch (err) {
-      setError(err.response?.data?.error || 'Execution failed. Please verify syntax.');
+      setError(err.response?.data?.error || 'Execution failed. Please check syntax.');
     } finally {
       setRunning(false);
     }
   };
 
-  // Submit against hidden test cases for grading
+  // 2. Submit against hidden test cases (grading evaluation)
   const handleSubmit = async () => {
     try {
       setSubmitting(true);
       setError('');
       setActiveConsoleTab('submit');
+      // Autosave procedure before submit
+      await api.post(`/labs/experiment/${expId}/procedure`, {
+        procedure: JSON.stringify(procedureSteps, null, 2),
+      });
+
       const res = await api.post(`/labs/experiment/${expId}/submit`, { code, language });
       setTestResult({
         passCount: res.pass_count,
         totalCases: res.total_test_cases,
         status: res.status,
-        marks: res.marks,
+        codeMarks: res.code_marks,
         message: res.message,
         results: res.results,
       });
       if (res.submission) setSubmission(res.submission);
+      showToast(`Hidden test cases evaluated: ${res.pass_count}/${res.total_test_cases} passed!`, 'success');
     } catch (err) {
       setError(err.response?.data?.error || 'Submission failed. Please try again.');
     } finally {
@@ -118,11 +210,35 @@ export default function LabWorkspace() {
     }
   };
 
+  // 3. Finish and send for Faculty Verification & Oral Viva
+  const handleFinishAndSend = async () => {
+    try {
+      setFinishing(true);
+      // Autosave procedure
+      await api.post(`/labs/experiment/${expId}/procedure`, {
+        procedure: JSON.stringify(procedureSteps, null, 2),
+      });
+
+      const res = await api.post(`/labs/experiment/${expId}/finish`, {});
+      if (res?.submission) setSubmission(res.submission);
+      setShowFinishModal(false);
+      showToast('Submitted for faculty verification & viva!', 'success');
+    } catch (err) {
+      showToast(err?.response?.data?.error || 'Failed to submit experiment.', 'error');
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  const isSubmittedOrApproved =
+    submission?.status === 'SUBMITTED_FOR_VERIFICATION' || submission?.status === 'APPROVED';
+
   // Parse sample test cases for left pane
   let sampleTestCases = [];
   try {
-    if (experiment?.sample_test_cases) {
-      sampleTestCases = JSON.parse(experiment.sample_test_cases);
+    const rawCases = assignedQuestion?.sample_test_cases || experiment?.sample_test_cases;
+    if (rawCases) {
+      sampleTestCases = JSON.parse(rawCases);
     }
   } catch {}
 
@@ -130,16 +246,34 @@ export default function LabWorkspace() {
     return (
       <div className="flex items-center justify-center h-[60vh] text-[var(--text-muted)] gap-3">
         <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
-        <span className="text-sm">Loading lab workspace...</span>
+        <span className="text-sm">Loading lab workspace & question allocation...</span>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden bg-[var(--bg)]">
-      {/* Studio Top Bar */}
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
+            toast.type === 'error'
+              ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
+              : 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          )}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
+      {/* Top Studio Bar */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-card)] border-b border-[var(--border)] shadow-[var(--shadow-sm)] shrink-0 gap-3">
-        {/* Left: Back + Experiment label */}
+        {/* Left: Back + Experiment & Locked Question Variant */}
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate('/labs')}
@@ -152,66 +286,65 @@ export default function LabWorkspace() {
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0">
               Ex {experiment?.experiment_no || expId}
             </span>
-            <span className="text-[13px] font-semibold text-[var(--text-primary)] truncate">
-              {experiment?.title}
-            </span>
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="text-[13px] font-bold text-[var(--text-primary)] truncate">
+                {assignedQuestion?.title || experiment?.title}
+              </span>
+              {assignedQuestion?.question_code && (
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border)] flex items-center gap-1 shrink-0">
+                  <Lock className="w-2.5 h-2.5 text-[var(--accent)]" />
+                  {assignedQuestion.question_code} Locked
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Centre: Dynamic Quick Nav for Experiments */}
-        <div className="hidden lg:flex items-center gap-1 bg-[var(--bg-input)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)]">
-          {courseExperiments.length > 0
-            ? courseExperiments.map((exp) => (
-                <button
-                  key={exp.id}
-                  onClick={() => navigate(`/labs/${courseId}/experiment/${exp.id}`)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1 ${
-                    parseInt(expId) === exp.id || parseInt(expId) === exp.experiment_no
-                      ? 'bg-[var(--accent)] text-white shadow-[var(--shadow-sm)]'
-                      : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
-                  title={exp.title}
-                >
-                  {!exp.is_unlocked && <Lock className="w-2.5 h-2.5 opacity-70" />}
-                  <span>{exp.experiment_no}</span>
-                </button>
-              ))
-            : [1, 2, 3, 4, 5, 6, 7].map((num) => (
-                <button
-                  key={num}
-                  onClick={() => navigate(`/labs/${courseId}/experiment/${num}`)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                    parseInt(expId) === num
-                      ? 'bg-[var(--accent)] text-white shadow-[var(--shadow-sm)]'
-                      : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
-        </div>
-
-        {/* Right: Actions */}
+        {/* Right: Status and Action Buttons */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {submission && (
+          {/* Submission Status Pill */}
+          {submission?.status && (
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${
                 submission.status === 'APPROVED'
-                  ? 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/30'
-                  : 'bg-[var(--amber-bg)] text-[var(--amber)] border-[var(--amber)]/30'
+                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                  : submission.status === 'SUBMITTED_FOR_VERIFICATION'
+                  ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30'
+                  : submission.status === 'TEST_PASSED'
+                  ? 'bg-teal-500/10 text-teal-600 border-teal-500/30'
+                  : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
               }`}
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              {submission.status === 'APPROVED' ? 'Verified' : 'Pending Review'}
+              {submission.status === 'APPROVED' ? (
+                <>
+                  <Award className="w-3.5 h-3.5 text-emerald-600" />
+                  Verified ({submission.marks}/{assignedQuestion?.max_marks || 10} Marks)
+                </>
+              ) : submission.status === 'SUBMITTED_FOR_VERIFICATION' ? (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                  In Faculty Viva Queue
+                </>
+              ) : submission.status === 'TEST_PASSED' ? (
+                <>
+                  <CheckCheck className="w-3.5 h-3.5 text-teal-600" />
+                  Tests Passed (Ready to Finish)
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  In Progress
+                </>
+              )}
             </span>
           )}
 
-          {/* RUN BUTTON */}
+          {/* RUN CODE BUTTON */}
           <button
             onClick={handleRun}
-            disabled={running || submitting || !isUnlocked}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-sm)]"
-            title="Run code against sample test cases (does not submit for grading)"
+            disabled={running || submitting || !isUnlocked || isSubmittedOrApproved}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-sm)]"
+            title="Run code against sample test cases for immediate feedback"
           >
             {running ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
@@ -221,117 +354,258 @@ export default function LabWorkspace() {
             Run Code
           </button>
 
-          {/* SUBMIT BUTTON */}
+          {/* SUBMIT CODE BUTTON */}
           <button
             onClick={handleSubmit}
-            disabled={running || submitting || !isUnlocked}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-sm)]"
-            title="Submit code against hidden test cases for faculty assessment"
+            disabled={running || submitting || !isUnlocked || isSubmittedOrApproved}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-accent)] text-[var(--accent)] text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-sm)]"
+            title="Evaluate code against hidden benchmark test cases"
           >
             {submitting ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <Send className="w-3.5 h-3.5" />
+              <CheckCircle2 className="w-3.5 h-3.5" />
             )}
-            Submit Solution
+            Submit Code
+          </button>
+
+          {/* FINISH & SEND FOR VERIFICATION */}
+          <button
+            onClick={() => setShowFinishModal(true)}
+            disabled={running || submitting || !isUnlocked || isSubmittedOrApproved}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-sm)]"
+            title="Finish experiment and submit for faculty oral viva evaluation"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Finish & Send for Verification
           </button>
         </div>
       </div>
 
-      {/* Lock Notice Banner if experiment is locked */}
-      {!isUnlocked && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center justify-between gap-3 text-amber-800 text-xs shrink-0">
+      {/* In-Queue / Verified Notice Banner */}
+      {submission?.status === 'SUBMITTED_FOR_VERIFICATION' && (
+        <div className="bg-indigo-500/10 border-b border-indigo-500/20 px-4 py-2.5 flex items-center justify-between gap-3 text-indigo-900 text-xs shrink-0">
           <div className="flex items-center gap-2 font-medium">
-            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            <MessageSquareCheck className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
-              <strong>Experiment Locked:</strong> Your assigned faculty incharge has not yet released this experiment for your section.
+              <strong>Experiment Locked & Sent for Verification:</strong> Please approach your faculty incharge for in-person oral viva evaluation.
             </span>
           </div>
-          <span className="text-[11px] font-mono opacity-80">Read-Only Mode</span>
+          <span className="text-[11px] font-mono opacity-80 font-bold">Oral Viva Pending</span>
         </div>
       )}
 
-      {/* Main Split Pane */}
+      {submission?.status === 'APPROVED' && (
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2.5 flex items-center justify-between gap-3 text-emerald-900 text-xs shrink-0">
+          <div className="flex items-center gap-2 font-medium">
+            <Award className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>Experiment Verified by Lab Incharge!</strong> Total Marks: <strong>{submission.marks}/{assignedQuestion?.max_marks || 10}</strong> (Code: {submission.code_marks || 0}, Viva: {submission.viva_marks || 0}).
+              {submission.faculty_notes && <span className="ml-2 italic opacity-90">"{submission.faculty_notes}"</span>}
+            </span>
+          </div>
+          <span className="text-[11px] font-mono opacity-80 font-bold">Officially Signed</span>
+        </div>
+      )}
+
+      {/* Main Split Workspace */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Problem Statement & Procedure */}
-        <div className="w-[42%] shrink-0 border-r border-[var(--border)] bg-[var(--bg-raised)] p-5 overflow-y-auto space-y-5">
-          {/* AIM */}
-          <div className="space-y-2">
-            <h2 className="text-[13px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-[var(--accent)]" />
-              Aim of Experiment
-            </h2>
-            <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed bg-[var(--bg-card)] p-3.5 rounded-[var(--radius-md)] border border-[var(--border)] shadow-[var(--shadow-sm)]">
-              {experiment?.aim}
-            </p>
-          </div>
-
-          {/* PROCEDURE */}
-          <div className="space-y-2">
-            <h3 className="text-[12px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-indigo-500" />
-              Step-by-Step Algorithm
-            </h3>
-            <pre className="text-[11px] text-[var(--text-secondary)] bg-[var(--bg-card)] p-4 rounded-[var(--radius-md)] border border-[var(--border)] font-mono leading-relaxed whitespace-pre-wrap overflow-auto shadow-[var(--shadow-sm)]">
-              {experiment?.procedure || 'No algorithmic steps provided.'}
-            </pre>
-          </div>
-
-          {/* SAMPLE TEST CASES */}
-          <div className="space-y-2">
-            <h3 className="text-[12px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-              <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+        {/* Left Panel: Problem Statement / Step-by-Step Procedure / Test Cases */}
+        <div className="w-[45%] shrink-0 border-r border-[var(--border)] bg-[var(--bg-raised)] flex flex-col overflow-hidden">
+          {/* Left Pane Tab Buttons */}
+          <div className="flex items-center border-b border-[var(--border)] bg-[var(--bg-card)] px-3 pt-2 gap-2 shrink-0">
+            <button
+              onClick={() => setLeftTab('aim')}
+              className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                leftTab === 'aim'
+                  ? 'border-[var(--accent)] text-[var(--accent)]'
+                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Aim & Problem
+            </button>
+            <button
+              onClick={() => setLeftTab('procedure')}
+              className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                leftTab === 'procedure'
+                  ? 'border-[var(--accent)] text-[var(--accent)]'
+                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <ListPlus className="w-3.5 h-3.5" />
+              My Algorithm Steps ({procedureSteps.length})
+            </button>
+            <button
+              onClick={() => setLeftTab('testcases')}
+              className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                leftTab === 'testcases'
+                  ? 'border-[var(--accent)] text-[var(--accent)]'
+                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
               Sample Test Cases ({sampleTestCases.length})
-            </h3>
-            {sampleTestCases.length === 0 ? (
-              <div className="bg-[var(--bg-card)] p-3 rounded-[var(--radius-md)] border border-[var(--border)] text-[11px] text-[var(--text-muted)]">
-                Sample inputs will be verified by the code evaluator.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {sampleTestCases.map((tc, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-[var(--bg-card)] p-3 rounded-[var(--radius-md)] border border-[var(--border)] text-[11px] font-mono space-y-1.5 shadow-[var(--shadow-sm)]"
-                  >
-                    <div className="text-[10px] font-bold text-[var(--accent)] uppercase">
-                      Sample Case {idx + 1}
-                    </div>
-                    {tc.input && (
-                      <div className="text-[var(--text-secondary)]">
-                        <span className="text-[var(--text-muted)]">Input: </span>
-                        <span className="bg-[var(--bg-raised)] px-1.5 py-0.5 rounded border border-[var(--border)]">
-                          {tc.input}
-                        </span>
-                      </div>
-                    )}
-                    <div className="text-[var(--text-secondary)]">
-                      <span className="text-[var(--text-muted)]">Expected Output: </span>
-                      <span className="bg-[var(--bg-raised)] px-1.5 py-0.5 rounded border border-[var(--border)] font-bold text-[var(--green)]">
-                        {tc.expected_output || tc.expected || 'N/A'}
-                      </span>
-                    </div>
+            </button>
+          </div>
+
+          {/* Left Pane Content Body */}
+          <div className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
+            {/* TAB 1: Aim & Problem Statement */}
+            {leftTab === 'aim' && (
+              <div className="space-y-4">
+                <div className="bg-[var(--bg-card)] p-4 rounded-[var(--radius-md)] border border-[var(--border)] shadow-[var(--shadow-sm)] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-[var(--accent)] uppercase tracking-wider">
+                      Allocated Problem
+                    </span>
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                      Max Marks: {assignedQuestion?.max_marks || 10}
+                    </span>
                   </div>
-                ))}
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                    {assignedQuestion?.title || experiment?.title}
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
+                    {assignedQuestion?.aim || experiment?.aim}
+                  </p>
+                </div>
+
+                <div className="bg-indigo-500/5 p-3.5 rounded-[var(--radius-md)] border border-indigo-500/20 text-xs text-indigo-900 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-indigo-700">
+                    <Sparkles className="w-4 h-4" />
+                    Examination Instructions
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    <li>Write your step-by-step algorithmic steps under the <strong>"My Algorithm Steps"</strong> tab.</li>
+                    <li>Develop and verify your solution code in the editor.</li>
+                    <li>Click <strong>"Run Code"</strong> to test sample cases and <strong>"Submit Code"</strong> for hidden case grading.</li>
+                    <li>Click <strong>"Finish & Send for Verification"</strong> to lock your submission and enter the faculty oral viva queue.</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: Student Step-by-Step Procedure / Algorithm Builder */}
+            {leftTab === 'procedure' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold text-[var(--text-primary)]">
+                      Step-by-Step Algorithmic Procedure
+                    </h3>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Write your procedure steps here. Faculty will review these during viva voce.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddProcedureStep}
+                      disabled={isSubmittedOrApproved}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] text-xs font-bold hover:bg-[var(--accent)] hover:text-white transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <ListPlus className="w-3 h-3" /> Add Step
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveProcedure}
+                      disabled={savingProcedure || isSubmittedOrApproved}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--border)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {savingProcedure ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {procedureSteps.map((step, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2 p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)]"
+                    >
+                      <span className="font-mono text-[11px] font-bold text-[var(--accent)] px-2 py-1 rounded bg-[var(--bg-input)] border border-[var(--border)] shrink-0">
+                        Step {idx + 1}
+                      </span>
+                      <textarea
+                        rows={2}
+                        value={step}
+                        onChange={(e) => handleEditProcedureStep(idx, e.target.value)}
+                        disabled={isSubmittedOrApproved}
+                        placeholder={`Describe operation in step ${idx + 1}...`}
+                        className="flex-1 bg-[var(--bg-input)] border border-[var(--border)] rounded px-2.5 py-1 text-xs text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--border-accent)] disabled:bg-transparent disabled:border-transparent"
+                      />
+                      {!isSubmittedOrApproved && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProcedureStep(idx)}
+                          className="text-[var(--text-muted)] hover:text-[var(--red)] p-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: Sample Test Cases */}
+            {leftTab === 'testcases' && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-[var(--text-primary)]">
+                  Public Sample Test Cases
+                </h3>
+                {sampleTestCases.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-[var(--radius-md)] border border-[var(--border)]">
+                    No sample test cases specified. Standard assertions will be evaluated.
+                  </div>
+                ) : (
+                  sampleTestCases.map((tc, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-[var(--bg-card)] p-3.5 rounded-[var(--radius-md)] border border-[var(--border)] text-xs font-mono space-y-2 shadow-[var(--shadow-sm)]"
+                    >
+                      <div className="text-[10px] font-bold text-[var(--accent)] uppercase">
+                        Sample Test Case #{idx + 1}
+                      </div>
+                      {tc.input && (
+                        <div className="text-[var(--text-secondary)]">
+                          <span className="text-[var(--text-muted)] block text-[10px] uppercase mb-0.5">Input:</span>
+                          <pre className="bg-[var(--bg-raised)] p-2 rounded border border-[var(--border)] whitespace-pre-wrap">
+                            {tc.input}
+                          </pre>
+                        </div>
+                      )}
+                      <div className="text-[var(--text-secondary)]">
+                        <span className="text-[var(--text-muted)] block text-[10px] uppercase mb-0.5">Expected Output:</span>
+                        <pre className="bg-[var(--bg-raised)] p-2 rounded border border-[var(--border)] font-bold text-emerald-600 whitespace-pre-wrap">
+                          {tc.expected_output || tc.expected || 'N/A'}
+                        </pre>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Panel: Editor + Dynamic Execution Console Drawer */}
+        {/* Right Panel: Code Editor + Dynamic Interactive Execution Console */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Code Editor */}
+          {/* Monaco / CodeEditor */}
           <div className="flex-1 p-2 overflow-hidden">
             <CodeEditor
               code={code}
               onChange={setCode}
               language={language}
               onLanguageChange={setLanguage}
-              isEditable={isUnlocked}
+              isEditable={isUnlocked && !isSubmittedOrApproved}
             />
           </div>
 
-          {/* Interactive Console Drawer */}
+          {/* Interactive Execution Console Drawer */}
           <div className="h-56 bg-[var(--bg-card)] border-t border-[var(--border)] flex flex-col overflow-hidden">
             {/* Drawer Header Tabs */}
             <div className="px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between shrink-0">
@@ -361,10 +635,10 @@ export default function LabWorkspace() {
                   }`}
                 >
                   <Send className="w-3 h-3 text-[var(--accent)]" />
-                  Submission Verdict
+                  Submission Verdict (Hidden Cases)
                   {testResult && (
                     <span className="ml-1 text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                      {testResult.passCount}/{testResult.totalCases} passed ({testResult.marks}/10 marks)
+                      {testResult.passCount}/{testResult.totalCases} passed ({testResult.codeMarks} code marks)
                     </span>
                   )}
                 </button>
@@ -372,12 +646,12 @@ export default function LabWorkspace() {
 
               <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
                 <Terminal className="w-3.5 h-3.5" />
-                <span>Standard I/O Console</span>
+                <span>Execution Output Console</span>
               </div>
             </div>
 
-            {/* Drawer Body */}
-            <div className="p-3 overflow-y-auto flex-1 font-mono text-[11px] space-y-2">
+            {/* Console Drawer Body */}
+            <div className="p-3 overflow-y-auto flex-1 font-mono text-[11px] space-y-2 custom-scrollbar">
               {error && (
                 <div className="flex items-center gap-2 p-2.5 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/20 text-[var(--red)]">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -385,13 +659,13 @@ export default function LabWorkspace() {
                 </div>
               )}
 
-              {/* TAB 1: RUN RESULTS (Sample Test Cases) */}
+              {/* TAB 1: RUN CODE RESULTS */}
               {activeConsoleTab === 'run' && !error && (
                 <>
                   {!runResult ? (
                     <div className="text-[var(--text-muted)] italic p-2 flex items-center gap-2">
                       <Play className="w-3.5 h-3.5 text-[var(--accent)] opacity-60" />
-                      Click "Run Code" above to evaluate against sample test cases without submitting for assessment.
+                      Click "Run Code" above to execute against public sample test cases.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -400,14 +674,14 @@ export default function LabWorkspace() {
                           key={i}
                           className={`p-2.5 rounded-[var(--radius-md)] border ${
                             res.passed
-                              ? 'bg-[var(--green-bg)] border-[var(--green)]/20'
-                              : 'bg-[var(--red-bg)] border-[var(--red)]/20'
+                              ? 'bg-emerald-500/10 border-emerald-500/20'
+                              : 'bg-rose-500/10 border-rose-500/20'
                           }`}
                         >
                           <div className="flex items-center justify-between">
                             <span
                               className={`font-bold flex items-center gap-1.5 ${
-                                res.passed ? 'text-[var(--green)]' : 'text-[var(--red)]'
+                                res.passed ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                             >
                               {res.passed ? (
@@ -438,57 +712,51 @@ export default function LabWorkspace() {
                 </>
               )}
 
-              {/* TAB 2: SUBMIT VERDICT */}
+              {/* TAB 2: SUBMIT CODE RESULTS */}
               {activeConsoleTab === 'submit' && !error && (
                 <>
                   {!testResult && !submission ? (
                     <div className="text-[var(--text-muted)] italic p-2 flex items-center gap-2">
                       <Send className="w-3.5 h-3.5 text-[var(--accent)] opacity-60" />
-                      Click "Submit Solution" to run against hidden grading test cases and submit for faculty verification.
+                      Click "Submit Code" to run against hidden test cases for automated scoring.
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div className="p-3 rounded-[var(--radius-md)] bg-[var(--green-bg)] border border-[var(--green)]/20 space-y-1">
-                        <div className="text-[var(--green)] font-bold flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4" />
-                          {testResult?.message || 'Submission Loaded'}
-                        </div>
-                        <div className="text-[var(--text-secondary)]">
-                          Status:{' '}
-                          <strong className="text-[var(--text-primary)]">
-                            {testResult?.status || submission?.status}
-                          </strong>{' '}
-                          · Marks:{' '}
-                          <strong className="text-[var(--text-primary)]">
-                            {testResult?.marks ?? submission?.marks}/10
-                          </strong>
-                        </div>
-                        {submission?.faculty_notes && (
-                          <div className="text-[var(--amber)]">
-                            Faculty Note: {submission.faculty_notes}
-                          </div>
-                        )}
-                      </div>
-
-                      {testResult?.results && (
-                        <div className="space-y-1.5 pt-1">
-                          {testResult.results.map((res, i) => (
-                            <div
-                              key={i}
-                              className={`p-2 rounded text-[10px] border flex items-center justify-between ${
-                                res.passed
-                                  ? 'bg-[var(--green-bg)]/50 border-[var(--green)]/20 text-[var(--green)]'
-                                  : 'bg-[var(--red-bg)]/50 border-[var(--red)]/20 text-[var(--red)]'
+                      {testResult?.results?.map((res, i) => (
+                        <div
+                          key={i}
+                          className={`p-2.5 rounded-[var(--radius-md)] border ${
+                            res.passed
+                              ? 'bg-emerald-500/10 border-emerald-500/20'
+                              : 'bg-rose-500/10 border-rose-500/20'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`font-bold flex items-center gap-1.5 ${
+                                res.passed ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                             >
-                              <span>
-                                {res.passed ? '✓' : '✗'} {res.name || `Hidden Case ${i + 1}`}
-                              </span>
-                              <span>{res.execution_ms || 0} ms</span>
+                              {res.passed ? (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              ) : (
+                                <AlertCircle className="w-3.5 h-3.5" />
+                              )}
+                              Hidden Benchmark Case #{i + 1} - {res.passed ? 'PASSED' : 'FAILED'}
+                            </span>
+                            <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {res.execution_ms || 0} ms
+                            </span>
+                          </div>
+                          {!res.passed && (
+                            <div className="text-[var(--text-secondary)] mt-1">
+                              Expected: <span className="text-[var(--text-primary)]">{res.expected}</span> ·
+                              Got: <span className="font-bold text-rose-500">{res.actual}</span>
                             </div>
-                          ))}
+                          )}
                         </div>
-                      )}
+                      ))}
                     </div>
                   )}
                 </>
@@ -497,7 +765,17 @@ export default function LabWorkspace() {
           </div>
         </div>
       </div>
+
+      {/* Finish & Send for Faculty Verification Modal */}
+      <ConfirmModal
+        isOpen={showFinishModal}
+        onClose={() => setShowFinishModal(false)}
+        onConfirm={handleFinishAndSend}
+        title="Finish Experiment & Send for Faculty Viva?"
+        message="Once submitted for verification, your code and algorithm steps will be locked for grading. Your faculty incharge will evaluate your solution and conduct the oral viva voce in person."
+        confirmText="Yes, Finish & Send"
+        loading={finishing}
+      />
     </div>
   );
 }
-

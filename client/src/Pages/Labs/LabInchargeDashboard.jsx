@@ -15,6 +15,14 @@ import {
   ShieldCheck,
   Layers,
   Sparkles,
+  MessageSquareCheck,
+  Award,
+  Clock,
+  X,
+  RotateCcw,
+  BookOpen,
+  ListPlus,
+  Terminal,
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -24,11 +32,24 @@ export default function LabInchargeDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('single');
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'SUBMITTED_FOR_VERIFICATION' | 'APPROVED'
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
-  const [expandedCode, setExpandedCode] = useState(null);
 
-  // ── Unlock Matrix State (Tab 3) ─────────────────────────────────────────────
+  // Evaluation & Viva Voce Modal State
+  const [selectedSubId, setSelectedSubId] = useState(null);
+  const [evalDetail, setEvalDetail] = useState(null);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalCodeMarks, setEvalCodeMarks] = useState(6);
+  const [evalVivaMarks, setEvalVivaMarks] = useState(4);
+  const [evalTotalMarks, setEvalTotalMarks] = useState(10);
+  const [evalNotes, setEvalNotes] = useState('Verified by Lab Incharge');
+  const [evalSubmitting, setEvalSubmitting] = useState(false);
+
+  // Active view tab inside eval modal: 'code' | 'algo' | 'viva'
+  const [evalTab, setEvalTab] = useState('viva');
+
+  // Unlock Matrix State (Tab 3)
   const [unlockData, setUnlockData] = useState({
     courses: [],
     mappings: [],
@@ -76,6 +97,75 @@ export default function LabInchargeDashboard() {
       // Non-blocking
     } finally {
       setLoadingUnlocks(false);
+    }
+  };
+
+  const openEvaluationModal = async (subId) => {
+    setSelectedSubId(subId);
+    setEvalLoading(true);
+    setEvalDetail(null);
+    setEvalTab('viva');
+    try {
+      const res = await api.get(`/lab-incharge/submission/${subId}`);
+      setEvalDetail(res);
+      const sub = res?.submission;
+      const cMarks = sub?.code_marks || 6;
+      const vMarks = sub?.viva_marks || 4;
+      const totMarks = sub?.marks || (cMarks + vMarks);
+      setEvalCodeMarks(cMarks);
+      setEvalVivaMarks(vMarks);
+      setEvalTotalMarks(totMarks);
+      setEvalNotes(sub?.faculty_notes || 'Verified by Lab Incharge');
+    } catch {
+      showToast('Failed to load submission evaluation details.', 'error');
+    } finally {
+      setEvalLoading(false);
+    }
+  };
+
+  const handleSaveEvaluation = async (status) => {
+    if (!selectedSubId) return;
+    try {
+      setEvalSubmitting(true);
+      await api.post('/lab-incharge/verify-single', {
+        submission_id: selectedSubId,
+        status,
+        code_marks: Number(evalCodeMarks) || 0,
+        viva_marks: Number(evalVivaMarks) || 0,
+        marks: Number(evalTotalMarks) || (Number(evalCodeMarks) + Number(evalVivaMarks)),
+        faculty_notes: evalNotes,
+      });
+      showToast(
+        status === 'APPROVED'
+          ? 'Experiment verified and signed successfully!'
+          : 'Revision requested from student.',
+        'success'
+      );
+      setSelectedSubId(null);
+      setEvalDetail(null);
+      fetchQueue();
+    } catch {
+      showToast('Failed to save experiment evaluation.', 'error');
+    } finally {
+      setEvalSubmitting(false);
+    }
+  };
+
+  const handleResetAllocation = async () => {
+    if (!evalDetail?.submission) return;
+    if (!window.confirm('Re-assign a new random question variant for this student?')) return;
+    try {
+      const sub = evalDetail.submission;
+      await api.post('/lab-incharge/student-allocation/reset', {
+        student_id: sub.student_id,
+        course_id: evalDetail.question?.course_id || 1,
+        experiment_id: sub.experiment_id,
+      });
+      showToast('Question variant reset. Student will receive new variant.', 'success');
+      openEvaluationModal(selectedSubId);
+      fetchQueue();
+    } catch {
+      showToast('Failed to reset question allocation.', 'error');
     }
   };
 
@@ -136,21 +226,6 @@ export default function LabInchargeDashboard() {
     }
   };
 
-  const handleVerifySingle = async (subId, status, marks = 10) => {
-    try {
-      await api.post('/lab-incharge/verify-single', {
-        submission_id: subId,
-        status,
-        marks,
-        faculty_notes: status === 'APPROVED' ? 'Verified by Lab Incharge' : 'Revision required',
-      });
-      showToast('Experiment status updated successfully.', 'success');
-      fetchQueue();
-    } catch {
-      showToast('Failed to update submission status.', 'error');
-    }
-  };
-
   const handleVerifySemester = async (studentId, courseId = 1) => {
     try {
       await api.post('/lab-incharge/verify-semester', {
@@ -164,41 +239,64 @@ export default function LabInchargeDashboard() {
     }
   };
 
-  const studentGroups = submissions.reduce((acc, sub) => {
-    const sId = sub.student_id;
-    if (!acc[sId]) acc[sId] = { student: sub.student, submissions: [] };
-    acc[sId].submissions.push(sub);
-    return acc;
-  }, {});
-
   const filteredSubmissions = submissions.filter((sub) => {
     const term = search.toLowerCase();
-    return (
+    const matchesSearch =
       sub.student?.name?.toLowerCase().includes(term) ||
       sub.student?.roll_no?.toLowerCase().includes(term) ||
-      sub.experiment?.title?.toLowerCase().includes(term)
-    );
+      sub.experiment?.title?.toLowerCase().includes(term) ||
+      sub.question?.title?.toLowerCase().includes(term);
+
+    if (statusFilter === 'ALL') return matchesSearch;
+    return matchesSearch && sub.status === statusFilter;
   });
 
   const TABS = [
-    { key: 'single', label: 'Individual Experiments' },
-    { key: 'semester', label: 'Semester Batch Review' },
-    { key: 'unlocks', label: 'Experiment Release & Unlocking' },
+    { key: 'single', label: 'Evaluation Queue & Viva Voce' },
+    { key: 'semester', label: 'Semester Batch Sign-Off' },
+    { key: 'unlocks', label: 'Experiment Release & Section Locks' },
   ];
+
+  // Parse student procedure steps for eval modal
+  const getStudentProcedureSteps = () => {
+    const raw = evalDetail?.submission?.student_procedure;
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [raw];
+    } catch {
+      return raw.split('\n').filter((l) => l.trim().length > 0);
+    }
+  };
+
+  // Parse reference algorithm steps for eval modal
+  const getReferenceAlgoSteps = () => {
+    const raw = evalDetail?.reference_algo || evalDetail?.question?.reference_algorithm;
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [raw];
+    } catch {
+      return raw.split('\n').filter((l) => l.trim().length > 0);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
+      {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
-          toast.type === 'error'
-            ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
-            : 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/30'
-        }`}>
-          {toast.type === 'error'
-            ? <AlertCircle className="w-4 h-4 shrink-0" />
-            : <CheckCircle2 className="w-4 h-4 shrink-0" />
-          }
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
+            toast.type === 'error'
+              ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
+              : 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/30'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          )}
           <span>{toast.msg}</span>
         </div>
       )}
@@ -208,10 +306,10 @@ export default function LabInchargeDashboard() {
         <div>
           <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
             <UserCheck className="w-6 h-6 text-[var(--accent)]" />
-            Lab Incharge Verification
+            Lab Incharge Evaluation & Viva Voce Cockpit
           </h1>
           <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Review student code submissions and test case results. Approve individual experiments or sign off the entire semester record in one click.
+            Review student code submissions, compare algorithms side-by-side, conduct in-person oral viva assessments, and award marks.
           </p>
         </div>
       </div>
@@ -229,7 +327,7 @@ export default function LabInchargeDashboard() {
             }`}
           >
             {tab.key === 'single' ? (
-              <FileText className="w-3.5 h-3.5" />
+              <MessageSquareCheck className="w-3.5 h-3.5" />
             ) : tab.key === 'semester' ? (
               <CheckCheck className="w-3.5 h-3.5" />
             ) : (
@@ -240,17 +338,35 @@ export default function LabInchargeDashboard() {
         ))}
       </div>
 
-      {/* Search (for single & semester modes) */}
+      {/* Search & Status Filters */}
       {activeTab !== 'unlocks' && (
-        <div className="relative">
-          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter by student name, roll number, or experiment..."
-            className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-10 pr-4 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by student name, roll number, or experiment title..."
+              className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-10 pr-4 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)]"
+            />
+          </div>
+
+          <div className="flex items-center gap-1 bg-[var(--bg-card)] p-1 rounded-[var(--radius-sm)] border border-[var(--border)] shrink-0">
+            {['ALL', 'SUBMITTED_FOR_VERIFICATION', 'APPROVED'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                  statusFilter === status
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {status === 'ALL' ? 'All Submissions' : status === 'SUBMITTED_FOR_VERIFICATION' ? 'Oral Viva Pending' : 'Approved'}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -269,335 +385,401 @@ export default function LabInchargeDashboard() {
         </div>
       )}
 
-      {/* Single Experiment Mode */}
+      {/* TAB 1: Evaluation Queue & Viva Voce */}
       {!loading && !error && activeTab === 'single' && (
         <div className="space-y-4">
           <p className="text-[12px] text-[var(--text-muted)]">
-            {filteredSubmissions.length} submission{filteredSubmissions.length !== 1 ? 's' : ''} found
+            Showing {filteredSubmissions.length} submission{filteredSubmissions.length !== 1 ? 's' : ''}
           </p>
 
           {filteredSubmissions.length === 0 ? (
             <div className="p-10 text-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] text-[var(--text-muted)] text-sm">
-              No submissions to review yet.
+              No submissions found for the selected filter.
             </div>
           ) : (
-            filteredSubmissions.map((sub) => (
-              <div key={sub.id} className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-[var(--radius-lg)] p-5 transition-all space-y-4">
-                {/* Header Row */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-bold text-[var(--text-primary)]">
-                        {sub.student?.name || 'Unknown Student'}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                        ({sub.student?.roll_no || '—'})
-                      </span>
+            <div className="grid grid-cols-1 gap-4">
+              {filteredSubmissions.map((sub) => {
+                const isPendingViva = sub.status === 'SUBMITTED_FOR_VERIFICATION';
+                return (
+                  <div
+                    key={sub.id}
+                    className={`bg-[var(--bg-card)] border rounded-[var(--radius-lg)] p-5 transition-all shadow-[var(--shadow-sm)] space-y-3 ${
+                      isPendingViva
+                        ? 'border-indigo-500/40 ring-1 ring-indigo-500/20 bg-indigo-500/[0.02]'
+                        : 'border-[var(--border)] hover:border-[var(--border-accent)]'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[14px] font-bold text-[var(--text-primary)]">
+                            {sub.student?.name || 'Student'}
+                          </span>
+                          <span className="text-[11px] text-[var(--text-muted)] font-mono px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
+                            {sub.student?.roll_no || '—'} · Sec {sub.student?.section || 'A'}
+                          </span>
+                          {sub.question?.question_code && (
+                            <span className="text-[10px] font-mono font-bold text-[var(--accent)] px-2 py-0.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)]">
+                              {sub.question.question_code}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-[var(--text-secondary)] font-medium">
+                          <strong>Ex {sub.experiment?.experiment_no}:</strong> {sub.question?.title || sub.experiment?.title}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${
+                            sub.status === 'APPROVED'
+                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                              : isPendingViva
+                              ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30 animate-pulse'
+                              : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                          }`}
+                        >
+                          {sub.status === 'APPROVED' ? (
+                            <>
+                              <Award className="w-3.5 h-3.5" />
+                              Approved ({sub.marks}/10)
+                            </>
+                          ) : isPendingViva ? (
+                            <>
+                              <MessageSquareCheck className="w-3.5 h-3.5" />
+                              Oral Viva Pending
+                            </>
+                          ) : (
+                            sub.status
+                          )}
+                        </span>
+
+                        <span className="text-xs font-mono text-[var(--text-muted)]">
+                          {sub.pass_count}/{sub.total_test_cases} tests passed
+                        </span>
+
+                        <button
+                          onClick={() => openEvaluationModal(sub.id)}
+                          className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                        >
+                          <MessageSquareCheck className="w-3.5 h-3.5" />
+                          Evaluate & Viva Voce
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-[12px] text-[var(--accent)] font-medium mt-0.5">
-                      Ex {sub.experiment?.experiment_no}: {sub.experiment?.title}
+
+                    <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-mono">
+                      <span>Submitted: {new Date(sub.updated_at).toLocaleString()}</span>
+                      {sub.marks > 0 && (
+                        <span>
+                          Marks Awarded: <strong>{sub.marks}</strong> (Code: {sub.code_marks || 0}, Viva: {sub.viva_marks || 0})
+                        </span>
+                      )}
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                      sub.status === 'APPROVED'
-                        ? 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/30'
-                        : 'bg-[var(--amber-bg)] text-[var(--amber)] border-[var(--amber)]/30'
-                    }`}>
-                      {sub.status === 'APPROVED' ? <CheckCircle2 className="w-3 h-3" /> : null}
-                      {sub.status}
-                    </span>
-                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                      {sub.pass_count}/{sub.total_test_cases} cases passed
-                    </span>
-                    <button
-                      onClick={() => handleVerifySingle(sub.id, 'APPROVED', 10)}
-                      className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--green-bg)] text-[var(--green)] border border-[var(--green)]/30 text-xs font-semibold hover:bg-[var(--green)]/15 transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Approve (10/10)
-                    </button>
-                    <button
-                      onClick={() => handleVerifySingle(sub.id, 'REVISION_REQUIRED', 0)}
-                      className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30 text-xs font-semibold hover:bg-[var(--red)]/15 transition-all cursor-pointer"
-                    >
-                      Revision
-                    </button>
-                  </div>
-                </div>
-
-                {/* Code Preview Toggle */}
-                <button
-                  onClick={() => setExpandedCode(expandedCode === sub.id ? null : sub.id)}
-                  className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer transition-all"
-                >
-                  <Code2 className="w-3.5 h-3.5 text-[var(--accent)]" />
-                  {expandedCode === sub.id ? 'Collapse' : 'View'} Submitted Code
-                  {expandedCode === sub.id ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                </button>
-
-                {expandedCode === sub.id && (
-                  <pre className="text-[11px] font-mono text-[var(--text-secondary)] bg-[var(--bg-raised)] p-3 rounded-[var(--radius-md)] border border-[var(--border)] max-h-52 overflow-y-auto whitespace-pre-wrap">
-                    {sub.submitted_code}
-                  </pre>
-                )}
-              </div>
-            ))
+                );
+              })}
+            </div>
           )}
         </div>
       )}
 
-      {/* Semester Batch Mode */}
-      {!loading && !error && activeTab === 'semester' && (
-        <div className="space-y-4">
-          <p className="text-[12px] text-[var(--text-muted)]">
-            {Object.keys(studentGroups).length} student portfolio{Object.keys(studentGroups).length !== 1 ? 's' : ''} loaded
-          </p>
-
-          {Object.keys(studentGroups).length === 0 ? (
-            <div className="p-10 text-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] text-[var(--text-muted)] text-sm">
-              No student submissions found.
-            </div>
-          ) : (
-            Object.entries(studentGroups).map(([sId, group]) => (
-              <div key={sId} className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-[var(--radius-lg)] p-6 transition-all space-y-4">
-                {/* Student Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
-                  <div>
-                    <h3 className="text-[16px] font-bold text-[var(--text-primary)]">
-                      {group.student?.name || 'Unknown Student'}
-                    </h3>
-                    <p className="text-[12px] text-[var(--text-secondary)] font-mono">
-                      Roll No: {group.student?.roll_no || '—'} · {group.student?.department || 'AI & DS'}
-                    </p>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                      {group.submissions.filter(s => s.status === 'APPROVED').length} / {group.submissions.length} experiments approved
-                    </p>
+      {/* Evaluation & Viva Voce Full Cockpit Modal */}
+      {selectedSubId && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+            {/* Modal Top Bar */}
+            <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center text-[var(--accent)]">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-[var(--text-primary)]">
+                      {evalDetail?.student?.name || 'Student Evaluation'}
+                    </h2>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)]">
+                      {evalDetail?.student?.roll_no}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                      {evalDetail?.question?.question_code}
+                    </span>
                   </div>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Ex {evalDetail?.experiment?.experiment_no}: {evalDetail?.question?.title || evalDetail?.experiment?.title}
+                  </p>
+                </div>
+              </div>
 
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetAllocation}
+                  className="px-2.5 py-1.5 rounded text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--red)] border border-[var(--border)] hover:border-[var(--red)]/30 transition-all cursor-pointer flex items-center gap-1"
+                  title="Re-draw random variant for student"
+                >
+                  <RotateCcw className="w-3 h-3" /> Re-assign Variant
+                </button>
+                <button
+                  onClick={() => setSelectedSubId(null)}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {evalLoading ? (
+              <div className="flex items-center justify-center py-24 text-[var(--text-muted)] gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)]" />
+                <span className="text-xs">Loading evaluation workspace...</span>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Modal View Selector Tabs */}
+                <div className="px-5 pt-3 border-b border-[var(--border)] flex items-center gap-2 shrink-0 bg-[var(--bg-card)]">
                   <button
-                    onClick={() => handleVerifySemester(sId)}
-                    className="px-5 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 flex items-center gap-2 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
+                    onClick={() => setEvalTab('viva')}
+                    className={`pb-2.5 px-3.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                      evalTab === 'viva'
+                        ? 'border-[var(--accent)] text-[var(--accent)]'
+                        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
                   >
-                    <CheckCheck className="w-4 h-4" />
-                    Approve Entire Semester Record
+                    <MessageSquareCheck className="w-4 h-4" />
+                    Oral Viva Questions ({evalDetail?.viva_questions?.length || 0})
+                  </button>
+                  <button
+                    onClick={() => setEvalTab('code')}
+                    className={`pb-2.5 px-3.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                      evalTab === 'code'
+                        ? 'border-[var(--accent)] text-[var(--accent)]'
+                        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <Code2 className="w-4 h-4" />
+                    Side-by-Side Code Comparison
+                  </button>
+                  <button
+                    onClick={() => setEvalTab('algo')}
+                    className={`pb-2.5 px-3.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                      evalTab === 'algo'
+                        ? 'border-[var(--accent)] text-[var(--accent)]'
+                        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <ListPlus className="w-4 h-4" />
+                    Side-by-Side Algorithm Comparison
                   </button>
                 </div>
 
-                {/* Experiment Cards Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {group.submissions.map((sub) => (
-                    <div
-                      key={sub.id}
-                      className={`p-3 rounded-[var(--radius-md)] border text-[11px] space-y-1 ${
-                        sub.status === 'APPROVED'
-                          ? 'bg-[var(--green-bg)] border-[var(--green)]/30'
-                          : 'bg-[var(--bg-raised)] border-[var(--border)]'
-                      }`}
-                    >
-                      <div className="font-bold text-[var(--text-primary)] leading-tight">
-                        Ex {sub.experiment?.experiment_no}: {sub.experiment?.title}
+                {/* Modal Main Body */}
+                <div className="flex-1 p-5 overflow-y-auto space-y-4 custom-scrollbar">
+                  {/* TAB 1: Oral Viva Voce Assessment */}
+                  {evalTab === 'viva' && (
+                    <div className="space-y-4">
+                      <div className="p-3.5 rounded-[var(--radius-md)] bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-900 space-y-1">
+                        <div className="font-bold flex items-center gap-1.5 text-indigo-700">
+                          <MessageSquareCheck className="w-4 h-4" />
+                          Oral Viva Voce Instructions for Faculty Incharge
+                        </div>
+                        <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                          Ask the student the questions below verbally. Verify their conceptual understanding, algorithm reasoning, and complexity insights against the model answers.
+                        </p>
                       </div>
-                      <div className={`font-semibold ${sub.status === 'APPROVED' ? 'text-[var(--green)]' : 'text-[var(--amber)]'}`}>
-                        {sub.marks}/10 marks · {sub.pass_count}/{sub.total_test_cases} passed
+
+                      <div className="space-y-3">
+                        {(!evalDetail?.viva_questions || evalDetail.viva_questions.length === 0) ? (
+                          <div className="p-6 text-center text-xs text-[var(--text-muted)] italic border border-dashed border-[var(--border)] rounded-[var(--radius-md)]">
+                            No viva questions found for this question variant.
+                          </div>
+                        ) : (
+                          evalDetail.viva_questions.map((vq, idx) => (
+                            <div
+                              key={idx}
+                              className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-2 shadow-[var(--shadow-sm)]"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-mono font-bold text-[var(--accent)] px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)]">
+                                  Viva Question #{idx + 1}
+                                </span>
+                              </div>
+                              <div className="text-xs font-bold text-[var(--text-primary)]">
+                                {vq.question}
+                              </div>
+                              <div className="text-xs text-[var(--text-secondary)] bg-[var(--bg-card)] p-3 rounded border border-[var(--border)] leading-relaxed">
+                                <span className="text-[10px] font-bold text-emerald-600 block uppercase mb-0.5">
+                                  Model Reference Answer:
+                                </span>
+                                {vq.answer}
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* TAB 2: Side-by-Side Code Diff */}
+                  {evalTab === 'code' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-96">
+                      <div className="flex flex-col border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden">
+                        <div className="px-3 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] text-xs font-bold text-[var(--text-primary)] flex items-center justify-between">
+                          <span>Student Submitted Code</span>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                            {evalDetail?.submission?.language || 'python'}
+                          </span>
+                        </div>
+                        <pre className="flex-1 p-3 text-xs font-mono text-[var(--text-secondary)] bg-[var(--bg-input)] overflow-auto whitespace-pre-wrap">
+                          {evalDetail?.submission?.submitted_code || '# No code submitted'}
+                        </pre>
+                      </div>
+
+                      <div className="flex flex-col border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden">
+                        <div className="px-3 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] text-xs font-bold text-emerald-600 flex items-center justify-between">
+                          <span>Master Reference Solution (Faculty)</span>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">Verified Solution</span>
+                        </div>
+                        <pre className="flex-1 p-3 text-xs font-mono text-[var(--text-secondary)] bg-[var(--bg-input)] overflow-auto whitespace-pre-wrap">
+                          {evalDetail?.reference_solution || '# No reference solution configured'}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: Side-by-Side Algorithm Diff */}
+                  {evalTab === 'algo' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="border border-[var(--border)] rounded-[var(--radius-md)] p-4 space-y-2 bg-[var(--bg-raised)]">
+                        <h4 className="text-xs font-bold text-[var(--text-primary)]">
+                          Student Written Procedure Steps
+                        </h4>
+                        <div className="space-y-2">
+                          {getStudentProcedureSteps().length === 0 ? (
+                            <div className="text-xs text-[var(--text-muted)] italic">No steps submitted.</div>
+                          ) : (
+                            getStudentProcedureSteps().map((st, i) => (
+                              <div key={i} className="p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-secondary)]">
+                                {st}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="border border-[var(--border)] rounded-[var(--radius-md)] p-4 space-y-2 bg-[var(--bg-raised)]">
+                        <h4 className="text-xs font-bold text-emerald-600">
+                          Faculty Reference Algorithm Steps
+                        </h4>
+                        <div className="space-y-2">
+                          {getReferenceAlgoSteps().length === 0 ? (
+                            <div className="text-xs text-[var(--text-muted)] italic">No reference steps provided.</div>
+                          ) : (
+                            getReferenceAlgoSteps().map((st, i) => (
+                              <div key={i} className="p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-secondary)]">
+                                {st}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Marking & Verification Cockpit Footer */}
+                <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-raised)] space-y-3 shrink-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                        Code & Tests Marks (Max 6)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="6"
+                        value={evalCodeMarks}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setEvalCodeMarks(val);
+                          setEvalTotalMarks(val + Number(evalVivaMarks));
+                        }}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                        Oral Viva Marks (Max 4)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="4"
+                        value={evalVivaMarks}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setEvalVivaMarks(val);
+                          setEvalTotalMarks(Number(evalCodeMarks) + val);
+                        }}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                        Total Marks (out of 10)
+                      </label>
+                      <input
+                        type="number"
+                        value={evalTotalMarks}
+                        onChange={(e) => setEvalTotalMarks(Number(e.target.value))}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-accent)] rounded px-3 py-1.5 text-xs font-mono text-[var(--accent)] font-bold"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-1">
+                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                        Faculty Remarks / Notes
+                      </label>
+                      <input
+                        type="text"
+                        value={evalNotes}
+                        onChange={(e) => setEvalNotes(e.target.value)}
+                        placeholder="e.g. Good verbal explanation"
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-3 py-1.5 text-xs text-[var(--text-primary)]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveEvaluation('REVISION_REQUIRED')}
+                      disabled={evalSubmitting}
+                      className="px-4 py-2 rounded-[var(--radius-sm)] bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      Request Revision
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveEvaluation('APPROVED')}
+                      disabled={evalSubmitting}
+                      className="px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--green)] hover:bg-[var(--green)]/90 text-white text-xs font-bold transition-all cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {evalSubmitting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      Approve & Digitally Sign ({evalTotalMarks}/10)
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* ================================================================ */}
-      {/* Experiment Release & Unlocking Mode (Tab 3)                      */}
-      {/* ================================================================ */}
-      {!loading && !error && activeTab === 'unlocks' && (
-        <div className="space-y-6">
-          {/* Controls Card */}
-          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
-              <div>
-                <h2 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-[var(--accent)]" />
-                  Student Experiment Unlocking & Release Controls
-                </h2>
-                <p className="text-[12px] text-[var(--text-secondary)]">
-                  Experiments are locked by default for students. Unlock individual experiments or release all experiments for a specific student section.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleBulkToggle(true)}
-                  disabled={loadingUnlocks}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-all cursor-pointer shadow-[var(--shadow-sm)] disabled:opacity-50"
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  Unlock All for Section
-                </button>
-                <button
-                  onClick={() => handleBulkToggle(false)}
-                  disabled={loadingUnlocks}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  Lock All
-                </button>
-              </div>
-            </div>
-
-            {/* Filter Controls */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                  Select Lab Course
-                </label>
-                <select
-                  value={selectedUnlockCourseId}
-                  onChange={(e) => setSelectedUnlockCourseId(e.target.value)}
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
-                >
-                  {unlockData.courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.course_code} - {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                  Target Student Section / Batch
-                </label>
-                <select
-                  value={selectedUnlockSection}
-                  onChange={(e) => setSelectedUnlockSection(e.target.value)}
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)] font-mono"
-                >
-                  <option value="ALL">ALL SECTIONS (Global)</option>
-                  {unlockData.sections.map((sec) => (
-                    <option key={sec} value={sec}>
-                      {sec}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            )}
           </div>
-
-          {/* Experiments Table */}
-          {loadingUnlocks ? (
-            <div className="flex items-center justify-center py-16 gap-3 text-[var(--text-muted)]">
-              <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
-              <span className="text-xs">Loading experiment release status...</span>
-            </div>
-          ) : (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
-              <table className="w-full text-left text-[12px]">
-                <thead>
-                  <tr className="border-b border-[var(--border)] bg-[var(--bg-raised)]">
-                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider w-14 text-center">
-                      Ex #
-                    </th>
-                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Experiment Title & Aim
-                    </th>
-                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Language
-                    </th>
-                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Current Access Status
-                    </th>
-                    <th className="py-3 px-4 text-right text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Release Toggle
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {unlockData.experiments
-                    .filter((e) => !selectedUnlockCourseId || e.course_id === Number(selectedUnlockCourseId))
-                    .map((exp) => {
-                      const activeCourseId = Number(selectedUnlockCourseId || exp.course_id);
-                      const isUnlocked = unlockData.unlocks.some(
-                        (u) =>
-                          u.course_id === activeCourseId &&
-                          u.experiment_id === exp.id &&
-                          (u.section === selectedUnlockSection || u.section === 'ALL') &&
-                          u.is_unlocked
-                      );
-
-                      const isToggling = togglingExpId === exp.id;
-
-                      return (
-                        <tr key={exp.id} className="hover:bg-[var(--bg-raised)]/50 transition-colors">
-                          <td className="py-3.5 px-4 text-center font-mono font-bold text-[var(--accent)]">
-                            {exp.experiment_no}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-bold text-[var(--text-primary)]">{exp.title}</div>
-                            <div className="text-[11px] text-[var(--text-secondary)] line-clamp-1 mt-0.5">
-                              {exp.aim}
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-[11px]">
-                            <span className="px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)] uppercase">
-                              {exp.language || 'python'}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            {isUnlocked ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                                <Unlock className="w-3.5 h-3.5" />
-                                Unlocked & Live
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                                <Lock className="w-3.5 h-3.5" />
-                                Locked for Students
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() =>
-                                handleToggleUnlock(
-                                  activeCourseId,
-                                  exp.id,
-                                  selectedUnlockSection,
-                                  !isUnlocked
-                                )
-                              }
-                              disabled={isToggling}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer shadow-[var(--shadow-sm)] ${
-                                isUnlocked
-                                  ? 'bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30 hover:bg-[var(--red)]/15'
-                                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                              }`}
-                            >
-                              {isToggling ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : isUnlocked ? (
-                                <>
-                                  <Lock className="w-3.5 h-3.5" />
-                                  Lock Exp {exp.experiment_no}
-                                </>
-                              ) : (
-                                <>
-                                  <Unlock className="w-3.5 h-3.5" />
-                                  Unlock Exp {exp.experiment_no}
-                                </>
-                              )}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
     </div>

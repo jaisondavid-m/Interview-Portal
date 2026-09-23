@@ -159,6 +159,9 @@ func runMigrations(db *gorm.DB) error {
 		&models.RateLimitConfig{},
 		&models.LabCourse{},
 		&models.LabExperiment{},
+		&models.LabExperimentQuestion{},
+		&models.LabVivaQuestion{},
+		&models.LabQuestionAllocation{},
 		&models.LabExperimentUnlock{},
 		&models.LabMapping{},
 		&models.LabSubmission{},
@@ -169,6 +172,7 @@ func runMigrations(db *gorm.DB) error {
 		syncAppPagesCatalog(db)
 		seedRateLimitConfigs(db)
 		seedLabCourseAndExperiments(db)
+		syncLabQuestionVariantsAndVivas(db)
 	}
 	return err
 }
@@ -839,6 +843,108 @@ func seedRateLimitConfigs(db *gorm.DB) {
 			item.CreatedAt = time.Now()
 			item.UpdatedAt = time.Now()
 			db.Create(&item)
+		}
+	}
+}
+
+// syncLabQuestionVariantsAndVivas ensures all experiments have question variants and viva question pools
+func syncLabQuestionVariantsAndVivas(db *gorm.DB) {
+	var experiments []models.LabExperiment
+	db.Find(&experiments)
+
+	for _, exp := range experiments {
+		var qCount int64
+		db.Model(&models.LabExperimentQuestion{}).Where("experiment_id = ?", exp.ID).Count(&qCount)
+		if qCount == 0 {
+			// Convert procedure into structured steps if possible
+			refAlgo := exp.Procedure
+			qVariant := models.LabExperimentQuestion{
+				ExperimentID:       exp.ID,
+				CourseID:           exp.CourseID,
+				QuestionCode:       fmt.Sprintf("EX%d_VAR_A", exp.ExperimentNo),
+				Title:              exp.Title,
+				Aim:                exp.Aim,
+				ReferenceAlgorithm: refAlgo,
+				SolutionCode:       exp.StarterCode,
+				Language:           exp.Language,
+				SampleTestCases:    exp.SampleTestCases,
+				HiddenTestCases:    exp.HiddenTestCases,
+				MaxMarks:           exp.MaxMarks,
+				VivaQuestionsCount: 5,
+				IsActive:           true,
+				CreatedAt:          time.Now(),
+				UpdatedAt:          time.Now(),
+			}
+			if err := db.Create(&qVariant).Error; err == nil {
+				// Seed Viva Question Pool for this question variant
+				defaultVivas := []models.LabVivaQuestion{
+					{
+						QuestionID:   qVariant.ID,
+						ExperimentID: exp.ID,
+						Question:     "What is the time and space complexity of your implemented algorithm?",
+						Answer:       "Time complexity is typically O(N) or O(N log N) based on operations; Space complexity is O(N) or O(1) auxiliary space.",
+						OrderIndex:   1,
+						CreatedAt:    time.Now(),
+						UpdatedAt:    time.Now(),
+					},
+					{
+						QuestionID:   qVariant.ID,
+						ExperimentID: exp.ID,
+						Question:     "How do you handle edge cases such as empty inputs, boundary values, or negative numbers?",
+						Answer:       "Input validation checks at the start of functions and fallback/default return values.",
+						OrderIndex:   2,
+						CreatedAt:    time.Now(),
+						UpdatedAt:    time.Now(),
+					},
+					{
+						QuestionID:   qVariant.ID,
+						ExperimentID: exp.ID,
+						Question:     "Which Python data structures (lists, dictionaries, sets) were chosen for this problem and why?",
+						Answer:       "Dictionaries offer O(1) key lookup, lists provide ordered sequence storage, sets ensure uniqueness.",
+						OrderIndex:   3,
+						CreatedAt:    time.Now(),
+						UpdatedAt:    time.Now(),
+					},
+					{
+						QuestionID:   qVariant.ID,
+						ExperimentID: exp.ID,
+						Question:     "Explain the step-by-step algorithm flow that connects user input to the final output.",
+						Answer:       "1. Parsing and normalizing raw input; 2. Applying core business/mathematical rules; 3. Formatting and returning the structured result.",
+						OrderIndex:   4,
+						CreatedAt:    time.Now(),
+						UpdatedAt:    time.Now(),
+					},
+					{
+						QuestionID:   qVariant.ID,
+						ExperimentID: exp.ID,
+						Question:     "How would you optimize this solution if the input dataset scaled to millions of entries?",
+						Answer:       "Use generator streams, indexing, caching computed values, or batch processing instead of in-memory lists.",
+						OrderIndex:   5,
+						CreatedAt:    time.Now(),
+						UpdatedAt:    time.Now(),
+					},
+					{
+						QuestionID:   qVariant.ID,
+						ExperimentID: exp.ID,
+						Question:     "What built-in functions or libraries did you utilize in this implementation?",
+						Answer:       "Built-in functions like sum(), len(), round(), sorted() and standard data structure methods.",
+						OrderIndex:   6,
+						CreatedAt:    time.Now(),
+						UpdatedAt:    time.Now(),
+					},
+				}
+				for _, vq := range defaultVivas {
+					db.Create(&vq)
+				}
+			}
+		}
+
+		// Ensure existing submissions have question_id backfilled
+		var firstQ models.LabExperimentQuestion
+		if err := db.Where("experiment_id = ?", exp.ID).Order("id asc").First(&firstQ).Error; err == nil {
+			db.Model(&models.LabSubmission{}).
+				Where("experiment_id = ? AND (question_id = 0 OR question_id IS NULL)", exp.ID).
+				Update("question_id", firstQ.ID)
 		}
 	}
 }

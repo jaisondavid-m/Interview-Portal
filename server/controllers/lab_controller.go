@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -103,9 +104,82 @@ func GetCourseExperimentsForStudent(c *gin.Context) {
 	})
 }
 
-// GetExperimentDetails returns problem, procedure, sample test cases for experiment
+// getOrAllocateQuestionForStudent deterministically retrieves or allocates a question variant for a student
+func getOrAllocateQuestionForStudent(courseID uint, expID uint, studentID uint) (*models.LabExperimentQuestion, error) {
+	// Check if already allocated
+	var alloc models.LabQuestionAllocation
+	err := database.DB.Where("student_id = ? AND course_id = ? AND experiment_id = ?", studentID, courseID, expID).First(&alloc).Error
+	if err == nil && alloc.QuestionID > 0 {
+		var q models.LabExperimentQuestion
+		if err := database.DB.First(&q, alloc.QuestionID).Error; err == nil {
+			return &q, nil
+		}
+	}
+
+	// Fetch active question variants for this experiment
+	var questions []models.LabExperimentQuestion
+	database.DB.Where("experiment_id = ? AND is_active = ?", expID, true).Order("id asc").Find(&questions)
+	if len(questions) == 0 {
+		database.DB.Where("experiment_id = ?", expID).Order("id asc").Find(&questions)
+	}
+
+	if len(questions) == 0 {
+		// Auto-create initial default question variant from parent experiment
+		var parentExp models.LabExperiment
+		if err := database.DB.First(&parentExp, expID).Error; err == nil {
+			q := models.LabExperimentQuestion{
+				ExperimentID:       parentExp.ID,
+				CourseID:           parentExp.CourseID,
+				QuestionCode:       fmt.Sprintf("EX%d_VAR_A", parentExp.ExperimentNo),
+				Title:              parentExp.Title,
+				Aim:                parentExp.Aim,
+				ReferenceAlgorithm: parentExp.Procedure,
+				SolutionCode:       parentExp.StarterCode,
+				Language:           parentExp.Language,
+				SampleTestCases:    parentExp.SampleTestCases,
+				HiddenTestCases:    parentExp.HiddenTestCases,
+				MaxMarks:           parentExp.MaxMarks,
+				VivaQuestionsCount: 5,
+				IsActive:           true,
+				CreatedAt:          time.Now(),
+				UpdatedAt:          time.Now(),
+			}
+			database.DB.Create(&q)
+			questions = append(questions, q)
+		}
+	}
+
+	if len(questions) == 0 {
+		return nil, fmt.Errorf("no question variants configured for experiment %d", expID)
+	}
+
+	// Deterministic random selection for this student
+	seed := time.Now().UnixNano() + int64(studentID*1000) + int64(expID)
+	r := rand.New(rand.NewSource(seed))
+	selectedQ := questions[r.Intn(len(questions))]
+
+	// Save allocation lock
+	newAlloc := models.LabQuestionAllocation{
+		StudentID:    studentID,
+		CourseID:     courseID,
+		ExperimentID: expID,
+		QuestionID:   selectedQ.ID,
+		AllocatedAt:  time.Now(),
+	}
+	database.DB.Create(&newAlloc)
+
+	return &selectedQ, nil
+}
+
+// GetExperimentDetails returns problem, allocated question, procedure, sample test cases for student
 func GetExperimentDetails(c *gin.Context) {
-	expID := c.Param("expId")
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
 	var exp models.LabExperiment
 	if err := database.DB.First(&exp, expID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
@@ -119,6 +193,27 @@ func GetExperimentDetails(c *gin.Context) {
 
 	unlocked, userSection := isExperimentUnlockedForStudent(exp.CourseID, exp.ID, userID, userRole)
 
+	// Fetch or Allocate Question Variant for Student
+	assignedQ, qErr := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, userID)
+	if qErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to allocate question: " + qErr.Error()})
+		return
+	}
+
+	// Sanitized question payload for student (NEVER send SolutionCode or HiddenTestCases to student)
+	safeQuestion := gin.H{
+		"id":                   assignedQ.ID,
+		"experiment_id":        assignedQ.ExperimentID,
+		"course_id":            assignedQ.CourseID,
+		"question_code":        assignedQ.QuestionCode,
+		"title":                assignedQ.Title,
+		"aim":                  assignedQ.Aim,
+		"language":             assignedQ.Language,
+		"sample_test_cases":    assignedQ.SampleTestCases,
+		"max_marks":            assignedQ.MaxMarks,
+		"viva_questions_count": assignedQ.VivaQuestionsCount,
+	}
+
 	// Fetch student's latest submission if exists
 	var submission models.LabSubmission
 	var subPtr *models.LabSubmission
@@ -127,10 +222,11 @@ func GetExperimentDetails(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"experiment":   exp,
-		"submission":   subPtr,
-		"is_unlocked":  unlocked,
-		"user_section": userSection,
+		"experiment":        exp,
+		"assigned_question": safeQuestion,
+		"submission":        subPtr,
+		"is_unlocked":       unlocked,
+		"user_section":      userSection,
 	})
 }
 
@@ -145,7 +241,7 @@ type RawTestCase struct {
 	Expected       string `json:"expected"`
 }
 
-// RunExperimentCode executes student code against SAMPLE test cases only without saving submission
+// RunExperimentCode executes student code against SAMPLE test cases only without grading
 func RunExperimentCode(c *gin.Context) {
 	expIDStr := c.Param("expId")
 	expID, err := strconv.ParseUint(expIDStr, 10, 64)
@@ -177,10 +273,20 @@ func RunExperimentCode(c *gin.Context) {
 		return
 	}
 
-	// Parse Sample Test Cases
+	assignedQ, qErr := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, userID)
+	if qErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve assigned question"})
+		return
+	}
+
+	// Parse Sample Test Cases from assigned question
 	var rawCases []RawTestCase
-	if exp.SampleTestCases != "" {
-		_ = json.Unmarshal([]byte(exp.SampleTestCases), &rawCases)
+	sampleSrc := assignedQ.SampleTestCases
+	if sampleSrc == "" {
+		sampleSrc = exp.SampleTestCases
+	}
+	if sampleSrc != "" {
+		_ = json.Unmarshal([]byte(sampleSrc), &rawCases)
 	}
 
 	var evalCases []EvalTestCase
@@ -229,7 +335,7 @@ func RunExperimentCode(c *gin.Context) {
 	})
 }
 
-// SubmitExperimentCode evaluates student code against HIDDEN test cases and creates/updates submission
+// SubmitExperimentCode evaluates student code against HIDDEN test cases and records progress
 func SubmitExperimentCode(c *gin.Context) {
 	expIDStr := c.Param("expId")
 	expID, err := strconv.ParseUint(expIDStr, 10, 64)
@@ -261,13 +367,29 @@ func SubmitExperimentCode(c *gin.Context) {
 		return
 	}
 
-	// Parse Hidden Test Cases (fallback to Sample Test Cases if hidden not provided)
-	var rawCases []RawTestCase
-	if exp.HiddenTestCases != "" {
-		_ = json.Unmarshal([]byte(exp.HiddenTestCases), &rawCases)
+	assignedQ, qErr := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, studentID)
+	if qErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve assigned question"})
+		return
 	}
-	if len(rawCases) == 0 && exp.SampleTestCases != "" {
-		_ = json.Unmarshal([]byte(exp.SampleTestCases), &rawCases)
+
+	// Parse Hidden Test Cases from assigned question (fallback to sample if empty)
+	var rawCases []RawTestCase
+	hiddenSrc := assignedQ.HiddenTestCases
+	if hiddenSrc == "" {
+		hiddenSrc = exp.HiddenTestCases
+	}
+	if hiddenSrc != "" {
+		_ = json.Unmarshal([]byte(hiddenSrc), &rawCases)
+	}
+	if len(rawCases) == 0 {
+		sampleSrc := assignedQ.SampleTestCases
+		if sampleSrc == "" {
+			sampleSrc = exp.SampleTestCases
+		}
+		if sampleSrc != "" {
+			_ = json.Unmarshal([]byte(sampleSrc), &rawCases)
+		}
 	}
 
 	var evalCases []EvalTestCase
@@ -307,21 +429,21 @@ func SubmitExperimentCode(c *gin.Context) {
 	for _, r := range results {
 		if r.Passed {
 			passCount++
-		}
-		if r.Passed {
 			logs = append(logs, fmt.Sprintf("✓ %s Passed (%d ms)", r.Name, r.ExecutionMs))
 		} else {
 			logs = append(logs, fmt.Sprintf("✗ %s Failed: Expected '%s', got '%s'", r.Name, r.Expected, r.Actual))
 		}
 	}
 
-	maxMarks := exp.MaxMarks
+	maxMarks := assignedQ.MaxMarks
 	if maxMarks <= 0 {
 		maxMarks = 10
 	}
-	marks := 0
+	// Code marks account for 60% of total max marks (viva accounts for 40% during oral review)
+	codeMarks := 0
 	if totalCases > 0 {
-		marks = int(float64(passCount) / float64(totalCases) * float64(maxMarks))
+		codeWeight := float64(maxMarks) * 0.6
+		codeMarks = int(float64(passCount) / float64(totalCases) * codeWeight)
 	}
 
 	// Save or update LabSubmission
@@ -330,13 +452,20 @@ func SubmitExperimentCode(c *gin.Context) {
 
 	sub.StudentID = studentID
 	sub.ExperimentID = exp.ID
+	sub.QuestionID = assignedQ.ID
 	sub.SubmittedCode = req.Code
 	sub.Language = req.Language
 	sub.ExecutionOutput = strings.Join(logs, "\n")
 	sub.PassCount = passCount
 	sub.TotalTestCases = totalCases
-	sub.Status = "PENDING_APPROVAL"
-	sub.Marks = marks
+	sub.CodeMarks = codeMarks
+	if sub.Status != "SUBMITTED_FOR_VERIFICATION" && sub.Status != "APPROVED" {
+		if passCount == totalCases {
+			sub.Status = "TEST_PASSED"
+		} else {
+			sub.Status = "DRAFT"
+		}
+	}
 
 	if findErr != nil {
 		database.DB.Create(&sub)
@@ -345,27 +474,165 @@ func SubmitExperimentCode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":          "Experiment submitted successfully for faculty verification!",
+		"message":          "Hidden test cases executed successfully!",
 		"pass_count":       passCount,
 		"total_test_cases": totalCases,
 		"status":           sub.Status,
-		"marks":            marks,
+		"code_marks":       codeMarks,
 		"submission":       sub,
 		"results":          results,
+	})
+}
+
+type SaveProcedureReq struct {
+	Procedure string `json:"procedure" binding:"required"` // JSON array string or raw text
+}
+
+// SaveStudentProcedure persists student's written step-by-step algorithm
+func SaveStudentProcedure(c *gin.Context) {
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	userIDVal, _ := c.Get("userID")
+	studentID, _ := userIDVal.(uint)
+
+	var req SaveProcedureReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Procedure steps are required"})
+		return
+	}
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, expID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	assignedQ, _ := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, studentID)
+	qID := uint(0)
+	if assignedQ != nil {
+		qID = assignedQ.ID
+	}
+
+	var sub models.LabSubmission
+	findErr := database.DB.Where("student_id = ? AND experiment_id = ?", studentID, exp.ID).First(&sub).Error
+
+	sub.StudentID = studentID
+	sub.ExperimentID = exp.ID
+	if qID > 0 {
+		sub.QuestionID = qID
+	}
+	sub.StudentProcedure = req.Procedure
+
+	if findErr != nil {
+		if sub.SubmittedCode == "" {
+			sub.SubmittedCode = "# Solution placeholder"
+			sub.Language = "python"
+			sub.Status = "DRAFT"
+		}
+		database.DB.Create(&sub)
+	} else {
+		database.DB.Save(&sub)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Step-by-step algorithm saved successfully!",
+		"submission": sub,
+	})
+}
+
+// FinishAndSendForVerification locks the student's submission, draws random viva questions, and queues for faculty
+func FinishAndSendForVerification(c *gin.Context) {
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	userIDVal, _ := c.Get("userID")
+	studentID, _ := userIDVal.(uint)
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, expID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	var sub models.LabSubmission
+	if err := database.DB.Where("student_id = ? AND experiment_id = ?", studentID, exp.ID).First(&sub).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please execute and submit your code before finishing the experiment."})
+		return
+	}
+
+	if strings.TrimSpace(sub.SubmittedCode) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Submitted code cannot be empty."})
+		return
+	}
+
+	assignedQ, _ := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, studentID)
+	qID := exp.ID
+	vivaCount := 5
+	if assignedQ != nil {
+		qID = assignedQ.ID
+		if assignedQ.VivaQuestionsCount > 0 {
+			vivaCount = assignedQ.VivaQuestionsCount
+		}
+	}
+
+	// Fetch all Viva questions in pool for this question
+	var vivaPool []models.LabVivaQuestion
+	database.DB.Where("question_id = ?", qID).Order("order_index asc, id asc").Find(&vivaPool)
+	if len(vivaPool) == 0 {
+		database.DB.Where("experiment_id = ?", exp.ID).Order("order_index asc, id asc").Find(&vivaPool)
+	}
+
+	// Randomly pick N viva questions
+	var selectedVivas []models.LabVivaQuestion
+	if len(vivaPool) <= vivaCount {
+		selectedVivas = vivaPool
+	} else {
+		// Shuffle
+		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(studentID)))
+		perm := r.Perm(len(vivaPool))
+		for i := 0; i < vivaCount; i++ {
+			selectedVivas = append(selectedVivas, vivaPool[perm[i]])
+		}
+	}
+
+	vivaJSON, _ := json.Marshal(selectedVivas)
+	sub.VivaQuestionsAsked = string(vivaJSON)
+	sub.Status = "SUBMITTED_FOR_VERIFICATION"
+	database.DB.Save(&sub)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Experiment submitted for faculty verification! Please meet your lab faculty for viva voce evaluation.",
+		"submission": sub,
+		"status":     sub.Status,
 	})
 }
 
 // GetFacultyQueue returns assigned student submissions for Lab Incharge
 func GetFacultyQueue(c *gin.Context) {
 	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
 	facultyID := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
-	// Get mapped courses/sections for this faculty
 	var mappings []models.LabMapping
-	database.DB.Where("faculty_id = ?", facultyID).Find(&mappings)
+	if strings.ToLower(userRole) == "admin" {
+		database.DB.Preload("Course").Preload("Faculty").Find(&mappings)
+	} else {
+		database.DB.Where("faculty_id = ?", facultyID).Find(&mappings)
+	}
 
 	var submissions []models.LabSubmission
-	database.DB.Preload("Student").Preload("Experiment").Order("updated_at desc").Find(&submissions)
+	database.DB.Preload("Student").Preload("Experiment").Preload("Question").Order("updated_at desc").Find(&submissions)
 
 	c.JSON(http.StatusOK, gin.H{
 		"mappings":    mappings,
@@ -373,14 +640,61 @@ func GetFacultyQueue(c *gin.Context) {
 	})
 }
 
+// GetFacultySubmissionDetail returns complete side-by-side verification payload for a submission
+func GetFacultySubmissionDetail(c *gin.Context) {
+	subIDStr := c.Param("subId")
+	subID, err := strconv.ParseUint(subIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+
+	var sub models.LabSubmission
+	if err := database.DB.Preload("Student").Preload("Experiment").Preload("Question").First(&sub, subID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+		return
+	}
+
+	// Fetch question details & reference solution
+	var question models.LabExperimentQuestion
+	if sub.QuestionID > 0 {
+		database.DB.First(&question, sub.QuestionID)
+	}
+	if question.ID == 0 {
+		database.DB.Where("experiment_id = ?", sub.ExperimentID).Order("id asc").First(&question)
+	}
+
+	// Parse Viva questions asked
+	var vivas []models.LabVivaQuestion
+	if sub.VivaQuestionsAsked != "" {
+		_ = json.Unmarshal([]byte(sub.VivaQuestionsAsked), &vivas)
+	}
+	if len(vivas) == 0 {
+		// Fallback to all viva questions configured for this question
+		database.DB.Where("question_id = ?", question.ID).Order("order_index asc").Find(&vivas)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"submission":         sub,
+		"student":            sub.Student,
+		"experiment":         sub.Experiment,
+		"question":           question,
+		"reference_solution": question.SolutionCode,
+		"reference_algo":     question.ReferenceAlgorithm,
+		"viva_questions":     vivas,
+	})
+}
+
 type VerifySingleReq struct {
 	SubmissionID uint   `json:"submission_id" binding:"required"`
 	Status       string `json:"status" binding:"required"` // APPROVED, REVISION_REQUIRED
-	Marks        int    `json:"marks"`
+	CodeMarks    int    `json:"code_marks"`
+	VivaMarks    int    `json:"viva_marks"`
+	Marks        int    `json:"marks"` // Total Marks
 	FacultyNotes string `json:"faculty_notes"`
 }
 
-// VerifySingleExperiment allows faculty to approve individual experiment
+// VerifySingleExperiment allows faculty to evaluate viva, award marks, and approve experiment
 func VerifySingleExperiment(c *gin.Context) {
 	facultyIDVal, _ := c.Get("userID")
 	facultyID := facultyIDVal.(uint)
@@ -399,15 +713,51 @@ func VerifySingleExperiment(c *gin.Context) {
 
 	now := time.Now()
 	sub.Status = req.Status
-	sub.Marks = req.Marks
+	sub.CodeMarks = req.CodeMarks
+	sub.VivaMarks = req.VivaMarks
+	totalMarks := req.Marks
+	if totalMarks == 0 && (req.CodeMarks > 0 || req.VivaMarks > 0) {
+		totalMarks = req.CodeMarks + req.VivaMarks
+	}
+	sub.Marks = totalMarks
 	sub.FacultyNotes = req.FacultyNotes
 	sub.VerifiedBy = &facultyID
 	sub.VerifiedAt = &now
 	database.DB.Save(&sub)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":    "Experiment verification saved successfully",
+		"message":    "Experiment verification & viva evaluation saved successfully!",
 		"submission": sub,
+	})
+}
+
+type ResetAllocationReq struct {
+	StudentID    uint `json:"student_id" binding:"required"`
+	CourseID     uint `json:"course_id" binding:"required"`
+	ExperimentID uint `json:"experiment_id" binding:"required"`
+}
+
+// ResetStudentQuestionAllocation allows faculty or admin to reset a student's assigned question
+func ResetStudentQuestionAllocation(c *gin.Context) {
+	var req ResetAllocationReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+		return
+	}
+
+	database.DB.Where("student_id = ? AND course_id = ? AND experiment_id = ?", req.StudentID, req.CourseID, req.ExperimentID).
+		Delete(&models.LabQuestionAllocation{})
+
+	// Re-allocate a fresh random variant
+	newQ, err := getOrAllocateQuestionForStudent(req.CourseID, req.ExperimentID, req.StudentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reallocate question: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":           "Student question allocation reset successfully!",
+		"assigned_question": newQ,
 	})
 }
 

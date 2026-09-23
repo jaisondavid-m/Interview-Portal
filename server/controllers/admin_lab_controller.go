@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -667,3 +668,244 @@ func AdminSaveCoursePdfTemplate(c *gin.Context) {
 		"course":  course,
 	})
 }
+
+// AdminGetExperimentQuestionVariants returns all question variants with viva questions for an experiment
+func AdminGetExperimentQuestionVariants(c *gin.Context) {
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var questions []models.LabExperimentQuestion
+	database.DB.Where("experiment_id = ?", expID).Order("id asc").Find(&questions)
+
+	// Fetch Viva questions for each variant
+	type VariantWithVivas struct {
+		models.LabExperimentQuestion
+		VivaQuestions []models.LabVivaQuestion `json:"viva_questions"`
+	}
+
+	var results []VariantWithVivas
+	for _, q := range questions {
+		var vivas []models.LabVivaQuestion
+		database.DB.Where("question_id = ?", q.ID).Order("order_index asc, id asc").Find(&vivas)
+		results = append(results, VariantWithVivas{
+			LabExperimentQuestion: q,
+			VivaQuestions:         vivas,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"variants": results,
+	})
+}
+
+type SaveQuestionVariantReq struct {
+	ID                 uint                     `json:"id"`
+	ExperimentID       uint                     `json:"experiment_id" binding:"required"`
+	CourseID           uint                     `json:"course_id" binding:"required"`
+	QuestionCode       string                   `json:"question_code" binding:"required"`
+	Title              string                   `json:"title" binding:"required"`
+	Aim                string                   `json:"aim" binding:"required"`
+	ReferenceAlgorithm string                   `json:"reference_algorithm"`
+	SolutionCode       string                   `json:"solution_code"`
+	Language           string                   `json:"language"`
+	SampleTestCases    string                   `json:"sample_test_cases"`
+	HiddenTestCases    string                   `json:"hidden_test_cases"`
+	MaxMarks           int                      `json:"max_marks"`
+	VivaQuestionsCount int                      `json:"viva_questions_count"`
+	IsActive           bool                     `json:"is_active"`
+	VivaQuestions      []models.LabVivaQuestion `json:"viva_questions"`
+}
+
+// AdminSaveExperimentQuestionVariant creates or updates a question variant along with its viva questions pool
+func AdminSaveExperimentQuestionVariant(c *gin.Context) {
+	var req SaveQuestionVariantReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid question variant payload: " + err.Error()})
+		return
+	}
+
+	lang := req.Language
+	if lang == "" {
+		lang = "python"
+	}
+	marks := req.MaxMarks
+	if marks <= 0 {
+		marks = 10
+	}
+	vivaCount := req.VivaQuestionsCount
+	if vivaCount <= 0 {
+		vivaCount = 5
+	}
+
+	var variant models.LabExperimentQuestion
+	isNew := true
+	if req.ID > 0 {
+		if err := database.DB.First(&variant, req.ID).Error; err == nil {
+			isNew = false
+		}
+	}
+
+	variant.ExperimentID = req.ExperimentID
+	variant.CourseID = req.CourseID
+	variant.QuestionCode = req.QuestionCode
+	variant.Title = req.Title
+	variant.Aim = req.Aim
+	variant.ReferenceAlgorithm = req.ReferenceAlgorithm
+	variant.SolutionCode = req.SolutionCode
+	variant.Language = lang
+	variant.SampleTestCases = req.SampleTestCases
+	variant.HiddenTestCases = req.HiddenTestCases
+	variant.MaxMarks = marks
+	variant.VivaQuestionsCount = vivaCount
+	variant.IsActive = req.IsActive
+
+	if isNew {
+		if err := database.DB.Create(&variant).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create question variant: " + err.Error()})
+			return
+		}
+	} else {
+		if err := database.DB.Save(&variant).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update question variant: " + err.Error()})
+			return
+		}
+	}
+
+	// Update Viva questions pool if provided
+	if req.VivaQuestions != nil {
+		// Delete old viva questions
+		database.DB.Where("question_id = ?", variant.ID).Delete(&models.LabVivaQuestion{})
+		for i, vq := range req.VivaQuestions {
+			if strings.TrimSpace(vq.Question) != "" {
+				newVq := models.LabVivaQuestion{
+					QuestionID:   variant.ID,
+					ExperimentID: variant.ExperimentID,
+					Question:     strings.TrimSpace(vq.Question),
+					Answer:       strings.TrimSpace(vq.Answer),
+					OrderIndex:   i + 1,
+					CreatedAt:    time.Now(),
+					UpdatedAt:    time.Now(),
+				}
+				database.DB.Create(&newVq)
+			}
+		}
+	}
+
+	var savedVivas []models.LabVivaQuestion
+	database.DB.Where("question_id = ?", variant.ID).Order("order_index asc").Find(&savedVivas)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "Question variant saved successfully!",
+		"variant":        variant,
+		"viva_questions": savedVivas,
+	})
+}
+
+// AdminDeleteExperimentQuestionVariant removes a question variant and its viva questions
+func AdminDeleteExperimentQuestionVariant(c *gin.Context) {
+	idStr := c.Param("variantId")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid variant ID"})
+		return
+	}
+
+	database.DB.Where("question_id = ?", id).Delete(&models.LabVivaQuestion{})
+	database.DB.Where("question_id = ?", id).Delete(&models.LabQuestionAllocation{})
+	database.DB.Delete(&models.LabExperimentQuestion{}, id)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Question variant deleted successfully!",
+	})
+}
+
+// AdminTestRunSolutionCode executes the reference solution code against all sample & hidden test cases
+func AdminTestRunSolutionCode(c *gin.Context) {
+	var req struct {
+		Code            string `json:"code" binding:"required"`
+		Language        string `json:"language" binding:"required"`
+		SampleTestCases string `json:"sample_test_cases"`
+		HiddenTestCases string `json:"hidden_test_cases"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Code and Language are required"})
+		return
+	}
+
+	var allCases []EvalTestCase
+	idx := 1
+
+	var sampleCases []RawTestCase
+	if req.SampleTestCases != "" {
+		_ = json.Unmarshal([]byte(req.SampleTestCases), &sampleCases)
+		for _, sc := range sampleCases {
+			expOut := sc.ExpectedOutput
+			if expOut == "" {
+				expOut = sc.Expected
+			}
+			allCases = append(allCases, EvalTestCase{
+				Index:          idx,
+				IsHidden:       false,
+				Name:           fmt.Sprintf("Sample Case %d", idx),
+				Input:          sc.Input,
+				ExpectedOutput: expOut,
+			})
+			idx++
+		}
+	}
+
+	var hiddenCases []RawTestCase
+	if req.HiddenTestCases != "" {
+		_ = json.Unmarshal([]byte(req.HiddenTestCases), &hiddenCases)
+		for _, hc := range hiddenCases {
+			expOut := hc.ExpectedOutput
+			if expOut == "" {
+				expOut = hc.Expected
+			}
+			allCases = append(allCases, EvalTestCase{
+				Index:          idx,
+				IsHidden:       true,
+				Name:           fmt.Sprintf("Hidden Case %d", idx),
+				Input:          hc.Input,
+				ExpectedOutput: expOut,
+			})
+			idx++
+		}
+	}
+
+	if len(allCases) == 0 {
+		allCases = append(allCases, EvalTestCase{
+			Index:          1,
+			IsHidden:       false,
+			Name:           "Default Execution Test",
+			Input:          "",
+			ExpectedOutput: "",
+		})
+	}
+
+	results, execErr := ExecuteTestCases(req.Code, req.Language, allCases)
+	if execErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Execution error: " + execErr.Error()})
+		return
+	}
+
+	passCount := 0
+	for _, r := range results {
+		if r.Passed {
+			passCount++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":          true,
+		"results":          results,
+		"pass_count":       passCount,
+		"total_test_cases": len(results),
+	})
+}
+

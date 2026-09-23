@@ -305,6 +305,8 @@ func SetupRouter() *gin.Engine {
 			labs.GET("/experiment/:expId", controllers.GetExperimentDetails)
 			labs.POST("/experiment/:expId/run", controllers.RunExperimentCode)
 			labs.POST("/experiment/:expId/submit", controllers.SubmitExperimentCode)
+			labs.POST("/experiment/:expId/procedure", controllers.SaveStudentProcedure)
+			labs.POST("/experiment/:expId/finish", controllers.FinishAndSendForVerification)
 			labs.GET("/record-pdf/:courseId/student/:studentId", controllers.DownloadStudentRecordPDF)
 			labs.POST("/record-pdf/custom", controllers.DownloadCustomLabRecordPDF)
 		}
@@ -314,10 +316,12 @@ func SetupRouter() *gin.Engine {
 		facultyLabs.Use(middlewares.AuthMiddleware())
 		{
 			facultyLabs.GET("/queue", controllers.GetFacultyQueue)
+			facultyLabs.GET("/submission/:subId", controllers.GetFacultySubmissionDetail)
 			facultyLabs.POST("/verify-single", controllers.VerifySingleExperiment)
 			facultyLabs.POST("/verify-semester", controllers.VerifySemesterRecord)
 			facultyLabs.GET("/unlocks", controllers.FacultyGetCourseReleases)
 			facultyLabs.POST("/unlocks/toggle", controllers.FacultyToggleExperimentUnlock)
+			facultyLabs.POST("/student-allocation/reset", controllers.ResetStudentQuestionAllocation)
 		}
 
 		// Admin Lab Management Routes
@@ -336,6 +340,11 @@ func SetupRouter() *gin.Engine {
 			adminLabs.POST("/record-pdf/custom", controllers.DownloadCustomLabRecordPDF)
 			adminLabs.PUT("/experiments/:id", controllers.AdminUpdateExperiment)
 			adminLabs.DELETE("/experiments/:id", controllers.AdminDeleteExperiment)
+			adminLabs.GET("/experiments/:expId/variants", controllers.AdminGetExperimentQuestionVariants)
+			adminLabs.POST("/experiments/:expId/variants", controllers.AdminSaveExperimentQuestionVariant)
+			adminLabs.DELETE("/experiments/variants/:variantId", controllers.AdminDeleteExperimentQuestionVariant)
+			adminLabs.POST("/solution-test", controllers.AdminTestRunSolutionCode)
+			adminLabs.POST("/student-allocation/reset", controllers.ResetStudentQuestionAllocation)
 			adminLabs.POST("/mappings", controllers.CreateLabMapping)
 			adminLabs.DELETE("/mappings/:id", controllers.DeleteLabMapping)
 			adminLabs.GET("/pdf-preview/:courseId/student/:studentId", controllers.AdminPreviewStudentRecordPDF)

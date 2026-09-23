@@ -361,7 +361,7 @@ export const router = createBrowserRouter([
           {
             path: 'my-bookings',
             element: (
-              <DynamicPageRoute pageKey="my_bookings">
+              <DynamicPageRoute pageKey={['student_bookings', 'my_bookings']}>
                 <MyBookings />
               </DynamicPageRoute>
             ),
