@@ -204,8 +204,6 @@ export default function LabBulkModal({
   const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef(null);
 
-  if (!isOpen) return null;
-
   const isExp = mode === 'experiments';
 
   // Download Sample JSON
@@ -357,7 +355,7 @@ export default function LabBulkModal({
 
   // Auto-parse Direct Paste Content in real-time
   useEffect(() => {
-    if (activeTab !== 'paste') return;
+    if (!isOpen || activeTab !== 'paste') return;
     if (!pasteContent.trim()) {
       setParsedItems([]);
       setErrorMsg('');
@@ -381,7 +379,7 @@ export default function LabBulkModal({
         setParsedItems([]);
       }
     }
-  }, [pasteContent, pasteFormat, activeTab, isExp]);
+  }, [pasteContent, pasteFormat, activeTab, isExp, isOpen]);
 
   // Submit Bulk Upload to Backend
   const handleSubmit = async () => {
@@ -420,6 +418,8 @@ export default function LabBulkModal({
 
   const validCount = parsedItems.filter((i) => i._valid).length;
   const invalidCount = parsedItems.filter((i) => !i._valid).length;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">

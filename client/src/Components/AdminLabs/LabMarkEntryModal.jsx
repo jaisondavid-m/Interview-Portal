@@ -55,13 +55,11 @@ export default function LabMarkEntryModal({
   onSave,
   submitting = false,
 }) {
-  if (!isOpen || !submissionDetail) return null;
-
-  const sub = submissionDetail.submission || {};
-  const student = submissionDetail.student || sub.student || {};
-  const course = submissionDetail.course || {};
-  const exp = submissionDetail.experiment || sub.experiment || {};
-  const question = submissionDetail.question || sub.question || {};
+  const sub = submissionDetail?.submission || {};
+  const student = submissionDetail?.student || sub.student || {};
+  const course = submissionDetail?.course || {};
+  const exp = submissionDetail?.experiment || sub.experiment || {};
+  const question = submissionDetail?.question || sub.question || {};
 
   // Resolve rubric: Course-configured rubric or standard default 100-mark rubric
   const rubricList = useMemo(() => {
@@ -157,6 +155,8 @@ export default function LabMarkEntryModal({
   };
 
   const gradeInfo = getGradePill(percentage);
+
+  if (!isOpen || !submissionDetail) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">

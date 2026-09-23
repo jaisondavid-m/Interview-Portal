@@ -1618,26 +1618,28 @@ export default function AdminLabCourseExperiments() {
       )}
 
       {/* Bulk Upload Modal (Experiments & Question Variants) */}
-      <LabBulkModal
-        isOpen={bulkModal.isOpen}
-        onClose={() => setBulkModal({ isOpen: false, mode: 'experiments' })}
-        mode={bulkModal.mode}
-        targetId={bulkModal.mode === 'experiments' ? courseId : selectedExp?.id}
-        targetMetadata={{
-          courseCode: course?.course_code,
-          expNo: selectedExp?.experiment_no,
-          title: selectedExp?.title,
-        }}
-        onSuccess={(res) => {
-          if (bulkModal.mode === 'experiments') {
-            fetchCourseData();
-            showToast(res?.message || 'Experiments imported successfully!');
-          } else {
-            if (selectedExp) openExperimentVariants(selectedExp);
-            showToast(res?.message || 'Question variants imported successfully!');
-          }
-        }}
-      />
+      {bulkModal.isOpen && (
+        <LabBulkModal
+          isOpen={bulkModal.isOpen}
+          onClose={() => setBulkModal({ isOpen: false, mode: 'experiments' })}
+          mode={bulkModal.mode}
+          targetId={bulkModal.mode === 'experiments' ? courseId : selectedExp?.id}
+          targetMetadata={{
+            courseCode: course?.course_code,
+            expNo: selectedExp?.experiment_no,
+            title: selectedExp?.title,
+          }}
+          onSuccess={(res) => {
+            if (bulkModal.mode === 'experiments') {
+              fetchCourseData();
+              showToast(res?.message || 'Experiments imported successfully!');
+            } else {
+              if (selectedExp) openExperimentVariants(selectedExp);
+              showToast(res?.message || 'Question variants imported successfully!');
+            }
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal
