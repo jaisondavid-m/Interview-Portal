@@ -19,6 +19,15 @@ import (
 func GetAdminLabData(c *gin.Context) {
 	var courses []models.LabCourse
 	database.DB.Order("title asc").Find(&courses)
+	for i := range courses {
+		if strings.TrimSpace(courses[i].Regulation) == "" {
+			if courses[i].AcademicYear != "" && !strings.Contains(courses[i].AcademicYear, "-") {
+				courses[i].Regulation = courses[i].AcademicYear
+			} else {
+				courses[i].Regulation = "2022"
+			}
+		}
+	}
 
 	// Fetch only users with role = 'faculty' from users table
 	var facultyList []models.User

@@ -171,6 +171,8 @@ func runMigrations(db *gorm.DB) error {
 		migrateAndDropLegacyPayloadJSONColumn(db)
 		syncAppPagesCatalog(db)
 		seedRateLimitConfigs(db)
+		// Backfill regulation for legacy courses
+		db.Model(&models.LabCourse{}).Where("regulation IS NULL OR regulation = ''").Update("regulation", "2022")
 		seedLabCourseAndExperiments(db)
 		syncLabQuestionVariantsAndVivas(db)
 	}

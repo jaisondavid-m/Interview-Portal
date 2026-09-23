@@ -53,6 +53,15 @@ func GetStudentLabCourses(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch lab courses"})
 		return
 	}
+	for i := range courses {
+		if strings.TrimSpace(courses[i].Regulation) == "" {
+			if courses[i].AcademicYear != "" && !strings.Contains(courses[i].AcademicYear, "-") {
+				courses[i].Regulation = courses[i].AcademicYear
+			} else {
+				courses[i].Regulation = "2022"
+			}
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"courses": courses})
 }
 

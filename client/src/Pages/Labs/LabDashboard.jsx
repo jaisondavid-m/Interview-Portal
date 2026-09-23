@@ -171,9 +171,9 @@ export default function LabDashboard() {
                             {course.degree ? `${course.degree} · ` : ''}{course.semester}
                           </span>
                         )}
-                        {course.academic_year && (
-                          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-                            {course.academic_year}
+                        {(course.regulation || course.academic_year) && (
+                          <span className="text-[10px] font-mono text-[var(--accent)] font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)]">
+                            {course.regulation ? (course.regulation.toLowerCase().includes('regulation') ? course.regulation : `Regulation ${course.regulation.replace(/^r/i, '')}`) : 'Regulation 2022'}
                           </span>
                         )}
                       </div>

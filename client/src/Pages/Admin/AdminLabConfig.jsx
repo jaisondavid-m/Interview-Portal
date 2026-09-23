@@ -618,7 +618,10 @@ export default function AdminLabConfig() {
     setEditingCourse(null);
   };
   const openEditCourse = (c) => {
-    setCourseForm({ ...c });
+    setCourseForm({
+      ...c,
+      regulation: c.regulation || (c.academic_year && !c.academic_year.includes('-') ? c.academic_year : '2022'),
+    });
     setCourseModal('edit');
     setEditingCourse(c);
   };
@@ -1010,7 +1013,7 @@ export default function AdminLabConfig() {
                         )}
                         {(c.regulation || c.academic_year) && (
                           <span className="text-[10px] font-mono text-[var(--accent)] font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)]">
-                            {c.regulation ? `R${c.regulation}` : c.academic_year}
+                            {c.regulation ? (c.regulation.toLowerCase().includes('regulation') ? c.regulation : `Regulation ${c.regulation.replace(/^r/i, '')}`) : 'Regulation 2022'}
                           </span>
                         )}
                       </div>
