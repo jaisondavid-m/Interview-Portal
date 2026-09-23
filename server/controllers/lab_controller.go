@@ -17,33 +17,139 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// isExperimentUnlockedForStudent checks if an experiment is unlocked for the user's section
-func isExperimentUnlockedForStudent(courseID uint, expID uint, userID uint, userRole string) (bool, string) {
+// StudentUnlockStatus contains fine-grained access details for a student on an experiment
+type StudentUnlockStatus struct {
+	IsUnlocked        bool       `json:"is_unlocked"`
+	Section           string     `json:"section"`
+	Status            string     `json:"status"` // "OPEN", "UPCOMING", "EXPIRED", "LOCKED"
+	StartsAt          *time.Time `json:"starts_at,omitempty"`
+	EndsAt            *time.Time `json:"ends_at,omitempty"`
+	IsStudentOverride bool       `json:"is_student_override"`
+	MaxAttempts       int        `json:"max_attempts"`
+	Notes             string     `json:"notes,omitempty"`
+}
+
+// getStudentExperimentAccess resolves whether an experiment is currently open for a student
+func getStudentExperimentAccess(courseID uint, expID uint, userID uint, userRole string) StudentUnlockStatus {
+	database.EnsureLabTables(database.DB)
 	role := strings.ToLower(userRole)
 	if role == "admin" || role == "faculty" {
-		return true, "FACULTY/ADMIN"
+		return StudentUnlockStatus{
+			IsUnlocked: true,
+			Section:    "FACULTY/ADMIN",
+			Status:     "OPEN",
+		}
 	}
 
 	var user models.User
 	if err := database.DB.Select("id, section, role").First(&user, userID).Error; err != nil {
-		return false, "UNKNOWN"
+		return StudentUnlockStatus{IsUnlocked: false, Section: "UNKNOWN", Status: "LOCKED"}
 	}
 
 	section := strings.TrimSpace(user.Section)
+	now := time.Now()
 
-	var unlock models.LabExperimentUnlock
-	query := database.DB.Where("course_id = ? AND experiment_id = ? AND is_unlocked = ?", courseID, expID, true)
+	// 1. Check if an individual student override exists
+	var studentUnlock models.LabExperimentUnlock
+	if err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ?", courseID, expID, userID).First(&studentUnlock).Error; err == nil {
+		if !studentUnlock.IsUnlocked {
+			return StudentUnlockStatus{
+				IsUnlocked:        false,
+				Section:           section,
+				Status:            "LOCKED",
+				StartsAt:          studentUnlock.StartsAt,
+				EndsAt:            studentUnlock.EndsAt,
+				IsStudentOverride: true,
+				MaxAttempts:       studentUnlock.MaxAttempts,
+				Notes:             studentUnlock.Notes,
+			}
+		}
+		if studentUnlock.StartsAt != nil && now.Before(*studentUnlock.StartsAt) {
+			return StudentUnlockStatus{
+				IsUnlocked:        false,
+				Section:           section,
+				Status:            "UPCOMING",
+				StartsAt:          studentUnlock.StartsAt,
+				EndsAt:            studentUnlock.EndsAt,
+				IsStudentOverride: true,
+				MaxAttempts:       studentUnlock.MaxAttempts,
+				Notes:             studentUnlock.Notes,
+			}
+		}
+		if studentUnlock.EndsAt != nil && now.After(*studentUnlock.EndsAt) {
+			return StudentUnlockStatus{
+				IsUnlocked:        false,
+				Section:           section,
+				Status:            "EXPIRED",
+				StartsAt:          studentUnlock.StartsAt,
+				EndsAt:            studentUnlock.EndsAt,
+				IsStudentOverride: true,
+				MaxAttempts:       studentUnlock.MaxAttempts,
+				Notes:             studentUnlock.Notes,
+			}
+		}
+		return StudentUnlockStatus{
+			IsUnlocked:        true,
+			Section:           section,
+			Status:            "OPEN",
+			StartsAt:          studentUnlock.StartsAt,
+			EndsAt:            studentUnlock.EndsAt,
+			IsStudentOverride: true,
+			MaxAttempts:       studentUnlock.MaxAttempts,
+			Notes:             studentUnlock.Notes,
+		}
+	}
+
+	// 2. Check Section or ALL rule (where student_id is null or 0)
+	var sectionUnlock models.LabExperimentUnlock
+	query := database.DB.Where("course_id = ? AND experiment_id = ? AND (student_id IS NULL OR student_id = 0) AND is_unlocked = ?", courseID, expID, true)
 	if section != "" {
 		query = query.Where("section IN (?, 'ALL')", section)
 	} else {
 		query = query.Where("section = 'ALL'")
 	}
 
-	if err := query.First(&unlock).Error; err == nil {
-		return true, section
+	if err := query.Order("CASE WHEN section = 'ALL' THEN 1 ELSE 0 END ASC").First(&sectionUnlock).Error; err == nil {
+		if sectionUnlock.StartsAt != nil && now.Before(*sectionUnlock.StartsAt) {
+			return StudentUnlockStatus{
+				IsUnlocked:  false,
+				Section:     section,
+				Status:      "UPCOMING",
+				StartsAt:    sectionUnlock.StartsAt,
+				EndsAt:      sectionUnlock.EndsAt,
+				MaxAttempts: sectionUnlock.MaxAttempts,
+				Notes:       sectionUnlock.Notes,
+			}
+		}
+		if sectionUnlock.EndsAt != nil && now.After(*sectionUnlock.EndsAt) {
+			return StudentUnlockStatus{
+				IsUnlocked:  false,
+				Section:     section,
+				Status:      "EXPIRED",
+				StartsAt:    sectionUnlock.StartsAt,
+				EndsAt:      sectionUnlock.EndsAt,
+				MaxAttempts: sectionUnlock.MaxAttempts,
+				Notes:       sectionUnlock.Notes,
+			}
+		}
+		return StudentUnlockStatus{
+			IsUnlocked:  true,
+			Section:     section,
+			Status:      "OPEN",
+			StartsAt:    sectionUnlock.StartsAt,
+			EndsAt:      sectionUnlock.EndsAt,
+			MaxAttempts: sectionUnlock.MaxAttempts,
+			Notes:       sectionUnlock.Notes,
+		}
 	}
 
-	return false, section
+	return StudentUnlockStatus{IsUnlocked: false, Section: section, Status: "LOCKED"}
+}
+
+// isExperimentUnlockedForStudent checks if an experiment is unlocked for the user's section or override
+func isExperimentUnlockedForStudent(courseID uint, expID uint, userID uint, userRole string) (bool, string) {
+	status := getStudentExperimentAccess(courseID, expID, userID, userRole)
+	return status.IsUnlocked, status.Section
 }
 
 // GetStudentLabCourses returns active lab courses for student
@@ -201,7 +307,7 @@ func GetExperimentDetails(c *gin.Context) {
 	userID, _ := userIDVal.(uint)
 	userRole, _ := userRoleVal.(string)
 
-	unlocked, userSection := isExperimentUnlockedForStudent(exp.CourseID, exp.ID, userID, userRole)
+	accessStatus := getStudentExperimentAccess(exp.CourseID, exp.ID, userID, userRole)
 
 	// Fetch or Allocate Question Variant for Student
 	assignedQ, qErr := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, userID)
@@ -235,8 +341,9 @@ func GetExperimentDetails(c *gin.Context) {
 		"experiment":        exp,
 		"assigned_question": safeQuestion,
 		"submission":        subPtr,
-		"is_unlocked":       unlocked,
-		"user_section":      userSection,
+		"is_unlocked":       accessStatus.IsUnlocked,
+		"user_section":      accessStatus.Section,
+		"access_status":     accessStatus,
 	})
 }
 
@@ -478,8 +585,10 @@ func SubmitExperimentCode(c *gin.Context) {
 	}
 
 	if findErr != nil {
+		sub.AttemptCount = 1
 		database.DB.Create(&sub)
 	} else {
+		sub.AttemptCount += 1
 		database.DB.Save(&sub)
 	}
 
@@ -886,8 +995,9 @@ func DownloadStudentRecordPDF(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
-// FacultyGetCourseReleases returns experiment unlock status matrix for courses & sections mapped to faculty
+// FacultyGetCourseReleases returns experiment unlock status matrix and student overrides for courses & sections mapped to faculty
 func FacultyGetCourseReleases(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
 	userRoleVal, _ := c.Get("userRole")
 	facultyID, _ := facultyIDVal.(uint)
@@ -910,8 +1020,19 @@ func FacultyGetCourseReleases(c *gin.Context) {
 		}
 	}
 
-	var unlocks []models.LabExperimentUnlock
-	database.DB.Preload("Course").Preload("Experiment").Find(&unlocks)
+	// Fetch section-level unlocks
+	var sectionUnlocks []models.LabExperimentUnlock
+	database.DB.Preload("Course").Preload("Experiment").
+		Where("student_id IS NULL OR student_id = 0").
+		Order("experiment_id asc").
+		Find(&sectionUnlocks)
+
+	// Fetch student-specific overrides
+	var studentOverrides []models.LabExperimentUnlock
+	database.DB.Preload("Course").Preload("Experiment").Preload("Student").
+		Where("student_id IS NOT NULL AND student_id > 0").
+		Order("created_at desc").
+		Find(&studentOverrides)
 
 	var allExperiments []models.LabExperiment
 	database.DB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
@@ -923,12 +1044,21 @@ func FacultyGetCourseReleases(c *gin.Context) {
 		Distinct().
 		Pluck("section", &sectionList)
 
+	// Fetch student roster for individual overrides
+	var studentList []models.User
+	database.DB.Where("LOWER(role) IN ?", []string{"student", "user"}).
+		Select("id, name, roll_no, email, section, department").
+		Order("name asc").
+		Find(&studentList)
+
 	c.JSON(http.StatusOK, gin.H{
-		"courses":     courses,
-		"mappings":    mappings,
-		"unlocks":     unlocks,
-		"experiments": allExperiments,
-		"sections":    sectionList,
+		"courses":           courses,
+		"mappings":          mappings,
+		"unlocks":           sectionUnlocks,
+		"student_overrides": studentOverrides,
+		"experiments":       allExperiments,
+		"sections":          sectionList,
+		"students":          studentList,
 	})
 }
 
@@ -941,6 +1071,7 @@ type ToggleUnlockReq struct {
 
 // FacultyToggleExperimentUnlock toggles unlock status for a specific course, experiment and section
 func FacultyToggleExperimentUnlock(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
 	facultyID, _ := facultyIDVal.(uint)
 
@@ -951,7 +1082,7 @@ func FacultyToggleExperimentUnlock(c *gin.Context) {
 	}
 
 	var unlock models.LabExperimentUnlock
-	err := database.DB.Where("course_id = ? AND experiment_id = ? AND section = ?", req.CourseID, req.ExperimentID, req.Section).First(&unlock).Error
+	err := database.DB.Where("course_id = ? AND experiment_id = ? AND section = ? AND (student_id IS NULL OR student_id = 0)", req.CourseID, req.ExperimentID, req.Section).First(&unlock).Error
 
 	now := time.Now()
 	unlock.CourseID = req.CourseID
@@ -980,6 +1111,468 @@ func FacultyToggleExperimentUnlock(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Experiment unlock state updated successfully",
 		"unlock":  unlock,
+	})
+}
+
+type ScheduleWindowBulkReq struct {
+	CourseID            uint       `json:"course_id" binding:"required"`
+	ExperimentIDs       []uint     `json:"experiment_ids" binding:"required"`
+	Section             string     `json:"section"` // 'ALL' or specific section
+	IsUnlocked          bool       `json:"is_unlocked"`
+	StartsAt            *time.Time `json:"starts_at"`
+	EndsAt              *time.Time `json:"ends_at"`
+	MaxAttempts         int        `json:"max_attempts"`
+	AllowLateSubmission bool       `json:"allow_late_submission"`
+	Notes               string     `json:"notes"`
+}
+
+// FacultyScheduleWindowBulk configures open window timings for multiple experiments across a section in bulk
+func FacultyScheduleWindowBulk(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	facultyIDVal, _ := c.Get("userID")
+	facultyID, _ := facultyIDVal.(uint)
+
+	var req ScheduleWindowBulkReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid bulk schedule payload: " + err.Error()})
+		return
+	}
+
+	sec := strings.TrimSpace(req.Section)
+	if sec == "" {
+		sec = "ALL"
+	}
+
+	now := time.Now()
+	for _, expID := range req.ExperimentIDs {
+		var unlock models.LabExperimentUnlock
+		err := database.DB.Where("course_id = ? AND experiment_id = ? AND section = ? AND (student_id IS NULL OR student_id = 0)", req.CourseID, expID, sec).First(&unlock).Error
+
+		unlock.CourseID = req.CourseID
+		unlock.ExperimentID = expID
+		unlock.Section = sec
+		unlock.FacultyID = facultyID
+		unlock.IsUnlocked = req.IsUnlocked
+		unlock.StartsAt = req.StartsAt
+		unlock.EndsAt = req.EndsAt
+		unlock.MaxAttempts = req.MaxAttempts
+		unlock.AllowLateSubmission = req.AllowLateSubmission
+		unlock.Notes = strings.TrimSpace(req.Notes)
+		if req.IsUnlocked {
+			unlock.UnlockedAt = &now
+		}
+
+		if err != nil {
+			database.DB.Create(&unlock)
+		} else {
+			database.DB.Save(&unlock)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully configured attendance window for %d experiments on %s!", len(req.ExperimentIDs), sec),
+	})
+}
+
+type SetStudentOverrideReq struct {
+	CourseID            uint       `json:"course_id" binding:"required"`
+	ExperimentID        uint       `json:"experiment_id" binding:"required"`
+	StudentID           uint       `json:"student_id" binding:"required"`
+	IsUnlocked          bool       `json:"is_unlocked"`
+	StartsAt            *time.Time `json:"starts_at"`
+	EndsAt              *time.Time `json:"ends_at"`
+	MaxAttempts         int        `json:"max_attempts"`
+	AllowLateSubmission bool       `json:"allow_late_submission"`
+	Notes               string     `json:"notes"`
+}
+
+// FacultySetStudentOverride creates or updates an individual student window extension or unlock
+func FacultySetStudentOverride(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	facultyIDVal, _ := c.Get("userID")
+	facultyID, _ := facultyIDVal.(uint)
+
+	var req SetStudentOverrideReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid student override payload: " + err.Error()})
+		return
+	}
+
+	var student models.User
+	if err := database.DB.First(&student, req.StudentID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
+		return
+	}
+
+	now := time.Now()
+	var override models.LabExperimentUnlock
+	err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ?", req.CourseID, req.ExperimentID, req.StudentID).First(&override).Error
+
+	override.CourseID = req.CourseID
+	override.ExperimentID = req.ExperimentID
+	override.StudentID = &req.StudentID
+	override.Section = student.Section
+	if override.Section == "" {
+		override.Section = "ALL"
+	}
+	override.FacultyID = facultyID
+	override.IsUnlocked = req.IsUnlocked
+	override.StartsAt = req.StartsAt
+	override.EndsAt = req.EndsAt
+	override.MaxAttempts = req.MaxAttempts
+	override.AllowLateSubmission = req.AllowLateSubmission
+	override.Notes = strings.TrimSpace(req.Notes)
+	if req.IsUnlocked {
+		override.UnlockedAt = &now
+	}
+
+	if err != nil {
+		if createErr := database.DB.Create(&override).Error; createErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create student override: " + createErr.Error()})
+			return
+		}
+	} else {
+		if saveErr := database.DB.Save(&override).Error; saveErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student override: " + saveErr.Error()})
+			return
+		}
+	}
+
+	database.DB.Preload("Course").Preload("Experiment").Preload("Student").First(&override, override.ID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  fmt.Sprintf("Window override configured for %s (%s)!", student.Name, student.RollNo),
+		"override": override,
+	})
+}
+
+// FacultyDeleteStudentOverride removes an individual student override
+func FacultyDeleteStudentOverride(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid override ID"})
+		return
+	}
+
+	database.DB.Delete(&models.LabExperimentUnlock{}, id)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Student window override removed successfully",
+	})
+}
+
+// FacultyGetCourseAnalytics returns comprehensive completion rates, student progress matrix, and attempt analytics
+func FacultyGetCourseAnalytics(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	sectionFilter := strings.TrimSpace(c.Query("section"))
+
+	var course models.LabCourse
+	if err := database.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+
+	// Fetch all experiments for course
+	var experiments []models.LabExperiment
+	database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments)
+
+	expIDs := make([]uint, len(experiments))
+	for i, e := range experiments {
+		expIDs[i] = e.ID
+	}
+
+	// Fetch all students (filtered by section if specified)
+	studentQuery := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
+	if sectionFilter != "" && sectionFilter != "ALL" {
+		studentQuery = studentQuery.Where("section = ?", sectionFilter)
+	}
+	var students []models.User
+	studentQuery.Order("roll_no asc, name asc").Find(&students)
+
+	// Fetch all submissions for these experiments
+	var submissions []models.LabSubmission
+	if len(expIDs) > 0 {
+		database.DB.Preload("Question").
+			Where("experiment_id IN ?", expIDs).
+			Find(&submissions)
+	}
+
+	// Fetch all student question allocations for this course
+	var allocations []models.LabQuestionAllocation
+	database.DB.Preload("Question").Where("course_id = ?", courseID).Find(&allocations)
+
+	// Fetch all student overrides for this course
+	var studentOverrides []models.LabExperimentUnlock
+	database.DB.Where("course_id = ? AND student_id IS NOT NULL AND student_id > 0", courseID).Find(&studentOverrides)
+
+	// Maps for fast lookup
+	// subMap[studentID][experimentID] -> LabSubmission
+	subMap := make(map[uint]map[uint]models.LabSubmission)
+	for _, sub := range submissions {
+		if subMap[sub.StudentID] == nil {
+			subMap[sub.StudentID] = make(map[uint]models.LabSubmission)
+		}
+		subMap[sub.StudentID][sub.ExperimentID] = sub
+	}
+
+	// allocMap[studentID][experimentID] -> LabQuestionAllocation
+	allocMap := make(map[uint]map[uint]models.LabQuestionAllocation)
+	for _, alloc := range allocations {
+		if allocMap[alloc.StudentID] == nil {
+			allocMap[alloc.StudentID] = make(map[uint]models.LabQuestionAllocation)
+		}
+		allocMap[alloc.StudentID][alloc.ExperimentID] = alloc
+	}
+
+	// overrideMap[studentID][experimentID] -> LabExperimentUnlock
+	overrideMap := make(map[uint]map[uint]models.LabExperimentUnlock)
+	for _, ov := range studentOverrides {
+		if ov.StudentID != nil {
+			sID := *ov.StudentID
+			if overrideMap[sID] == nil {
+				overrideMap[sID] = make(map[uint]models.LabExperimentUnlock)
+			}
+			overrideMap[sID][ov.ExperimentID] = ov
+		}
+	}
+
+	// Build Per-Experiment Stats
+	type ExpStat struct {
+		ExperimentID    uint    `json:"experiment_id"`
+		ExperimentNo    int     `json:"experiment_no"`
+		Title           string  `json:"title"`
+		Aim             string  `json:"aim"`
+		MaxMarks        int     `json:"max_marks"`
+		Language        string  `json:"language"`
+		TotalEnrolled   int     `json:"total_enrolled"`
+		CompletedCount  int     `json:"completed_count"`  // APPROVED
+		SubmittedCount  int     `json:"submitted_count"`  // SUBMITTED_FOR_VERIFICATION
+		InProgressCount int     `json:"in_progress_count"`// DRAFT, TEST_PASSED, REVISION_REQUIRED
+		NotStartedCount int     `json:"not_started_count"`
+		AvgAttempts     float64 `json:"avg_attempts"`
+		AvgMarks        float64 `json:"avg_marks"`
+	}
+
+	totalStudentsCount := len(students)
+	expStats := make([]ExpStat, len(experiments))
+
+	for i, exp := range experiments {
+		approvedCount := 0
+		inReviewCount := 0
+		inProgCount := 0
+		totalAttempts := 0
+		attemptsCountWithSub := 0
+		totalMarksApproved := 0
+
+		for _, st := range students {
+			sub, hasSub := subMap[st.ID][exp.ID]
+			if hasSub {
+				attempts := sub.AttemptCount
+				if attempts <= 0 {
+					attempts = 1
+				}
+				totalAttempts += attempts
+				attemptsCountWithSub++
+
+				switch sub.Status {
+				case "APPROVED":
+					approvedCount++
+					totalMarksApproved += sub.Marks
+				case "SUBMITTED_FOR_VERIFICATION":
+					inReviewCount++
+				default:
+					inProgCount++
+				}
+			}
+		}
+
+		notStarted := totalStudentsCount - (approvedCount + inReviewCount + inProgCount)
+		if notStarted < 0 {
+			notStarted = 0
+		}
+
+		avgAtt := 0.0
+		if attemptsCountWithSub > 0 {
+			avgAtt = float64(totalAttempts) / float64(attemptsCountWithSub)
+		}
+
+		avgMks := 0.0
+		if approvedCount > 0 {
+			avgMks = float64(totalMarksApproved) / float64(approvedCount)
+		}
+
+		expStats[i] = ExpStat{
+			ExperimentID:    exp.ID,
+			ExperimentNo:    exp.ExperimentNo,
+			Title:           exp.Title,
+			Aim:             exp.Aim,
+			MaxMarks:        exp.MaxMarks,
+			Language:        exp.Language,
+			TotalEnrolled:   totalStudentsCount,
+			CompletedCount:  approvedCount,
+			SubmittedCount:  inReviewCount,
+			InProgressCount: inProgCount,
+			NotStartedCount: notStarted,
+			AvgAttempts:     avgAtt,
+			AvgMarks:        avgMks,
+		}
+	}
+
+	// Build Student Matrix
+	type StudentExpDetail struct {
+		ExperimentID       uint                       `json:"experiment_id"`
+		ExperimentNo       int                        `json:"experiment_no"`
+		Status             string                     `json:"status"` // NOT_STARTED, DRAFT, TEST_PASSED, SUBMITTED_FOR_VERIFICATION, APPROVED, REVISION_REQUIRED
+		AttemptCount       int                        `json:"attempt_count"`
+		PassCount          int                        `json:"pass_count"`
+		TotalTestCases     int                        `json:"total_test_cases"`
+		Marks              int                        `json:"marks"`
+		MarksBreakdown     string                     `json:"marks_breakdown,omitempty"`
+		FacultyNotes       string                     `json:"faculty_notes,omitempty"`
+		SubmittedAt        *time.Time                 `json:"submitted_at,omitempty"`
+		VerifiedAt         *time.Time                 `json:"verified_at,omitempty"`
+		QuestionCode       string                     `json:"question_code,omitempty"`
+		QuestionTitle      string                     `json:"question_title,omitempty"`
+		OverrideWindow     *models.LabExperimentUnlock `json:"override_window,omitempty"`
+	}
+
+	type StudentMatrixRow struct {
+		StudentID        uint               `json:"student_id"`
+		Name             string             `json:"name"`
+		RollNo           string             `json:"roll_no"`
+		Email            string             `json:"email"`
+		Section          string             `json:"section"`
+		Department       string             `json:"department"`
+		CompletedCount   int                `json:"completed_count"`
+		TotalExperiments int                `json:"total_experiments"`
+		TotalMarks       int                `json:"total_marks"`
+		OverallPct       int                `json:"overall_pct"`
+		Experiments      []StudentExpDetail `json:"experiments"`
+	}
+
+	studentMatrix := make([]StudentMatrixRow, len(students))
+	totalApprovedAll := 0
+	grandTotalMarksAll := 0
+
+	for i, st := range students {
+		compCount := 0
+		totMarks := 0
+		expDetails := make([]StudentExpDetail, len(experiments))
+
+		for j, exp := range experiments {
+			sub, hasSub := subMap[st.ID][exp.ID]
+			alloc := allocMap[st.ID][exp.ID]
+			var ovPtr *models.LabExperimentUnlock
+			if ov, hasOv := overrideMap[st.ID][exp.ID]; hasOv {
+				ovPtr = &ov
+			}
+
+			qCode := ""
+			qTitle := ""
+			if alloc.QuestionID > 0 && alloc.Question.ID > 0 {
+				qCode = alloc.Question.QuestionCode
+				qTitle = alloc.Question.Title
+			} else if sub.QuestionID > 0 && sub.Question != nil {
+				qCode = sub.Question.QuestionCode
+				qTitle = sub.Question.Title
+			}
+
+			if hasSub {
+				if sub.Status == "APPROVED" {
+					compCount++
+					totMarks += sub.Marks
+				}
+				attempts := sub.AttemptCount
+				if attempts <= 0 {
+					attempts = 1
+				}
+
+				var subAt *time.Time
+				if !sub.CreatedAt.IsZero() {
+					subAt = &sub.CreatedAt
+				}
+
+				expDetails[j] = StudentExpDetail{
+					ExperimentID:   exp.ID,
+					ExperimentNo:   exp.ExperimentNo,
+					Status:         sub.Status,
+					AttemptCount:   attempts,
+					PassCount:      sub.PassCount,
+					TotalTestCases: sub.TotalTestCases,
+					Marks:          sub.Marks,
+					MarksBreakdown: sub.MarksBreakdown,
+					FacultyNotes:   sub.FacultyNotes,
+					SubmittedAt:    subAt,
+					VerifiedAt:     sub.VerifiedAt,
+					QuestionCode:   qCode,
+					QuestionTitle:  qTitle,
+					OverrideWindow: ovPtr,
+				}
+			} else {
+				expDetails[j] = StudentExpDetail{
+					ExperimentID:   exp.ID,
+					ExperimentNo:   exp.ExperimentNo,
+					Status:         "NOT_STARTED",
+					AttemptCount:   0,
+					QuestionCode:   qCode,
+					QuestionTitle:  qTitle,
+					OverrideWindow: ovPtr,
+				}
+			}
+		}
+
+		maxMarksPossible := len(experiments) * 100
+		pct := 0
+		if maxMarksPossible > 0 {
+			pct = (totMarks * 100) / maxMarksPossible
+		}
+
+		totalApprovedAll += compCount
+		grandTotalMarksAll += totMarks
+
+		studentMatrix[i] = StudentMatrixRow{
+			StudentID:        st.ID,
+			Name:             st.Name,
+			RollNo:           st.RollNo,
+			Email:            st.Email,
+			Section:          st.Section,
+			Department:       st.Department,
+			CompletedCount:   compCount,
+			TotalExperiments: len(experiments),
+			TotalMarks:       totMarks,
+			OverallPct:       pct,
+			Experiments:      expDetails,
+		}
+	}
+
+	overallCompletionPct := 0
+	totalPossibleCompletions := totalStudentsCount * len(experiments)
+	if totalPossibleCompletions > 0 {
+		overallCompletionPct = (totalApprovedAll * 100) / totalPossibleCompletions
+	}
+
+	avgScoreAll := 0
+	if totalStudentsCount > 0 {
+		avgScoreAll = grandTotalMarksAll / totalStudentsCount
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"course":                  course,
+		"experiments":             experiments,
+		"total_students":          totalStudentsCount,
+		"overall_completion_rate": overallCompletionPct,
+		"average_score":           avgScoreAll,
+		"experiment_stats":        expStats,
+		"student_matrix":          studentMatrix,
 	})
 }
 
