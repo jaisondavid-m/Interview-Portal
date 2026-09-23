@@ -909,3 +909,291 @@ func AdminTestRunSolutionCode(c *gin.Context) {
 	})
 }
 
+// AdminBulkCreateExperiments handles batch insertion/updating of experiments for a lab course
+func AdminBulkCreateExperiments(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	var course models.LabCourse
+	if err := database.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Lab course not found"})
+		return
+	}
+
+	var inputs []ExperimentInput
+	if err := c.ShouldBindJSON(&inputs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload format. Expected an array of experiments: " + err.Error()})
+		return
+	}
+
+	if len(inputs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No experiments provided in payload"})
+		return
+	}
+
+	createdCount := 0
+	updatedCount := 0
+	var errors []string
+
+	tx := database.DB.Begin()
+	for i, input := range inputs {
+		if strings.TrimSpace(input.Title) == "" {
+			errors = append(errors, fmt.Sprintf("Item %d: Title is required", i+1))
+			continue
+		}
+		if strings.TrimSpace(input.Aim) == "" {
+			errors = append(errors, fmt.Sprintf("Item %d (%s): Aim is required", i+1, input.Title))
+			continue
+		}
+
+		expNo := input.ExperimentNo
+		if expNo <= 0 {
+			expNo = i + 1
+		}
+		lang := input.Language
+		if lang == "" {
+			lang = "python"
+		}
+		maxMarks := input.MaxMarks
+		if maxMarks <= 0 {
+			maxMarks = 10
+		}
+
+		var existing models.LabExperiment
+		err := tx.Where("course_id = ? AND experiment_no = ?", courseID, expNo).First(&existing).Error
+		if err == nil {
+			// Update existing
+			existing.Title = strings.TrimSpace(input.Title)
+			existing.Aim = strings.TrimSpace(input.Aim)
+			existing.Procedure = strings.TrimSpace(input.Procedure)
+			existing.Language = lang
+			existing.StarterCode = input.StarterCode
+			existing.SampleTestCases = input.SampleTestCases
+			existing.HiddenTestCases = input.HiddenTestCases
+			existing.MaxMarks = maxMarks
+			if err := tx.Save(&existing).Error; err != nil {
+				errors = append(errors, fmt.Sprintf("Item %d: %s", i+1, err.Error()))
+			} else {
+				updatedCount++
+			}
+		} else {
+			// Create new
+			newExp := models.LabExperiment{
+				CourseID:        uint(courseID),
+				ExperimentNo:    expNo,
+				Title:           strings.TrimSpace(input.Title),
+				Aim:             strings.TrimSpace(input.Aim),
+				Procedure:       strings.TrimSpace(input.Procedure),
+				Language:        lang,
+				StarterCode:     input.StarterCode,
+				SampleTestCases: input.SampleTestCases,
+				HiddenTestCases: input.HiddenTestCases,
+				MaxMarks:        maxMarks,
+			}
+			if err := tx.Create(&newExp).Error; err != nil {
+				errors = append(errors, fmt.Sprintf("Item %d: %s", i+1, err.Error()))
+			} else {
+				createdCount++
+				// Also create initial default variant if none exists
+				var vCount int64
+				tx.Model(&models.LabExperimentQuestion{}).Where("experiment_id = ?", newExp.ID).Count(&vCount)
+				if vCount == 0 {
+					defVariant := models.LabExperimentQuestion{
+						ExperimentID:       newExp.ID,
+						CourseID:           uint(courseID),
+						QuestionCode:       fmt.Sprintf("EX%d_VAR_A", newExp.ExperimentNo),
+						Title:              newExp.Title,
+						Aim:                newExp.Aim,
+						ReferenceAlgorithm: newExp.Procedure,
+						SolutionCode:       newExp.StarterCode,
+						Language:           lang,
+						SampleTestCases:    newExp.SampleTestCases,
+						HiddenTestCases:    newExp.HiddenTestCases,
+						MaxMarks:           maxMarks,
+						VivaQuestionsCount: 5,
+						IsActive:           true,
+					}
+					tx.Create(&defVariant)
+				}
+			}
+		}
+	}
+
+	if len(errors) > 0 && createdCount == 0 && updatedCount == 0 {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to process any experiments in batch",
+			"details": errors,
+		})
+		return
+	}
+
+	tx.Commit()
+
+	// Update course total_experiments count
+	var totalCount int64
+	database.DB.Model(&models.LabExperiment{}).Where("course_id = ?", courseID).Count(&totalCount)
+	database.DB.Model(&models.LabCourse{}).Where("id = ?", courseID).Update("total_experiments", totalCount)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       fmt.Sprintf("Bulk upload completed: %d created, %d updated", createdCount, updatedCount),
+		"created_count": createdCount,
+		"updated_count": updatedCount,
+		"errors":        errors,
+		"total_count":   totalCount,
+	})
+}
+
+// AdminBulkCreateQuestionVariants handles batch insertion/updating of question variants for an experiment
+func AdminBulkCreateQuestionVariants(c *gin.Context) {
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, expID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	var inputs []SaveQuestionVariantReq
+	if err := c.ShouldBindJSON(&inputs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload format. Expected an array of question variants: " + err.Error()})
+		return
+	}
+
+	if len(inputs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No question variants provided in payload"})
+		return
+	}
+
+	createdCount := 0
+	updatedCount := 0
+	var errors []string
+
+	tx := database.DB.Begin()
+	for i, input := range inputs {
+		if strings.TrimSpace(input.Title) == "" {
+			errors = append(errors, fmt.Sprintf("Variant %d: Title is required", i+1))
+			continue
+		}
+		if strings.TrimSpace(input.Aim) == "" {
+			errors = append(errors, fmt.Sprintf("Variant %d (%s): Aim is required", i+1, input.Title))
+			continue
+		}
+
+		qCode := strings.TrimSpace(input.QuestionCode)
+		if qCode == "" {
+			qCode = fmt.Sprintf("EX%d_VAR_%c", exp.ExperimentNo, rune('A'+i))
+		}
+		lang := input.Language
+		if lang == "" {
+			lang = exp.Language
+		}
+		if lang == "" {
+			lang = "python"
+		}
+		marks := input.MaxMarks
+		if marks <= 0 {
+			marks = exp.MaxMarks
+		}
+		if marks <= 0 {
+			marks = 10
+		}
+		vivaCount := input.VivaQuestionsCount
+		if vivaCount <= 0 {
+			vivaCount = 5
+		}
+
+		var variant models.LabExperimentQuestion
+		var isNew bool
+		if input.ID > 0 {
+			if err := tx.First(&variant, input.ID).Error; err == nil {
+				isNew = false
+			} else {
+				isNew = true
+			}
+		} else {
+			// Check if code matches existing
+			if err := tx.Where("experiment_id = ? AND question_code = ?", exp.ID, qCode).First(&variant).Error; err == nil {
+				isNew = false
+			} else {
+				isNew = true
+			}
+		}
+
+		variant.ExperimentID = exp.ID
+		variant.CourseID = exp.CourseID
+		variant.QuestionCode = qCode
+		variant.Title = strings.TrimSpace(input.Title)
+		variant.Aim = strings.TrimSpace(input.Aim)
+		variant.ReferenceAlgorithm = input.ReferenceAlgorithm
+		variant.SolutionCode = input.SolutionCode
+		variant.Language = lang
+		variant.SampleTestCases = input.SampleTestCases
+		variant.HiddenTestCases = input.HiddenTestCases
+		variant.MaxMarks = marks
+		variant.VivaQuestionsCount = vivaCount
+		variant.IsActive = true
+
+		if isNew {
+			if err := tx.Create(&variant).Error; err != nil {
+				errors = append(errors, fmt.Sprintf("Variant %d: %s", i+1, err.Error()))
+				continue
+			}
+			createdCount++
+		} else {
+			if err := tx.Save(&variant).Error; err != nil {
+				errors = append(errors, fmt.Sprintf("Variant %d: %s", i+1, err.Error()))
+				continue
+			}
+			updatedCount++
+		}
+
+		// Save viva questions if present
+		if len(input.VivaQuestions) > 0 {
+			tx.Where("question_id = ?", variant.ID).Delete(&models.LabVivaQuestion{})
+			for vi, vq := range input.VivaQuestions {
+				if strings.TrimSpace(vq.Question) != "" {
+					newVq := models.LabVivaQuestion{
+						QuestionID:   variant.ID,
+						ExperimentID: variant.ExperimentID,
+						Question:     strings.TrimSpace(vq.Question),
+						Answer:       strings.TrimSpace(vq.Answer),
+						OrderIndex:   vi + 1,
+						CreatedAt:    time.Now(),
+						UpdatedAt:    time.Now(),
+					}
+					tx.Create(&newVq)
+				}
+			}
+		}
+	}
+
+	if len(errors) > 0 && createdCount == 0 && updatedCount == 0 {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to process any question variants in batch",
+			"details": errors,
+		})
+		return
+	}
+
+	tx.Commit()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       fmt.Sprintf("Bulk variants upload completed: %d created, %d updated", createdCount, updatedCount),
+		"created_count": createdCount,
+		"updated_count": updatedCount,
+		"errors":        errors,
+	})
+}
+
+

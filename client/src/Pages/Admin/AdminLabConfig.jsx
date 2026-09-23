@@ -806,6 +806,20 @@ export default function AdminLabConfig() {
   const selectedBatchInfo = batches.find((b) => b.name === mappingForm.batch_name);
   const selectedStudentBatchInfo = batches.find((b) => b.name === studentMappingForm.batch_name);
 
+  // Course search state
+  const [courseSearch, setCourseSearch] = useState('');
+
+  const filteredCourses = courses.filter((c) => {
+    const q = courseSearch.toLowerCase();
+    return (
+      c.title?.toLowerCase().includes(q) ||
+      c.course_code?.toLowerCase().includes(q) ||
+      c.department?.toLowerCase().includes(q) ||
+      c.semester?.toLowerCase().includes(q) ||
+      c.academic_year?.toLowerCase().includes(q)
+    );
+  });
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -830,14 +844,24 @@ export default function AdminLabConfig() {
       {/* Page Header */}
       <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-[22px] sm:text-[26px] font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
-            <FlaskConical className="w-7 h-7 text-[var(--accent)]" />
+          <h1 className="text-[20px] sm:text-[24px] md:text-[26px] font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
+            <FlaskConical className="w-6 h-6 sm:w-7 sm:h-7 text-[var(--accent)]" />
             Lab Configuration
           </h1>
           <p className="text-[12px] sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Configure lab courses, edit student batches with mapped semesters & academic years, and assign faculty lab incharges.
+            Configure practical laboratory courses, student batches & sections, and faculty lab incharge assignments.
           </p>
         </div>
+
+        {tab === 'courses' && (
+          <button
+            onClick={openCreateCourse}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)] shrink-0 self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            Add Lab Course
+          </button>
+        )}
       </div>
 
       {/* Navigation Tabs */}
@@ -854,9 +878,19 @@ export default function AdminLabConfig() {
           >
             <Icon className="w-4 h-4" />
             {label}
+            {key === 'courses' && courses.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)] font-mono">
+                {courses.length}
+              </span>
+            )}
             {key === 'config' && batches.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)] font-mono">
                 {batches.length} Batches
+              </span>
+            )}
+            {key === 'mapping' && mappings.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)] font-mono">
+                {mappings.length}
               </span>
             )}
           </button>
@@ -864,85 +898,152 @@ export default function AdminLabConfig() {
       </div>
 
       {/* ================================================================ */}
-      {/* TAB 1: LAB COURSES                                               */}
+      {/* TAB 1: LAB COURSES (Card Grid Pattern)                           */}
       {/* ================================================================ */}
       {tab === 'courses' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5">
-            <div>
-              <h2 className="text-[15px] font-bold text-[var(--text-primary)]">Lab Courses</h2>
-              <p className="text-[12px] text-[var(--text-secondary)]">
-                Registered practical courses with curriculum and total experiment counts.
-              </p>
+        <div className="space-y-5">
+          {/* Search Bar */}
+          <div className="panel-card p-4">
+            <div className="relative w-full max-w-md flex items-center">
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={courseSearch}
+                onChange={(e) => setCourseSearch(e.target.value)}
+                placeholder="Search lab courses (e.g. 22AI304, Data Structures, Python)..."
+                className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-9 pr-8 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
+              />
+              {courseSearch && (
+                <button
+                  type="button"
+                  onClick={() => setCourseSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-            <button
-              onClick={openCreateCourse}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)] shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Add Lab Course
-            </button>
           </div>
 
           {coursesLoading ? (
-            <div className="flex items-center justify-center py-16 gap-3 text-[var(--text-muted)]">
+            <div className="flex items-center justify-center py-20 gap-3 text-[var(--text-muted)]">
               <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
               <span className="text-sm">Loading lab courses...</span>
             </div>
-          ) : courses.length === 0 ? (
-            <div className="py-14 text-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] text-[var(--text-muted)] text-sm">
-              No lab courses yet. Click <strong>Add Lab Course</strong> to create one.
+          ) : filteredCourses.length === 0 ? (
+            <div className="panel-card p-12 text-center space-y-3">
+              <FlaskConical className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
+              <p className="text-[14px] font-semibold text-[var(--text-primary)]">
+                {courseSearch ? 'No lab courses matching your search.' : 'No practical lab courses configured yet.'}
+              </p>
+              <p className="text-[12px] text-[var(--text-muted)] max-w-md mx-auto">
+                {courseSearch
+                  ? 'Try modifying your search keywords or clear the filter.'
+                  : 'Get started by creating your first academic lab course with code, curriculum, and experiments.'}
+              </p>
+              {!courseSearch && (
+                <button
+                  onClick={openCreateCourse}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)] mt-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Lab Course
+                </button>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {courses.map((c) => (
-                <div
-                  key={c.id}
-                  className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-[var(--radius-lg)] p-5 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                        {c.course_code}
-                      </span>
-                      <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-                        {c.degree} · {c.semester}
-                      </span>
-                      <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-                        {c.academic_year}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredCourses.map((c) => {
+                const mappedFaculty = mappings.filter((m) => m.course_id === c.id);
+                const facultyCount = mappedFaculty.length;
+                const totalExperiments = c.total_experiments || 0;
+
+                return (
+                  <div
+                    key={c.id}
+                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all"
+                    onClick={() => navigate(`/admin/labs/courses/${c.id}/experiments`)}
+                  >
+                    <div className="space-y-3.5">
+                      {/* Top Row: Icon + Badges + Action Buttons */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] flex items-center justify-center shrink-0">
+                          <FlaskConical className="w-5 h-5" />
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditCourse(c);
+                            }}
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition cursor-pointer"
+                            title="Edit Course Details"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCourse(c.id);
+                            }}
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] rounded hover:bg-[var(--red-bg)] transition cursor-pointer"
+                            title="Delete Course"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Course Meta Badges */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                          {c.course_code}
+                        </span>
+                        {c.semester && (
+                          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
+                            {c.semester}
+                          </span>
+                        )}
+                        {c.academic_year && (
+                          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
+                            {c.academic_year}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Title & Department */}
+                      <div>
+                        <h3 className="text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-snug">
+                          {c.title}
+                        </h3>
+                        <p className="text-[12px] text-[var(--text-secondary)] mt-1 line-clamp-2 leading-relaxed">
+                          {c.department || c.description || 'Practical laboratory curriculum and assessment modules.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Card Footer: Dot Stats + Action Link */}
+                    <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[var(--text-primary)] font-semibold">
+                          {totalExperiments} {totalExperiments === 1 ? 'Exp' : 'Exps'}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {facultyCount} {facultyCount === 1 ? 'Faculty' : 'Faculty'}
+                        </span>
+                      </div>
+                      <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        Configure &rarr;
                       </span>
                     </div>
-                    <h3 className="text-[14px] font-bold text-[var(--text-primary)]">{c.title}</h3>
-                    <p className="text-[12px] text-[var(--text-secondary)]">
-                      {c.department} · {c.total_experiments} Experiments
-                    </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => navigate(`/admin/labs/courses/${c.id}/experiments`)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] text-xs font-bold hover:bg-[var(--accent)] hover:text-white transition-all cursor-pointer shadow-[var(--shadow-sm)]"
-                      title="Manage Experiments & Test Cases"
-                    >
-                      <Code2 className="w-3.5 h-3.5" />
-                      Experiments & Test Cases ({c.total_experiments || 0})
-                    </button>
-                    <button
-                      onClick={() => openEditCourse(c)}
-                      className="p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--border-accent)] transition-all cursor-pointer"
-                      title="Edit course"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCourse(c.id)}
-                      className="p-2 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/20 text-[var(--red)] hover:bg-[var(--red)]/15 transition-all cursor-pointer"
-                      title="Delete course"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1517,62 +1618,85 @@ export default function AdminLabConfig() {
                   No faculty lab mappings created yet.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[12px]">
-                    <thead>
-                      <tr className="border-b border-[var(--border)]">
-                        {['Course', 'Faculty (Incharge)', 'Batch / Section', 'Semester & Year', 'Actions'].map((h) => (
-                          <th
-                            key={h}
-                            className="pb-2.5 pr-3 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider"
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border)]">
-                      {mappings.map((m) => (
-                        <tr key={m.id} className="hover:bg-[var(--bg-raised)] transition-colors">
-                          <td className="py-2.5 pr-3">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] mr-1">
-                              {m.course?.course_code}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {mappings.map((m) => (
+                    <div
+                      key={m.id}
+                      className="data-card p-4 flex flex-col justify-between space-y-3 transition-all hover:border-[var(--border-accent)]"
+                    >
+                      <div className="space-y-2.5">
+                        {/* Header: Badges & Action Buttons */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                              {m.course?.course_code || 'LAB'}
                             </span>
-                            <span className="font-medium text-[var(--text-primary)]">{m.course?.title}</span>
-                          </td>
-                          <td className="py-2.5 pr-3 font-medium text-[var(--text-primary)]">
-                            {m.faculty?.name || '—'}
-                          </td>
-                          <td className="py-2.5 pr-3">
-                            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border)] font-bold">
-                              {m.section || 'ALL'}
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border)]">
+                              Batch: {m.section || 'ALL'}
                             </span>
-                          </td>
-                          <td className="py-2.5 pr-3 text-[var(--text-secondary)] text-[11px]">
-                            {m.semester} ({m.academic_year})
-                          </td>
-                          <td className="py-2.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => openEditMapping(m)}
-                                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer transition-all"
-                                title="Edit mapping"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteMapping(m.id)}
-                                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/20 text-[var(--red)] hover:bg-[var(--red)]/15 cursor-pointer transition-all"
-                                title="Remove mapping"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => openEditMapping(m)}
+                              className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer transition-all"
+                              title="Edit mapping"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteMapping(m.id)}
+                              className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/20 text-[var(--red)] hover:bg-[var(--red)]/15 cursor-pointer transition-all"
+                              title="Remove mapping"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Course Title */}
+                        <div>
+                          <h4 className="text-[14px] font-bold text-[var(--text-primary)] leading-tight">
+                            {m.course?.title || 'Course Title'}
+                          </h4>
+                          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                            {m.semester} · {m.academic_year}
+                          </div>
+                        </div>
+
+                        {/* Faculty Info */}
+                        <div className="flex items-center gap-2 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)]">
+                          <div className="w-6 h-6 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center font-bold text-[10px] shrink-0">
+                            {m.faculty?.name?.charAt(0) || 'F'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[12px] font-semibold text-[var(--text-primary)] truncate">
+                              {m.faculty?.name || 'Faculty Incharge'}
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <div className="text-[10px] text-[var(--text-muted)] truncate">
+                              {m.faculty?.email || 'Faculty'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer Link */}
+                      <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
+                        <span className="text-[var(--text-muted)] font-mono">
+                          {m.course?.total_experiments || 7} Experiments
+                        </span>
+                        {m.course?.id && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/admin/labs/courses/${m.course.id}/experiments`)}
+                            className="text-[var(--accent)] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                          >
+                            Configure Exps &rarr;
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
