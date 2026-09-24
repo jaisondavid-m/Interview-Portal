@@ -55,8 +55,6 @@ export default function LabWorkspace() {
 
   // Left Pane Tabs: 'aim' | 'procedure' | 'testcases'
   const [leftTab, setLeftTab] = useState('aim');
-  // Console Tabs: 'run' | 'submit'
-  const [activeConsoleTab, setActiveConsoleTab] = useState('run');
 
   // Finish Confirmation Modal
   const [showFinishModal, setShowFinishModal] = useState(false);
@@ -170,7 +168,6 @@ export default function LabWorkspace() {
     try {
       setRunning(true);
       setError('');
-      setActiveConsoleTab('run');
       const res = await api.post(`/labs/experiment/${expId}/run`, { code, language });
       setRunResult(res);
       showToast(`Sample test executed: ${res.pass_count}/${res.total_test_cases} passed.`, 'success');
@@ -186,7 +183,6 @@ export default function LabWorkspace() {
     try {
       setSubmitting(true);
       setError('');
-      setActiveConsoleTab('submit');
       // Autosave procedure before submit
       await api.post(`/labs/experiment/${expId}/procedure`, {
         procedure: JSON.stringify(procedureSteps, null, 2),
@@ -241,6 +237,24 @@ export default function LabWorkspace() {
       sampleTestCases = JSON.parse(rawCases);
     }
   } catch {}
+
+  // Unified list of executed test cases in order (Sample cases followed by Hidden cases)
+  const allExecutedCases = [
+    ...(runResult?.results?.map((res, i) => ({
+      name: res.name || `Sample Case ${i + 1}`,
+      passed: Boolean(res.passed),
+      execution_ms: res.execution_ms,
+      isSample: true,
+    })) || []),
+    ...(testResult?.results?.map((res, i) => ({
+      name: res.name || `Hidden Case ${i + 1}`,
+      passed: Boolean(res.passed),
+      execution_ms: res.execution_ms,
+      isSample: false,
+    })) || []),
+  ];
+  const totalCasesCount = allExecutedCases.length;
+  const totalPassedCount = allExecutedCases.filter((c) => c.passed).length;
 
   if (loading) {
     return (
@@ -608,46 +622,28 @@ export default function LabWorkspace() {
 
           {/* Interactive Execution Console Drawer */}
           <div className="h-56 bg-[var(--bg-card)] border-t border-[var(--border)] flex flex-col overflow-hidden">
-            {/* Drawer Header Tabs */}
-            <div className="px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setActiveConsoleTab('run')}
-                  className={`px-3 py-1 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    activeConsoleTab === 'run'
-                      ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <Play className="w-3 h-3 text-[var(--accent)]" />
-                  Sample Test Run
-                  {runResult && (
-                    <span className="ml-1 text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                      {runResult.pass_count}/{runResult.total_test_cases} passed
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setActiveConsoleTab('submit')}
-                  className={`px-3 py-1 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    activeConsoleTab === 'submit'
-                      ? 'bg-[var(--bg-card)] text-[var(--accent)] border border-[var(--border)] shadow-[var(--shadow-sm)]'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <Send className="w-3 h-3 text-[var(--accent)]" />
-                  Submission Verdict (Hidden Cases)
-                  {testResult && (
-                    <span className="ml-1 text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                      {testResult.passCount}/{testResult.totalCases} passed ({testResult.codeMarks} code marks)
-                    </span>
-                  )}
-                </button>
+            {/* Drawer Header */}
+            <div className="px-4 py-2.5 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center">
+                  <Terminal className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs font-bold text-[var(--text-primary)]">Test Cases</span>
+                {totalCasesCount > 0 && (
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded border font-semibold ${
+                      totalPassedCount === totalCasesCount
+                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                    }`}
+                  >
+                    {totalPassedCount}/{totalCasesCount} passed
+                  </span>
+                )}
               </div>
 
               <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
-                <Terminal className="w-3.5 h-3.5" />
-                <span>Execution Output Console</span>
+                <span>Execution Output</span>
               </div>
             </div>
 
@@ -660,107 +656,44 @@ export default function LabWorkspace() {
                 </div>
               )}
 
-              {/* TAB 1: RUN CODE RESULTS */}
-              {activeConsoleTab === 'run' && !error && (
-                <>
-                  {!runResult ? (
-                    <div className="text-[var(--text-muted)] italic p-2 flex items-center gap-2">
-                      <Play className="w-3.5 h-3.5 text-[var(--accent)] opacity-60" />
-                      Click "Run Code" above to execute against public sample test cases.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {runResult.results?.map((res, i) => (
-                        <div
-                          key={i}
-                          className={`p-2.5 rounded-[var(--radius-md)] border ${
-                            res.passed
-                              ? 'bg-emerald-500/10 border-emerald-500/20'
-                              : 'bg-rose-500/10 border-rose-500/20'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span
-                              className={`font-bold flex items-center gap-1.5 ${
-                                res.passed ? 'text-emerald-600' : 'text-rose-600'
-                              }`}
-                            >
-                              {res.passed ? (
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              ) : (
-                                <AlertCircle className="w-3.5 h-3.5" />
-                              )}
-                              {res.name || `Sample Case ${i + 1}`} - {res.passed ? 'PASSED' : 'FAILED'}
-                            </span>
-                            <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {res.execution_ms || 0} ms
-                            </span>
-                          </div>
-                          {res.input && (
-                            <div className="text-[var(--text-secondary)] mt-1">
-                              Input: <span className="text-[var(--text-primary)]">{res.input}</span>
-                            </div>
-                          )}
-                          <div className="text-[var(--text-secondary)]">
-                            Expected: <span className="text-[var(--text-primary)]">{res.expected}</span> ·
-                            Got: <span className="font-bold text-[var(--text-primary)]">{res.actual}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+              {allExecutedCases.length === 0 && !error ? (
+                <div className="text-[var(--text-muted)] italic p-2 flex items-center gap-2">
+                  <Play className="w-3.5 h-3.5 text-[var(--accent)] opacity-60" />
+                  Run or submit your code to view test case execution results.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {allExecutedCases.map((res, i) => (
+                    <div
+                      key={i}
+                      className={`px-3 py-2 rounded-[var(--radius-md)] border flex items-center justify-between transition-colors ${
+                        res.passed
+                          ? 'bg-emerald-500/10 border-emerald-500/20'
+                          : 'bg-rose-500/10 border-rose-500/20'
+                      }`}
+                    >
+                      <span
+                        className={`font-semibold flex items-center gap-2 ${
+                          res.passed ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {res.passed ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        )}
+                        <span>
+                          {res.name} - {res.passed ? 'PASSED' : 'FAILED'}
+                        </span>
+                      </span>
 
-              {/* TAB 2: SUBMIT CODE RESULTS */}
-              {activeConsoleTab === 'submit' && !error && (
-                <>
-                  {!testResult && !submission ? (
-                    <div className="text-[var(--text-muted)] italic p-2 flex items-center gap-2">
-                      <Send className="w-3.5 h-3.5 text-[var(--accent)] opacity-60" />
-                      Click "Submit Code" to run against hidden test cases for automated scoring.
+                      <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1 shrink-0 font-medium">
+                        <Clock className="w-3 h-3" />
+                        {res.execution_ms || 0} ms
+                      </span>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {testResult?.results?.map((res, i) => (
-                        <div
-                          key={i}
-                          className={`p-2.5 rounded-[var(--radius-md)] border ${
-                            res.passed
-                              ? 'bg-emerald-500/10 border-emerald-500/20'
-                              : 'bg-rose-500/10 border-rose-500/20'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span
-                              className={`font-bold flex items-center gap-1.5 ${
-                                res.passed ? 'text-emerald-600' : 'text-rose-600'
-                              }`}
-                            >
-                              {res.passed ? (
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              ) : (
-                                <AlertCircle className="w-3.5 h-3.5" />
-                              )}
-                              Hidden Benchmark Case #{i + 1} - {res.passed ? 'PASSED' : 'FAILED'}
-                            </span>
-                            <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {res.execution_ms || 0} ms
-                            </span>
-                          </div>
-                          {!res.passed && (
-                            <div className="text-[var(--text-secondary)] mt-1">
-                              Expected: <span className="text-[var(--text-primary)]">{res.expected}</span> ·
-                              Got: <span className="font-bold text-rose-500">{res.actual}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
+                  ))}
+                </div>
               )}
             </div>
           </div>
