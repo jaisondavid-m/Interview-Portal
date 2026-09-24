@@ -602,6 +602,7 @@ export default function LabWorkspace() {
               language={language}
               onLanguageChange={setLanguage}
               isEditable={isUnlocked && !isSubmittedOrApproved}
+              isLanguageLocked={Boolean(assignedQuestion?.language || experiment?.language)}
             />
           </div>
 

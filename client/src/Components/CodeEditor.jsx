@@ -22,6 +22,7 @@ export default function CodeEditor({
   language = 'javascript',
   onLanguageChange,
   isEditable = true,
+  isLanguageLocked = false,
 }) {
   const [copied, setCopied] = React.useState(false);
 
@@ -53,8 +54,10 @@ export default function CodeEditor({
           <select
             value={language}
             onChange={(e) => onLanguageChange && onLanguageChange(e.target.value)}
-            disabled={!isEditable}
-            className="bg-[#282c34] text-gray-300 text-[11px] font-mono rounded px-2.5 py-1 border border-[#3e4451] focus:outline-none focus:border-[var(--accent)] disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+            disabled={!isEditable || isLanguageLocked}
+            className={`bg-[#282c34] text-gray-300 text-[11px] font-mono rounded px-2.5 py-1 border border-[#3e4451] focus:outline-none focus:border-[var(--accent)] ${
+              !isEditable || isLanguageLocked ? 'opacity-85 cursor-not-allowed' : 'cursor-pointer'
+            }`}
           >
             {LANGUAGE_CONFIGS.map((lang) => (
               <option key={lang.id} value={lang.id}>
@@ -62,6 +65,14 @@ export default function CodeEditor({
               </option>
             ))}
           </select>
+          {isLanguageLocked && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              title="Language engine is fixed for this practical experiment"
+            >
+              <Lock className="w-3 h-3" /> Fixed Engine
+            </span>
+          )}
         </div>
 
         {/* Actions Toolbar */}

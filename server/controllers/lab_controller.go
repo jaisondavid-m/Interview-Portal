@@ -415,6 +415,15 @@ func RunExperimentCode(c *gin.Context) {
 		return
 	}
 
+	// Enforce configured language engine (e.g. python, cpp, java)
+	requiredLang := strings.TrimSpace(assignedQ.Language)
+	if requiredLang == "" {
+		requiredLang = strings.TrimSpace(exp.Language)
+	}
+	if requiredLang != "" && strings.ToLower(requiredLang) != "all" {
+		req.Language = strings.ToLower(requiredLang)
+	}
+
 	// Parse Sample Test Cases from assigned question
 	var rawCases []RawTestCase
 	sampleSrc := assignedQ.SampleTestCases
@@ -507,6 +516,15 @@ func SubmitExperimentCode(c *gin.Context) {
 	if qErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve assigned question"})
 		return
+	}
+
+	// Enforce configured language engine (e.g. python, cpp, java)
+	requiredLang := strings.TrimSpace(assignedQ.Language)
+	if requiredLang == "" {
+		requiredLang = strings.TrimSpace(exp.Language)
+	}
+	if requiredLang != "" && strings.ToLower(requiredLang) != "all" {
+		req.Language = strings.ToLower(requiredLang)
 	}
 
 	// Parse Hidden Test Cases from assigned question (fallback to sample if empty)
