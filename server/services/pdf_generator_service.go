@@ -625,49 +625,41 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 			vivaMarks = 0
 		}
 
-		// Table Header
+		// Table Header (4-Column Rubric without Status)
 		pdf.SetFont("Arial", "B", 8.5)
 		pdf.SetFillColor(230, 238, 248)
 		pdf.SetDrawColor(180, 195, 215)
 		pdf.SetTextColor(20, 40, 70)
 		pdf.SetLineWidth(0.3)
 
-		pdf.CellFormat(12, 7, "S.NO", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(88, 7, "ASSESSMENT COMPONENT / CRITERIA", "1", 0, "L", true, 0, "")
-		pdf.CellFormat(24, 7, "MAX MARKS", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(26, 7, "MARKS SCORED", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(24, 7, "STATUS", "1", 1, "C", true, 0, "")
+		pdf.CellFormat(14, 7, "S.NO", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(104, 7, "ASSESSMENT COMPONENT / CRITERIA", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(28, 7, "MAX MARKS", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(28, 7, "MARKS SCORED", "1", 1, "C", true, 0, "")
 
 		// Table Rows
 		pdf.SetFont("Arial", "", 8.5)
 		pdf.SetTextColor(30, 35, 45)
 
-		drawRubricRow := func(sno string, criteria string, maxM int, scoredM int, status string) {
-			pdf.CellFormat(12, 6.8, sno, "1", 0, "C", false, 0, "")
-			pdf.CellFormat(88, 6.8, "  "+criteria, "1", 0, "L", false, 0, "")
-			pdf.CellFormat(24, 6.8, fmt.Sprintf("%d", maxM), "1", 0, "C", false, 0, "")
-			pdf.CellFormat(26, 6.8, fmt.Sprintf("%d", scoredM), "1", 0, "C", false, 0, "")
-			pdf.SetFont("Arial", "B", 7.5)
-			pdf.SetTextColor(30, 110, 60)
-			pdf.CellFormat(24, 6.8, status, "1", 1, "C", false, 0, "")
-			pdf.SetFont("Arial", "", 8.5)
-			pdf.SetTextColor(30, 35, 45)
+		drawRubricRow := func(sno string, criteria string, maxM int, scoredM int) {
+			pdf.CellFormat(14, 6.8, sno, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(104, 6.8, "  "+criteria, "1", 0, "L", false, 0, "")
+			pdf.CellFormat(28, 6.8, fmt.Sprintf("%d", maxM), "1", 0, "C", false, 0, "")
+			pdf.CellFormat(28, 6.8, fmt.Sprintf("%d", scoredM), "1", 1, "C", false, 0, "")
 		}
 
-		drawRubricRow("1", "Algorithm & Logic Formulation", 20, algoMarks, "VERIFIED")
-		drawRubricRow("2", "Source Code & Implementation Syntax", 40, codeMarks, "VERIFIED")
-		drawRubricRow("3", "Benchmark Test Case Validation", 20, testMarks, "PASSED")
-		drawRubricRow("4", "Viva Voce & Oral Defense", 20, vivaMarks, "COMPLETED")
+		drawRubricRow("1", "Algorithm & Logic Formulation", 20, algoMarks)
+		drawRubricRow("2", "Source Code & Implementation Syntax", 40, codeMarks)
+		drawRubricRow("3", "Benchmark Test Case Validation", 20, testMarks)
+		drawRubricRow("4", "Viva Voce & Oral Defense", 20, vivaMarks)
 
 		// Rubric Total Row
 		pdf.SetFont("Arial", "B", 8.5)
 		pdf.SetFillColor(238, 245, 255)
 		pdf.SetTextColor(15, 35, 75)
-		pdf.CellFormat(100, 7.5, "TOTAL EVALUATED SCORE :", "1", 0, "R", true, 0, "")
-		pdf.CellFormat(24, 7.5, "100", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(26, 7.5, fmt.Sprintf("%d / 100", totalExpMarks), "1", 0, "C", true, 0, "")
-		pdf.SetTextColor(20, 110, 50)
-		pdf.CellFormat(24, 7.5, "APPROVED", "1", 1, "C", true, 0, "")
+		pdf.CellFormat(118, 7.5, "TOTAL EVALUATED SCORE :", "1", 0, "R", true, 0, "")
+		pdf.CellFormat(28, 7.5, "100", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(28, 7.5, fmt.Sprintf("%d / 100", totalExpMarks), "1", 1, "C", true, 0, "")
 		pdf.Ln(7)
 
 		// 2. AFTER THAT: RESULT SECTION
