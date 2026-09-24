@@ -344,11 +344,11 @@ export default function LabEvaluationPage() {
         <p className="text-xs text-[var(--text-secondary)]">{error || 'Could not load submission data.'}</p>
         <button
           type="button"
-          onClick={() => navigate('/lab-incharge')}
+          onClick={() => navigate('/faculty/labs/evaluation')}
           className="px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer inline-flex items-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Lab Dashboard
+          Back to Evaluation Queue
         </button>
       </div>
     );
@@ -381,19 +381,21 @@ export default function LabEvaluationPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate('/lab-incharge')}
+            onClick={() => navigate('/faculty/labs/evaluation')}
             className="p-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition-all cursor-pointer shadow-sm group"
-            title="Return to Lab Dashboard"
+            title="Return to Evaluation Queue"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <div>
             <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-              <Link to="/lab-incharge" className="hover:text-[var(--accent)] transition-colors">
+              <Link to="/faculty/labs" className="hover:text-[var(--accent)] transition-colors">
                 Lab Dashboard
               </Link>
               <ChevronRight className="w-3.5 h-3.5" />
-              <span>Evaluation Queue</span>
+              <Link to="/faculty/labs/evaluation" className="hover:text-[var(--accent)] transition-colors">
+                Evaluation Queue
+              </Link>
               <ChevronRight className="w-3.5 h-3.5" />
               <span className="text-[var(--text-primary)] font-semibold">{student?.name || 'Student'}</span>
             </div>

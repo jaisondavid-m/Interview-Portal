@@ -1,93 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
-  UserCheck,
-  CheckCircle2,
-  CheckCheck,
-  FileText,
-  Search,
-  Loader2,
-  AlertCircle,
-  Code2,
-  ChevronDown,
-  ChevronRight,
-  Lock,
-  Unlock,
-  ShieldCheck,
-  Layers,
-  Sparkles,
-  MessageSquareCheck,
-  Award,
-  Clock,
-  X,
-  RotateCcw,
-  BookOpen,
-  ListPlus,
-  Terminal,
-  Calendar,
-  Sliders,
-  Download,
-  Users,
-  Filter,
-  Eye,
   BarChart3,
   TrendingUp,
-  Percent
+  Percent,
+  Search,
+  Download,
+  Users,
+  Eye,
+  CheckCircle2,
+  Clock,
+  MessageSquareCheck,
+  Award,
+  AlertCircle,
+  Sliders,
+  ChevronRight,
+  Sparkles,
+  Layers,
+  Filter
 } from 'lucide-react';
 import api from '../../api/axios';
-import LabScheduleModal from '../../Components/AdminLabs/LabScheduleModal';
 import LabStudentAnalyticsDrawer from '../../Components/AdminLabs/LabStudentAnalyticsDrawer';
 
 export default function LabInchargeDashboard() {
   const navigate = useNavigate();
-  const [submissions, setSubmissions] = useState([]);
-  const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('analytics'); // 'analytics' | 'single' | 'semester' | 'unlocks'
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'SUBMITTED_FOR_VERIFICATION' | 'APPROVED'
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
 
-  // Evaluation & Viva Voce Modal State
-  const [selectedSubId, setSelectedSubId] = useState(null);
-  const [evalDetail, setEvalDetail] = useState(null);
-  const [evalLoading, setEvalLoading] = useState(false);
-  const [evalCodeMarks, setEvalCodeMarks] = useState(6);
-  const [evalVivaMarks, setEvalVivaMarks] = useState(4);
-  const [evalTotalMarks, setEvalTotalMarks] = useState(10);
-  const [evalNotes, setEvalNotes] = useState('Verified by Lab Incharge');
-  const [evalSubmitting, setEvalSubmitting] = useState(false);
-
-  // Active view tab inside eval modal: 'code' | 'algo' | 'viva'
-  const [evalTab, setEvalTab] = useState('viva');
-
-  // Unlock Matrix & Schedule State (Tab 4)
-  const [unlockData, setUnlockData] = useState({
-    courses: [],
-    mappings: [],
-    unlocks: [],
-    student_overrides: [],
-    experiments: [],
-    sections: [],
-    students: [],
-  });
-  const [selectedUnlockCourseId, setSelectedUnlockCourseId] = useState('');
-  const [selectedUnlockSection, setSelectedUnlockSection] = useState('ALL');
-  const [loadingUnlocks, setLoadingUnlocks] = useState(false);
-  const [togglingExpId, setTogglingExpId] = useState(null);
-
-  // Window Schedule Modal State
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [scheduleTargetStudentId, setScheduleTargetStudentId] = useState('');
-  const [scheduleTargetExpId, setScheduleTargetExpId] = useState('');
-
-  // Student Analytics & Progress Matrix State (Tab 1)
-  const [analyticsData, setAnalyticsData] = useState(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  // Courses & Analytics State
+  const [courses, setCourses] = useState([]);
   const [analyticsCourseId, setAnalyticsCourseId] = useState('');
   const [analyticsSection, setAnalyticsSection] = useState('ALL');
   const [analyticsSearch, setAnalyticsSearch] = useState('');
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
+  // Deep-Dive Drawer State
   const [selectedStudentDrawer, setSelectedStudentDrawer] = useState(null);
 
   const showToast = (msg, type = 'success') => {
@@ -96,49 +45,25 @@ export default function LabInchargeDashboard() {
   };
 
   useEffect(() => {
-    fetchQueue();
-    fetchUnlockMatrix();
+    fetchInitialCourses();
   }, []);
 
-  const fetchQueue = async () => {
+  const fetchInitialCourses = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/lab-incharge/queue');
-      setSubmissions(res?.submissions || []);
-      setMappings(res?.mappings || []);
-    } catch {
-      setError('Could not load student lab submissions.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUnlockMatrix = async () => {
-    try {
-      setLoadingUnlocks(true);
       const res = await api.get('/lab-incharge/unlocks');
-      setUnlockData(res || {
-        courses: [],
-        mappings: [],
-        unlocks: [],
-        student_overrides: [],
-        experiments: [],
-        sections: [],
-        students: [],
-      });
-      if (res?.courses?.length > 0) {
-        if (!selectedUnlockCourseId) {
-          setSelectedUnlockCourseId(String(res.courses[0].id));
-        }
-        if (!analyticsCourseId) {
-          setAnalyticsCourseId(String(res.courses[0].id));
-          fetchAnalytics(String(res.courses[0].id), 'ALL');
-        }
+      const courseList = res?.courses || [];
+      setCourses(courseList);
+
+      if (courseList.length > 0) {
+        const firstId = String(courseList[0].id);
+        setAnalyticsCourseId(firstId);
+        fetchAnalytics(firstId, 'ALL');
       }
     } catch {
-      // Non-blocking
+      setError('Failed to load practical lab courses.');
     } finally {
-      setLoadingUnlocks(false);
+      setLoading(false);
     }
   };
 
@@ -156,45 +81,14 @@ export default function LabInchargeDashboard() {
     }
   };
 
-  const openEvaluationModal = (subId) => {
-    navigate(`/lab-incharge/evaluate/${subId}`);
+  const handleCourseChange = (newCourseId) => {
+    setAnalyticsCourseId(newCourseId);
+    fetchAnalytics(newCourseId, analyticsSection);
   };
 
-  const handleToggleUnlock = async (courseId, expId, section, newStatus) => {
-    try {
-      setTogglingExpId(expId);
-      await api.post('/lab-incharge/unlocks/toggle', {
-        course_id: Number(courseId),
-        experiment_id: Number(expId),
-        section: section || 'ALL',
-        is_unlocked: newStatus,
-      });
-      showToast(
-        newStatus
-          ? `Experiment released for section ${section}!`
-          : `Experiment locked for section ${section}!`,
-        'success'
-      );
-      fetchUnlockMatrix();
-    } catch {
-      showToast('Failed to update unlock status.', 'error');
-    } finally {
-      setTogglingExpId(null);
-    }
-  };
-
-  const handleVerifySemester = async (studentId, courseId = 1) => {
-    try {
-      await api.post('/lab-incharge/verify-semester', {
-        student_id: studentId,
-        course_id: courseId,
-      });
-      showToast('Entire semester record approved!', 'success');
-      fetchQueue();
-      if (analyticsCourseId) fetchAnalytics(analyticsCourseId, analyticsSection);
-    } catch {
-      showToast('Failed to approve semester record.', 'error');
-    }
+  const handleSectionChange = (newSection) => {
+    setAnalyticsSection(newSection);
+    fetchAnalytics(analyticsCourseId, newSection);
   };
 
   // Export Student Progress Matrix to CSV
@@ -230,49 +124,6 @@ export default function LabInchargeDashboard() {
     document.body.appendChild(link);
     link.click();
     link.remove();
-  };
-
-  const filteredSubmissions = submissions.filter((sub) => {
-    const term = search.toLowerCase();
-    const matchesSearch =
-      sub.student?.name?.toLowerCase().includes(term) ||
-      sub.student?.roll_no?.toLowerCase().includes(term) ||
-      sub.experiment?.title?.toLowerCase().includes(term) ||
-      sub.question?.title?.toLowerCase().includes(term);
-
-    if (statusFilter === 'ALL') return matchesSearch;
-    return matchesSearch && sub.status === statusFilter;
-  });
-
-  const TABS = [
-    { key: 'analytics', label: 'Student Progress & Analytics', icon: BarChart3 },
-    { key: 'single', label: 'Evaluation Queue & Viva Voce', icon: MessageSquareCheck },
-    { key: 'semester', label: 'Semester Batch Sign-Off', icon: CheckCheck },
-    { key: 'unlocks', label: 'Window Scheduling & Section Locks', icon: Clock },
-  ];
-
-  // Parse student procedure steps for eval modal
-  const getStudentProcedureSteps = () => {
-    const raw = evalDetail?.submission?.student_procedure;
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [raw];
-    } catch {
-      return raw.split('\n').filter((l) => l.trim().length > 0);
-    }
-  };
-
-  // Parse reference algorithm steps for eval modal
-  const getReferenceAlgoSteps = () => {
-    const raw = evalDetail?.reference_algo || evalDetail?.question?.reference_algorithm;
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [raw];
-    } catch {
-      return raw.split('\n').filter((l) => l.trim().length > 0);
-    }
   };
 
   const getStatusPill = (status, attemptCount, marks) => {
@@ -319,745 +170,301 @@ export default function LabInchargeDashboard() {
   // Filtered Student Matrix
   const filteredStudentMatrix = (analyticsData?.student_matrix || []).filter((st) => {
     const q = analyticsSearch.toLowerCase();
-    const matchesSearch = st.name?.toLowerCase().includes(q) || st.roll_no?.toLowerCase().includes(q) || st.section?.toLowerCase().includes(q);
-    return matchesSearch;
+    return (
+      st.name?.toLowerCase().includes(q) ||
+      st.roll_no?.toLowerCase().includes(q) ||
+      st.section?.toLowerCase().includes(q)
+    );
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* Toast Notification */}
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
             toast.type === 'error'
-              ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
-              : 'bg-[var(--green-bg)] text-[var(--green)] border-[var(--green)]/30'
+              ? 'bg-rose-950 text-rose-200 border-rose-800'
+              : 'bg-emerald-950 text-emerald-200 border-emerald-800'
           }`}
         >
           {toast.type === 'error' ? (
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-400" />
           ) : (
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           )}
           <span>{toast.msg}</span>
         </div>
       )}
 
       {/* Page Header */}
-      <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="pb-4 border-b border-[var(--border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
-            <UserCheck className="w-6 h-6 text-[var(--accent)]" />
-            Faculty Lab Dashboard
+          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] mb-1">
+            <span>Faculty Portal</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="text-[var(--text-primary)] font-semibold">Lab Dashboard</span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
+            <BarChart3 className="w-6 h-6 text-[var(--accent)]" />
+            Student Progress & Analytics Dashboard
           </h1>
           <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Monitor real-time student experiment progress, evaluate submissions, conduct oral viva voce, and manage scheduling windows.
+            Comprehensive real-time student experiment completion tracking, class score averages, and detailed student progress matrices.
           </p>
         </div>
+
+        {/* Quick Navigation Action Links */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => navigate('/faculty/labs/evaluation')}
+            className="px-4 py-2 rounded-xl bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-2"
+          >
+            <MessageSquareCheck className="w-4 h-4" />
+            Evaluation Queue & Viva Voce &rarr;
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/faculty/labs/scheduling')}
+            className="px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            Scheduling & Locks
+          </button>
+        </div>
       </div>
 
-      {/* Mode Tab Selector */}
-      <div className="border-b border-[var(--border)] flex items-center gap-1 overflow-x-auto">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`py-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer shrink-0 ${
-                activeTab === tab.key
-                  ? 'border-[var(--accent)] text-[var(--accent)]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
+      {/* Controls Bar: Course Selector, Section Filter, Search, Export */}
+      <div className="panel-card p-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 rounded-2xl">
+        <div className="flex items-center gap-3 flex-wrap flex-1">
+          <div className="space-y-1 min-w-[240px]">
+            <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+              Active Practical Course
+            </label>
+            <select
+              value={analyticsCourseId}
+              onChange={(e) => handleCourseChange(e.target.value)}
+              className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
             >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ============================================================ */}
-      {/* TAB 1: STUDENT PROGRESS & ANALYTICS MATRIX                    */}
-      {/* ============================================================ */}
-      {activeTab === 'analytics' && (
-        <div className="space-y-6">
-          {/* Controls Bar: Course Selector, Section Filter, Search, Export */}
-          <div className="panel-card p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-wrap flex-1">
-              <div className="space-y-1 min-w-[200px]">
-                <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
-                  Course
-                </label>
-                <select
-                  value={analyticsCourseId}
-                  onChange={(e) => {
-                    setAnalyticsCourseId(e.target.value);
-                    fetchAnalytics(e.target.value, analyticsSection);
-                  }}
-                  className="w-full px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-                >
-                  {unlockData.courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.course_code} - {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1 min-w-[140px]">
-                <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
-                  Section Filter
-                </label>
-                <select
-                  value={analyticsSection}
-                  onChange={(e) => {
-                    setAnalyticsSection(e.target.value);
-                    fetchAnalytics(analyticsCourseId, e.target.value);
-                  }}
-                  className="w-full px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="ALL">ALL Sections</option>
-                  {unlockData.sections.map((sec) => (
-                    <option key={sec} value={sec}>
-                      Section {sec}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1 flex-1 min-w-[220px]">
-                <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
-                  Search Roster
-                </label>
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={analyticsSearch}
-                    onChange={(e) => setAnalyticsSearch(e.target.value)}
-                    placeholder="Search by Roll No, Name, or Section..."
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 self-end lg:self-center">
-              <button
-                type="button"
-                onClick={handleExportAnalyticsCSV}
-                className="px-3.5 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
-                Export CSV
-              </button>
-              <button
-                type="button"
-                onClick={() => fetchAnalytics(analyticsCourseId, analyticsSection)}
-                className="p-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] transition-all cursor-pointer"
-                title="Refresh Analytics"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${loadingAnalytics ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.course_code} - {c.title}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {loadingAnalytics ? (
-            <div className="flex items-center justify-center py-20 text-[var(--text-muted)] gap-3">
-              <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)]" />
-              <span className="text-xs">Computing student completion analytics & matrix...</span>
-            </div>
-          ) : !analyticsData ? (
-            <div className="panel-card p-12 text-center text-xs text-[var(--text-muted)]">
-              Select a course above to inspect student progress.
-            </div>
-          ) : (
-            <>
-              {/* Overview Summary KPI Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="panel-card p-4 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                      Enrolled Students
-                    </span>
-                    <Users className="w-4 h-4 text-[var(--accent)]" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-[var(--text-primary)]">
-                    {analyticsData.total_students}
-                  </div>
-                  <span className="text-[10px] text-[var(--text-secondary)]">Active in lab roster</span>
-                </div>
+          <div className="space-y-1 min-w-[160px]">
+            <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+              Section Filter
+            </label>
+            <select
+              value={analyticsSection}
+              onChange={(e) => handleSectionChange(e.target.value)}
+              className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
+            >
+              <option value="ALL">ALL Sections</option>
+              {(analyticsData?.sections || ['A', 'B', 'C']).map((sec) => (
+                <option key={sec} value={sec}>
+                  Section {sec}
+                </option>
+              ))}
+            </select>
+          </div>
 
-                <div className="panel-card p-4 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                      Overall Completion
-                    </span>
-                    <Percent className="w-4 h-4 text-emerald-500" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-emerald-500">
-                    {analyticsData.overall_completion_rate}%
-                  </div>
-                  <span className="text-[10px] text-[var(--text-secondary)]">Required curriculum done</span>
-                </div>
-
-                <div className="panel-card p-4 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                      Class Average Score
-                    </span>
-                    <TrendingUp className="w-4 h-4 text-indigo-500" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-indigo-400">
-                    {analyticsData.average_score} <span className="text-xs text-[var(--text-muted)]">marks</span>
-                  </div>
-                  <span className="text-[10px] text-[var(--text-secondary)]">Cumulative average</span>
-                </div>
-
-                <div className="panel-card p-4 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                      Curriculum Labs
-                    </span>
-                    <BookOpen className="w-4 h-4 text-amber-500" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-[var(--text-primary)]">
-                    {analyticsData.experiments?.length || 0}
-                  </div>
-                  <span className="text-[10px] text-[var(--text-secondary)]">Scheduled experiments</span>
-                </div>
-              </div>
-
-              {/* Experiment-by-Experiment Completion Rate Cards */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
-                    <Layers className="w-3.5 h-3.5 text-[var(--accent)]" />
-                    Experiment Completion Rates & Average Attempts
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {(analyticsData.experiment_stats || []).map((exp) => {
-                    const compPct = exp.total_enrolled > 0 ? Math.round((exp.completed_count / exp.total_enrolled) * 100) : 0;
-                    return (
-                      <div
-                        key={exp.experiment_id}
-                        className="panel-card p-3.5 space-y-2.5 hover:border-[var(--accent)]/40 transition-all"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                              Ex {exp.experiment_no}
-                            </span>
-                            <h4 className="text-xs font-bold text-[var(--text-primary)] line-clamp-1 mt-1">
-                              {exp.title}
-                            </h4>
-                          </div>
-                          <span className="text-xs font-mono font-bold text-emerald-500">
-                            {compPct}%
-                          </span>
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="w-full h-1.5 rounded-full bg-[var(--bg-input)] overflow-hidden flex">
-                          <div
-                            style={{ width: `${compPct}%` }}
-                            className="h-full bg-emerald-500 transition-all"
-                          />
-                          <div
-                            style={{ width: `${(exp.submitted_count / (exp.total_enrolled || 1)) * 100}%` }}
-                            className="h-full bg-amber-500 transition-all"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-1 text-[10px] text-[var(--text-muted)] font-mono">
-                          <div>
-                            Done: <strong className="text-emerald-600">{exp.completed_count}</strong>
-                          </div>
-                          <div>
-                            Review: <strong className="text-amber-600">{exp.submitted_count}</strong>
-                          </div>
-                          <div>
-                            Avg Att: <strong className="text-[var(--text-primary)]">{exp.avg_attempts.toFixed(1)}</strong>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Student Progress Matrix Interactive Table */}
-              <div className="panel-card overflow-hidden space-y-3 p-4">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div>
-                    <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 text-[var(--accent)]" />
-                      Student Experiment Progress Matrix
-                      <span className="text-[10px] font-normal text-[var(--text-muted)] font-mono">
-                        ({filteredStudentMatrix.length} students)
-                      </span>
-                    </h3>
-                    <p className="text-[11px] text-[var(--text-secondary)]">
-                      Click any student row to view attempt logs, viva answers, and grant window extensions.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto border border-[var(--border)] rounded-xl">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                        <th className="py-3 px-4 sticky left-0 bg-[var(--bg-raised)] z-10">Student</th>
-                        <th className="py-3 px-3">Sec</th>
-                        <th className="py-3 px-3">Completed</th>
-                        <th className="py-3 px-3">Total Marks</th>
-                        {(analyticsData.experiments || []).map((exp) => (
-                          <th key={exp.id} className="py-3 px-3 text-center min-w-[90px]">
-                            Ex {exp.experiment_no}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border)]">
-                      {filteredStudentMatrix.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={4 + (analyticsData.experiments?.length || 0)}
-                            className="py-8 text-center text-xs text-[var(--text-muted)]"
-                          >
-                            No students match your search filter.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredStudentMatrix.map((st) => (
-                          <tr
-                            key={st.student_id}
-                            onClick={() => setSelectedStudentDrawer(st)}
-                            className="hover:bg-[var(--bg-raised)] cursor-pointer transition-colors group"
-                          >
-                            <td className="py-2.5 px-4 sticky left-0 bg-[var(--bg-card)] group-hover:bg-[var(--bg-raised)] z-10">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-[var(--text-primary)]">
-                                  {st.roll_no || `ID#${st.student_id}`}
-                                </span>
-                                <span className="text-xs text-[var(--text-secondary)] truncate max-w-[140px]">
-                                  {st.name}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="py-2.5 px-3 font-mono text-[11px] text-[var(--text-muted)]">
-                              {st.section || '—'}
-                            </td>
-
-                            <td className="py-2.5 px-3">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-[var(--accent)]">
-                                  {st.completed_count}/{st.total_experiments}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="py-2.5 px-3 font-mono text-xs font-bold text-emerald-500">
-                              {st.total_marks}
-                            </td>
-
-                            {st.experiments.map((expDet) => (
-                              <td key={expDet.experiment_id} className="py-2.5 px-3 text-center">
-                                {getStatusPill(expDet.status, expDet.attempt_count, expDet.marks)}
-                              </td>
-                            ))}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* TAB 2: EVALUATION QUEUE & VIVA VOCE                           */}
-      {/* ============================================================ */}
-      {activeTab === 'single' && (
-        <div className="space-y-4">
-          {/* Search & Status Filters */}
-          <div className="panel-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="relative flex-1 w-full max-w-md">
-              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <div className="space-y-1 flex-1 min-w-[200px]">
+            <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+              Search Enrolled Students
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by student name, roll number, or experiment title..."
-                className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-lg pl-9 pr-4 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                value={analyticsSearch}
+                onChange={(e) => setAnalyticsSearch(e.target.value)}
+                placeholder="Search by student name or roll number..."
+                className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
               />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded transition cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {['ALL', 'SUBMITTED_FOR_VERIFICATION', 'APPROVED'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                    statusFilter === status
-                      ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
-                      : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
-                  }`}
-                >
-                  {status === 'ALL'
-                    ? 'All Submissions'
-                    : status === 'SUBMITTED_FOR_VERIFICATION'
-                    ? 'Oral Viva Pending'
-                    : 'Approved'}
-                </button>
-              ))}
             </div>
           </div>
+        </div>
 
-          {/* Queue List */}
-          {filteredSubmissions.length === 0 ? (
-            <div className="panel-card p-12 text-center space-y-3">
-              <CheckCircle2 className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
-              <p className="text-sm font-semibold text-[var(--text-primary)]">
-                {search ? 'No submissions match your search.' : 'All caught up! No submissions waiting for oral viva.'}
-              </p>
+        <div className="flex items-center gap-2 pt-2 lg:pt-0">
+          <button
+            type="button"
+            onClick={handleExportAnalyticsCSV}
+            className="px-4 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs font-bold text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export Class CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Course High-Level KPI Summary Cards */}
+      {analyticsData && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="panel-card p-4 space-y-1 rounded-2xl border border-[var(--border)]">
+            <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] tracking-wider flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-[var(--accent)]" /> Enrolled Students
+            </span>
+            <div className="text-xl sm:text-2xl font-black font-mono text-[var(--text-primary)]">
+              {analyticsData.summary?.total_students || 0}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSubmissions.map((sub) => {
-                const isPendingViva = sub.status === 'SUBMITTED_FOR_VERIFICATION';
-                return (
-                  <div
-                    key={sub.id}
-                    className={`panel-card p-4 flex flex-col justify-between group cursor-pointer transition-all hover:border-[var(--accent)] ${
-                      isPendingViva ? 'border-indigo-500/40 ring-1 ring-indigo-500/20' : ''
-                    }`}
-                    onClick={() => openEvaluationModal(sub.id)}
-                  >
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center text-[var(--accent)] font-bold font-mono text-xs">
-                            {sub.student?.name?.charAt(0) || 'S'}
-                          </div>
-                          <div>
-                            <h3 className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-tight">
-                              {sub.student?.name || 'Student'}
-                            </h3>
-                            <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                              {sub.student?.roll_no || '—'} · Sec {sub.student?.section || 'A'}
-                            </span>
-                          </div>
-                        </div>
+            <span className="text-[10px] text-[var(--text-muted)] block">
+              Across target section
+            </span>
+          </div>
 
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${
-                            sub.status === 'APPROVED'
-                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
-                              : isPendingViva
-                              ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30 animate-pulse'
-                              : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-                          }`}
-                        >
-                          {sub.status === 'APPROVED' ? (
-                            <>
-                              <Award className="w-3 h-3" />
-                              {sub.marks}/100
-                            </>
-                          ) : isPendingViva ? (
-                            <>
-                              <MessageSquareCheck className="w-3 h-3" />
-                              Viva Pending
-                            </>
-                          ) : (
-                            sub.status
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                            Exp {sub.experiment?.experiment_no || 1}
-                          </span>
-                          {sub.question?.question_code && (
-                            <span className="font-mono text-[10px] text-[var(--text-muted)] px-1.5 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-                              {sub.question.question_code}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-semibold text-[var(--text-primary)] line-clamp-1">
-                          {sub.question?.title || sub.experiment?.title}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 mt-3 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                      <span className="text-[var(--text-secondary)] font-semibold">
-                        {sub.pass_count}/{sub.total_test_cases} tests passed
-                      </span>
-                      <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                        Evaluate &rarr;
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+          <div className="panel-card p-4 space-y-1 rounded-2xl border border-[var(--border)]">
+            <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> Completion Rate
+            </span>
+            <div className="text-xl sm:text-2xl font-black font-mono text-emerald-500">
+              {analyticsData.summary?.completion_rate_pct || 0}%
             </div>
-          )}
+            <span className="text-[10px] text-[var(--text-muted)] block">
+              {analyticsData.summary?.completed_submissions || 0} experiments verified
+            </span>
+          </div>
+
+          <div className="panel-card p-4 space-y-1 rounded-2xl border border-[var(--border)]">
+            <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] tracking-wider flex items-center gap-1.5">
+              <Percent className="w-3.5 h-3.5 text-blue-500" /> Average Score
+            </span>
+            <div className="text-xl sm:text-2xl font-black font-mono text-blue-500">
+              {analyticsData.summary?.avg_score_pct || 0}%
+            </div>
+            <span className="text-[10px] text-[var(--text-muted)] block">
+              Across all graded labs
+            </span>
+          </div>
+
+          <div
+            onClick={() => navigate('/faculty/labs/evaluation')}
+            className="panel-card p-4 space-y-1 rounded-2xl border border-[var(--border)] cursor-pointer hover:border-amber-500/50 transition-all group"
+          >
+            <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] tracking-wider flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-amber-500" /> Oral Viva Pending
+            </span>
+            <div className="text-xl sm:text-2xl font-black font-mono text-amber-500 group-hover:underline">
+              {analyticsData.summary?.pending_review_count || 0}
+            </div>
+            <span className="text-[10px] text-[var(--accent)] font-semibold block">
+              View Viva Queue &rarr;
+            </span>
+          </div>
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* TAB 3: SEMESTER BATCH SIGN-OFF                                */}
-      {/* ============================================================ */}
-      {activeTab === 'semester' && (
-        <div className="panel-card p-6 space-y-4">
-          <div className="flex items-center justify-between">
+      {/* Comprehensive Student Progress Matrix Table */}
+      <div className="panel-card p-6 space-y-4 rounded-2xl">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
             <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <CheckCheck className="w-4 h-4 text-[var(--accent)]" />
-              Semester Final Lab Record Approvals
+              <BarChart3 className="w-4 h-4 text-[var(--accent)]" />
+              Student Lab Completion Matrix
             </h2>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Click any student row to open deep-dive experiment history, individual execution attempts, and rubric marks.
+            </p>
           </div>
-          <p className="text-xs text-[var(--text-secondary)]">
-            When all experiments for a student are completed, perform a final digital batch sign-off and issue their certified lab record.
-          </p>
+          <span className="text-xs font-mono text-[var(--text-muted)]">
+            Showing {filteredStudentMatrix.length} Students
+          </span>
+        </div>
 
+        {loadingAnalytics ? (
+          <div className="py-16 text-center text-xs text-[var(--text-muted)] space-y-2">
+            <Clock className="w-6 h-6 animate-spin mx-auto text-[var(--accent)]" />
+            <p>Loading course student progress matrix...</p>
+          </div>
+        ) : filteredStudentMatrix.length === 0 ? (
+          <div className="py-12 text-center text-xs text-[var(--text-muted)] italic">
+            No students found matching your search.
+          </div>
+        ) : (
           <div className="overflow-x-auto border border-[var(--border)] rounded-xl">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                  <th className="py-3 px-4">Student</th>
-                  <th className="py-3 px-3">Section</th>
-                  <th className="py-3 px-3">Completed Experiments</th>
-                  <th className="py-3 px-3">Status</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                  <th className="py-3 px-4 min-w-[180px]">Student</th>
+                  <th className="py-3 px-3 text-center">Sec</th>
+                  <th className="py-3 px-3 text-center">Progress</th>
+                  <th className="py-3 px-3 text-center">Total Marks</th>
+                  <th className="py-3 px-3 text-center">Score %</th>
+                  {(analyticsData?.experiments || []).map((exp) => (
+                    <th key={exp.id} className="py-3 px-2 text-center font-mono" title={exp.title}>
+                      Ex {exp.experiment_no}
+                    </th>
+                  ))}
+                  <th className="py-3 px-4 text-right">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {analyticsData?.student_matrix?.map((st) => {
-                  const isAllDone = st.completed_count >= st.total_experiments;
-                  return (
-                    <tr key={st.student_id} className="hover:bg-[var(--bg-raised)] transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-bold text-[var(--text-primary)] block">{st.roll_no}</span>
-                        <span className="text-[11px] text-[var(--text-secondary)]">{st.name}</span>
+                {filteredStudentMatrix.map((st) => (
+                  <tr
+                    key={st.student_id}
+                    onClick={() => setSelectedStudentDrawer(st)}
+                    className="hover:bg-[var(--bg-hover)] transition-colors cursor-pointer group"
+                  >
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                        {st.name}
+                      </div>
+                      <div className="text-[10px] font-mono text-[var(--text-muted)]">
+                        {st.roll_no || `ID#${st.student_id}`}
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono text-[var(--text-secondary)]">
+                      {st.section || 'A'}
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-bold text-[var(--accent)]">
+                      {st.completed_count} / {st.total_experiments}
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-bold text-[var(--text-primary)]">
+                      {st.total_marks}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span
+                        className={`font-mono font-bold text-xs ${
+                          st.overall_pct >= 80
+                            ? 'text-emerald-500'
+                            : st.overall_pct >= 50
+                            ? 'text-blue-500'
+                            : 'text-amber-500'
+                        }`}
+                      >
+                        {st.overall_pct}%
+                      </span>
+                    </td>
+                    {st.experiments.map((exp) => (
+                      <td key={exp.experiment_id} className="py-3 px-2 text-center">
+                        {getStatusPill(exp.status, exp.attempt_count, exp.marks)}
                       </td>
-                      <td className="py-3 px-3 font-mono">{st.section || '—'}</td>
-                      <td className="py-3 px-3 font-mono">
-                        <strong className={isAllDone ? 'text-emerald-600' : 'text-amber-600'}>
-                          {st.completed_count} / {st.total_experiments}
-                        </strong>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            isAllDone
-                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
-                              : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-                          }`}
-                        >
-                          {isAllDone ? 'Ready for Sign-Off' : 'Pending Labs'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleVerifySemester(st.student_id, Number(analyticsCourseId || 1))}
-                          className="px-3 py-1.5 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold transition-all cursor-pointer shadow-sm"
-                        >
-                          Sign & Certify Record
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                    ))}
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedStudentDrawer(st);
+                        }}
+                        className="p-1.5 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-raised)] text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
+                        title="View detailed student audit & override"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* TAB 4: WINDOW SCHEDULING & SECTION LOCKS                      */}
-      {/* ============================================================ */}
-      {activeTab === 'unlocks' && (
-        <div className="space-y-6">
-          <div className="panel-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="space-y-1 min-w-[200px]">
-                <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
-                  Target Lab Course
-                </label>
-                <select
-                  value={selectedUnlockCourseId}
-                  onChange={(e) => setSelectedUnlockCourseId(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-                >
-                  {unlockData.courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.course_code} - {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1 min-w-[140px]">
-                <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
-                  Target Section
-                </label>
-                <select
-                  value={selectedUnlockSection}
-                  onChange={(e) => setSelectedUnlockSection(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="ALL">ALL Sections</option>
-                  {unlockData.sections.map((sec) => (
-                    <option key={sec} value={sec}>
-                      Section {sec}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setScheduleTargetStudentId('');
-                  setScheduleTargetExpId('');
-                  setIsScheduleModalOpen(true);
-                }}
-                className="px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
-              >
-                <Clock className="w-3.5 h-3.5" />
-                Configure Attendance Windows & Overrides
-              </button>
-            </div>
-          </div>
-
-          {/* Section Experiment Release Schedule Grid */}
-          <div className="panel-card p-6 space-y-4">
-            <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
-              <Unlock className="w-3.5 h-3.5 text-[var(--accent)]" />
-              Experiment Availability Matrix (Section: {selectedUnlockSection})
-            </h3>
-
-            <div className="space-y-3">
-              {unlockData.experiments
-                .filter((e) => String(e.course_id) === String(selectedUnlockCourseId))
-                .map((exp) => {
-                  const unlockRecord = unlockData.unlocks.find(
-                    (u) =>
-                      u.experiment_id === exp.id &&
-                      (u.section === selectedUnlockSection || u.section === 'ALL')
-                  );
-                  const isUnlocked = unlockRecord?.is_unlocked || false;
-                  const starts = unlockRecord?.starts_at ? new Date(unlockRecord.starts_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
-                  const ends = unlockRecord?.ends_at ? new Date(unlockRecord.ends_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
-
-                  return (
-                    <div
-                      key={exp.id}
-                      className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between gap-4 hover:border-[var(--accent)]/40 transition-all"
-                    >
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                            Ex {exp.experiment_no}
-                          </span>
-                          <h4 className="text-xs font-bold text-[var(--text-primary)]">{exp.title}</h4>
-                        </div>
-                        <p className="text-[11px] text-[var(--text-secondary)] line-clamp-1">{exp.aim}</p>
-
-                        <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] pt-1 flex-wrap font-mono">
-                          {starts && ends ? (
-                            <span className="text-indigo-600 font-semibold flex items-center gap-1">
-                              <Calendar className="w-3 h-3" /> Window: {starts} → {ends}
-                            </span>
-                          ) : (
-                            <span>Window: Standard Class Session</span>
-                          )}
-                          {unlockRecord?.max_attempts > 0 && (
-                            <span>Max Attempts: {unlockRecord.max_attempts}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setScheduleTargetStudentId('');
-                            setScheduleTargetExpId(String(exp.id));
-                            setIsScheduleModalOpen(true);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <Clock className="w-3 h-3" /> Schedule
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={togglingExpId === exp.id}
-                          onClick={() => handleToggleUnlock(selectedUnlockCourseId, exp.id, selectedUnlockSection, !isUnlocked)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                            isUnlocked
-                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20'
-                              : 'bg-[var(--bg-input)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          {isUnlocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                          {isUnlocked ? 'Open' : 'Locked'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-      {/* Window Scheduling & Overrides Modal */}
-      {isScheduleModalOpen && (
-        <LabScheduleModal
-          isOpen={isScheduleModalOpen}
-          onClose={() => setIsScheduleModalOpen(false)}
-          courses={unlockData.courses}
-          sections={unlockData.sections}
-          experiments={unlockData.experiments}
-          students={unlockData.students}
-          studentOverrides={unlockData.student_overrides}
-          initialCourseId={selectedUnlockCourseId || analyticsCourseId}
-          initialStudentId={scheduleTargetStudentId}
-          initialExpId={scheduleTargetExpId}
-          onSuccess={(msg) => {
-            showToast(msg);
-            fetchUnlockMatrix();
-            if (analyticsCourseId) fetchAnalytics(analyticsCourseId, analyticsSection);
-          }}
-        />
-      )}
+        )}
+      </div>
 
       {/* Student Deep-Dive Analytics Drawer */}
       {selectedStudentDrawer && (
@@ -1066,9 +473,7 @@ export default function LabInchargeDashboard() {
           onClose={() => setSelectedStudentDrawer(null)}
           studentData={selectedStudentDrawer}
           onOpenScheduleOverride={(studentId, expId) => {
-            setScheduleTargetStudentId(String(studentId));
-            setScheduleTargetExpId(String(expId));
-            setIsScheduleModalOpen(true);
+            navigate('/faculty/labs/scheduling');
           }}
         />
       )}

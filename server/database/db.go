@@ -570,11 +570,29 @@ func syncAppPagesCatalog(db *gorm.DB) {
 		{
 			Key:         "lab_incharge_verification",
 			Name:        "Lab Dashboard",
-			Path:        "/lab-incharge",
-			Icon:        "FlaskConical",
+			Path:        "/faculty/labs",
+			Icon:        "BarChart3",
 			Category:    "Academic Labs",
-			Description: "Review student lab submissions, track student progress & analytics, and grant experiment/semester record approvals",
+			Description: "Student progress matrix, lab experiment completion rates, and analytics",
 			OrderIndex:  31,
+		},
+		{
+			Key:         "faculty_lab_evaluation",
+			Name:        "Lab Evaluation",
+			Path:        "/faculty/labs/evaluation",
+			Icon:        "MessageSquareCheck",
+			Category:    "Academic Labs",
+			Description: "Oral viva voce evaluation queue, rubric grading, and semester record sign-offs",
+			OrderIndex:  32,
+		},
+		{
+			Key:         "faculty_lab_scheduling",
+			Name:        "Lab Scheduling",
+			Path:        "/faculty/labs/scheduling",
+			Icon:        "Clock",
+			Category:    "Academic Labs",
+			Description: "Window scheduling, section availability locks, and student deadline extensions",
+			OrderIndex:  33,
 		},
 		{
 			Key:         "admin_lab_config",
@@ -583,7 +601,7 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			Icon:        "FlaskConical",
 			Category:    "Academic Labs",
 			Description: "Add lab courses, configure experiments & test cases, manage sections/semesters/academic years, and map students to faculty lab incharges",
-			OrderIndex:  32,
+			OrderIndex:  34,
 		},
 		{
 			Key:         "admin_lab_pdf_audit",
@@ -592,7 +610,7 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			Icon:        "FileCode2",
 			Category:    "Academic Labs",
 			Description: "Preview and audit official server-generated student PDF lab records",
-			OrderIndex:  33,
+			OrderIndex:  35,
 		},
 	}
 
@@ -610,7 +628,7 @@ func syncAppPagesCatalog(db *gorm.DB) {
 					db.Create(&models.RolePagePermission{RoleName: "student", PageKey: page.Key, CanAccess: true})
 					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
 				}
-				if page.Key == "lab_incharge_verification" {
+				if page.Key == "lab_incharge_verification" || page.Key == "faculty_lab_evaluation" || page.Key == "faculty_lab_scheduling" {
 					db.Create(&models.RolePagePermission{RoleName: "faculty", PageKey: page.Key, CanAccess: true})
 					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
 				}

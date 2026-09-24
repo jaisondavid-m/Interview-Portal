@@ -41,6 +41,8 @@ import LabWorkspace from '../Pages/Labs/LabWorkspace';
 import LabRecordPreview from '../Pages/Labs/LabRecordPreview';
 import LabInchargeDashboard from '../Pages/Labs/LabInchargeDashboard';
 import LabEvaluationPage from '../Pages/Labs/LabEvaluationPage';
+import FacultyLabEvaluation from '../Pages/Labs/FacultyLabEvaluation';
+import FacultyLabScheduling from '../Pages/Labs/FacultyLabScheduling';
 import AdminLabPdfViewer from '../Pages/Admin/AdminLabPdfViewer';
 import AdminLabConfig from '../Pages/Admin/AdminLabConfig';
 import AdminLabCourseExperiments from '../Pages/Admin/AdminLabCourseExperiments';
@@ -386,12 +388,28 @@ export const router = createBrowserRouter([
             element: <LabInchargeDashboard />,
           },
           {
+            path: 'lab-incharge/evaluation',
+            element: <FacultyLabEvaluation />,
+          },
+          {
+            path: 'lab-incharge/scheduling',
+            element: <FacultyLabScheduling />,
+          },
+          {
             path: 'lab-incharge/evaluate/:subId',
             element: <LabEvaluationPage />,
           },
           {
             path: 'faculty/labs',
             element: <LabInchargeDashboard />,
+          },
+          {
+            path: 'faculty/labs/evaluation',
+            element: <FacultyLabEvaluation />,
+          },
+          {
+            path: 'faculty/labs/scheduling',
+            element: <FacultyLabScheduling />,
           },
           {
             path: 'faculty/labs/evaluate/:subId',

@@ -3,7 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
   Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, Database,
-  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Headphones, Zap, Settings
+  Building2, CalendarCheck, ClipboardCheck, FlaskConical, Headphones, Zap, Settings,
+  BarChart3, Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,6 +27,8 @@ const ICON_MAP = {
   Zap,
   Settings,
   Settings: SlidersHorizontal,
+  BarChart3,
+  Clock,
 };
 
 export default function Sidebar() {
@@ -61,7 +64,9 @@ export default function Sidebar() {
     : isFaculty
     ? [
         { name: 'Faculty Dashboard', path: '/faculty/dashboard', icon: LayoutDashboard },
-        { name: 'Lab Dashboard', path: '/lab-incharge', icon: FlaskConical },
+        { name: 'Lab Dashboard', path: '/faculty/labs', icon: BarChart3 },
+        { name: 'Lab Evaluation', path: '/faculty/labs/evaluation', icon: MessageSquareCheck },
+        { name: 'Lab Scheduling', path: '/faculty/labs/scheduling', icon: Clock },
         { name: 'Venue Attendance', path: '/faculty/attendance', icon: ClipboardCheck },
         { name: 'Live Audio Monitor', path: '/faculty/venue-monitor', icon: Headphones },
       ]
