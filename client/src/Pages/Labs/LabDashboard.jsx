@@ -297,6 +297,11 @@ export default function LabDashboard() {
                                 <Unlock className="w-3.5 h-3.5" />
                                 Unlocked
                               </span>
+                            ) : exp.unlock_status?.status === 'PREREQUISITE_LOCKED' ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                <Lock className="w-3.5 h-3.5" />
+                                Prerequisite Locked
+                              </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded bg-slate-500/10 text-[var(--text-muted)] border border-[var(--border)]">
                                 <Lock className="w-3.5 h-3.5" />
@@ -338,7 +343,9 @@ export default function LabDashboard() {
                           <div className="w-full flex items-center justify-between gap-2">
                             <div className="inline-flex items-center gap-2 text-[11px] font-medium text-[var(--text-muted)]">
                               <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                              <span>Locked by faculty incharge</span>
+                              <span>
+                                {exp.unlock_status?.notes || 'Locked by faculty incharge'}
+                              </span>
                             </div>
 
                             {sub && (

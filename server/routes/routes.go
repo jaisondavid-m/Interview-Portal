@@ -324,6 +324,7 @@ func SetupRouter() *gin.Engine {
 			facultyLabs.POST("/unlocks/schedule", controllers.FacultyScheduleWindowBulk)
 			facultyLabs.POST("/unlocks/student-override", controllers.FacultySetStudentOverride)
 			facultyLabs.DELETE("/unlocks/student-override/:id", controllers.FacultyDeleteStudentOverride)
+			facultyLabs.POST("/courses/:courseId/progression-mode", controllers.FacultyUpdateCourseProgressionMode)
 			facultyLabs.GET("/analytics/:courseId", controllers.FacultyGetCourseAnalytics)
 			facultyLabs.POST("/student-allocation/reset", controllers.ResetStudentQuestionAllocation)
 		}

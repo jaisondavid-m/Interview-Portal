@@ -17,6 +17,7 @@ type LabCourse struct {
 	Regulation       string         `gorm:"size:50;default:'2022'" json:"regulation"` // e.g. 2022, 2026
 	AcademicYear     string         `gorm:"size:50" json:"academic_year"`            // Optional legacy fallback
 	TotalExperiments int            `gorm:"default:7" json:"total_experiments"`
+	ProgressionMode  string         `gorm:"size:50;default:'OPEN'" json:"progression_mode"` // OPEN or SEQUENTIAL
 	EvaluationRubric string         `gorm:"type:text" json:"evaluation_rubric"` // JSON array of rubric criteria
 	Description      string         `gorm:"type:text" json:"description"`
 	CreatedAt        time.Time      `json:"created_at"`

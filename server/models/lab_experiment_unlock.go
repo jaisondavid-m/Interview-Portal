@@ -19,6 +19,8 @@ type LabExperimentUnlock struct {
 	FacultyID           uint           `gorm:"not null;index" json:"faculty_id"`
 	Faculty             User           `gorm:"foreignKey:FacultyID" json:"faculty,omitempty"`
 	IsUnlocked          bool           `gorm:"default:false;not null" json:"is_unlocked"`
+	RequiresPrerequisite bool          `gorm:"default:false" json:"requires_prerequisite"`
+	BypassPrerequisite   bool          `gorm:"default:false" json:"bypass_prerequisite"`
 	StartsAt            *time.Time     `json:"starts_at,omitempty"` // Window start datetime
 	EndsAt              *time.Time     `json:"ends_at,omitempty"`   // Window end datetime
 	MaxAttempts         int            `gorm:"default:0" json:"max_attempts"` // 0 = unlimited

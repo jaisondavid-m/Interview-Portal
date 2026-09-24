@@ -19,21 +19,25 @@ import (
 
 // StudentUnlockStatus contains fine-grained access details for a student on an experiment
 type StudentUnlockStatus struct {
-	IsUnlocked        bool       `json:"is_unlocked"`
-	Section           string     `json:"section"`
-	Status            string     `json:"status"` // "OPEN", "UPCOMING", "EXPIRED", "LOCKED"
-	StartsAt          *time.Time `json:"starts_at,omitempty"`
-	EndsAt            *time.Time `json:"ends_at,omitempty"`
-	IsStudentOverride bool       `json:"is_student_override"`
-	MaxAttempts       int        `json:"max_attempts"`
-	Notes             string     `json:"notes,omitempty"`
+	IsUnlocked          bool       `json:"is_unlocked"`
+	Section             string     `json:"section"`
+	Status              string     `json:"status"` // "OPEN", "UPCOMING", "EXPIRED", "LOCKED", "PREREQUISITE_LOCKED"
+	StartsAt            *time.Time `json:"starts_at,omitempty"`
+	EndsAt              *time.Time `json:"ends_at,omitempty"`
+	IsStudentOverride   bool       `json:"is_student_override"`
+	MaxAttempts         int        `json:"max_attempts"`
+	Notes               string     `json:"notes,omitempty"`
+	PrerequisiteExpID   uint       `json:"prerequisite_exp_id,omitempty"`
+	PrerequisiteExpNo   int        `json:"prerequisite_exp_no,omitempty"`
+	PrerequisiteTitle   string     `json:"prerequisite_title,omitempty"`
+	BypassPrerequisite bool       `json:"bypass_prerequisite,omitempty"`
 }
 
 // getStudentExperimentAccess resolves whether an experiment is currently open for a student
 func getStudentExperimentAccess(courseID uint, expID uint, userID uint, userRole string) StudentUnlockStatus {
 	database.EnsureLabTables(database.DB)
 	role := strings.ToLower(userRole)
-	if role == "admin" || role == "faculty" {
+	if role == "admin" || role == "faculty" || role == "faculty_incharge" {
 		return StudentUnlockStatus{
 			IsUnlocked: true,
 			Section:    "FACULTY/ADMIN",
@@ -48,6 +52,43 @@ func getStudentExperimentAccess(courseID uint, expID uint, userID uint, userRole
 
 	section := strings.TrimSpace(user.Section)
 	now := time.Now()
+
+	// 0. Sequential Progression Prerequisite Check
+	var currentExp models.LabExperiment
+	if err := database.DB.Select("id, course_id, experiment_no, title").First(&currentExp, expID).Error; err == nil {
+		var course models.LabCourse
+		database.DB.Select("id, progression_mode").First(&course, courseID)
+
+		if strings.ToUpper(strings.TrimSpace(course.ProgressionMode)) == "SEQUENTIAL" {
+			var prevExp models.LabExperiment
+			if err := database.DB.Where("course_id = ? AND experiment_no < ?", courseID, currentExp.ExperimentNo).
+				Order("experiment_no desc").First(&prevExp).Error; err == nil && prevExp.ID > 0 {
+
+				// Check if current student has an explicit override with BypassPrerequisite
+				var studentOverride models.LabExperimentUnlock
+				hasOverrideBypass := false
+				if err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ? AND is_unlocked = ? AND bypass_prerequisite = ?", courseID, expID, userID, true, true).First(&studentOverride).Error; err == nil {
+					hasOverrideBypass = true
+				}
+
+				if !hasOverrideBypass {
+					var prevSub models.LabSubmission
+					err := database.DB.Where("student_id = ? AND experiment_id = ? AND (status IN ('TEST_PASSED', 'SUBMITTED_FOR_VERIFICATION', 'APPROVED') OR marks > 0)", userID, prevExp.ID).First(&prevSub).Error
+					if err != nil {
+						return StudentUnlockStatus{
+							IsUnlocked:        false,
+							Section:           section,
+							Status:            "PREREQUISITE_LOCKED",
+							PrerequisiteExpID: prevExp.ID,
+							PrerequisiteExpNo: prevExp.ExperimentNo,
+							PrerequisiteTitle: prevExp.Title,
+							Notes:             fmt.Sprintf("Locked: Complete Experiment %d (%s) first.", prevExp.ExperimentNo, prevExp.Title),
+						}
+					}
+				}
+			}
+		}
+	}
 
 	// 1. Check if an individual student override exists
 	var studentUnlock models.LabExperimentUnlock
@@ -193,13 +234,14 @@ func GetCourseExperimentsForStudent(c *gin.Context) {
 
 	type ExpItem struct {
 		models.LabExperiment
-		IsUnlocked bool                  `json:"is_unlocked"`
-		Submission *models.LabSubmission `json:"submission,omitempty"`
+		IsUnlocked   bool                  `json:"is_unlocked"`
+		UnlockStatus StudentUnlockStatus   `json:"unlock_status"`
+		Submission   *models.LabSubmission `json:"submission,omitempty"`
 	}
 
 	var results []ExpItem
 	for _, exp := range experiments {
-		unlocked, _ := isExperimentUnlockedForStudent(uint(courseID), exp.ID, userID, userRole)
+		status := getStudentExperimentAccess(uint(courseID), exp.ID, userID, userRole)
 
 		var sub models.LabSubmission
 		var subPtr *models.LabSubmission
@@ -212,7 +254,8 @@ func GetCourseExperimentsForStudent(c *gin.Context) {
 
 		results = append(results, ExpItem{
 			LabExperiment: exp,
-			IsUnlocked:    unlocked,
+			IsUnlocked:    status.IsUnlocked,
+			UnlockStatus:  status,
 			Submission:    subPtr,
 		})
 	}
@@ -1181,6 +1224,7 @@ type ScheduleWindowBulkReq struct {
 	ExperimentIDs       []uint     `json:"experiment_ids" binding:"required"`
 	Section             string     `json:"section"` // 'ALL' or specific section
 	IsUnlocked          bool       `json:"is_unlocked"`
+	RequiresPrerequisite bool      `json:"requires_prerequisite"`
 	StartsAt            *time.Time `json:"starts_at"`
 	EndsAt              *time.Time `json:"ends_at"`
 	MaxAttempts         int        `json:"max_attempts"`
@@ -1215,6 +1259,7 @@ func FacultyScheduleWindowBulk(c *gin.Context) {
 		unlock.Section = sec
 		unlock.FacultyID = facultyID
 		unlock.IsUnlocked = req.IsUnlocked
+		unlock.RequiresPrerequisite = req.RequiresPrerequisite
 		unlock.StartsAt = req.StartsAt
 		unlock.EndsAt = req.EndsAt
 		unlock.MaxAttempts = req.MaxAttempts
@@ -1241,6 +1286,7 @@ type SetStudentOverrideReq struct {
 	ExperimentID        uint       `json:"experiment_id" binding:"required"`
 	StudentID           uint       `json:"student_id" binding:"required"`
 	IsUnlocked          bool       `json:"is_unlocked"`
+	BypassPrerequisite  bool       `json:"bypass_prerequisite"`
 	StartsAt            *time.Time `json:"starts_at"`
 	EndsAt              *time.Time `json:"ends_at"`
 	MaxAttempts         int        `json:"max_attempts"`
@@ -1279,6 +1325,7 @@ func FacultySetStudentOverride(c *gin.Context) {
 	}
 	override.FacultyID = facultyID
 	override.IsUnlocked = req.IsUnlocked
+	override.BypassPrerequisite = req.BypassPrerequisite
 	override.StartsAt = req.StartsAt
 	override.EndsAt = req.EndsAt
 	override.MaxAttempts = req.MaxAttempts
@@ -1305,6 +1352,42 @@ func FacultySetStudentOverride(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":  fmt.Sprintf("Window override configured for %s (%s)!", student.Name, student.RollNo),
 		"override": override,
+	})
+}
+
+type UpdateProgressionModeReq struct {
+	ProgressionMode string `json:"progression_mode" binding:"required"` // "OPEN" or "SEQUENTIAL"
+}
+
+// FacultyUpdateCourseProgressionMode toggles whether experiments in a course must be completed sequentially
+func FacultyUpdateCourseProgressionMode(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	courseIDStr := c.Param("courseId")
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	var req UpdateProgressionModeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload: " + err.Error()})
+		return
+	}
+
+	mode := strings.ToUpper(strings.TrimSpace(req.ProgressionMode))
+	if mode != "SEQUENTIAL" && mode != "OPEN" {
+		mode = "OPEN"
+	}
+
+	if err := database.DB.Model(&models.LabCourse{}).Where("id = ?", courseID).Update("progression_mode", mode).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update progression mode: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":          fmt.Sprintf("Progression mode updated to %s", mode),
+		"progression_mode": mode,
 	})
 }
 
