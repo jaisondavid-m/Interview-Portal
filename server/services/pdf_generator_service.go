@@ -85,10 +85,10 @@ func formatProcedureText(raw string) string {
 	return raw
 }
 
-// GenerateCustomLabRecordPDF compiles a spacious, academic multi-page lab record PDF following strict left/right page rules
+// GenerateCustomLabRecordPDF compiles a spacious, academic multi-page lab record PDF with BIT logo on all pages
 func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetAutoPageBreak(false, 15) // We handle explicit, deterministic pagination
+	pdf.SetAutoPageBreak(false, 15) // Explicit deterministic pagination
 
 	// Register College Banner Logo
 	if len(bitLogoBytes) > 0 {
@@ -125,12 +125,46 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		}
 	}
 
+	// Helper to render institutional header with BIT logo on any page
+	renderHeaderWithLogo := func(isLeft bool, rightText string) {
+		lineStart := 20.0
+		lineEnd := 194.0
+		logoX := 20.0
+		if isLeft {
+			lineStart = 14.0
+			lineEnd = 188.0
+			logoX = 14.0
+		}
+
+		if len(bitLogoBytes) > 0 {
+			// Place BIT institutional logo at top-left of running header
+			pdf.ImageOptions("bit_logo", logoX, 12.5, 48, 7.5, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+		}
+
+		pdf.SetY(13.5)
+		pdf.SetFont("Arial", "B", 7.8)
+		pdf.SetTextColor(75, 90, 115)
+		if isLeft {
+			pdf.SetX(64)
+			pdf.CellFormat(124, 5, rightText, "", 1, "R", false, 0, "")
+		} else {
+			pdf.SetX(70)
+			pdf.CellFormat(124, 5, rightText, "", 1, "R", false, 0, "")
+		}
+
+		pdf.SetLineWidth(0.2)
+		pdf.SetDrawColor(200, 215, 230)
+		pdf.Line(lineStart, 21.5, lineEnd, 21.5)
+		pdf.SetY(24.5)
+	}
+
 	// Helper: Ensure the next page is strictly on a LEFT page (Even page number: 2, 4, 6, 8...)
 	addLeftPage := func() {
 		if pageCount%2 == 0 {
 			// Already on an Even page. Add an Odd page as spacer first
 			pdf.AddPage()
 			drawPageBorder()
+			renderHeaderWithLogo(false, "PRACTICAL LAB RECORD — OBSERVATION")
 			pdf.SetY(135)
 			pdf.SetFont("Arial", "I", 8.5)
 			pdf.SetTextColor(160, 170, 185)
@@ -146,6 +180,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 			// Already on an Odd page. Add an Even page as spacer first
 			pdf.AddPage()
 			drawPageBorder()
+			renderHeaderWithLogo(true, "PRACTICAL LAB RECORD — WORKBOOK NOTES")
 			pdf.SetY(135)
 			pdf.SetFont("Arial", "I", 8.5)
 			pdf.SetTextColor(160, 170, 185)
@@ -329,16 +364,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	// ----------------------------------------------------
 	pdf.AddPage()
 	drawPageBorder()
-
-	// Header
-	pdf.SetY(15)
-	pdf.SetFont("Arial", "B", 9.5)
-	pdf.SetTextColor(80, 90, 100)
-	pdf.CellFormat(0, 5, "BANNARI AMMAN INSTITUTE OF TECHNOLOGY  —  PRACTICAL LAB RECORD", "", 1, "C", false, 0, "")
-	pdf.SetLineWidth(0.2)
-	pdf.SetDrawColor(200, 210, 220)
-	pdf.Line(14, pdf.GetY(), 190, pdf.GetY())
-	pdf.Ln(4)
+	renderHeaderWithLogo(true, fmt.Sprintf("%s — PRACTICAL LAB RECORD", data.CourseCode))
 
 	pdf.SetFont("Arial", "B", 12.5)
 	pdf.SetTextColor(20, 45, 90)
@@ -405,7 +431,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	// STRICT RULES IMPLEMENTATION:
 	// Page 1 of Exp: LEFT PAGE (Even)  -> STRICTLY VERIFIED SOURCE CODE & EXECUTION OUTPUT ONLY
 	// Page 2 of Exp: RIGHT PAGE (Odd)  -> TITLE, AIM, ALGORITHM / STEP-BY-STEP PROCEDURE
-	// Page 3 of Exp: NEW LAST PAGE     -> FIRST: MARK TABLE (Tabular Column), AFTER THAT: RESULT SECTION & SIGN-OFF
+	// Page 3 of Exp: NEW LAST PAGE     -> FIRST: MARK TABLE (4 Columns), AFTER THAT: RESULT SECTION & SIGN-OFF
 	// -------------------------------------------------------------------------
 
 	for _, exp := range data.Experiments {
@@ -414,17 +440,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// (Strict Rule: Only Code and Execution Output are allowed on this page)
 		// =========================================================================
 		addLeftPage()
-
-		// Running Top Header (Left Page)
-		pdf.SetY(15)
-		pdf.SetFont("Arial", "I", 8)
-		pdf.SetTextColor(100, 110, 125)
-		pdf.CellFormat(90, 5, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE & EXECUTION CONSOLE", exp.ExperimentNo), "", 0, "L", false, 0, "")
-		pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
-		pdf.SetLineWidth(0.2)
-		pdf.SetDrawColor(210, 220, 230)
-		pdf.Line(14, pdf.GetY(), 188, pdf.GetY())
-		pdf.Ln(4)
+		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE & EXECUTION", exp.ExperimentNo))
 
 		// 1. VERIFIED SOURCE CODE BLOCK
 		langStr := strings.ToUpper(exp.Language)
@@ -451,16 +467,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		for idx, line := range codeLines {
 			if pdf.GetY() > 255 {
 				addLeftPage()
-				// Running Top Header (Left Page Continuation)
-				pdf.SetY(15)
-				pdf.SetFont("Arial", "I", 8)
-				pdf.SetTextColor(100, 110, 125)
-				pdf.CellFormat(90, 5, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE (CONT.)", exp.ExperimentNo), "", 0, "L", false, 0, "")
-				pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
-				pdf.SetLineWidth(0.2)
-				pdf.SetDrawColor(210, 220, 230)
-				pdf.Line(14, pdf.GetY(), 188, pdf.GetY())
-				pdf.Ln(4)
+				renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE (CONT.)", exp.ExperimentNo))
 
 				pdf.SetFont("Courier", "", 7.8)
 				pdf.SetTextColor(20, 30, 45)
@@ -476,15 +483,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// 2. EXECUTION OUTPUT & TEST VERIFICATION BLOCK
 		if pdf.GetY() > 240 {
 			addLeftPage()
-			pdf.SetY(15)
-			pdf.SetFont("Arial", "I", 8)
-			pdf.SetTextColor(100, 110, 125)
-			pdf.CellFormat(90, 5, fmt.Sprintf("EX NO: %02d  —  EXECUTION OUTPUT & TEST VERIFICATION", exp.ExperimentNo), "", 0, "L", false, 0, "")
-			pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
-			pdf.SetLineWidth(0.2)
-			pdf.SetDrawColor(210, 220, 230)
-			pdf.Line(14, pdf.GetY(), 188, pdf.GetY())
-			pdf.Ln(4)
+			renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  EXECUTION OUTPUT & TEST VERIFICATION", exp.ExperimentNo))
 		}
 
 		pdf.SetFont("Arial", "B", 9)
@@ -526,17 +525,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// (Strict Rule: Code & Output are forbidden here; all others allowed)
 		// =========================================================================
 		addRightPage()
-
-		// Running Top Header (Right Page)
-		pdf.SetY(15)
-		pdf.SetFont("Arial", "I", 8)
-		pdf.SetTextColor(100, 110, 125)
-		pdf.CellFormat(90, 5, fmt.Sprintf("BIT — %s", data.CourseCode), "", 0, "L", false, 0, "")
-		pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
-		pdf.SetLineWidth(0.2)
-		pdf.SetDrawColor(210, 220, 230)
-		pdf.Line(20, pdf.GetY(), 194, pdf.GetY())
-		pdf.Ln(4)
+		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d", data.CourseCode, exp.ExperimentNo))
 
 		// Experiment Title Banner Strip
 		pdf.SetFont("Arial", "B", 10.5)
@@ -582,17 +571,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// =========================================================================
 		pdf.AddPage()
 		drawPageBorder()
-
-		// Running Top Header (Last Page)
-		pdf.SetY(15)
-		pdf.SetFont("Arial", "I", 8)
-		pdf.SetTextColor(100, 110, 125)
-		pdf.CellFormat(90, 5, fmt.Sprintf("BIT — %s | EVALUATION REPORT", data.CourseCode), "", 0, "L", false, 0, "")
-		pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
-		pdf.SetLineWidth(0.2)
-		pdf.SetDrawColor(210, 220, 230)
-		pdf.Line(20, pdf.GetY(), 194, pdf.GetY())
-		pdf.Ln(4)
+		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d EVALUATION", data.CourseCode, exp.ExperimentNo))
 
 		// Experiment Summary Banner
 		pdf.SetFont("Arial", "B", 10)
@@ -602,7 +581,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.CellFormat(0, 7.5, fmt.Sprintf("  EX NO: %02d EVALUATION REPORT  —  %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
 		pdf.Ln(5)
 
-		// 1. FIRST: TABULAR MARKS RUBRIC COLUMN
+		// 1. FIRST: TABULAR MARKS RUBRIC COLUMN (4-Column Rubric without Status)
 		pdf.SetFont("Arial", "B", 9.5)
 		pdf.SetTextColor(25, 45, 80)
 		pdf.Cell(0, 5, "EVALUATION & MARKS BREAKDOWN RUBRIC:")
