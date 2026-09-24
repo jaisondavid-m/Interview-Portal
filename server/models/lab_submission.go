@@ -21,7 +21,7 @@ type LabSubmission struct {
 	ExecutionOutput    string                 `gorm:"type:text" json:"execution_output"`
 	PassCount          int                    `gorm:"default:0" json:"pass_count"`
 	TotalTestCases     int                    `gorm:"default:0" json:"total_test_cases"`
-	AttemptCount       int                    `gorm:"default:1" json:"attempt_count"`
+	AttemptCount       int                    `gorm:"default:0" json:"attempt_count"`
 	Status             string                 `gorm:"size:50;default:'DRAFT'" json:"status"` // DRAFT, TEST_PASSED, SUBMITTED_FOR_VERIFICATION, APPROVED, REVISION_REQUIRED
 	CodeMarks          int                    `gorm:"default:0" json:"code_marks"`
 	VivaMarks          int                    `gorm:"default:0" json:"viva_marks"`

@@ -207,6 +207,9 @@ func GetCourseExperimentsForStudent(c *gin.Context) {
 			subPtr = &sub
 		}
 
+		// Security: Never leak hidden test cases to student in list API
+		exp.HiddenTestCases = ""
+
 		results = append(results, ExpItem{
 			LabExperiment: exp,
 			IsUnlocked:    unlocked,
@@ -316,6 +319,22 @@ func GetExperimentDetails(c *gin.Context) {
 		return
 	}
 
+	// Sanitized experiment payload (NEVER leak HiddenTestCases to student)
+	safeExperiment := gin.H{
+		"id":                exp.ID,
+		"course_id":         exp.CourseID,
+		"experiment_no":     exp.ExperimentNo,
+		"title":             exp.Title,
+		"aim":               exp.Aim,
+		"procedure":         exp.Procedure,
+		"language":          exp.Language,
+		"starter_code":      exp.StarterCode,
+		"sample_test_cases": exp.SampleTestCases,
+		"max_marks":         exp.MaxMarks,
+		"created_at":        exp.CreatedAt,
+		"updated_at":        exp.UpdatedAt,
+	}
+
 	// Sanitized question payload for student (NEVER send SolutionCode or HiddenTestCases to student)
 	safeQuestion := gin.H{
 		"id":                   assignedQ.ID,
@@ -338,7 +357,7 @@ func GetExperimentDetails(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"experiment":        exp,
+		"experiment":        safeExperiment,
 		"assigned_question": safeQuestion,
 		"submission":        subPtr,
 		"is_unlocked":       accessStatus.IsUnlocked,
@@ -543,13 +562,30 @@ func SubmitExperimentCode(c *gin.Context) {
 	totalCases := len(results)
 	passCount := 0
 	var logs []string
+	type SafeResultItem struct {
+		Index       int    `json:"index"`
+		Name        string `json:"name"`
+		Passed      bool   `json:"passed"`
+		ExecutionMs int    `json:"execution_ms"`
+		IsHidden    bool   `json:"is_hidden"`
+	}
+	var sanitizedResults []SafeResultItem
+
 	for _, r := range results {
 		if r.Passed {
 			passCount++
 			logs = append(logs, fmt.Sprintf("✓ %s Passed (%d ms)", r.Name, r.ExecutionMs))
 		} else {
-			logs = append(logs, fmt.Sprintf("✗ %s Failed: Expected '%s', got '%s'", r.Name, r.Expected, r.Actual))
+			logs = append(logs, fmt.Sprintf("✗ %s Failed", r.Name))
 		}
+
+		sanitizedResults = append(sanitizedResults, SafeResultItem{
+			Index:       r.Index,
+			Name:        r.Name,
+			Passed:      r.Passed,
+			ExecutionMs: r.ExecutionMs,
+			IsHidden:    true,
+		})
 	}
 
 	maxMarks := assignedQ.MaxMarks
@@ -584,11 +620,11 @@ func SubmitExperimentCode(c *gin.Context) {
 		}
 	}
 
+	// Note: Running/submitting code does NOT count as an attempt; attempts are counted on Finish & Send
 	if findErr != nil {
-		sub.AttemptCount = 1
+		sub.AttemptCount = 0
 		database.DB.Create(&sub)
 	} else {
-		sub.AttemptCount += 1
 		database.DB.Save(&sub)
 	}
 
@@ -599,7 +635,7 @@ func SubmitExperimentCode(c *gin.Context) {
 		"status":           sub.Status,
 		"code_marks":       codeMarks,
 		"submission":       sub,
-		"results":          results,
+		"results":          sanitizedResults,
 	})
 }
 
@@ -726,6 +762,14 @@ func FinishAndSendForVerification(c *gin.Context) {
 
 	vivaJSON, _ := json.Marshal(selectedVivas)
 	sub.VivaQuestionsAsked = string(vivaJSON)
+
+	// Increment attempts only when Finish & Send is clicked (1 on initial submit, +1 on resubmission/revision)
+	if sub.AttemptCount == 0 {
+		sub.AttemptCount = 1
+	} else {
+		sub.AttemptCount += 1
+	}
+
 	sub.Status = "SUBMITTED_FOR_VERIFICATION"
 	database.DB.Save(&sub)
 
