@@ -61,6 +61,22 @@ export default function AdminLabPdfViewer() {
 
   // Zoom scale for book spread view: 'fit' | '0.6' | '0.75' | '1.0'
   const [zoomScale, setZoomScale] = useState('fit');
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+
+  const generateLivePdfBlob = async () => {
+    try {
+      const payload = { ...template, is_duplex: isDuplex };
+      const response = await api.post('/admin/labs/record-pdf/custom', payload, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data || response], { type: 'application/pdf' });
+      if (pdfBlobUrl) window.URL.revokeObjectURL(pdfBlobUrl);
+      const url = window.URL.createObjectURL(blob);
+      setPdfBlobUrl(url);
+    } catch {
+      showToast('Failed to compile live PDF stream', 'error');
+    }
+  };
 
   // Full editable template structure
   const [template, setTemplate] = useState({
@@ -498,6 +514,20 @@ export default function AdminLabPdfViewer() {
                 📄 Single Page Focus & Editor
               </button>
               <button
+                onClick={() => {
+                  setViewMode('live_pdf');
+                  generateLivePdfBlob();
+                }}
+                className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'live_pdf'
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                ⚡ Live Compiled PDF
+              </button>
+              <button
                 onClick={() => setViewMode('scroll')}
                 className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   viewMode === 'scroll'
@@ -545,6 +575,26 @@ export default function AdminLabPdfViewer() {
               </button>
             </div>
           </div>
+
+          {/* ========================================================= */}
+          {/* VIEW: LIVE COMPILED PDF STREAM                            */}
+          {/* ========================================================= */}
+          {viewMode === 'live_pdf' && (
+            <div className="w-full bg-slate-900 rounded-[var(--radius-lg)] p-1 border border-[var(--border)] shadow-2xl overflow-hidden">
+              {pdfBlobUrl ? (
+                <iframe
+                  src={`${pdfBlobUrl}#toolbar=1&navpanes=0&view=FitH`}
+                  className="w-full h-[85vh] rounded-[calc(var(--radius-lg)-4px)] border-none"
+                  title="Live Compiled PDF Preview"
+                />
+              ) : (
+                <div className="p-16 text-center text-slate-400 space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-[var(--accent)]" />
+                  <p className="text-xs">Generating live compiled PDF stream from backend...</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ========================================================= */}
           {/* VIEW 1: RESPONSIVE TWO-PAGE BOOKLET SPREAD                */}
