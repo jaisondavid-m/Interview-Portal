@@ -1,0 +1,1167 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Users,
+  Plus,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Search,
+  ArrowLeft,
+  X,
+  Save,
+  GraduationCap,
+  Calendar,
+  Layers,
+  UserPlus,
+  UserCheck,
+  CheckSquare,
+  Square,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Building2
+} from 'lucide-react';
+import api from '../../api/axios';
+import SearchableSelect from '../../Components/SearchableSelect';
+
+const inputCls =
+  'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
+const labelCls = 'text-[12px] font-semibold text-[var(--text-secondary)]';
+
+const SEMESTER_PRESETS = [
+  'Semester I',
+  'Semester II',
+  'Semester III',
+  'Semester IV',
+  'Semester V',
+  'Semester VI',
+  'Semester VII',
+  'Semester VIII',
+];
+
+const ACADEMIC_YEAR_PRESETS = [
+  '2024-2025',
+  '2025-2026',
+  '2026-2027',
+  '2027-2028',
+];
+
+const DEPT_PRESETS = [
+  'Computer Science and Engineering',
+  'Artificial Intelligence and Data Science',
+  'Information Technology',
+  'Electronics and Communication Engineering',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Electrical and Electronics Engineering',
+];
+
+export default function AdminLabBatches() {
+  const navigate = useNavigate();
+
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // Persistence helpers
+  const loadStored = (key, fallback) => {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const saveStored = (key, val) => localStorage.setItem(key, JSON.stringify(val));
+
+  // Batches state
+  const defaultBatches = [
+    { id: '1', name: 'CSE-A', semester: 'Semester III', academic_year: '2025-2026', department: 'CSE' },
+    { id: '2', name: 'CSE-B', semester: 'Semester III', academic_year: '2025-2026', department: 'CSE' },
+    { id: '3', name: 'AI&DS-A', semester: 'Semester III', academic_year: '2025-2026', department: 'AI&DS' },
+    { id: '4', name: 'AI&DS-B', semester: 'Semester III', academic_year: '2025-2026', department: 'AI&DS' },
+  ];
+
+  const [batches, setBatches] = useState(() => {
+    const raw = loadStored('lab_batches_v2', null);
+    if (raw && Array.isArray(raw)) return raw;
+    const legacy = loadStored('lab_sections', null);
+    if (legacy && Array.isArray(legacy)) {
+      return legacy.map((sec, idx) => ({
+        id: String(idx + 1),
+        name: typeof sec === 'string' ? sec : sec.name || `Batch-${idx + 1}`,
+        semester: 'Semester III',
+        academic_year: '2025-2026',
+        department: '',
+      }));
+    }
+    return defaultBatches;
+  });
+
+  const saveBatches = (newBatches) => {
+    setBatches(newBatches);
+    saveStored('lab_batches_v2', newBatches);
+  };
+
+  // Batch Stats
+  const [batchStats, setBatchStats] = useState({});
+
+  // Batch Modal
+  const [batchModal, setBatchModal] = useState(null); // null | 'create' | 'edit'
+  const [editingBatch, setEditingBatch] = useState(null);
+  const emptyBatch = {
+    name: '',
+    semester: 'Semester III',
+    academic_year: '2025-2026',
+    department: 'CSE',
+  };
+  const [batchForm, setBatchForm] = useState(emptyBatch);
+
+  // Student list state
+  const [filterSection, setFilterSection] = useState('ALL');
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total_pages: 1,
+    total_records: 0,
+    has_next: false,
+    has_prev: false,
+  });
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [targetSection, setTargetSection] = useState(() => batches[0]?.name || 'CSE-A');
+  const [assigning, setAssigning] = useState(false);
+
+  // Add Students Drawer
+  const [showAddDrawer, setShowAddDrawer] = useState(false);
+  const [drawerStudents, setDrawerStudents] = useState([]);
+  const [drawerSearch, setDrawerSearch] = useState('');
+  const [drawerPage, setDrawerPage] = useState(1);
+  const [drawerPagination, setDrawerPagination] = useState({ total_pages: 1, total_records: 0 });
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerSelectedIds, setDrawerSelectedIds] = useState(new Set());
+
+  const STUDENT_LIMIT = 15;
+
+  const fetchBatchStats = async () => {
+    try {
+      const res = await api.get('/admin/labs/batch-students/stats');
+      if (Array.isArray(res?.stats)) {
+        const statsMap = {};
+        res.stats.forEach((s) => {
+          statsMap[s.section] = s.count;
+        });
+        setBatchStats(statsMap);
+      }
+    } catch {
+      // silently catch
+    }
+  };
+
+  const fetchStudents = useCallback(async () => {
+    try {
+      setStudentsLoading(true);
+      const params = {
+        page,
+        limit: STUDENT_LIMIT,
+        search: search.trim() || undefined,
+        role: 'student',
+      };
+      if (filterSection === 'UNASSIGNED') {
+        params.section = 'unassigned';
+      } else if (filterSection !== 'ALL') {
+        params.section = filterSection;
+      }
+      const res = await api.get('/admin/users', { params });
+      setStudents(Array.isArray(res.data) ? res.data : []);
+      if (res.pagination) setPagination(res.pagination);
+    } catch {
+      // silently catch
+    } finally {
+      setStudentsLoading(false);
+    }
+  }, [page, search, filterSection]);
+
+  const fetchDrawerStudents = useCallback(async () => {
+    try {
+      setDrawerLoading(true);
+      const params = {
+        page: drawerPage,
+        limit: 12,
+        search: drawerSearch.trim() || undefined,
+        role: 'student',
+      };
+      const res = await api.get('/admin/users', { params });
+      setDrawerStudents(Array.isArray(res.data) ? res.data : []);
+      if (res.pagination) setDrawerPagination(res.pagination);
+    } catch {
+      // silently catch
+    } finally {
+      setDrawerLoading(false);
+    }
+  }, [drawerPage, drawerSearch]);
+
+  useEffect(() => {
+    fetchBatchStats();
+  }, []);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
+  useEffect(() => {
+    if (showAddDrawer) {
+      fetchDrawerStudents();
+    }
+  }, [showAddDrawer, fetchDrawerStudents]);
+
+  // Debounce search in table
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1);
+      fetchStudents();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Debounce search in drawer
+  useEffect(() => {
+    if (!showAddDrawer) return;
+    const t = setTimeout(() => {
+      setDrawerPage(1);
+      fetchDrawerStudents();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [drawerSearch]);
+
+  // Batch creation & modification
+  const openCreateBatch = () => {
+    setBatchForm({
+      name: '',
+      semester: 'Semester III',
+      academic_year: '2025-2026',
+      department: 'CSE',
+    });
+    setEditingBatch(null);
+    setBatchModal('create');
+  };
+
+  const openEditBatch = (b) => {
+    setBatchForm({ ...b });
+    setEditingBatch(b);
+    setBatchModal('edit');
+  };
+
+  const handleSaveBatch = (e) => {
+    e.preventDefault();
+    if (!batchForm.name.trim()) {
+      showToast('Batch name is required.', 'error');
+      return;
+    }
+    const cleanName = batchForm.name.trim();
+    if (batchModal === 'create') {
+      if (batches.some((b) => b.name.toLowerCase() === cleanName.toLowerCase())) {
+        showToast('A batch with this name already exists.', 'error');
+        return;
+      }
+      const newEntry = {
+        id: String(Date.now()),
+        name: cleanName,
+        semester: batchForm.semester,
+        academic_year: batchForm.academic_year,
+        department: batchForm.department,
+      };
+      saveBatches([...batches, newEntry]);
+      showToast(`Batch "${cleanName}" created successfully!`);
+    } else if (batchModal === 'edit' && editingBatch) {
+      const updated = batches.map((b) =>
+        b.id === editingBatch.id
+          ? {
+              ...b,
+              name: cleanName,
+              semester: batchForm.semester,
+              academic_year: batchForm.academic_year,
+              department: batchForm.department,
+            }
+          : b
+      );
+      saveBatches(updated);
+      showToast(`Batch "${cleanName}" updated successfully!`);
+    }
+    setBatchModal(null);
+    setEditingBatch(null);
+  };
+
+  const handleDeleteBatch = (id, name) => {
+    if (!window.confirm(`Delete batch "${name}"? Students allocated to this batch will not be deleted.`)) return;
+    const filtered = batches.filter((b) => b.id !== id);
+    saveBatches(filtered);
+    showToast(`Batch "${name}" deleted.`);
+  };
+
+  // Student selection & assignment
+  const toggleStudent = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllStudents = () => {
+    if (selectedIds.size === students.length && students.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(students.map((s) => s.id)));
+    }
+  };
+
+  const handleApplySection = async (sectionToAssign) => {
+    if (selectedIds.size === 0) {
+      showToast('Select at least one student.', 'error');
+      return;
+    }
+    try {
+      setAssigning(true);
+      await api.post('/admin/labs/batch-students/assign', {
+        student_ids: Array.from(selectedIds),
+        section: sectionToAssign,
+      });
+      showToast(
+        sectionToAssign
+          ? `${selectedIds.size} student(s) allocated to ${sectionToAssign}!`
+          : `${selectedIds.size} student(s) unassigned!`,
+        'success'
+      );
+      setSelectedIds(new Set());
+      fetchStudents();
+      fetchBatchStats();
+    } catch {
+      showToast('Failed to assign section.', 'error');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleQuickAssignSingle = async (studentId, sectionVal) => {
+    try {
+      await api.post('/admin/labs/batch-students/assign', {
+        student_ids: [studentId],
+        section: sectionVal,
+      });
+      showToast(sectionVal ? `Allocated to ${sectionVal}` : 'Unassigned from batch');
+      fetchStudents();
+      fetchBatchStats();
+    } catch {
+      showToast('Failed to update student section.', 'error');
+    }
+  };
+
+  // Drawer handlers
+  const toggleDrawerStudent = (id) => {
+    setDrawerSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllDrawerStudents = () => {
+    if (drawerSelectedIds.size === drawerStudents.length && drawerStudents.length > 0) {
+      setDrawerSelectedIds(new Set());
+    } else {
+      setDrawerSelectedIds(new Set(drawerStudents.map((s) => s.id)));
+    }
+  };
+
+  const handleAddSelectedToBatch = async () => {
+    if (drawerSelectedIds.size === 0) {
+      showToast('Select students to add.', 'error');
+      return;
+    }
+    const target =
+      filterSection === 'ALL' || filterSection === 'UNASSIGNED' ? targetSection : filterSection;
+    try {
+      setAssigning(true);
+      await api.post('/admin/labs/batch-students/assign', {
+        student_ids: Array.from(drawerSelectedIds),
+        section: target,
+      });
+      showToast(`${drawerSelectedIds.size} student(s) added to batch "${target}"!`);
+      setShowAddDrawer(false);
+      setDrawerSelectedIds(new Set());
+      fetchStudents();
+      fetchBatchStats();
+    } catch {
+      showToast('Failed to add students to batch.', 'error');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const totalAssignedStudents = Object.values(batchStats).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
+            toast.type === 'error'
+              ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
+              : 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          )}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
+      {/* Page Header */}
+      <div className="pb-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/admin/labs/config')}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] py-1.5 px-3 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer shadow-[var(--shadow-sm)] shrink-0"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+            Back to Config
+          </button>
+          <div>
+            <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
+              <Users className="w-6 h-6 text-[var(--accent)]" />
+              Student Batches & Sections
+            </h1>
+            <p className="text-[12px] sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
+              Configure student cohorts with pre-linked semester and academic year, and manage allocations seamlessly.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+          <button
+            onClick={openCreateBatch}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
+          >
+            <Plus className="w-4 h-4" />
+            Create New Batch
+          </button>
+        </div>
+      </div>
+
+      {/* SECTION 1: Batch Cohort Cards Grid */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <Layers className="w-4 h-4 text-[var(--accent)]" />
+            Configured Batches & Cohorts
+            <span className="text-[11px] font-mono text-[var(--text-muted)] ml-1">
+              ({batches.length} Batches · {totalAssignedStudents} Students Allocated)
+            </span>
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {batches.map((b) => {
+            const count = batchStats[b.name] || 0;
+            const isFiltering = filterSection === b.name;
+
+            return (
+              <div
+                key={b.id}
+                onClick={() => {
+                  setFilterSection(b.name);
+                  setPage(1);
+                }}
+                className={`group relative bg-[var(--bg-card)] border rounded-[var(--radius-md)] p-4 space-y-3 transition-all cursor-pointer hover:shadow-sm ${
+                  isFiltering
+                    ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/20 shadow-sm'
+                    : 'border-[var(--border)] hover:border-[var(--border-accent)]'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="font-mono font-bold text-[16px] text-[var(--accent)] group-hover:underline">
+                      {b.name}
+                    </span>
+                    {b.department && (
+                      <span className="block text-[10px] text-[var(--text-muted)] font-medium">
+                        {b.department}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => openEditBatch(b)}
+                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                      title="Edit batch semester & year"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteBatch(b.id, b.name)}
+                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] transition-colors cursor-pointer"
+                      title="Delete batch"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Linked Semester & Academic Year Badges */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
+                    <GraduationCap className="w-3 h-3 text-[var(--accent)]" />
+                    {b.semester}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
+                    <Calendar className="w-3 h-3 text-[var(--accent)]" />
+                    {b.academic_year}
+                  </span>
+                </div>
+
+                {/* Footer Count & Filter Action */}
+                <div className="pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
+                  <span className="text-[var(--text-muted)]">Enrolled:</span>
+                  <span className="font-mono font-bold text-[var(--accent)]">
+                    {count} student{count === 1 ? '' : 's'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SECTION 2: Student Allocation Workspace */}
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4 shadow-[var(--shadow-xs)]">
+        {/* Workspace Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-[var(--border)]">
+          <div>
+            <h2 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-[var(--accent)]" />
+              Student Batch Allocation Roster
+            </h2>
+            <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+              Filter by batch, select students, and assign them directly to batches.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => setShowAddDrawer(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              {filterSection !== 'ALL' && filterSection !== 'UNASSIGNED'
+                ? `Add Students to ${filterSection}`
+                : 'Add Students to Batch'}
+            </button>
+            <button
+              onClick={() => {
+                fetchStudents();
+                fetchBatchStats();
+              }}
+              className="p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+              title="Refresh roster"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${studentsLoading ? 'animate-spin text-[var(--accent)]' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-1">
+            Filter View:
+          </span>
+          <button
+            onClick={() => {
+              setFilterSection('ALL');
+              setPage(1);
+              setSelectedIds(new Set());
+            }}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterSection === 'ALL'
+                ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
+                : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
+            }`}
+          >
+            <span>All Students</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20 text-inherit">
+              {pagination.total_records || '—'}
+            </span>
+          </button>
+
+          {batches.map((b) => {
+            const count = batchStats[b.name] || 0;
+            return (
+              <button
+                key={b.id}
+                onClick={() => {
+                  setFilterSection(b.name);
+                  setPage(1);
+                  setSelectedIds(new Set());
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  filterSection === b.name
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
+                    : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
+                }`}
+              >
+                <span>{b.name}</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20 text-inherit">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => {
+              setFilterSection('UNASSIGNED');
+              setPage(1);
+              setSelectedIds(new Set());
+            }}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterSection === 'UNASSIGNED'
+                ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
+                : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
+            }`}
+          >
+            <span>Unassigned</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20 text-inherit">
+              {batchStats['Unassigned'] || 0}
+            </span>
+          </button>
+        </div>
+
+        {/* Selected Action Floating Bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--accent-dim)] border border-[var(--border-accent)] rounded-[var(--radius-md)] p-3.5 animate-in fade-in">
+            <div className="flex items-center gap-2 text-xs font-bold text-[var(--accent)]">
+              <CheckSquare className="w-4 h-4" />
+              <span>{selectedIds.size} student(s) selected</span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-[var(--text-secondary)] font-medium">Assign to:</span>
+              <select
+                value={targetSection}
+                onChange={(e) => setTargetSection(e.target.value)}
+                className="bg-[var(--bg-card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-semibold focus:outline-none cursor-pointer"
+              >
+                {batches.map((b) => (
+                  <option key={b.id} value={b.name}>
+                    {b.name} ({b.semester})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => handleApplySection(targetSection)}
+                disabled={assigning}
+                className="px-3.5 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              >
+                {assigning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                Allocate to Selected
+              </button>
+
+              <button
+                onClick={() => handleApplySection('')}
+                disabled={assigning}
+                className="px-3 py-1.5 rounded bg-[var(--red-bg)] border border-[var(--red)]/20 text-[var(--red)] text-xs font-semibold hover:bg-[var(--red)]/15 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Remove from Batch
+              </button>
+
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="px-2.5 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Search Bar + Select All */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search students by name, roll number, department, or email..."
+              className={`${inputCls} pl-9`}
+            />
+          </div>
+          <button
+            onClick={toggleAllStudents}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all shrink-0"
+          >
+            {selectedIds.size === students.length && students.length > 0 ? (
+              <CheckSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+            ) : (
+              <Square className="w-3.5 h-3.5" />
+            )}
+            {selectedIds.size === students.length && students.length > 0
+              ? 'Deselect All'
+              : 'Select All on Page'}
+          </button>
+        </div>
+
+        {/* Student Table */}
+        {studentsLoading ? (
+          <div className="flex items-center justify-center py-12 gap-2 text-[var(--text-muted)]">
+            <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
+            <span className="text-xs">Loading students...</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-[var(--border)] rounded-[var(--radius-md)]">
+            <table className="w-full text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--border)] bg-[var(--bg-raised)]">
+                  <th className="py-2.5 px-3 w-9"></th>
+                  <th className="py-2.5 pr-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    Student Details
+                  </th>
+                  <th className="py-2.5 pr-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    Roll Number
+                  </th>
+                  <th className="py-2.5 pr-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="py-2.5 pr-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    Current Batch
+                  </th>
+                  <th className="py-2.5 px-3 text-right text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    Quick Move
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {students.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-[var(--text-muted)] text-xs">
+                      No students found matching this criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  students.map((s) => {
+                    const isSelected = selectedIds.has(s.id);
+                    const matchedBatch = batches.find((b) => b.name === s.section);
+                    return (
+                      <tr
+                        key={s.id}
+                        className={`transition-colors hover:bg-[var(--bg-raised)] ${
+                          isSelected ? 'bg-[var(--accent-dim)]/50' : ''
+                        }`}
+                      >
+                        <td className="py-2.5 px-3" onClick={() => toggleStudent(s.id)}>
+                          <button className="cursor-pointer flex items-center justify-center">
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-[var(--accent)]" />
+                            ) : (
+                              <Square className="w-4 h-4 text-[var(--text-muted)]" />
+                            )}
+                          </button>
+                        </td>
+                        <td className="py-2.5 pr-4 font-medium text-[var(--text-primary)]">
+                          <div>{s.name}</div>
+                          <div className="text-[11px] text-[var(--text-muted)]">{s.email}</div>
+                        </td>
+                        <td className="py-2.5 pr-4 font-mono font-medium text-[var(--text-secondary)]">
+                          {s.roll_no || '—'}
+                        </td>
+                        <td className="py-2.5 pr-4 text-[var(--text-secondary)]">{s.department || '—'}</td>
+                        <td className="py-2.5 pr-4">
+                          {s.section ? (
+                            <div className="inline-flex flex-col">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] w-fit">
+                                {s.section}
+                              </span>
+                              {matchedBatch && (
+                                <span className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                                  {matchedBatch.semester} · {matchedBatch.academic_year}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-[var(--text-muted)] bg-[var(--bg-input)] border border-[var(--border)] italic">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <select
+                              value={s.section || ''}
+                              onChange={(e) => handleQuickAssignSingle(s.id, e.target.value)}
+                              className="bg-[var(--bg-input)] border border-[var(--border)] rounded px-2 py-1 text-[11px] text-[var(--text-primary)] font-medium focus:outline-none cursor-pointer"
+                            >
+                              <option value="">Unassigned</option>
+                              {batches.map((b) => (
+                                <option key={b.id} value={b.name}>
+                                  {b.name}
+                                </option>
+                              ))}
+                            </select>
+                            {s.section && (
+                              <button
+                                onClick={() => handleQuickAssignSingle(s.id, '')}
+                                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] transition-colors cursor-pointer"
+                                title="Remove from batch"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {pagination.total_pages > 1 && (
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+            <span className="text-[11px] text-[var(--text-muted)]">
+              {pagination.total_records} students · Page {page} of {pagination.total_pages}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                disabled={!pagination.has_prev}
+                onClick={() => setPage((p) => p - 1)}
+                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition-all"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              {Array.from({ length: Math.min(pagination.total_pages, 5) }, (_, i) => {
+                const p = i + 1;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-all ${
+                      page === p
+                        ? 'bg-[var(--accent)] text-white'
+                        : 'bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+              <button
+                disabled={!pagination.has_next}
+                onClick={() => setPage((p) => p + 1)}
+                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition-all"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL: Create / Edit Batch with Clean Presets Flow */}
+      {batchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-xl)] shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+              <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <Users className="w-4 h-4 text-[var(--accent)]" />
+                {batchModal === 'edit' ? `Edit Batch: ${editingBatch?.name}` : 'Create New Student Batch'}
+              </h3>
+              <button
+                onClick={() => setBatchModal(null)}
+                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--red)] cursor-pointer transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBatch} className="p-6 space-y-4">
+              {/* Batch Name */}
+              <div className="space-y-1.5">
+                <label className={labelCls}>
+                  Batch Name / Section Identifier <span className="text-[var(--red)]">*</span>
+                </label>
+                <input
+                  value={batchForm.name}
+                  onChange={(e) => setBatchForm((p) => ({ ...p, name: e.target.value.toUpperCase() }))}
+                  placeholder="e.g. CSE-A, AI&DS-B, IT-A"
+                  className={inputCls}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              {/* Department */}
+              <div className="space-y-1.5">
+                <label className={labelCls}>Department</label>
+                <input
+                  value={batchForm.department}
+                  onChange={(e) => setBatchForm((p) => ({ ...p, department: e.target.value }))}
+                  placeholder="e.g. Computer Science and Engineering"
+                  className={inputCls}
+                />
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {['CSE', 'AI&DS', 'IT', 'ECE', 'MECH'].map((dept) => (
+                    <button
+                      key={dept}
+                      type="button"
+                      onClick={() => setBatchForm((p) => ({ ...p, department: dept }))}
+                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--border-accent)] cursor-pointer transition-colors"
+                    >
+                      +{dept}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Semester Selector */}
+              <div className="space-y-1.5">
+                <label className={labelCls}>
+                  Semester <span className="text-[var(--red)]">*</span>
+                </label>
+                <select
+                  value={batchForm.semester}
+                  onChange={(e) => setBatchForm((p) => ({ ...p, semester: e.target.value }))}
+                  className={inputCls}
+                  required
+                >
+                  {SEMESTER_PRESETS.map((sem) => (
+                    <option key={sem} value={sem}>
+                      {sem}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Academic Year Selector */}
+              <div className="space-y-1.5">
+                <label className={labelCls}>
+                  Academic Year <span className="text-[var(--red)]">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={batchForm.academic_year}
+                    onChange={(e) => setBatchForm((p) => ({ ...p, academic_year: e.target.value }))}
+                    className={inputCls}
+                    required
+                  >
+                    {ACADEMIC_YEAR_PRESETS.map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {batchModal === 'edit' ? 'Save Changes' : 'Create Batch'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchModal(null)}
+                  className="px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Add Students to Batch (Drawer) */}
+      {showAddDrawer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-xl)] shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+              <div>
+                <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-[var(--accent)]" />
+                  Add Students to Batch {filterSection !== 'ALL' && filterSection !== 'UNASSIGNED' ? `(${filterSection})` : ''}
+                </h3>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  Select students from the list below to assign them directly into the batch.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddDrawer(false)}
+                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--red)] cursor-pointer transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+              {(filterSection === 'ALL' || filterSection === 'UNASSIGNED') && (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Target Batch to Assign</label>
+                  <select
+                    value={targetSection}
+                    onChange={(e) => setTargetSection(e.target.value)}
+                    className={inputCls}
+                  >
+                    {batches.map((b) => (
+                      <option key={b.id} value={b.name}>
+                        {b.name} ({b.semester})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Search + Select All */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={drawerSearch}
+                    onChange={(e) => setDrawerSearch(e.target.value)}
+                    placeholder="Search by student name, roll number, or department..."
+                    className={`${inputCls} pl-9 text-xs`}
+                  />
+                </div>
+                <button
+                  onClick={toggleAllDrawerStudents}
+                  className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all"
+                >
+                  {drawerSelectedIds.size === drawerStudents.length && drawerStudents.length > 0
+                    ? 'Deselect All'
+                    : 'Select All'}
+                </button>
+              </div>
+
+              {/* Student Drawer List */}
+              {drawerLoading ? (
+                <div className="flex items-center justify-center py-10 gap-2 text-[var(--text-muted)]">
+                  <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)]" />
+                  <span className="text-xs">Loading students...</span>
+                </div>
+              ) : (
+                <div className="max-h-64 overflow-y-auto border border-[var(--border)] rounded-[var(--radius-md)] divide-y divide-[var(--border)]">
+                  {drawerStudents.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-[var(--text-muted)]">No students found.</div>
+                  ) : (
+                    drawerStudents.map((s) => {
+                      const isSel = drawerSelectedIds.has(s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => toggleDrawerStudent(s.id)}
+                          className={`flex items-center justify-between p-3 text-xs cursor-pointer transition-colors hover:bg-[var(--bg-raised)] ${
+                            isSel ? 'bg-[var(--accent-dim)]/60' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isSel ? (
+                              <CheckSquare className="w-4 h-4 text-[var(--accent)]" />
+                            ) : (
+                              <Square className="w-4 h-4 text-[var(--text-muted)]" />
+                            )}
+                            <div>
+                              <div className="font-semibold text-[var(--text-primary)]">{s.name}</div>
+                              <div className="text-[11px] text-[var(--text-muted)] font-mono">
+                                {s.roll_no || 'No Roll No'} · {s.email}
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            {s.section ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)]">
+                                Currently: {s.section}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-[var(--text-muted)] italic">Unassigned</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Drawer Pagination */}
+              {drawerPagination.total_pages > 1 && (
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-[var(--text-muted)]">
+                    Page {drawerPage} of {drawerPagination.total_pages}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      disabled={drawerPage <= 1}
+                      onClick={() => setDrawerPage((p) => p - 1)}
+                      className="p-1 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-40 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      disabled={drawerPage >= drawerPagination.total_pages}
+                      onClick={() => setDrawerPage((p) => p + 1)}
+                      className="p-1 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-40 cursor-pointer"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] bg-[var(--bg-raised)] rounded-b-[var(--radius-xl)]">
+              <span className="text-xs font-semibold text-[var(--text-secondary)]">
+                {drawerSelectedIds.size} student(s) selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddDrawer(false)}
+                  className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddSelectedToBatch}
+                  disabled={drawerSelectedIds.size === 0 || assigning}
+                  className="px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  {assigning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                  Assign to {filterSection !== 'ALL' && filterSection !== 'UNASSIGNED' ? filterSection : targetSection}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

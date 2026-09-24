@@ -45,6 +45,9 @@ import FacultyLabEvaluation from '../Pages/Labs/FacultyLabEvaluation';
 import FacultyLabScheduling from '../Pages/Labs/FacultyLabScheduling';
 import AdminLabPdfViewer from '../Pages/Admin/AdminLabPdfViewer';
 import AdminLabConfig from '../Pages/Admin/AdminLabConfig';
+import AdminLabCourses from '../Pages/Admin/AdminLabCourses';
+import AdminLabBatches from '../Pages/Admin/AdminLabBatches';
+import AdminLabFacultyMapping from '../Pages/Admin/AdminLabFacultyMapping';
 import AdminLabCourseExperiments from '../Pages/Admin/AdminLabCourseExperiments';
 
 // Route Guards & Error Boundary
@@ -417,7 +420,15 @@ export const router = createBrowserRouter([
           },
           {
             path: 'admin/labs/mapping',
-            element: <Navigate to="/admin/labs/config" replace />,
+            element: <AdminLabFacultyMapping />,
+          },
+          {
+            path: 'admin/labs/courses',
+            element: <AdminLabCourses />,
+          },
+          {
+            path: 'admin/labs/batches',
+            element: <AdminLabBatches />,
           },
           {
             path: 'admin/labs/pdf-preview',
