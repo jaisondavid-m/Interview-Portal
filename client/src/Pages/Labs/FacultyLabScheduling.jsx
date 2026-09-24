@@ -58,7 +58,6 @@ export default function FacultyLabScheduling() {
   const [selectedUnlockSection, setSelectedUnlockSection] = useState('ALL');
   const [togglingExpId, setTogglingExpId] = useState(null);
   const [savingScheduleExpId, setSavingScheduleExpId] = useState(null);
-  const [savingProgression, setSavingProgression] = useState(false);
 
   // Inline Experiment Schedule Drafts: { [expId]: { is_unlocked, starts_at, ends_at, max_attempts, allow_late_submission, notes } }
   const [scheduleDrafts, setScheduleDrafts] = useState({});
@@ -151,35 +150,6 @@ export default function FacultyLabScheduling() {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     } catch {
       return '';
-    }
-  };
-
-  // 1. Toggle Progression Mode (Sequential vs Open Access)
-  const handleToggleProgressionMode = async (newMode) => {
-    if (!selectedUnlockCourseId) return;
-    try {
-      setSavingProgression(true);
-      await api.post(`/lab-incharge/courses/${selectedUnlockCourseId}/progression-mode`, {
-        progression_mode: newMode,
-      });
-      showToast(
-        newMode === 'SEQUENTIAL'
-          ? 'Sequential Milestone Progression enabled! Students must complete Exp N-1 to unlock Exp N.'
-          : 'Open Access mode enabled! Students can access any unlocked experiment.'
-      );
-      // Update local course state
-      setUnlockData((prev) => ({
-        ...prev,
-        courses: prev.courses.map((c) =>
-          String(c.id) === String(selectedUnlockCourseId)
-            ? { ...c, progression_mode: newMode }
-            : c
-        ),
-      }));
-    } catch {
-      showToast('Failed to update progression policy.', 'error');
-    } finally {
-      setSavingProgression(false);
     }
   };
 
@@ -348,8 +318,6 @@ export default function FacultyLabScheduling() {
     );
   });
 
-  const isSequentialMode = currentCourse?.progression_mode === 'SEQUENTIAL';
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* Toast Notification */}
@@ -455,106 +423,7 @@ export default function FacultyLabScheduling() {
         </button>
       </div>
 
-      {/* CARD 1: Sequential Milestone Progression Policy Card */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4 shadow-[var(--shadow-xs)]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] mb-1">
-              <ShieldCheck className="w-3 h-3" />
-              Faculty Progression Authority
-            </div>
-            <h2 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <ListOrdered className="w-4 h-4 text-[var(--accent)]" />
-              Experiment Milestone Progression Policy
-            </h2>
-            <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-              Choose whether students must complete experiments one-by-one in sequential order or have open access.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => handleToggleProgressionMode(isSequentialMode ? 'OPEN' : 'SEQUENTIAL')}
-              disabled={savingProgression}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer shadow-sm ${
-                isSequentialMode
-                  ? 'bg-[var(--accent)] text-white hover:brightness-110'
-                  : 'bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--border-strong)]'
-              }`}
-            >
-              {savingProgression ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : isSequentialMode ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <RotateCcw className="w-4 h-4" />
-              )}
-              {isSequentialMode
-                ? 'Sequential Progression: ACTIVE'
-                : 'Open Access: ACTIVE'}
-            </button>
-          </div>
-        </div>
-
-        {/* Policy Explainer Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div
-            onClick={() => handleToggleProgressionMode('SEQUENTIAL')}
-            className={`p-4 rounded-[var(--radius-md)] border transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
-              isSequentialMode
-                ? 'bg-[var(--accent-dim)]/40 border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                : 'bg-[var(--bg-input)]/50 border-[var(--border)] hover:border-[var(--border-strong)] opacity-80'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 font-bold text-[13px] text-[var(--text-primary)]">
-                <GitBranch className="w-4 h-4 text-[var(--accent)]" />
-                Sequential Milestone Progression (Linear)
-              </div>
-              {isSequentialMode && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--accent)] text-white">
-                  Enabled
-                </span>
-              )}
-            </div>
-            <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-              <strong>Experiment 1 completed & verified &rarr; Experiment 2 unlocks.</strong> Experiment 2 completed &rarr; Experiment 3 unlocks. Students cannot jump ahead without finishing earlier experiments.
-            </p>
-            <div className="flex items-center gap-1.5 pt-1 text-[11px] font-mono text-[var(--accent)] font-semibold">
-              <span>Exp 1 [Done]</span> &rarr; <span>Exp 2 [Done]</span> &rarr; <span>Exp 3 [Open]</span>
-            </div>
-          </div>
-
-          <div
-            onClick={() => handleToggleProgressionMode('OPEN')}
-            className={`p-4 rounded-[var(--radius-md)] border transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
-              !isSequentialMode
-                ? 'bg-[var(--accent-dim)]/40 border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                : 'bg-[var(--bg-input)]/50 border-[var(--border)] hover:border-[var(--border-strong)] opacity-80'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 font-bold text-[13px] text-[var(--text-primary)]">
-                <Unlock className="w-4 h-4 text-[var(--accent)]" />
-                Open Access / Independent Releases
-              </div>
-              {!isSequentialMode && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--accent)] text-white">
-                  Enabled
-                </span>
-              )}
-            </div>
-            <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-              Any experiment released in an active attendance window is immediately accessible, regardless of whether earlier experiments were finished.
-            </p>
-            <div className="flex items-center gap-1.5 pt-1 text-[11px] font-mono text-[var(--text-muted)]">
-              <span>Free student exploration within scheduled windows</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CARD 2: Inline Experiment Release Roster & Window Timings (NO MODALS) */}
+      {/* Experiment Release Roster & Window Timings (NO MODALS) */}
       <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4 shadow-[var(--shadow-xs)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
           <div>
@@ -608,7 +477,7 @@ export default function FacultyLabScheduling() {
                 notes: '',
               };
               const isUnlocked = draft.is_unlocked;
-              const hasPrereq = isSequentialMode && idx > 0;
+              const hasPrereq = idx > 0;
               const prevExp = hasPrereq ? activeCourseExperiments[idx - 1] : null;
               const isSavingThis = savingScheduleExpId === exp.id;
               const isTogglingThis = togglingExpId === exp.id;

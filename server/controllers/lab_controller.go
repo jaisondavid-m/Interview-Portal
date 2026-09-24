@@ -53,37 +53,32 @@ func getStudentExperimentAccess(courseID uint, expID uint, userID uint, userRole
 	section := strings.TrimSpace(user.Section)
 	now := time.Now()
 
-	// 0. Sequential Progression Prerequisite Check
+	// 0. Sequential Milestone Prerequisite Check (Always Enforced by Default)
 	var currentExp models.LabExperiment
 	if err := database.DB.Select("id, course_id, experiment_no, title").First(&currentExp, expID).Error; err == nil {
-		var course models.LabCourse
-		database.DB.Select("id, progression_mode").First(&course, courseID)
+		var prevExp models.LabExperiment
+		if err := database.DB.Where("course_id = ? AND experiment_no < ?", courseID, currentExp.ExperimentNo).
+			Order("experiment_no desc").First(&prevExp).Error; err == nil && prevExp.ID > 0 {
 
-		if strings.ToUpper(strings.TrimSpace(course.ProgressionMode)) == "SEQUENTIAL" {
-			var prevExp models.LabExperiment
-			if err := database.DB.Where("course_id = ? AND experiment_no < ?", courseID, currentExp.ExperimentNo).
-				Order("experiment_no desc").First(&prevExp).Error; err == nil && prevExp.ID > 0 {
+			// Check if current student has an explicit override with BypassPrerequisite
+			var studentOverride models.LabExperimentUnlock
+			hasOverrideBypass := false
+			if err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ? AND is_unlocked = ? AND bypass_prerequisite = ?", courseID, expID, userID, true, true).First(&studentOverride).Error; err == nil {
+				hasOverrideBypass = true
+			}
 
-				// Check if current student has an explicit override with BypassPrerequisite
-				var studentOverride models.LabExperimentUnlock
-				hasOverrideBypass := false
-				if err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ? AND is_unlocked = ? AND bypass_prerequisite = ?", courseID, expID, userID, true, true).First(&studentOverride).Error; err == nil {
-					hasOverrideBypass = true
-				}
-
-				if !hasOverrideBypass {
-					var prevSub models.LabSubmission
-					err := database.DB.Where("student_id = ? AND experiment_id = ? AND (status IN ('TEST_PASSED', 'SUBMITTED_FOR_VERIFICATION', 'APPROVED') OR marks > 0)", userID, prevExp.ID).First(&prevSub).Error
-					if err != nil {
-						return StudentUnlockStatus{
-							IsUnlocked:        false,
-							Section:           section,
-							Status:            "PREREQUISITE_LOCKED",
-							PrerequisiteExpID: prevExp.ID,
-							PrerequisiteExpNo: prevExp.ExperimentNo,
-							PrerequisiteTitle: prevExp.Title,
-							Notes:             fmt.Sprintf("Locked: Complete Experiment %d (%s) first.", prevExp.ExperimentNo, prevExp.Title),
-						}
+			if !hasOverrideBypass {
+				var prevSub models.LabSubmission
+				err := database.DB.Where("student_id = ? AND experiment_id = ? AND (status IN ('TEST_PASSED', 'SUBMITTED_FOR_VERIFICATION', 'APPROVED') OR marks > 0)", userID, prevExp.ID).First(&prevSub).Error
+				if err != nil {
+					return StudentUnlockStatus{
+						IsUnlocked:        false,
+						Section:           section,
+						Status:            "PREREQUISITE_LOCKED",
+						PrerequisiteExpID: prevExp.ID,
+						PrerequisiteExpNo: prevExp.ExperimentNo,
+						PrerequisiteTitle: prevExp.Title,
+						Notes:             fmt.Sprintf("Locked: Complete Experiment %d (%s) first.", prevExp.ExperimentNo, prevExp.Title),
 					}
 				}
 			}
