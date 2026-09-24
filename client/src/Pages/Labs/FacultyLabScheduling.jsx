@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Clock,
@@ -31,7 +31,8 @@ import {
   RefreshCw,
   GitBranch,
   ShieldCheck,
-  ListOrdered
+  ListOrdered,
+  Users
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -67,6 +68,8 @@ export default function FacultyLabScheduling() {
   const [selectedOverrideExpIds, setSelectedOverrideExpIds] = useState([]);
   const [overrideStudentSection, setOverrideStudentSection] = useState('ALL');
   const [overrideStudentQuery, setOverrideStudentQuery] = useState('');
+  const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
+  const studentSearchRef = useRef(null);
   const [overrideForm, setOverrideForm] = useState({
     is_unlocked: true,
     bypass_prerequisite: false,
@@ -143,8 +146,21 @@ export default function FacultyLabScheduling() {
     }
   }, [selectedUnlockCourseId, selectedUnlockSection, unlockData.unlocks, activeCourseExperiments.length]);
 
+  // Close student dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (studentSearchRef.current && !studentSearchRef.current.contains(e.target)) {
+        setIsStudentDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Multi-select helpers for Override Form
-  const filteredOverrideStudents = (unlockData.students || []).filter((s) => {
+  const availableMatchingStudents = (unlockData.students || []).filter((s) => {
+    const isAlreadySelected = selectedOverrideStudentIds.includes(s.id);
+    if (isAlreadySelected) return false;
     const matchesSec =
       overrideStudentSection === 'ALL' ||
       !s.section ||
@@ -159,21 +175,24 @@ export default function FacultyLabScheduling() {
     );
   });
 
-  const toggleStudentSelection = (sId) => {
-    setSelectedOverrideStudentIds((prev) =>
-      prev.includes(sId) ? prev.filter((id) => id !== sId) : [...prev, sId]
-    );
+  const selectedStudentsData = (unlockData.students || []).filter((s) =>
+    selectedOverrideStudentIds.includes(s.id)
+  );
+
+  const addStudentToSelection = (sId) => {
+    if (!selectedOverrideStudentIds.includes(sId)) {
+      setSelectedOverrideStudentIds((prev) => [...prev, sId]);
+    }
   };
 
-  const handleSelectAllFilteredStudents = () => {
-    const filteredIds = filteredOverrideStudents.map((s) => s.id);
-    const allSelected =
-      filteredIds.length > 0 && filteredIds.every((id) => selectedOverrideStudentIds.includes(id));
-    if (allSelected) {
-      setSelectedOverrideStudentIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
-    } else {
-      setSelectedOverrideStudentIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
-    }
+  const removeStudentFromSelection = (sId) => {
+    setSelectedOverrideStudentIds((prev) => prev.filter((id) => id !== sId));
+  };
+
+  const addAllMatchingStudents = () => {
+    const idsToAdd = availableMatchingStudents.map((s) => s.id);
+    setSelectedOverrideStudentIds((prev) => Array.from(new Set([...prev, ...idsToAdd])));
+    setIsStudentDropdownOpen(false);
   };
 
   const toggleExpSelection = (eId) => {
@@ -673,19 +692,38 @@ export default function FacultyLabScheduling() {
             </div>
           </div>
 
-          {/* Step 2: Student Multi-Select Roster */}
-          <div className="space-y-2 pt-2 border-t border-[var(--border)]">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <label className={labelCls}>
-                2. Select Target Students ({selectedOverrideStudentIds.length} Selected) *
-              </label>
+          {/* Step 2: Searchable Student Select & Selected List */}
+          <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <label className={labelCls}>
+                  2. Search & Select Target Students ({selectedOverrideStudentIds.length} Selected) *
+                </label>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Search by student name, roll number, or email to add them to this override.
+                </p>
+              </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
+              {selectedOverrideStudentIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedOverrideStudentIds([])}
+                  className="text-[11px] font-bold text-[var(--red)] hover:underline cursor-pointer flex items-center gap-1 self-start sm:self-auto"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Clear All ({selectedOverrideStudentIds.length})
+                </button>
+              )}
+            </div>
+
+            {/* Searchable Select Combobox */}
+            <div ref={studentSearchRef} className="relative">
+              <div className="flex items-center gap-2">
                 {/* Section filter */}
                 <select
                   value={overrideStudentSection}
                   onChange={(e) => setOverrideStudentSection(e.target.value)}
-                  className="px-2.5 py-1 text-[11px] rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer"
+                  className="px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer shrink-0"
                 >
                   <option value="ALL">All Sections ({unlockData.students.length})</option>
                   {unlockData.sections.map((sec) => (
@@ -695,83 +733,131 @@ export default function FacultyLabScheduling() {
                   ))}
                 </select>
 
-                {/* Search query */}
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                {/* Search input */}
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={overrideStudentQuery}
-                    onChange={(e) => setOverrideStudentQuery(e.target.value)}
-                    placeholder="Search name / roll no..."
-                    className="pl-7 pr-2.5 py-1 text-[11px] rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] w-36 sm:w-44"
+                    onFocus={() => setIsStudentDropdownOpen(true)}
+                    onChange={(e) => {
+                      setOverrideStudentQuery(e.target.value);
+                      setIsStudentDropdownOpen(true);
+                    }}
+                    placeholder="Type student name, roll no, or email to search and add..."
+                    className={`${inputCls} pl-9 pr-8`}
                   />
+                  {overrideStudentQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setOverrideStudentQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleSelectAllFilteredStudents}
-                  className="text-[11px] font-semibold text-[var(--accent)] hover:underline cursor-pointer"
-                >
-                  {filteredOverrideStudents.length > 0 &&
-                  filteredOverrideStudents.every((s) => selectedOverrideStudentIds.includes(s.id))
-                    ? 'Deselect Filtered'
-                    : `Select All (${filteredOverrideStudents.length})`}
-                </button>
-
-                {selectedOverrideStudentIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOverrideStudentIds([])}
-                    className="text-[11px] font-semibold text-[var(--red)] hover:underline cursor-pointer"
-                  >
-                    Clear All
-                  </button>
-                )}
               </div>
+
+              {/* Search Results Floating Dropdown */}
+              {isStudentDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="p-2 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                      {availableMatchingStudents.length} Available Students
+                    </span>
+                    {availableMatchingStudents.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={addAllMatchingStudents}
+                        className="text-[11px] font-bold text-[var(--accent)] hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        Add All Matching ({availableMatchingStudents.length})
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-56 overflow-y-auto divide-y divide-[var(--border)]/60">
+                    {availableMatchingStudents.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-[var(--text-muted)] italic">
+                        {unlockData.students.length === 0
+                          ? 'No students found in lab database.'
+                          : 'No matching unselected students found.'}
+                      </div>
+                    ) : (
+                      availableMatchingStudents.map((s) => (
+                        <div
+                          key={s.id}
+                          onClick={() => {
+                            addStudentToSelection(s.id);
+                          }}
+                          className="p-2.5 hover:bg-[var(--bg-raised)] cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-[var(--text-primary)]">
+                              {s.name}
+                            </div>
+                            <div className="text-[11px] text-[var(--text-muted)] font-mono flex items-center gap-2 mt-0.5">
+                              <span>{s.roll_no || s.email}</span>
+                              <span className="px-1.5 py-0.2 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] font-bold text-[10px]">
+                                Sec: {s.section || 'Unassigned'}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="shrink-0 px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)]/10 text-[var(--accent)] text-[11px] font-bold hover:bg-[var(--accent)] hover:text-white transition flex items-center gap-1">
+                            <UserPlus className="w-3 h-3" />
+                            Add
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Student Roster Checkbox Grid */}
-            <div className="max-h-56 overflow-y-auto border border-[var(--border)] rounded-[var(--radius-sm)] bg-[var(--bg-input)] p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {filteredOverrideStudents.length === 0 ? (
-                <div className="col-span-full py-6 text-center text-xs text-[var(--text-muted)] italic">
-                  No students match the selected section/filter.
+            {/* Selected Students List (Only Shows Added Students) */}
+            <div className="space-y-2 pt-1">
+              <div className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center justify-between">
+                <span>Selected Students to Override ({selectedStudentsData.length})</span>
+              </div>
+
+              {selectedStudentsData.length === 0 ? (
+                <div className="p-5 rounded-[var(--radius-md)] border border-dashed border-[var(--border)] bg-[var(--bg-input)]/40 text-center text-xs text-[var(--text-muted)] flex flex-col items-center justify-center gap-1.5">
+                  <UserPlus className="w-5 h-5 text-[var(--text-muted)]" />
+                  <span className="font-semibold text-[var(--text-secondary)]">No students added yet</span>
+                  <span>Search above and click &quot;Add&quot; to include students in this override window.</span>
                 </div>
               ) : (
-                filteredOverrideStudents.map((s) => {
-                  const isSelected = selectedOverrideStudentIds.includes(s.id);
-                  return (
+                <div className="max-h-52 overflow-y-auto border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-input)] p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {selectedStudentsData.map((s) => (
                     <div
                       key={s.id}
-                      onClick={() => toggleStudentSelection(s.id)}
-                      className={`p-2 rounded-[var(--radius-sm)] border text-xs transition-all flex items-center gap-2.5 cursor-pointer select-none ${
-                        isSelected
-                          ? 'bg-[var(--accent-dim)] border-[var(--accent)] text-[var(--text-primary)] shadow-xs'
-                          : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
-                      }`}
+                      className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border-accent)]/50 shadow-xs flex items-center justify-between gap-2.5 text-xs group hover:border-[var(--accent)] transition-all"
                     >
-                      <div
-                        className={`w-4 h-4 rounded shrink-0 flex items-center justify-center border transition-all ${
-                          isSelected
-                            ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                            : 'border-[var(--border-strong)] bg-[var(--bg-input)]'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-[var(--text-primary)] truncate text-[11px]">
+                        <div className="font-bold text-[var(--text-primary)] truncate text-[11px]">
                           {s.name}
                         </div>
-                        <div className="text-[10px] text-[var(--text-muted)] font-mono truncate flex items-center gap-1.5">
+                        <div className="text-[10px] text-[var(--text-muted)] font-mono truncate flex items-center gap-1.5 mt-0.5">
                           <span>{s.roll_no || s.email}</span>
                           <span className="px-1 py-0.2 rounded bg-[var(--bg-raised)] text-[var(--text-secondary)] font-bold">
                             {s.section || 'Unassigned'}
                           </span>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => removeStudentFromSelection(s.id)}
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition cursor-pointer shrink-0"
+                        title="Remove student"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  );
-                })
+                  ))}
+                </div>
               )}
             </div>
           </div>
