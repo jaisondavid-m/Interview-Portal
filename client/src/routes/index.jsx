@@ -40,6 +40,7 @@ import LabDashboard from '../Pages/Labs/LabDashboard';
 import LabWorkspace from '../Pages/Labs/LabWorkspace';
 import LabRecordPreview from '../Pages/Labs/LabRecordPreview';
 import LabInchargeDashboard from '../Pages/Labs/LabInchargeDashboard';
+import LabEvaluationPage from '../Pages/Labs/LabEvaluationPage';
 import AdminLabPdfViewer from '../Pages/Admin/AdminLabPdfViewer';
 import AdminLabConfig from '../Pages/Admin/AdminLabConfig';
 import AdminLabCourseExperiments from '../Pages/Admin/AdminLabCourseExperiments';
@@ -383,6 +384,18 @@ export const router = createBrowserRouter([
           {
             path: 'lab-incharge',
             element: <LabInchargeDashboard />,
+          },
+          {
+            path: 'lab-incharge/evaluate/:subId',
+            element: <LabEvaluationPage />,
+          },
+          {
+            path: 'faculty/labs',
+            element: <LabInchargeDashboard />,
+          },
+          {
+            path: 'faculty/labs/evaluate/:subId',
+            element: <LabEvaluationPage />,
           },
           {
             path: 'admin/labs/mapping',

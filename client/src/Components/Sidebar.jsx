@@ -61,7 +61,7 @@ export default function Sidebar() {
     : isFaculty
     ? [
         { name: 'Faculty Dashboard', path: '/faculty/dashboard', icon: LayoutDashboard },
-        { name: 'Lab Incharge Verification', path: '/lab-incharge', icon: FlaskConical },
+        { name: 'Lab Dashboard', path: '/lab-incharge', icon: FlaskConical },
         { name: 'Venue Attendance', path: '/faculty/attendance', icon: ClipboardCheck },
         { name: 'Live Audio Monitor', path: '/faculty/venue-monitor', icon: Headphones },
       ]

@@ -569,11 +569,11 @@ func syncAppPagesCatalog(db *gorm.DB) {
 		},
 		{
 			Key:         "lab_incharge_verification",
-			Name:        "Lab Incharge Verification",
+			Name:        "Lab Dashboard",
 			Path:        "/lab-incharge",
-			Icon:        "UserCheck",
+			Icon:        "FlaskConical",
 			Category:    "Academic Labs",
-			Description: "Review student lab submissions and grant single-experiment or semester record approvals",
+			Description: "Review student lab submissions, track student progress & analytics, and grant experiment/semester record approvals",
 			OrderIndex:  31,
 		},
 		{

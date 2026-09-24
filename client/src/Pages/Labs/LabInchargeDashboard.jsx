@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   UserCheck,
   CheckCircle2,
@@ -34,11 +35,11 @@ import {
   Percent
 } from 'lucide-react';
 import api from '../../api/axios';
-import LabMarkEntryModal from '../../Components/AdminLabs/LabMarkEntryModal';
 import LabScheduleModal from '../../Components/AdminLabs/LabScheduleModal';
 import LabStudentAnalyticsDrawer from '../../Components/AdminLabs/LabStudentAnalyticsDrawer';
 
 export default function LabInchargeDashboard() {
+  const navigate = useNavigate();
   const [submissions, setSubmissions] = useState([]);
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -155,78 +156,8 @@ export default function LabInchargeDashboard() {
     }
   };
 
-  const [isMarkModalOpen, setIsMarkModalOpen] = useState(false);
-
-  const openEvaluationModal = async (subId) => {
-    setSelectedSubId(subId);
-    setEvalLoading(true);
-    setEvalDetail(null);
-    setEvalTab('viva');
-    try {
-      const res = await api.get(`/lab-incharge/submission/${subId}`);
-      setEvalDetail(res);
-      const sub = res?.submission;
-      const cMarks = sub?.code_marks || 6;
-      const vMarks = sub?.viva_marks || 4;
-      const totMarks = sub?.marks || (cMarks + vMarks);
-      setEvalCodeMarks(cMarks);
-      setEvalVivaMarks(vMarks);
-      setEvalTotalMarks(totMarks);
-      setEvalNotes(sub?.faculty_notes || 'Verified by Lab Incharge');
-    } catch {
-      showToast('Failed to load submission evaluation details.', 'error');
-    } finally {
-      setEvalLoading(false);
-    }
-  };
-
-  const handleSaveEvaluation = async (evalPayload) => {
-    if (!selectedSubId) return;
-    try {
-      setEvalSubmitting(true);
-      await api.post('/lab-incharge/verify-single', {
-        submission_id: selectedSubId,
-        status: evalPayload.status || 'APPROVED',
-        marks: evalPayload.marks !== undefined ? evalPayload.marks : evalTotalMarks,
-        marks_breakdown: evalPayload.marks_breakdown || null,
-        code_marks: Number(evalCodeMarks) || 0,
-        viva_marks: Number(evalVivaMarks) || 0,
-        faculty_notes: evalPayload.faculty_notes || evalNotes,
-      });
-      showToast(
-        evalPayload.status === 'APPROVED'
-          ? 'Experiment verified, graded, and signed successfully!'
-          : 'Revision requested from student.',
-        'success'
-      );
-      setIsMarkModalOpen(false);
-      setSelectedSubId(null);
-      setEvalDetail(null);
-      fetchQueue();
-      if (analyticsCourseId) fetchAnalytics(analyticsCourseId, analyticsSection);
-    } catch {
-      showToast('Failed to save experiment evaluation.', 'error');
-    } finally {
-      setEvalSubmitting(false);
-    }
-  };
-
-  const handleResetAllocation = async () => {
-    if (!evalDetail?.submission) return;
-    if (!window.confirm('Re-assign a new random question variant for this student?')) return;
-    try {
-      const sub = evalDetail.submission;
-      await api.post('/lab-incharge/student-allocation/reset', {
-        student_id: sub.student_id,
-        course_id: evalDetail.question?.course_id || 1,
-        experiment_id: sub.experiment_id,
-      });
-      showToast('Question variant reset. Student will receive new variant.', 'success');
-      openEvaluationModal(selectedSubId);
-      fetchQueue();
-    } catch {
-      showToast('Failed to reset question allocation.', 'error');
-    }
+  const openEvaluationModal = (subId) => {
+    navigate(`/lab-incharge/evaluate/${subId}`);
   };
 
   const handleToggleUnlock = async (courseId, expId, section, newStatus) => {
@@ -417,10 +348,10 @@ export default function LabInchargeDashboard() {
         <div>
           <h1 className="text-[20px] sm:text-[24px] font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2.5">
             <UserCheck className="w-6 h-6 text-[var(--accent)]" />
-            Lab Incharge Evaluation & Assessment Cockpit
+            Faculty Lab Dashboard
           </h1>
           <p className="text-xs sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
-            Configure experiment open windows, track student completion rates & attempts, conduct viva voce, and sign records.
+            Monitor real-time student experiment progress, evaluate submissions, conduct oral viva voce, and manage scheduling windows.
           </p>
         </div>
       </div>
@@ -1105,257 +1036,7 @@ export default function LabInchargeDashboard() {
         </div>
       )}
 
-      {/* Evaluation & Viva Voce Cockpit Modal */}
-      {selectedSubId && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
-            {/* Modal Top Bar */}
-            <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-[var(--accent-dim)] border border-[var(--border-accent)] flex items-center justify-center text-[var(--accent)]">
-                  <UserCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-bold text-[var(--text-primary)]">
-                      {evalDetail?.student?.name || 'Student Evaluation'}
-                    </h2>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)]">
-                      {evalDetail?.student?.roll_no}
-                    </span>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                      {evalDetail?.question?.question_code}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Ex {evalDetail?.experiment?.experiment_no}: {evalDetail?.question?.title || evalDetail?.experiment?.title}
-                  </p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleResetAllocation}
-                  className="px-2.5 py-1.5 rounded text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--red)] border border-[var(--border)] hover:border-[var(--red)]/30 transition-all cursor-pointer flex items-center gap-1"
-                  title="Re-draw random variant for student"
-                >
-                  <RotateCcw className="w-3 h-3" /> Re-assign Variant
-                </button>
-                <button
-                  onClick={() => setSelectedSubId(null)}
-                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded-lg cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {evalLoading ? (
-              <div className="flex items-center justify-center py-24 text-[var(--text-muted)] gap-3">
-                <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)]" />
-                <span className="text-xs">Loading evaluation workspace...</span>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="px-5 pt-3 border-b border-[var(--border)] flex items-center gap-2 shrink-0 bg-[var(--bg-card)]">
-                  <button
-                    onClick={() => setEvalTab('viva')}
-                    className={`pb-2.5 px-3.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                      evalTab === 'viva'
-                        ? 'border-[var(--accent)] text-[var(--accent)]'
-                        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <MessageSquareCheck className="w-4 h-4" />
-                    Oral Viva Questions ({evalDetail?.viva_questions?.length || 0})
-                  </button>
-                  <button
-                    onClick={() => setEvalTab('code')}
-                    className={`pb-2.5 px-3.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                      evalTab === 'code'
-                        ? 'border-[var(--accent)] text-[var(--accent)]'
-                        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <Code2 className="w-4 h-4" />
-                    Side-by-Side Code Comparison
-                  </button>
-                  <button
-                    onClick={() => setEvalTab('algo')}
-                    className={`pb-2.5 px-3.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                      evalTab === 'algo'
-                        ? 'border-[var(--accent)] text-[var(--accent)]'
-                        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <ListPlus className="w-4 h-4" />
-                    Side-by-Side Algorithm Comparison
-                  </button>
-                </div>
-
-                <div className="flex-1 p-5 overflow-y-auto space-y-4">
-                  {evalTab === 'viva' && (
-                    <div className="space-y-4">
-                      <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1">
-                        <div className="font-bold flex items-center gap-1.5 text-indigo-700">
-                          <MessageSquareCheck className="w-4 h-4" />
-                          Oral Viva Voce Instructions
-                        </div>
-                        <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                          Ask the student the questions below verbally. Verify conceptual understanding and problem-solving depth against the model answers.
-                        </p>
-                      </div>
-
-                      <div className="space-y-3">
-                        {(!evalDetail?.viva_questions || evalDetail.viva_questions.length === 0) ? (
-                          <div className="p-6 text-center text-xs text-[var(--text-muted)] italic border border-dashed border-[var(--border)] rounded-xl">
-                            No viva questions found for this question variant.
-                          </div>
-                        ) : (
-                          evalDetail.viva_questions.map((vq, idx) => (
-                            <div
-                              key={idx}
-                              className="p-4 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-2 shadow-sm"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-mono font-bold text-[var(--accent)] px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)]">
-                                  Viva Question #{idx + 1}
-                                </span>
-                              </div>
-                              <div className="text-xs font-bold text-[var(--text-primary)]">
-                                {vq.question}
-                              </div>
-                              <div className="text-xs text-[var(--text-secondary)] bg-[var(--bg-card)] p-3 rounded-lg border border-[var(--border)] leading-relaxed">
-                                <span className="text-[10px] font-bold text-emerald-600 block uppercase mb-0.5">
-                                  Model Reference Answer:
-                                </span>
-                                {vq.answer}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {evalTab === 'code' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-96">
-                      <div className="flex flex-col border border-[var(--border)] rounded-xl overflow-hidden">
-                        <div className="px-3 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] text-xs font-bold text-[var(--text-primary)] flex items-center justify-between">
-                          <span>Student Submitted Code</span>
-                          <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                            {evalDetail?.submission?.language || 'python'}
-                          </span>
-                        </div>
-                        <pre className="flex-1 p-3 text-xs font-mono text-[var(--text-secondary)] bg-[var(--bg-input)] overflow-auto whitespace-pre-wrap">
-                          {evalDetail?.submission?.submitted_code || '# No code submitted'}
-                        </pre>
-                      </div>
-
-                      <div className="flex flex-col border border-[var(--border)] rounded-xl overflow-hidden">
-                        <div className="px-3 py-2 bg-[var(--bg-raised)] border-b border-[var(--border)] text-xs font-bold text-emerald-600 flex items-center justify-between">
-                          <span>Master Reference Solution (Faculty)</span>
-                          <span className="text-[10px] font-mono text-[var(--text-muted)]">Verified</span>
-                        </div>
-                        <pre className="flex-1 p-3 text-xs font-mono text-[var(--text-secondary)] bg-[var(--bg-input)] overflow-auto whitespace-pre-wrap">
-                          {evalDetail?.reference_solution || '# No reference solution configured'}
-                        </pre>
-                      </div>
-                    </div>
-                  )}
-
-                  {evalTab === 'algo' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div className="border border-[var(--border)] rounded-xl p-4 space-y-2 bg-[var(--bg-raised)]">
-                        <h4 className="text-xs font-bold text-[var(--text-primary)]">
-                          Student Written Procedure Steps
-                        </h4>
-                        <div className="space-y-2">
-                          {getStudentProcedureSteps().length === 0 ? (
-                            <div className="text-xs text-[var(--text-muted)] italic">No steps submitted.</div>
-                          ) : (
-                            getStudentProcedureSteps().map((st, i) => (
-                              <div key={i} className="p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-secondary)]">
-                                {st}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="border border-[var(--border)] rounded-xl p-4 space-y-2 bg-[var(--bg-raised)]">
-                        <h4 className="text-xs font-bold text-emerald-600">
-                          Faculty Reference Algorithm Steps
-                        </h4>
-                        <div className="space-y-2">
-                          {getReferenceAlgoSteps().length === 0 ? (
-                            <div className="text-xs text-[var(--text-muted)] italic">No reference steps provided.</div>
-                          ) : (
-                            getReferenceAlgoSteps().map((st, i) => (
-                              <div key={i} className="p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-secondary)]">
-                                {st}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer Actions */}
-                <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between gap-3 shrink-0 flex-wrap">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono font-bold text-[var(--text-secondary)] px-2.5 py-1 rounded bg-[var(--bg-input)] border border-[var(--border)]">
-                      Tests: {evalDetail?.submission?.pass_count || 0} / {evalDetail?.submission?.total_test_cases || 0} Passed
-                    </span>
-                    <span className="text-xs text-[var(--text-muted)]">
-                      Status: <strong className="text-[var(--text-primary)]">{evalDetail?.submission?.status || 'SUBMITTED'}</strong>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSaveEvaluation({
-                          status: 'REVISION_REQUIRED',
-                          marks: 0,
-                          faculty_notes: 'Revision requested by Lab Incharge',
-                        })
-                      }
-                      disabled={evalSubmitting}
-                      className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      Request Revision
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsMarkModalOpen(true)}
-                      className="px-5 py-2 rounded-xl bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-2"
-                    >
-                      <Award className="w-4 h-4" />
-                      Award Rubric Marks & Sign Record &rarr;
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Course-Configured Rubric Mark Entry Modal */}
-      {isMarkModalOpen && (
-        <LabMarkEntryModal
-          isOpen={isMarkModalOpen}
-          onClose={() => setIsMarkModalOpen(false)}
-          submissionDetail={evalDetail}
-          onSave={handleSaveEvaluation}
-          submitting={evalSubmitting}
-        />
-      )}
 
       {/* Window Scheduling & Overrides Modal */}
       {isScheduleModalOpen && (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X,
   Award,
@@ -24,6 +25,7 @@ export default function LabStudentAnalyticsDrawer({
   studentData,
   onOpenScheduleOverride,
 }) {
+  const navigate = useNavigate();
   if (!isOpen || !studentData) return null;
 
   const {
@@ -243,8 +245,8 @@ export default function LabStudentAnalyticsDrawer({
                     </div>
                   )}
 
-                  {/* Override Indicator & Action Button */}
-                  <div className="flex items-center justify-between pt-1 gap-2">
+                  {/* Actions Bar: Evaluate Submission & Schedule Override */}
+                  <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
                     {hasOverride ? (
                       <span className="text-[10px] text-amber-500 font-semibold flex items-center gap-1">
                         <Clock className="w-3 h-3" /> Individual Override Active
@@ -255,14 +257,30 @@ export default function LabStudentAnalyticsDrawer({
                       </span>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => onOpenScheduleOverride(student_id, exp.experiment_id)}
-                      className="text-[11px] font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Sliders className="w-3 h-3" />
-                      {hasOverride ? 'Edit Window Override' : 'Grant Window Extension'}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {exp.submission_id ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            navigate(`/lab-incharge/evaluate/${exp.submission_id}`);
+                          }}
+                          className="text-[11px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Award className="w-3 h-3" />
+                          Evaluate Submission &rarr;
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => onOpenScheduleOverride(student_id, exp.experiment_id)}
+                        className="text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Sliders className="w-3 h-3" />
+                        {hasOverride ? 'Edit Window' : 'Grant Extension'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
