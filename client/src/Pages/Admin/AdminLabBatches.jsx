@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -23,7 +23,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  Building2
+  Building2,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  AlertTriangle,
+  Eye,
+  HelpCircle,
+  Check
 } from 'lucide-react';
 import api from '../../api/axios';
 import SearchableSelect from '../../Components/SearchableSelect';
@@ -147,6 +155,22 @@ export default function AdminLabBatches() {
   const [drawerPagination, setDrawerPagination] = useState({ total_pages: 1, total_records: 0 });
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerSelectedIds, setDrawerSelectedIds] = useState(new Set());
+
+  // Bulk Upload State
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkTab, setBulkTab] = useState('file'); // 'file' | 'text'
+  const [bulkTargetBatchMode, setBulkTargetBatchMode] = useState('selected'); // 'selected' | 'from_csv'
+  const [bulkTargetBatch, setBulkTargetBatch] = useState(() => batches[0]?.name || 'CSE-A');
+  const [bulkImportMode, setBulkImportMode] = useState('upsert'); // 'upsert' | 'create_only' | 'update_only'
+  const [bulkDefaultDept, setBulkDefaultDept] = useState('CSE');
+  const [bulkDefaultPassword, setBulkDefaultPassword] = useState('mockmate-bitsathy-4321');
+  const [bulkFile, setBulkFile] = useState(null);
+  const [bulkRawText, setBulkRawText] = useState('');
+  const [bulkPreview, setBulkPreview] = useState([]);
+  const [bulkParseError, setBulkParseError] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
+  const fileInputRef = useRef(null);
 
   const STUDENT_LIMIT = 15;
 
@@ -406,6 +430,226 @@ export default function AdminLabBatches() {
     }
   };
 
+  // Bulk upload handlers
+  const openBulkUploadModal = () => {
+    setBulkFile(null);
+    setBulkRawText('');
+    setBulkPreview([]);
+    setBulkParseError('');
+    setBulkResult(null);
+    setBulkImportMode('upsert');
+    setBulkTargetBatch(batches[0]?.name || 'CSE-A');
+    setShowBulkModal(true);
+  };
+
+  const parseCSVText = (
+    text,
+    targetMode = bulkTargetBatchMode,
+    chosenBatch = bulkTargetBatch
+  ) => {
+    setBulkParseError('');
+    if (!text || !text.trim()) {
+      setBulkPreview([]);
+      return;
+    }
+
+    const cleanText = text.replace(/^\uFEFF/, '');
+    const lines = cleanText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      setBulkPreview([]);
+      return;
+    }
+
+    const splitLine = (line) => {
+      const delimiter = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
+      return line
+        .split(delimiter)
+        .map((cell) => cell.trim().replace(/^["']|["']$/g, ''));
+    };
+
+    const firstRow = splitLine(lines[0]);
+    const isHeader = firstRow.some((col) => {
+      const c = col.toLowerCase();
+      return (
+        c.includes('name') ||
+        c.includes('email') ||
+        c.includes('roll') ||
+        c.includes('reg') ||
+        c.includes('dept') ||
+        c.includes('sec') ||
+        c.includes('batch')
+      );
+    });
+
+    let colIdx = { name: 0, email: 1, roll_no: 2, department: 3, section: 4 };
+
+    if (isHeader) {
+      firstRow.forEach((h, idx) => {
+        const lower = h.toLowerCase();
+        if (lower.includes('name')) colIdx.name = idx;
+        else if (lower.includes('mail')) colIdx.email = idx;
+        else if (lower.includes('roll') || lower.includes('reg')) colIdx.roll_no = idx;
+        else if (lower.includes('dept')) colIdx.department = idx;
+        else if (lower.includes('sec') || lower.includes('batch') || lower.includes('cohort')) colIdx.section = idx;
+      });
+    }
+
+    const dataRows = isHeader ? lines.slice(1) : lines;
+    const rows = [];
+    const seenEmails = new Set();
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const cells = splitLine(dataRows[i]);
+      if (cells.length === 0 || cells.every((c) => !c)) continue;
+
+      const name = cells[colIdx.name] || '';
+      const email = (cells[colIdx.email] || '').toLowerCase().trim();
+      const roll_no = cells[colIdx.roll_no] || '';
+      const department = cells[colIdx.department] || bulkDefaultDept || 'CSE';
+      const parsedSection = cells[colIdx.section] || '';
+      const resolvedSection = targetMode === 'selected' ? chosenBatch : (parsedSection || chosenBatch);
+
+      let status = 'valid';
+      let message = 'Ready to provision & assign';
+
+      if (!email) {
+        status = 'error';
+        message = 'Missing email address';
+      } else if (!email.includes('@') || !email.includes('.')) {
+        status = 'error';
+        message = 'Invalid email syntax';
+      } else if (seenEmails.has(email)) {
+        status = 'error';
+        message = 'Duplicate email within file';
+      } else {
+        seenEmails.add(email);
+      }
+
+      rows.push({
+        id: i + 1,
+        name: name.trim() || (email ? email.split('@')[0].replace(/\./g, ' ') : `Student ${i + 1}`),
+        email,
+        roll_no: roll_no.trim(),
+        department: department.trim(),
+        section: resolvedSection.trim(),
+        role: 'student',
+        status,
+        message,
+      });
+    }
+
+    setBulkPreview(rows);
+  };
+
+  const handleBulkFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkFile(file);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target.result;
+      setBulkRawText(text);
+      parseCSVText(text, bulkTargetBatchMode, bulkTargetBatch);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleRawTextChange = (text) => {
+    setBulkRawText(text);
+    parseCSVText(text, bulkTargetBatchMode, bulkTargetBatch);
+  };
+
+  const handleBatchModeChange = (mode, batchName) => {
+    setBulkTargetBatchMode(mode);
+    setBulkTargetBatch(batchName);
+    if (bulkRawText) {
+      parseCSVText(bulkRawText, mode, batchName);
+    }
+  };
+
+  const downloadSampleCSV = () => {
+    const defaultBatchName = batches[0]?.name || 'CSE-A';
+    const csvContent =
+      'Name,Email,Roll No,Department,Section\n' +
+      `Rahul K,rahul.22cs@bitsathy.ac.in,7376221CS101,CSE,${defaultBatchName}\n` +
+      `Priya S,priya.22cs@bitsathy.ac.in,7376221CS102,CSE,${defaultBatchName}\n` +
+      `Arun M,arun.22ai@bitsathy.ac.in,7376221AD101,AI&DS,${batches[1]?.name || 'CSE-B'}\n` +
+      `Kavitha R,kavitha.22ai@bitsathy.ac.in,7376221AD102,AI&DS,${batches[1]?.name || 'CSE-B'}\n`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'student_batch_roster_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExecuteBulkUpload = async () => {
+    const eligibleRows = bulkPreview.filter((r) => r.status === 'valid');
+    if (eligibleRows.length === 0) {
+      showToast('No valid student rows to upload. Please review errors.', 'error');
+      return;
+    }
+
+    setBulkLoading(true);
+    try {
+      const userItems = eligibleRows.map((r) => ({
+        name: r.name,
+        email: r.email,
+        roll_no: r.roll_no,
+        department: r.department,
+        section: r.section,
+        role: 'student',
+      }));
+
+      const CHUNK_SIZE = 500;
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let totalSkipped = 0;
+      let allSkippedDetails = [];
+
+      for (let i = 0; i < userItems.length; i += CHUNK_SIZE) {
+        const batchChunk = userItems.slice(i, i + CHUNK_SIZE);
+        const payload = {
+          users: batchChunk,
+          default_password: bulkDefaultPassword || 'mockmate-bitsathy-4321',
+          mode: bulkImportMode,
+        };
+
+        const res = await api.post('/admin/users/bulk', payload, { timeout: 180000 });
+        if (res) {
+          totalCreated += res.created_count || 0;
+          totalUpdated += res.updated_count || 0;
+          totalSkipped += res.skipped_count || 0;
+          if (res.skipped_details?.length) {
+            allSkippedDetails = [...allSkippedDetails, ...res.skipped_details];
+          }
+        }
+      }
+
+      setBulkResult({
+        status: 'success',
+        created_count: totalCreated,
+        updated_count: totalUpdated,
+        skipped_count: totalSkipped,
+        skipped_details: allSkippedDetails,
+      });
+
+      showToast(`Bulk upload complete: ${totalCreated} created, ${totalUpdated} updated!`);
+      fetchStudents();
+      fetchBatchStats();
+    } catch (err) {
+      showToast(err.response?.data?.message || err.message || 'Failed to complete bulk upload.', 'error');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const totalAssignedStudents = Object.values(batchStats).reduce((a, b) => a + b, 0);
 
   return (
@@ -449,7 +693,14 @@ export default function AdminLabBatches() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={openBulkUploadModal}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-bold hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer shadow-[var(--shadow-sm)]"
+          >
+            <Upload className="w-4 h-4 text-[var(--accent)]" />
+            Bulk Upload Roster
+          </button>
           <button
             onClick={openCreateBatch}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
@@ -560,6 +811,13 @@ export default function AdminLabBatches() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={openBulkUploadModal}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 text-[var(--accent)]" />
+              Bulk Upload
+            </button>
             <button
               onClick={() => setShowAddDrawer(true)}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
@@ -1156,6 +1414,327 @@ export default function AdminLabBatches() {
                 >
                   {assigning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
                   Assign to {filterSection !== 'ALL' && filterSection !== 'UNASSIGNED' ? filterSection : targetSection}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Bulk Upload Students & Batches */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-xl)] shadow-2xl max-w-3xl w-full flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-[var(--accent)]" />
+                  Bulk Upload Students & Allocate Batches
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  Import student rosters from CSV, Excel, or tabular text and automatically assign them to batches.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBulkModal(false)}
+                className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 overflow-y-auto flex-1">
+              {/* Target Batch Allocation Strategy */}
+              <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3">
+                <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                  1. Batch & Allocation Configuration
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className={labelCls}>Allocation Strategy</label>
+                    <select
+                      value={bulkTargetBatchMode}
+                      onChange={(e) => handleBatchModeChange(e.target.value, bulkTargetBatch)}
+                      className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer"
+                    >
+                      <option value="selected">Assign All to a Specific Batch</option>
+                      <option value="from_csv">Read Batch from CSV Column (&quot;Section&quot;)</option>
+                    </select>
+                  </div>
+
+                  {bulkTargetBatchMode === 'selected' ? (
+                    <div className="space-y-1">
+                      <label className={labelCls}>Target Batch Cohort</label>
+                      <select
+                        value={bulkTargetBatch}
+                        onChange={(e) => handleBatchModeChange('selected', e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer"
+                      >
+                        {batches.map((b) => (
+                          <option key={b.id} value={b.name}>
+                            {b.name} ({b.semester} · {b.academic_year})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <label className={labelCls}>Fallback Batch (if row has no section)</label>
+                      <select
+                        value={bulkTargetBatch}
+                        onChange={(e) => handleBatchModeChange('from_csv', e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer"
+                      >
+                        {batches.map((b) => (
+                          <option key={b.id} value={b.name}>
+                            {b.name} ({b.semester})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-[var(--border)]">
+                  <div className="space-y-1">
+                    <label className={labelCls}>Provisioning Mode</label>
+                    <select
+                      value={bulkImportMode}
+                      onChange={(e) => setBulkImportMode(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer"
+                    >
+                      <option value="upsert">Upsert (Create new + update batch)</option>
+                      <option value="create_only">Create Only (Skip existing)</option>
+                      <option value="update_only">Update Batch Only (Existing only)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={labelCls}>Default Department</label>
+                    <input
+                      type="text"
+                      value={bulkDefaultDept}
+                      onChange={(e) => setBulkDefaultDept(e.target.value)}
+                      placeholder="e.g. CSE"
+                      className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={labelCls}>Default Password</label>
+                    <input
+                      type="text"
+                      value={bulkDefaultPassword}
+                      onChange={(e) => setBulkDefaultPassword(e.target.value)}
+                      placeholder="Default initial password"
+                      className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload Tabs & File Input */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-[var(--border)] pb-2 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBulkTab('file')}
+                      className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        bulkTab === 'file'
+                          ? 'bg-[var(--accent)] text-white shadow-sm'
+                          : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      Upload CSV / Excel File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkTab('text')}
+                      className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        bulkTab === 'text'
+                          ? 'bg-[var(--accent)] text-white shadow-sm'
+                          : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Paste Raw Text
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={downloadSampleCSV}
+                    className="text-[11px] font-bold text-[var(--accent)] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download Sample CSV Template
+                  </button>
+                </div>
+
+                {bulkTab === 'file' ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-8 border-2 border-dashed border-[var(--border)] hover:border-[var(--accent)] rounded-[var(--radius-lg)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-input)]/70 transition-all cursor-pointer text-center space-y-2 group"
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,.txt,.tsv"
+                      onChange={handleBulkFileChange}
+                      className="hidden"
+                    />
+                    <div className="w-10 h-10 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-[var(--text-primary)] block">
+                        {bulkFile ? bulkFile.name : 'Click to browse or drag & drop student CSV roster'}
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)]">
+                        Supports standard CSV / TSV with headers: Name, Email, Roll No, Department, Section
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <textarea
+                      rows={5}
+                      value={bulkRawText}
+                      onChange={(e) => handleRawTextChange(e.target.value)}
+                      placeholder={'Name,Email,Roll No,Department,Section\nRahul K,rahul.22cs@bitsathy.ac.in,7376221CS101,CSE,CSE-A\nPriya S,priya.22cs@bitsathy.ac.in,7376221CS102,CSE,CSE-A'}
+                      className="w-full font-mono text-xs p-3 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Live Preview Table */}
+              {bulkPreview.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                      Live Parsed Preview ({bulkPreview.length} Rows)
+                    </span>
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[11px]">
+                        {bulkPreview.filter((r) => r.status === 'valid').length} Valid
+                      </span>
+                      {bulkPreview.filter((r) => r.status === 'error').length > 0 && (
+                        <span className="px-2 py-0.5 rounded bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/30 text-[11px]">
+                          {bulkPreview.filter((r) => r.status === 'error').length} Errors
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto border border-[var(--border)] rounded-[var(--radius-md)]">
+                    <table className="w-full text-left text-[11px]">
+                      <thead>
+                        <tr className="border-b border-[var(--border)] bg-[var(--bg-raised)]">
+                          <th className="py-2 px-2.5 w-8 text-[10px] font-mono text-[var(--text-muted)]">#</th>
+                          <th className="py-2 px-2.5 font-semibold text-[var(--text-muted)] uppercase tracking-wider">Name</th>
+                          <th className="py-2 px-2.5 font-semibold text-[var(--text-muted)] uppercase tracking-wider">Email</th>
+                          <th className="py-2 px-2.5 font-semibold text-[var(--text-muted)] uppercase tracking-wider">Roll No</th>
+                          <th className="py-2 px-2.5 font-semibold text-[var(--text-muted)] uppercase tracking-wider">Dept</th>
+                          <th className="py-2 px-2.5 font-semibold text-[var(--text-muted)] uppercase tracking-wider">Assigned Batch</th>
+                          <th className="py-2 px-2.5 text-right font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--border)] font-mono">
+                        {bulkPreview.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={`hover:bg-[var(--bg-raised)] transition-colors ${
+                              row.status === 'error' ? 'bg-[var(--red-bg)]/30' : ''
+                            }`}
+                          >
+                            <td className="py-1.5 px-2.5 text-[10px] text-[var(--text-muted)]">{row.id}</td>
+                            <td className="py-1.5 px-2.5 font-sans font-semibold text-[var(--text-primary)]">
+                              {row.name}
+                            </td>
+                            <td className="py-1.5 px-2.5 text-[var(--text-secondary)]">{row.email}</td>
+                            <td className="py-1.5 px-2.5 text-[var(--text-muted)]">{row.roll_no || '—'}</td>
+                            <td className="py-1.5 px-2.5 text-[var(--text-muted)]">{row.department}</td>
+                            <td className="py-1.5 px-2.5">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20">
+                                {row.section}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-2.5 text-right font-sans">
+                              {row.status === 'valid' ? (
+                                <span className="text-emerald-600 font-bold text-[10px] flex items-center justify-end gap-1">
+                                  <Check className="w-3 h-3" />
+                                  Ready
+                                </span>
+                              ) : (
+                                <span className="text-[var(--red)] font-bold text-[10px] flex items-center justify-end gap-1">
+                                  <AlertCircle className="w-3 h-3 shrink-0" />
+                                  {row.message}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Upload Results Card */}
+              {bulkResult && (
+                <div className="p-4 rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+                  <div className="font-bold text-xs text-emerald-600 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Provisioning & Batch Allocation Succeeded!
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-center">
+                      <span className="text-[10px] text-[var(--text-muted)] block">Created</span>
+                      <span className="font-mono font-bold text-emerald-600 text-sm">{bulkResult.created_count}</span>
+                    </div>
+                    <div className="p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-center">
+                      <span className="text-[10px] text-[var(--text-muted)] block">Updated Batch</span>
+                      <span className="font-mono font-bold text-[var(--accent)] text-sm">{bulkResult.updated_count}</span>
+                    </div>
+                    <div className="p-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-center">
+                      <span className="text-[10px] text-[var(--text-muted)] block">Skipped</span>
+                      <span className="font-mono font-bold text-[var(--text-muted)] text-sm">{bulkResult.skipped_count}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] bg-[var(--bg-raised)] rounded-b-[var(--radius-xl)]">
+              <span className="text-xs font-semibold text-[var(--text-secondary)]">
+                {bulkPreview.filter((r) => r.status === 'valid').length} of {bulkPreview.length} rows valid
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowBulkModal(false)}
+                  className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer"
+                >
+                  {bulkResult ? 'Close' : 'Cancel'}
+                </button>
+                <button
+                  onClick={handleExecuteBulkUpload}
+                  disabled={bulkPreview.filter((r) => r.status === 'valid').length === 0 || bulkLoading}
+                  className="px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  {bulkLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5" />
+                  )}
+                  Import & Allocate (
+                  {bulkPreview.filter((r) => r.status === 'valid').length} Students)
                 </button>
               </div>
             </div>

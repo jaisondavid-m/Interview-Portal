@@ -386,6 +386,7 @@ type BulkUserItem struct {
 	Email      string `json:"email"`
 	RollNo     string `json:"roll_no"`
 	Department string `json:"department"`
+	Section    string `json:"section"`
 	Password   string `json:"password"`
 	Role       string `json:"role"`
 }
@@ -488,6 +489,7 @@ func AdminBulkCreateUsers(c *gin.Context) {
 		email := strings.ToLower(strings.TrimSpace(item.Email))
 		rollNo := strings.TrimSpace(item.RollNo)
 		department := strings.TrimSpace(item.Department)
+		section := strings.TrimSpace(item.Section)
 		role := strings.ToLower(strings.TrimSpace(item.Role))
 
 		if email == "" {
@@ -525,6 +527,9 @@ func AdminBulkCreateUsers(c *gin.Context) {
 			}
 			if department != "" {
 				updates["department"] = department
+			}
+			if section != "" {
+				updates["section"] = section
 			}
 			if role != "" {
 				updates["role"] = role
@@ -567,6 +572,7 @@ func AdminBulkCreateUsers(c *gin.Context) {
 				Email:      email,
 				RollNo:     rollNo,
 				Department: department,
+				Section:    section,
 				Password:   hashedPW,
 				Role:       role,
 				AuthMethod: "local",
@@ -598,11 +604,12 @@ func AdminBulkCreateUsers(c *gin.Context) {
 	})
 }
 
-// AdminBulkUpdateUsers allows admins to batch-update selected user accounts (e.g. change department, role, or reset password)
+// AdminBulkUpdateUsers allows admins to batch-update selected user accounts (e.g. change department, role, section, or reset password)
 func AdminBulkUpdateUsers(c *gin.Context) {
 	var input struct {
 		UserIDs    []uint `json:"user_ids" binding:"required"`
 		Department string `json:"department"`
+		Section    string `json:"section"`
 		Role       string `json:"role"`
 		AuthMethod string `json:"auth_method"`
 		Password   string `json:"password"`
@@ -619,6 +626,9 @@ func AdminBulkUpdateUsers(c *gin.Context) {
 	updates := map[string]interface{}{}
 	if d := strings.TrimSpace(input.Department); d != "" {
 		updates["department"] = d
+	}
+	if s := strings.TrimSpace(input.Section); s != "" {
+		updates["section"] = s
 	}
 	if r := strings.TrimSpace(input.Role); r != "" {
 		updates["role"] = r
