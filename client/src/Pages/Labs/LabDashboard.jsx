@@ -317,30 +317,6 @@ export default function LabDashboard() {
                             </p>
                           )}
                         </div>
-
-                        {/* Submission Metadata / Evaluation Score if evaluated */}
-                        {sub && (
-                          <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)] text-[11px] font-mono grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            <div>
-                              <span className="text-[var(--text-muted)] block text-[10px]">Code Marks</span>
-                              <span className="font-semibold text-[var(--text-primary)]">
-                                {sub.code_marks ?? 0}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[var(--text-muted)] block text-[10px]">Viva Marks</span>
-                              <span className="font-semibold text-[var(--text-primary)]">
-                                {sub.viva_marks ?? 0}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[var(--text-muted)] block text-[10px]">Attempts</span>
-                              <span className="font-semibold text-[var(--text-primary)]">
-                                {sub.attempts_count ?? 0}
-                              </span>
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       {/* Card Footer Actions */}
