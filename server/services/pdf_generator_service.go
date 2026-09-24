@@ -442,19 +442,31 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		}
 		codeLines := strings.Split(codeText, "\n")
 
-		// Render monospace code block with line numbering
+		// Render full monospace code block line by line with line numbering
 		pdf.SetFont("Courier", "", 7.8)
 		pdf.SetTextColor(20, 30, 45)
 		pdf.SetFillColor(250, 251, 253)
 		pdf.SetDrawColor(215, 225, 238)
 
-		// Max lines on left page before output block
-		maxCodeLines := 32
-		if len(codeLines) > maxCodeLines {
-			codeLines = codeLines[:maxCodeLines]
-		}
-
 		for idx, line := range codeLines {
+			if pdf.GetY() > 255 {
+				addLeftPage()
+				// Running Top Header (Left Page Continuation)
+				pdf.SetY(15)
+				pdf.SetFont("Arial", "I", 8)
+				pdf.SetTextColor(100, 110, 125)
+				pdf.CellFormat(90, 5, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE (CONT.)", exp.ExperimentNo), "", 0, "L", false, 0, "")
+				pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
+				pdf.SetLineWidth(0.2)
+				pdf.SetDrawColor(210, 220, 230)
+				pdf.Line(14, pdf.GetY(), 188, pdf.GetY())
+				pdf.Ln(4)
+
+				pdf.SetFont("Courier", "", 7.8)
+				pdf.SetTextColor(20, 30, 45)
+				pdf.SetFillColor(250, 251, 253)
+				pdf.SetDrawColor(215, 225, 238)
+			}
 			numPrefix := fmt.Sprintf("%2d | ", idx+1)
 			pdf.CellFormat(174, 3.8, numPrefix+line, "LR", 1, "L", true, 0, "")
 		}
@@ -462,6 +474,19 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.Ln(4)
 
 		// 2. EXECUTION OUTPUT & TEST VERIFICATION BLOCK
+		if pdf.GetY() > 240 {
+			addLeftPage()
+			pdf.SetY(15)
+			pdf.SetFont("Arial", "I", 8)
+			pdf.SetTextColor(100, 110, 125)
+			pdf.CellFormat(90, 5, fmt.Sprintf("EX NO: %02d  —  EXECUTION OUTPUT & TEST VERIFICATION", exp.ExperimentNo), "", 0, "L", false, 0, "")
+			pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
+			pdf.SetLineWidth(0.2)
+			pdf.SetDrawColor(210, 220, 230)
+			pdf.Line(14, pdf.GetY(), 188, pdf.GetY())
+			pdf.Ln(4)
+		}
+
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(25, 45, 80)
 		pdf.Cell(0, 5, "EXECUTION OUTPUT & TEST VERIFICATION:")

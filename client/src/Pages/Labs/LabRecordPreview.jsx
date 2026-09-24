@@ -12,10 +12,7 @@ import {
   Eye,
   Sparkles,
   Award,
-  Edit3,
   Columns2,
-  ChevronLeft,
-  ChevronRight,
   FileSpreadsheet
 } from 'lucide-react';
 import api from '../../api/axios';
@@ -32,7 +29,7 @@ export default function LabRecordPreview() {
 
   // View state: 'book_spread' | 'single' | 'scroll'
   const [viewMode, setViewMode] = useState('book_spread');
-  const [activePageIndex, setActivePageIndex] = useState('cover');
+  const [activePageIndex, setActivePageIndex] = useState(0);
   const [activeSpread, setActiveSpread] = useState(1);
   const [isDuplex, setIsDuplex] = useState(true);
 
@@ -107,18 +104,45 @@ export default function LabRecordPreview() {
     }
   };
 
-  // Build page sequence for booklet spreads
+  // Build full academic page sequence:
+  // Page 1: Cover (Right)
+  // Page 2: Index (Left)
+  // For each experiment:
+  // - Part 1: Source Code & Output (Left Page)
+  // - Part 2: Title, Aim, Algorithm (Right Page)
+  // - Part 3: Marks Table first, then Result (Last Page)
   const allBookPages = [
-    { type: 'cover', title: 'Cover & Bonafide Certificate', pageNum: 1 },
-    { type: 'index', title: 'Index / Table of Contents', pageNum: 2 },
-    ...template.experiments.map((exp, idx) => ({
-      type: 'exp',
-      expData: exp,
-      expIndex: idx,
-      title: `Ex ${exp.experiment_no}: ${exp.title}`,
-      pageNum: idx + 3
-    }))
+    { type: 'cover', title: 'Cover & Bonafide Certificate', pageNum: 1, isLeft: false },
+    { type: 'index', title: 'Index / Table of Contents', pageNum: 2, isLeft: true },
   ];
+
+  let curPageNum = 3;
+  template.experiments?.forEach((exp) => {
+    // 1. Left page: Code & Output
+    allBookPages.push({
+      type: 'exp_code_output',
+      expData: exp,
+      title: `Ex ${exp.experiment_no}: Verified Code & Output`,
+      pageNum: curPageNum++,
+      isLeft: true,
+    });
+    // 2. Right page: Aim & Algorithm
+    allBookPages.push({
+      type: 'exp_aim_algorithm',
+      expData: exp,
+      title: `Ex ${exp.experiment_no}: Specification & Algorithm`,
+      pageNum: curPageNum++,
+      isLeft: false,
+    });
+    // 3. Last page: Marks Table first, then Result
+    allBookPages.push({
+      type: 'exp_rubric_result',
+      expData: exp,
+      title: `Ex ${exp.experiment_no}: Rubric & Result`,
+      pageNum: curPageNum++,
+      isLeft: false,
+    });
+  });
 
   const totalSpreads = Math.ceil(allBookPages.length / 2);
   const getSpreadPages = (spreadIdx) => {
@@ -128,6 +152,16 @@ export default function LabRecordPreview() {
     const leftPage = allBookPages[spreadIdx * 2 - 1] || null;
     const rightPage = allBookPages[spreadIdx * 2] || null;
     return { left: leftPage, right: rightPage };
+  };
+
+  const renderPageContent = (page) => {
+    if (!page) return null;
+    if (page.type === 'cover') return <StudentA4CoverPage template={template} isLeft={page.isLeft} />;
+    if (page.type === 'index') return <StudentA4IndexPage template={template} isLeft={page.isLeft} />;
+    if (page.type === 'exp_code_output') return <StudentA4CodeOutputPage exp={page.expData} template={template} isLeft={page.isLeft} pageNum={page.pageNum} totalPages={allBookPages.length} />;
+    if (page.type === 'exp_aim_algorithm') return <StudentA4AimAlgoPage exp={page.expData} template={template} isLeft={page.isLeft} pageNum={page.pageNum} totalPages={allBookPages.length} />;
+    if (page.type === 'exp_rubric_result') return <StudentA4RubricResultPage exp={page.expData} template={template} isLeft={page.isLeft} pageNum={page.pageNum} totalPages={allBookPages.length} />;
+    return null;
   };
 
   return (
@@ -195,7 +229,7 @@ export default function LabRecordPreview() {
             ) : (
               <Download className="w-4 h-4" />
             )}
-            Download Complete PDF ({template.experiments?.length + 2 || 'All'} Pages)
+            Download Complete PDF ({allBookPages.length} Pages)
           </button>
         </div>
       </div>
@@ -248,149 +282,78 @@ export default function LabRecordPreview() {
 
             {/* Quick Page Jump Buttons for Single Page */}
             {viewMode === 'single' && (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-                <button
-                  onClick={() => setActivePageIndex('cover')}
-                  className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    activePageIndex === 'cover'
-                      ? 'bg-[var(--accent)] text-white shadow-sm'
-                      : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
-                  }`}
-                >
-                  Cover
-                </button>
-                <button
-                  onClick={() => setActivePageIndex('index')}
-                  className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    activePageIndex === 'index'
-                      ? 'bg-[var(--accent)] text-white shadow-sm'
-                      : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
-                  }`}
-                >
-                  Index
-                </button>
-                {template.experiments?.map((exp, idx) => (
+              <div className="flex items-center gap-1 overflow-x-auto py-1 max-w-xl custom-scrollbar">
+                {allBookPages.map((p, idx) => (
                   <button
                     key={idx}
                     onClick={() => setActivePageIndex(idx)}
-                    className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    className={`px-2 py-1 rounded text-[10px] font-mono whitespace-nowrap transition-all cursor-pointer ${
                       activePageIndex === idx
-                        ? 'bg-[var(--accent)] text-white shadow-sm'
-                        : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+                        ? 'bg-[var(--accent)] text-white font-bold'
+                        : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)]'
                     }`}
                   >
-                    <span className="font-mono text-[10px]">Ex {String(exp.experiment_no || idx + 1).padStart(2, '0')}</span>
+                    P{p.pageNum}
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* TWO-PAGE BOOKLET SPREAD VIEW */}
+          {/* TWO PAGE BOOK SPREAD VIEW */}
           {viewMode === 'book_spread' && (
-            <div className="space-y-6">
-              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 shadow-[var(--shadow-sm)] flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-2">
+                <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <Columns2 className="w-4 h-4 text-[var(--accent)]" />
+                  Spread {activeSpread} of {totalSpreads - 1 || 1}
+                </span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setActiveSpread(prev => Math.max(0, prev - 1))}
-                    disabled={activeSpread === 0}
-                    className="px-3 py-1.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-xs font-bold text-[var(--text-primary)] hover:border-[var(--border-accent)] disabled:opacity-40 cursor-pointer flex items-center gap-1 transition-all"
+                    disabled={activeSpread <= 1}
+                    onClick={() => setActiveSpread((s) => Math.max(1, s - 1))}
+                    className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--border-accent)] disabled:opacity-40 transition-all cursor-pointer"
                   >
-                    <ChevronLeft className="w-4 h-4" />
-                    Previous Spread
+                    &larr; Previous Spread
                   </button>
-
-                  <span className="text-xs font-mono font-bold px-3 py-1.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                    Spread {activeSpread + 1} of {totalSpreads}
-                  </span>
-
                   <button
-                    onClick={() => setActiveSpread(prev => Math.min(totalSpreads - 1, prev + 1))}
                     disabled={activeSpread >= totalSpreads - 1}
-                    className="px-3 py-1.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-xs font-bold text-[var(--text-primary)] hover:border-[var(--border-accent)] disabled:opacity-40 cursor-pointer flex items-center gap-1 transition-all"
+                    onClick={() => setActiveSpread((s) => Math.min(totalSpreads - 1, s + 1))}
+                    className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--border-accent)] disabled:opacity-40 transition-all cursor-pointer"
                   >
-                    Next Spread
-                    <ChevronRight className="w-4 h-4" />
+                    Next Spread &rarr;
                   </button>
-                </div>
-
-                <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1">
-                  {Array.from({ length: totalSpreads }).map((_, sIdx) => {
-                    const { left, right } = getSpreadPages(sIdx);
-                    const label = sIdx === 0 ? 'Cover' : `P${left?.pageNum || ''}-P${right?.pageNum || ''}`;
-                    return (
-                      <button
-                        key={sIdx}
-                        onClick={() => setActiveSpread(sIdx)}
-                        className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-all cursor-pointer ${
-                          activeSpread === sIdx
-                            ? 'bg-[var(--accent)] text-white shadow-sm'
-                            : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)]'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
 
-              {/* Spread Presentation */}
-              <div className="bg-slate-900/90 p-4 sm:p-8 rounded-[var(--radius-xl)] shadow-2xl border border-slate-700/50">
-                <div className="flex flex-col xl:flex-row items-center justify-center gap-0 max-w-[1550px] mx-auto relative">
+              <div className="bg-slate-900/90 rounded-[var(--radius-lg)] p-6 shadow-2xl border border-slate-700/60 overflow-x-auto">
+                <div className="min-w-[1250px] flex items-stretch justify-center gap-5">
                   {(() => {
                     const { left, right } = getSpreadPages(activeSpread);
                     return (
                       <>
-                        <div className="w-full xl:w-1/2 flex justify-end">
-                          {left ? (
-                            <div className="w-full max-w-[700px] relative shadow-2xl origin-right">
-                              <div className="absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-slate-900/20 to-transparent pointer-events-none z-10" />
-                              <div className="absolute top-2 left-4 text-[10px] font-mono font-bold text-slate-400 select-none">
-                                📖 Left Page (P{left.pageNum})
-                              </div>
-                              {left.type === 'cover' && <StudentA4CoverPage template={template} isLeft={true} />}
-                              {left.type === 'index' && <StudentA4IndexPage template={template} isLeft={true} />}
-                              {left.type === 'exp' && (
-                                <StudentA4ExperimentPage exp={left.expData} template={template} isLeft={true} />
-                              )}
-                            </div>
-                          ) : (
+                        {/* Left Page */}
+                        <div className="w-1/2 flex flex-col items-center">
+                          <div className="text-[11px] font-mono font-bold text-slate-400 mb-2">
+                            {left ? `📘 Left Page (P${left.pageNum}) — ${left.title}` : '📘 Left Page'}
+                          </div>
+                          {left ? renderPageContent(left) : (
                             <div className="w-full max-w-[700px] bg-slate-800 border-2 border-dashed border-slate-700 rounded-sm p-12 min-h-[950px] flex flex-col items-center justify-center text-center text-slate-500 space-y-3" style={{ aspectRatio: '1 / 1.414' }}>
                               <BookOpen className="w-12 h-12 text-slate-600" />
-                              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest">
-                                Outer Hardcover Binding
-                              </h4>
-                              <p className="text-xs text-slate-500 max-w-xs">
-                                Physical manual begins on the right page. Flip forward to view the Table of Contents & Experiment Sheets.
-                              </p>
+                              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Inside Front Cover</h4>
                             </div>
                           )}
                         </div>
 
-                        <div className="hidden xl:flex flex-col items-center justify-center w-6 h-[950px] relative z-20 select-none">
-                          <div className="w-2 h-full bg-gradient-to-r from-slate-950 via-slate-800 to-slate-950 shadow-inner rounded-full" />
-                        </div>
-
-                        <div className="w-full xl:w-1/2 flex justify-start">
-                          {right ? (
-                            <div className="w-full max-w-[700px] relative shadow-2xl origin-left">
-                              <div className="absolute top-0 left-0 bottom-0 w-8 bg-gradient-to-r from-slate-900/20 to-transparent pointer-events-none z-10" />
-                              <div className="absolute top-2 right-4 text-[10px] font-mono font-bold text-slate-400 select-none">
-                                📖 Right Page (P{right.pageNum})
-                              </div>
-                              {right.type === 'cover' && <StudentA4CoverPage template={template} isLeft={false} />}
-                              {right.type === 'index' && <StudentA4IndexPage template={template} isLeft={false} />}
-                              {right.type === 'exp' && (
-                                <StudentA4ExperimentPage exp={right.expData} template={template} isLeft={false} />
-                              )}
-                            </div>
-                          ) : (
+                        {/* Right Page */}
+                        <div className="w-1/2 flex flex-col items-center">
+                          <div className="text-[11px] font-mono font-bold text-slate-400 mb-2">
+                            {right ? `📖 Right Page (P${right.pageNum}) — ${right.title}` : '📖 Right Page'}
+                          </div>
+                          {right ? renderPageContent(right) : (
                             <div className="w-full max-w-[700px] bg-slate-800 border-2 border-dashed border-slate-700 rounded-sm p-12 min-h-[950px] flex flex-col items-center justify-center text-center text-slate-500 space-y-3" style={{ aspectRatio: '1 / 1.414' }}>
                               <Award className="w-12 h-12 text-slate-600" />
-                              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest">
-                                End of Record Notebook
-                              </h4>
+                              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest">End of Record Notebook</h4>
                             </div>
                           )}
                         </div>
@@ -405,21 +368,17 @@ export default function LabRecordPreview() {
           {/* SINGLE PAGE VIEW */}
           {viewMode === 'single' && (
             <div className="max-w-4xl mx-auto">
-              {activePageIndex === 'cover' && <StudentA4CoverPage template={template} />}
-              {activePageIndex === 'index' && <StudentA4IndexPage template={template} />}
-              {typeof activePageIndex === 'number' && template.experiments[activePageIndex] && (
-                <StudentA4ExperimentPage exp={template.experiments[activePageIndex]} template={template} />
-              )}
+              {renderPageContent(allBookPages[activePageIndex])}
             </div>
           )}
 
           {/* CONTINUOUS SCROLL VIEW */}
           {viewMode === 'scroll' && (
             <div className="space-y-8 max-w-4xl mx-auto">
-              <StudentA4CoverPage template={template} />
-              <StudentA4IndexPage template={template} />
-              {template.experiments?.map((exp, idx) => (
-                <StudentA4ExperimentPage key={idx} exp={exp} template={template} />
+              {allBookPages.map((page, idx) => (
+                <div key={idx}>
+                  {renderPageContent(page)}
+                </div>
               ))}
             </div>
           )}
@@ -517,7 +476,7 @@ function StudentA4CoverPage({ template, isLeft = false }) {
         {/* Page Footer */}
         <div className={`text-[9px] text-slate-400 pt-2 border-t border-slate-200 flex justify-between`}>
           <span>Bannari Amman Institute of Technology</span>
-          <span>Page 1 of {template.experiments?.length + 2}</span>
+          <span>Page 1</span>
         </div>
       </div>
     </div>
@@ -525,8 +484,8 @@ function StudentA4CoverPage({ template, isLeft = false }) {
 }
 
 function StudentA4IndexPage({ template, isLeft = true }) {
-  const totalMarks = template.experiments?.reduce((acc, curr) => acc + (curr.marks || 10), 0) || 0;
-  const avg = template.experiments?.length > 0 ? (totalMarks / template.experiments.length).toFixed(1) : '10.0';
+  const totalMarks = template.experiments?.reduce((acc, curr) => acc + (curr.marks || 100), 0) || 0;
+  const avg = template.experiments?.length > 0 ? (totalMarks / template.experiments.length).toFixed(1) : '100.0';
 
   return (
     <div className={`bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-2xl p-7 max-w-[800px] mx-auto min-h-[1050px] relative font-[system-ui] flex flex-col justify-between ${isLeft ? 'pr-9 pl-5' : 'pl-9 pr-5'}`} style={{ aspectRatio: '1 / 1.414' }}>
@@ -568,7 +527,7 @@ function StudentA4IndexPage({ template, isLeft = true }) {
                     {exp.title}
                   </td>
                   <td className="p-2 text-center font-bold text-slate-900 border-r border-slate-300">
-                    {exp.marks || 10} / 10
+                    {exp.marks || 100} / 100
                   </td>
                   <td className="p-2 text-center font-bold text-emerald-700 text-[10px]">
                     VERIFIED
@@ -580,7 +539,7 @@ function StudentA4IndexPage({ template, isLeft = true }) {
                   Total Evaluated Average Score :
                 </td>
                 <td className="p-2 text-center text-slate-900 border-r border-slate-400 font-black">
-                  {avg} / 10
+                  {avg} / 100
                 </td>
                 <td className="p-2 text-center text-slate-600 font-mono text-[10px]">
                   SEALED
@@ -592,128 +551,212 @@ function StudentA4IndexPage({ template, isLeft = true }) {
 
         <div className={`text-[9px] text-slate-400 pt-2 border-t border-slate-200 flex justify-between`}>
           <span>Bannari Amman Institute of Technology</span>
-          <span>Page 2 of {template.experiments?.length + 2}</span>
+          <span>Page 2</span>
         </div>
       </div>
     </div>
   );
 }
 
-function StudentA4ExperimentPage({ exp, template, isLeft = false }) {
+// 1. LEFT PAGE: STRICTLY CODE & EXECUTION OUTPUT ONLY (Full code without scrollbars)
+function StudentA4CodeOutputPage({ exp, template, isLeft = true, pageNum, totalPages }) {
   const codeLines = (exp.submitted_code || '').split('\n');
-  const pType = exp.page_type || 'experiment';
 
   return (
     <div className={`bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-2xl p-7 max-w-[800px] mx-auto min-h-[1050px] relative font-[system-ui] flex flex-col justify-between ${isLeft ? 'pr-9 pl-5' : 'pl-9 pr-5'}`} style={{ aspectRatio: '1 / 1.414' }}>
       <div className="border border-slate-400 p-6 h-full flex flex-col justify-between space-y-4">
         <div className="space-y-3">
           <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold border-b border-slate-200 pb-1">
+            <span>EX NO: {String(exp.experiment_no).padStart(2, '0')} — VERIFIED SOURCE CODE & EXECUTION</span>
+            <span>Student: {template.student_name} ({template.roll_no})</span>
+          </div>
+
+          {/* 1. SOURCE CODE (Full Lines Displayed Without Scrollbars) */}
+          <div className="space-y-1.5">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+              VERIFIED SOURCE CODE ({exp.language?.toUpperCase() || 'PYTHON'}):
+            </h5>
+            <div className="bg-slate-50 text-slate-900 p-3 rounded font-mono text-[10px] leading-relaxed border border-slate-300">
+              {codeLines.map((line, lIdx) => (
+                <div key={lIdx} className="flex leading-normal">
+                  <span className="text-slate-400 w-8 select-none text-right pr-3 shrink-0 font-semibold">{lIdx + 1} |</span>
+                  <span className="text-slate-900 whitespace-pre-wrap break-all">{line || ' '}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. EXECUTION OUTPUT & TEST VERIFICATION */}
+          <div className="space-y-1.5 pt-2">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+              EXECUTION OUTPUT & TEST VERIFICATION:
+            </h5>
+            <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded text-[10.5px] font-mono text-emerald-900 space-y-1.5">
+              <div className="font-bold text-emerald-800 flex items-center gap-1.5">
+                <span>✓ [PASS] Status: {exp.status || 'VERIFIED'}</span>
+                <span>| Hidden Benchmark Cases: {exp.pass_count || 2} / {exp.total_test_cases || 2} Passed</span>
+              </div>
+              <div className="text-slate-800 pl-2 border-l-2 border-emerald-400 bg-white/70 p-1.5 rounded">
+                [CONSOLE]: {exp.execution_output || `All benchmark test cases executed with 0 runtime errors. Solution verified.`}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Page Footer */}
+        <div className="text-[9px] text-slate-400 pt-2 border-t border-slate-200 flex justify-between">
+          <span>Bannari Amman Institute of Technology</span>
+          <span>Page {pageNum} of {totalPages}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 2. RIGHT PAGE: SPECIFICATION, AIM & ALGORITHM
+function StudentA4AimAlgoPage({ exp, template, isLeft = false, pageNum, totalPages }) {
+  return (
+    <div className={`bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-2xl p-7 max-w-[800px] mx-auto min-h-[1050px] relative font-[system-ui] flex flex-col justify-between ${isLeft ? 'pr-9 pl-5' : 'pl-9 pr-5'}`} style={{ aspectRatio: '1 / 1.414' }}>
+      <div className="border border-slate-400 p-6 h-full flex flex-col justify-between space-y-4">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold border-b border-slate-200 pb-1">
             <span>BIT — {template.course_code}</span>
             <span>Student: {template.student_name} ({template.roll_no})</span>
           </div>
 
-          {pType === 'observation' ? (
-            <div className="space-y-3">
-              <div className="bg-slate-100 border border-slate-400 p-2 text-left font-black text-[12px] text-slate-900">
-                ROUGH WORK & OBSERVATION SHEET — EX {String(exp.experiment_no).padStart(2, '0')}
-              </div>
-              {exp.notes && (
-                <p className="text-xs text-slate-600 p-2 bg-slate-50 border border-slate-200 rounded">
-                  {exp.notes}
-                </p>
-              )}
-              <div className="space-y-6 pt-4">
-                {Array.from({ length: 18 }).map((_, lIdx) => (
-                  <div key={lIdx} className="border-b border-slate-200 h-2" />
-                ))}
-              </div>
+          <div className="bg-slate-100 border border-slate-400 p-2.5 text-left font-black text-[12px] text-slate-900 flex items-center justify-between">
+            <span>EX NO: {String(exp.experiment_no).padStart(2, '0')} — {exp.title?.toUpperCase()}</span>
+            <span className="text-[10px] font-normal font-mono text-slate-600">{exp.date || '22-09-2026'}</span>
+          </div>
+
+          {/* 1. AIM */}
+          <div className="space-y-1.5">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">AIM:</h5>
+            <p className="text-[11px] text-slate-700 leading-relaxed pl-3 border-l-2 border-slate-400">
+              {exp.aim || `To design, develop, and implement an algorithmic solution in ${exp.language || 'Python'} for '${exp.title}' and verify against benchmark test cases.`}
+            </p>
+          </div>
+
+          {/* 2. PROCEDURE / ALGORITHM */}
+          <div className="space-y-1.5 pt-2">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">ALGORITHM / STEP-BY-STEP PROCEDURE:</h5>
+            <div className="text-[10.5px] text-slate-700 whitespace-pre-line leading-relaxed pl-3 border-l-2 border-slate-400 bg-slate-50/50 p-3 rounded">
+              {exp.procedure || `Step 1: Start the program execution.\n\nStep 2: Read and parse required input parameters according to the specification.\n\nStep 3: Process the core algorithm logic and handle boundary edge cases.\n\nStep 4: Execute the logic and format output correctly.\n\nStep 5: Verify execution against benchmark test cases and terminate successfully.`}
             </div>
-          ) : pType === 'viva' ? (
-            <div className="space-y-3">
-              <div className="bg-slate-100 border border-slate-400 p-2 text-left font-black text-[12px] text-slate-900">
-                VIVA VOCE QUESTIONS & EVALUATION — EX {String(exp.experiment_no).padStart(2, '0')}: {exp.title}
-              </div>
-              <div className="p-4 bg-slate-50 border border-slate-300 rounded space-y-3 text-xs text-slate-800">
-                <p className="whitespace-pre-line leading-relaxed">
-                  {exp.notes || `1. What is the fundamental logic of ${exp.title}?\n2. What are the key edge test cases?\n3. Explain the time and space complexity.`}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="bg-slate-100 border border-slate-400 p-2 text-left font-black text-[12px] text-slate-900 flex items-center justify-between">
-                <span>EX NO: {String(exp.experiment_no).padStart(2, '0')} — {exp.title?.toUpperCase()}</span>
-                <span className="text-[10px] font-normal font-mono text-slate-600">{exp.date || '22-09-2026'}</span>
-              </div>
-
-              {/* 1. AIM */}
-              <div className="space-y-1">
-                <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">AIM:</h5>
-                <p className="text-[11px] text-slate-700 leading-relaxed pl-2 border-l-2 border-slate-400">
-                  {exp.aim || `To design and implement a program for ${exp.title}.`}
-                </p>
-              </div>
-
-              {/* 2. PROCEDURE */}
-              {exp.procedure && (
-                <div className="space-y-1">
-                  <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">PROCEDURE / ALGORITHM:</h5>
-                  <p className="text-[10.5px] text-slate-700 whitespace-pre-line leading-relaxed pl-2 border-l-2 border-slate-400">
-                    {exp.procedure}
-                  </p>
-                </div>
-              )}
-
-              {/* 3. SOURCE CODE */}
-              <div className="space-y-1">
-                <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
-                  VERIFIED SOURCE CODE ({exp.language?.toUpperCase() || 'PYTHON 3'}):
-                </h5>
-                <div className="bg-slate-900 text-slate-100 p-3 rounded font-mono text-[10px] leading-snug overflow-x-auto border border-slate-700">
-                  {codeLines.map((line, lIdx) => (
-                    <div key={lIdx} className="flex">
-                      <span className="text-slate-500 w-8 select-none text-right pr-2">{lIdx + 1}</span>
-                      <span className="text-slate-200">{line}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 4. EXECUTION OUTPUT */}
-              <div className="space-y-1">
-                <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
-                  EXECUTION OUTPUT & TEST VERIFICATION:
-                </h5>
-                <div className="bg-emerald-50 border border-emerald-300 p-2 rounded text-[10px] font-mono text-emerald-900 space-y-1">
-                  <div className="font-bold text-emerald-800">
-                    ✓ [PASS] Status: {exp.status || 'VERIFIED'} | Hidden Test Cases: {exp.pass_count || 3} / {exp.total_test_cases || 3} | Marks: {exp.marks || 10} / 10
-                  </div>
-                  <div className="text-slate-700 pl-2 border-l-2 border-emerald-400">
-                    [CONSOLE]: {exp.execution_output || `All test cases passed for '${exp.title}'.`}
-                  </div>
-                </div>
-              </div>
-
-              {/* 5. RESULT */}
-              <div className="space-y-1">
-                <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">RESULT:</h5>
-                <p className="text-[11px] text-slate-700 italic pl-2 border-l-2 border-slate-400">
-                  {exp.result_text || `Thus the program for '${exp.title}' was successfully developed, executed, tested against all verification test cases, and evaluated.`}
-                </p>
-              </div>
-            </>
-          )}
+          </div>
         </div>
 
-        {/* Evaluation Sign Footer */}
+        {/* Page Footer */}
+        <div className="text-[9px] text-slate-400 pt-2 border-t border-slate-200 flex justify-between">
+          <span>Bannari Amman Institute of Technology</span>
+          <span>Page {pageNum} of {totalPages}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 3. LAST PAGE: MARKS TABLE FIRST, THEN RESULT SECTION
+function StudentA4RubricResultPage({ exp, template, isLeft = false, pageNum, totalPages }) {
+  const totalExpMarks = exp.marks || 100;
+  const ratio = totalExpMarks / 100;
+  const algoMarks = Math.round(20 * ratio);
+  const codeMarks = Math.round(40 * ratio);
+  const testMarks = Math.round(20 * ratio);
+  const vivaMarks = totalExpMarks - (algoMarks + codeMarks + testMarks);
+
+  return (
+    <div className={`bg-white text-slate-900 border-2 border-slate-800 rounded-sm shadow-2xl p-7 max-w-[800px] mx-auto min-h-[1050px] relative font-[system-ui] flex flex-col justify-between ${isLeft ? 'pr-9 pl-5' : 'pl-9 pr-5'}`} style={{ aspectRatio: '1 / 1.414' }}>
+      <div className="border border-slate-400 p-6 h-full flex flex-col justify-between space-y-4">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold border-b border-slate-200 pb-1">
+            <span>BIT — {template.course_code} | EVALUATION REPORT</span>
+            <span>Student: {template.student_name} ({template.roll_no})</span>
+          </div>
+
+          <div className="bg-slate-100 border border-slate-400 p-2 text-left font-black text-[12px] text-slate-900">
+            EX NO: {String(exp.experiment_no).padStart(2, '0')} EVALUATION REPORT — {exp.title?.toUpperCase()}
+          </div>
+
+          {/* 1. FIRST: TABULAR MARKS RUBRIC COLUMN */}
+          <div className="space-y-1.5">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+              EVALUATION & MARKS BREAKDOWN RUBRIC:
+            </h5>
+            <table className="w-full border-collapse text-[11px] border border-slate-400">
+              <thead>
+                <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-400">
+                  <th className="p-2 text-center border-r border-slate-400 w-12">S.NO</th>
+                  <th className="p-2 text-left border-r border-slate-400">ASSESSMENT COMPONENT / CRITERIA</th>
+                  <th className="p-2 text-center border-r border-slate-400 w-24">MAX MARKS</th>
+                  <th className="p-2 text-center border-r border-slate-400 w-24">MARKS SCORED</th>
+                  <th className="p-2 text-center w-24">STATUS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                <tr>
+                  <td className="p-2 text-center font-mono border-r border-slate-300">1</td>
+                  <td className="p-2 font-medium border-r border-slate-300">Algorithm & Logic Formulation</td>
+                  <td className="p-2 text-center border-r border-slate-300">20</td>
+                  <td className="p-2 text-center font-bold border-r border-slate-300">{algoMarks}</td>
+                  <td className="p-2 text-center font-bold text-emerald-700 text-[10px]">VERIFIED</td>
+                </tr>
+                <tr>
+                  <td className="p-2 text-center font-mono border-r border-slate-300">2</td>
+                  <td className="p-2 font-medium border-r border-slate-300">Source Code & Implementation Syntax</td>
+                  <td className="p-2 text-center border-r border-slate-300">40</td>
+                  <td className="p-2 text-center font-bold border-r border-slate-300">{codeMarks}</td>
+                  <td className="p-2 text-center font-bold text-emerald-700 text-[10px]">VERIFIED</td>
+                </tr>
+                <tr>
+                  <td className="p-2 text-center font-mono border-r border-slate-300">3</td>
+                  <td className="p-2 font-medium border-r border-slate-300">Benchmark Test Case Validation</td>
+                  <td className="p-2 text-center border-r border-slate-300">20</td>
+                  <td className="p-2 text-center font-bold border-r border-slate-300">{testMarks}</td>
+                  <td className="p-2 text-center font-bold text-emerald-700 text-[10px]">PASSED</td>
+                </tr>
+                <tr>
+                  <td className="p-2 text-center font-mono border-r border-slate-300">4</td>
+                  <td className="p-2 font-medium border-r border-slate-300">Viva Voce & Oral Defense</td>
+                  <td className="p-2 text-center border-r border-slate-300">20</td>
+                  <td className="p-2 text-center font-bold border-r border-slate-300">{vivaMarks}</td>
+                  <td className="p-2 text-center font-bold text-emerald-700 text-[10px]">COMPLETED</td>
+                </tr>
+                <tr className="bg-slate-50 font-bold border-t-2 border-slate-400">
+                  <td colSpan={2} className="p-2 text-right border-r border-slate-400 uppercase text-[10px]">
+                    Total Evaluated Score :
+                  </td>
+                  <td className="p-2 text-center border-r border-slate-400 font-bold">100</td>
+                  <td className="p-2 text-center text-slate-900 border-r border-slate-400 font-black">
+                    {totalExpMarks} / 100
+                  </td>
+                  <td className="p-2 text-center text-emerald-700 font-bold text-[10px]">
+                    APPROVED
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* 2. AFTER THAT: RESULT SECTION */}
+          <div className="space-y-1.5 pt-2">
+            <h5 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">RESULT:</h5>
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded text-[11px] text-emerald-950 italic leading-relaxed">
+              {exp.result_text || `Thus the program for '${exp.title}' was successfully developed, executed, tested against all verification benchmark cases, and evaluated with required oral viva voce.`}
+            </div>
+          </div>
+        </div>
+
+        {/* 3. SIGN-OFF FOOTER */}
         <div>
           <div className="grid grid-cols-3 gap-3 border border-slate-400 p-2 text-center text-[10px] font-bold bg-slate-50">
             <div>Date: {exp.date || '22-09-2026'}</div>
-            <div>Marks: {exp.marks || 10} / 10</div>
+            <div>Score: {totalExpMarks} / 100</div>
             <div className="text-emerald-700">Staff Sign: VERIFIED [DIGITAL]</div>
           </div>
-          <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-200 mt-2">
-            Experiment {exp.experiment_no} · Bannari Amman Institute of Technology
+          <div className="text-[9px] text-slate-400 pt-2 border-t border-slate-200 flex justify-between mt-2">
+            <span>Bannari Amman Institute of Technology</span>
+            <span>Page {pageNum} of {totalPages}</span>
           </div>
         </div>
       </div>
