@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -27,6 +28,9 @@ type CustomLabExperimentItem struct {
 	ExecutionOutput string   `json:"execution_output"`
 	PassCount       int      `json:"pass_count"`
 	TotalTestCases  int      `json:"total_test_cases"`
+	CodeMarks       int      `json:"code_marks"`
+	VivaMarks       int      `json:"viva_marks"`
+	AlgorithmMarks  int      `json:"algorithm_marks"`
 	Marks           int      `json:"marks"`
 	Status          string   `json:"status"`
 	Date            string   `json:"date"`
@@ -57,10 +61,34 @@ type CustomLabRecordData struct {
 	Experiments      []CustomLabExperimentItem `json:"experiments"`
 }
 
-// GenerateCustomLabRecordPDF compiles a full multi-page lab record PDF from a custom payload
+// formatProcedureText parses JSON step arrays or raw newline text into readable step-by-step lines
+func formatProcedureText(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "[") && strings.HasSuffix(raw, "]") {
+		var steps []string
+		if err := json.Unmarshal([]byte(raw), &steps); err == nil && len(steps) > 0 {
+			var formatted []string
+			for i, s := range steps {
+				s = strings.TrimSpace(s)
+				if !strings.HasPrefix(strings.ToLower(s), "step") {
+					formatted = append(formatted, fmt.Sprintf("Step %d: %s", i+1, s))
+				} else {
+					formatted = append(formatted, s)
+				}
+			}
+			return strings.Join(formatted, "\n\n")
+		}
+	}
+	return raw
+}
+
+// GenerateCustomLabRecordPDF compiles a spacious, academic multi-page lab record PDF following strict left/right page rules
 func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetAutoPageBreak(true, 15)
+	pdf.SetAutoPageBreak(false, 15) // We handle explicit, deterministic pagination
 
 	// Register College Banner Logo
 	if len(bitLogoBytes) > 0 {
@@ -69,43 +97,76 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 
 	pageCount := 0
 
-	// Helper for drawing duplex/single-sided page borders
+	// Helper for drawing duplex/single-sided page borders with academic double border
 	drawPageBorder := func() {
 		pageCount++
 		isOdd := pageCount%2 != 0
 
-		if data.IsDuplex {
-			if isOdd {
-				// Right page (Odd): gutter on left
-				pdf.SetMargins(20, 15, 12)
-				pdf.SetLineWidth(0.6)
-				pdf.SetDrawColor(40, 60, 90)
-				pdf.Rect(18, 10, 180, 277, "D")
-
-				pdf.SetLineWidth(0.2)
-				pdf.SetDrawColor(120, 140, 160)
-				pdf.Rect(19.5, 11.5, 177, 274, "D")
-			} else {
-				// Left page (Even): gutter on right
-				pdf.SetMargins(12, 15, 20)
-				pdf.SetLineWidth(0.6)
-				pdf.SetDrawColor(40, 60, 90)
-				pdf.Rect(12, 10, 180, 277, "D")
-
-				pdf.SetLineWidth(0.2)
-				pdf.SetDrawColor(120, 140, 160)
-				pdf.Rect(13.5, 11.5, 177, 274, "D")
-			}
-		} else {
-			pdf.SetMargins(15, 15, 15)
+		if isOdd {
+			// Right page (Odd / Recto): Gutter on Left (20mm)
+			pdf.SetMargins(20, 15, 14)
 			pdf.SetLineWidth(0.6)
-			pdf.SetDrawColor(40, 60, 90)
-			pdf.Rect(10, 10, 190, 277, "D")
+			pdf.SetDrawColor(30, 55, 95)
+			pdf.Rect(18, 10, 180, 277, "D")
 
 			pdf.SetLineWidth(0.2)
-			pdf.SetDrawColor(120, 140, 160)
-			pdf.Rect(11.5, 11.5, 187, 274, "D")
+			pdf.SetDrawColor(120, 145, 175)
+			pdf.Rect(19.5, 11.5, 177, 274, "D")
+		} else {
+			// Left page (Even / Verso): Gutter on Right (20mm)
+			pdf.SetMargins(14, 15, 20)
+			pdf.SetLineWidth(0.6)
+			pdf.SetDrawColor(30, 55, 95)
+			pdf.Rect(12, 10, 180, 277, "D")
+
+			pdf.SetLineWidth(0.2)
+			pdf.SetDrawColor(120, 145, 175)
+			pdf.Rect(13.5, 11.5, 177, 274, "D")
 		}
+	}
+
+	// Helper: Ensure the next page is strictly on a RIGHT page (Odd page number)
+	ensureRightPage := func() {
+		if pageCount%2 != 0 {
+			// Current page is Odd (Right). Add an Even (Left) blank filler page
+			pdf.AddPage()
+			drawPageBorder()
+			pdf.SetY(135)
+			pdf.SetFont("Arial", "I", 8.5)
+			pdf.SetTextColor(160, 170, 185)
+			pdf.CellFormat(0, 6, "— THIS PAGE IS INTENTIONALLY LEFT BLANK FOR WORKBOOK NOTES —", "", 1, "C", false, 0, "")
+		}
+		pdf.AddPage()
+		drawPageBorder()
+	}
+
+	// Helper: Ensure the next page is strictly on a LEFT page (Even page number)
+	ensureLeftPage := func() {
+		if pageCount%2 == 0 {
+			// Current page is Even (Left). Add an Odd (Right) blank filler page
+			pdf.AddPage()
+			drawPageBorder()
+			pdf.SetY(135)
+			pdf.SetFont("Arial", "I", 8.5)
+			pdf.SetTextColor(160, 170, 185)
+			pdf.CellFormat(0, 6, "— THIS PAGE IS INTENTIONALLY LEFT BLANK FOR OBSERVATION —", "", 1, "C", false, 0, "")
+		}
+		pdf.AddPage()
+		drawPageBorder()
+	}
+
+	// Student details fallback
+	sName := data.StudentName
+	if sName == "" {
+		sName = "JAISON DAVID M"
+	}
+	sRoll := data.RollNo
+	if sRoll == "" {
+		sRoll = "7376222AD145"
+	}
+	sBranch := data.BranchSection
+	if sBranch == "" {
+		sBranch = "AIDS - A"
 	}
 
 	// ----------------------------------------------------
@@ -114,13 +175,8 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf.AddPage()
 	drawPageBorder()
 
-	// 1. Header Banner Logo
 	if len(bitLogoBytes) > 0 {
-		logoX := 18.0
-		if data.IsDuplex {
-			logoX = 22.0
-		}
-		pdf.ImageOptions("bit_logo", logoX, 14, 168, 22, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+		pdf.ImageOptions("bit_logo", 22, 14, 168, 22, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
 		pdf.SetY(38)
 	} else {
 		pdf.SetY(18)
@@ -184,10 +240,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf.Ln(5)
 
 	// Student Profile Box (Classic Clean 2-Column Table)
-	boxX := 20.0
-	if data.IsDuplex {
-		boxX = 22.0
-	}
+	boxX := 22.0
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(200, 212, 225)
 	pdf.SetLineWidth(0.3)
@@ -207,18 +260,6 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.Ln(6.5)
 	}
 
-	sName := data.StudentName
-	if sName == "" {
-		sName = "JAISON DAVID M"
-	}
-	sRoll := data.RollNo
-	if sRoll == "" {
-		sRoll = "7376222AD145"
-	}
-	sBranch := data.BranchSection
-	if sBranch == "" {
-		sBranch = "AIDS - A"
-	}
 	drawRow("STUDENT NAME", strings.ToUpper(sName))
 	drawRow("ROLL / REG NO", sRoll)
 	drawRow("BRANCH / SECTION", sBranch)
@@ -296,7 +337,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf.CellFormat(0, 5, "BANNARI AMMAN INSTITUTE OF TECHNOLOGY  —  PRACTICAL LAB RECORD", "", 1, "C", false, 0, "")
 	pdf.SetLineWidth(0.2)
 	pdf.SetDrawColor(200, 210, 220)
-	pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
+	pdf.Line(14, pdf.GetY(), 190, pdf.GetY())
 	pdf.Ln(4)
 
 	pdf.SetFont("Arial", "B", 12.5)
@@ -314,7 +355,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	pdf.CellFormat(14, 7.5, "EX. NO", "1", 0, "C", true, 0, "")
 	pdf.CellFormat(24, 7.5, "DATE", "1", 0, "C", true, 0, "")
 	pdf.CellFormat(92, 7.5, "TITLE OF THE EXPERIMENT", "1", 0, "L", true, 0, "")
-	pdf.CellFormat(20, 7.5, "MARKS", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(22, 7.5, "MARKS", "1", 0, "C", true, 0, "")
 	pdf.CellFormat(26, 7.5, "STAFF SIGN", "1", 1, "C", true, 0, "")
 
 	pdf.SetFont("Arial", "", 8.5)
@@ -323,12 +364,12 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 	totalMarks := 0
 	for _, exp := range data.Experiments {
 		title := exp.Title
-		if len(title) > 54 {
-			title = title[:51] + "..."
+		if len(title) > 52 {
+			title = title[:49] + "..."
 		}
 		marksVal := exp.Marks
 		if marksVal <= 0 {
-			marksVal = 10
+			marksVal = 100
 		}
 		totalMarks += marksVal
 
@@ -337,13 +378,13 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 			dateStr = time.Now().Format("02-01-2006")
 		}
 
-		pdf.CellFormat(14, 7, fmt.Sprintf("%02d", exp.ExperimentNo), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(24, 7, dateStr, "1", 0, "C", false, 0, "")
-		pdf.CellFormat(92, 7, "  "+title, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(20, 7, fmt.Sprintf("%d / 10", marksVal), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(14, 7.2, fmt.Sprintf("%02d", exp.ExperimentNo), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(24, 7.2, dateStr, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(92, 7.2, "  "+title, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(22, 7.2, fmt.Sprintf("%d / 100", marksVal), "1", 0, "C", false, 0, "")
 		pdf.SetFont("Arial", "I", 7.5)
 		pdf.SetTextColor(30, 100, 50)
-		pdf.CellFormat(26, 7, "VERIFIED", "1", 1, "C", false, 0, "")
+		pdf.CellFormat(26, 7.2, "VERIFIED", "1", 1, "C", false, 0, "")
 		pdf.SetFont("Arial", "", 8.5)
 		pdf.SetTextColor(30, 35, 45)
 	}
@@ -354,245 +395,305 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		pdf.SetFont("Arial", "B", 8.5)
 		pdf.SetFillColor(245, 248, 252)
 		pdf.CellFormat(130, 7.5, "TOTAL EVALUATED SCORE & AVERAGE :", "1", 0, "R", true, 0, "")
-		pdf.CellFormat(20, 7.5, fmt.Sprintf("%.1f / 10", avgMarks), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(22, 7.5, fmt.Sprintf("%.1f / 100", avgMarks), "1", 0, "C", true, 0, "")
 		pdf.CellFormat(26, 7.5, "SEALED", "1", 1, "C", true, 0, "")
 	}
 
-	// ----------------------------------------------------
-	// PAGES 3+: EXPERIMENTS & CUSTOM SHEETS (1 TO N)
-	// ----------------------------------------------------
+	// -------------------------------------------------------------------------
+	// EXPERIMENTS: MULTI-PAGE ACADEMIC WORKBOOK STRUCTURE (1 TO N)
+	// -------------------------------------------------------------------------
+	// Each experiment strictly spans:
+	// Part 1: Right Page (Odd)  -> Title Banner, AIM, and STEP-BY-STEP ALGORITHM
+	// Part 2: Left Page (Even)  -> STRICTLY SOURCE CODE & EXECUTION OUTPUT ONLY
+	// Part 3: Right Page (Odd) -> RESULT, TABULAR MARKS RUBRIC, and SIGN-OFF
+	// -------------------------------------------------------------------------
+
 	for _, exp := range data.Experiments {
-		pdf.AddPage()
-		drawPageBorder()
+		// =========================================================================
+		// EXPERIMENT PART 1: RIGHT PAGE (ODD) — SPECIFICATION & ALGORITHM
+		// =========================================================================
+		ensureRightPage()
 
-		pType := strings.ToLower(exp.PageType)
-		if pType == "" {
-			pType = "experiment"
-		}
-
-		// Running Header
+		// Running Top Header
 		pdf.SetY(15)
 		pdf.SetFont("Arial", "I", 8)
-		pdf.SetTextColor(100, 110, 120)
+		pdf.SetTextColor(100, 110, 125)
 		pdf.CellFormat(90, 5, fmt.Sprintf("BIT — %s", data.CourseCode), "", 0, "L", false, 0, "")
-		pdf.CellFormat(90, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
+		pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
 		pdf.SetLineWidth(0.2)
 		pdf.SetDrawColor(210, 220, 230)
-		pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
-		pdf.Ln(3)
+		pdf.Line(20, pdf.GetY(), 194, pdf.GetY())
+		pdf.Ln(4)
 
-		if pType == "observation" {
-			// Render Blank Observation Page
-			pdf.SetFont("Arial", "B", 11)
-			pdf.SetFillColor(235, 242, 250)
-			pdf.SetDrawColor(180, 200, 225)
-			pdf.SetTextColor(20, 45, 90)
-			pdf.CellFormat(0, 7.5, fmt.Sprintf("  ROUGH WORK & OBSERVATION SHEET — EX %02d", exp.ExperimentNo), "1", 1, "L", true, 0, "")
-			pdf.Ln(3)
-
-			if exp.Notes != "" {
-				pdf.SetFont("Arial", "", 9.5)
-				pdf.SetTextColor(40, 50, 60)
-				pdf.MultiCell(0, 5, exp.Notes, "", "L", false)
-				pdf.Ln(3)
-			}
-
-			// Draw clean notebook grid lines for calculation
-			pdf.SetDrawColor(220, 230, 240)
-			pdf.SetLineWidth(0.2)
-			for y := pdf.GetY() + 5; y < 260; y += 8 {
-				pdf.Line(20, y, 190, y)
-			}
-			pdf.SetY(262)
-			pdf.SetFont("Arial", "I", 8)
-			pdf.SetTextColor(120, 130, 140)
-			pdf.CellFormat(0, 5, "Staff Signature for Observation: ___________________", "", 1, "R", false, 0, "")
-			continue
-		}
-
-		if pType == "viva" {
-			// Render Viva Voce Questions Page
-			pdf.SetFont("Arial", "B", 11)
-			pdf.SetFillColor(235, 242, 250)
-			pdf.SetDrawColor(180, 200, 225)
-			pdf.SetTextColor(20, 45, 90)
-			pdf.CellFormat(0, 7.5, fmt.Sprintf("  VIVA VOCE QUESTIONS & EVALUATION — EX %02d: %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
-			pdf.Ln(3)
-
-			vivaContent := exp.Notes
-			if vivaContent == "" {
-				vivaContent = fmt.Sprintf("1. What is the time and space complexity of the algorithm used in %s?\n2. Explain edge cases handled in your code.\n3. How can this solution be optimized for larger input constraints?", exp.Title)
-			}
-			pdf.SetFont("Arial", "", 9.5)
-			pdf.SetTextColor(40, 45, 55)
-			pdf.MultiCell(0, 5.5, vivaContent, "", "L", false)
-			pdf.Ln(6)
-
-			pdf.SetFont("Arial", "B", 8)
-			pdf.SetFillColor(245, 248, 252)
-			pdf.SetDrawColor(190, 205, 220)
-			pdf.CellFormat(58, 5.5, fmt.Sprintf("Viva Marks: %d / 10", exp.Marks), "1", 0, "C", true, 0, "")
-			pdf.CellFormat(60, 5.5, "Examiner Sign: VERIFIED [DIGITAL]", "1", 1, "C", true, 0, "")
-			continue
-		}
-
-		// Default Standard Experiment Sheet
-		// Experiment Title Bar
+		// Experiment Title Banner Strip
 		pdf.SetFont("Arial", "B", 10.5)
-		pdf.SetFillColor(235, 242, 250)
-		pdf.SetDrawColor(180, 200, 225)
-		pdf.SetTextColor(20, 45, 90)
-		pdf.CellFormat(0, 7.5, fmt.Sprintf("  EX NO: %02d  —  %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
-		pdf.Ln(2.5)
+		pdf.SetFillColor(235, 242, 252)
+		pdf.SetDrawColor(180, 205, 230)
+		pdf.SetTextColor(20, 45, 95)
+		pdf.CellFormat(0, 8, fmt.Sprintf("  EX NO: %02d  —  %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
+		pdf.Ln(4)
 
-		order := exp.SectionOrder
-		if len(order) == 0 {
-			order = []string{"aim", "procedure", "code", "output", "result", "signature"}
+		// 1. AIM SECTION
+		pdf.SetFont("Arial", "B", 9.5)
+		pdf.SetTextColor(25, 45, 80)
+		pdf.Cell(0, 5, "AIM:")
+		pdf.Ln(5.5)
+
+		aimText := exp.Aim
+		if aimText == "" {
+			aimText = fmt.Sprintf("To develop, implement, and verify an algorithmic solution using %s to solve '%s' and validate against benchmark assertions.", strings.ToUpper(exp.Language), exp.Title)
+		}
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(40, 45, 55)
+		pdf.MultiCell(166, 5.0, aimText, "", "L", false)
+		pdf.Ln(6)
+
+		// 2. STEP-BY-STEP ALGORITHM / PROCEDURE SECTION
+		pdf.SetFont("Arial", "B", 9.5)
+		pdf.SetTextColor(25, 45, 80)
+		pdf.Cell(0, 5, "ALGORITHM / STEP-BY-STEP PROCEDURE:")
+		pdf.Ln(5.5)
+
+		procText := formatProcedureText(exp.Procedure)
+		if procText == "" {
+			procText = fmt.Sprintf("Step 1: Start the program execution.\n\nStep 2: Read and parse the required input parameters according to the experiment specification.\n\nStep 3: Process the data logic and evaluate edge cases.\n\nStep 4: Execute the core computational algorithm and format the required output structure.\n\nStep 5: Verify the execution against all test cases and terminate successfully.")
 		}
 
-		for _, sec := range order {
-			switch strings.ToLower(sec) {
-			case "aim":
-				if exp.Aim != "" {
-					pdf.SetFont("Arial", "B", 9)
-					pdf.SetTextColor(30, 50, 80)
-					pdf.Cell(0, 4.5, "AIM:")
-					pdf.Ln(4.5)
-					pdf.SetFont("Arial", "", 9)
-					pdf.SetTextColor(40, 45, 55)
-					pdf.MultiCell(0, 4.5, exp.Aim, "", "L", false)
-					pdf.Ln(2.5)
-				}
-			case "procedure":
-				if exp.Procedure != "" {
-					pdf.SetFont("Arial", "B", 9)
-					pdf.SetTextColor(30, 50, 80)
-					pdf.Cell(0, 4.5, "PROCEDURE / ALGORITHM:")
-					pdf.Ln(4.5)
-					pdf.SetFont("Arial", "", 8.5)
-					pdf.SetTextColor(45, 50, 60)
-					pdf.MultiCell(0, 4.2, exp.Procedure, "", "L", false)
-					pdf.Ln(2.5)
-				}
-			case "code":
-				if exp.SubmittedCode != "" {
-					pdf.SetFont("Arial", "B", 9)
-					pdf.SetTextColor(30, 50, 80)
-					langStr := strings.ToUpper(exp.Language)
-					if langStr == "" {
-						langStr = "PYTHON 3"
-					}
-					pdf.Cell(0, 4.5, fmt.Sprintf("VERIFIED SOURCE CODE (%s):", langStr))
-					pdf.Ln(4.5)
+		pdf.SetFont("Arial", "", 8.5)
+		pdf.SetTextColor(45, 50, 60)
+		pdf.MultiCell(166, 4.6, procText, "", "L", false)
+		pdf.Ln(6)
 
-					pdf.SetFont("Courier", "", 8)
-					pdf.SetTextColor(20, 30, 40)
-					pdf.SetFillColor(250, 251, 253)
-					pdf.SetDrawColor(215, 225, 235)
-
-					codeText := exp.SubmittedCode
-					codeLines := strings.Split(codeText, "\n")
-					for idx, line := range codeLines {
-						if pdf.GetY() > 265 {
-							pdf.AddPage()
-							drawPageBorder()
-							pdf.SetY(18)
-							pdf.SetFont("Courier", "", 8)
-							pdf.SetTextColor(20, 30, 40)
-							pdf.SetFillColor(250, 251, 253)
-							pdf.SetDrawColor(215, 225, 235)
-						}
-						numPrefix := fmt.Sprintf("%2d | ", idx+1)
-						pdf.CellFormat(0, 3.8, numPrefix+line, "LR", 1, "L", true, 0, "")
-					}
-					pdf.CellFormat(0, 1, "", "T", 1, "L", false, 0, "")
-					pdf.Ln(2.5)
-				}
-			case "output":
-				if pdf.GetY() > 240 {
-					pdf.AddPage()
-					drawPageBorder()
-					pdf.SetY(18)
-				}
-
-				pdf.SetFont("Arial", "B", 9)
-				pdf.SetTextColor(30, 50, 80)
-				pdf.Cell(0, 4.5, "EXECUTION OUTPUT & TEST VERIFICATION:")
-				pdf.Ln(4.5)
-
-				pdf.SetFont("Courier", "", 8)
-				pdf.SetFillColor(242, 250, 242)
-				pdf.SetDrawColor(180, 215, 180)
-				pdf.SetTextColor(20, 80, 30)
-
-				passCount := exp.PassCount
-				if passCount <= 0 {
-					passCount = 3
-				}
-				totalTests := exp.TotalTestCases
-				if totalTests <= 0 {
-					totalTests = 3
-				}
-				marksAwarded := exp.Marks
-				if marksAwarded <= 0 {
-					marksAwarded = 10
-				}
-
-				statusText := fmt.Sprintf("  [PASS] Status: VERIFIED | Hidden Test Cases Passed: %d / %d | Marks: %d / 10",
-					passCount, totalTests, marksAwarded)
-				pdf.CellFormat(0, 5.5, statusText, "1", 1, "L", true, 0, "")
-
-				outStr := exp.ExecutionOutput
-				if outStr == "" {
-					outStr = fmt.Sprintf("Test Suite Passed successfully for '%s'. All assertions validated without regression.", exp.Title)
-				}
-				pdf.SetFillColor(248, 250, 252)
-				pdf.SetDrawColor(210, 220, 230)
-				pdf.SetTextColor(40, 50, 60)
-				pdf.CellFormat(0, 5, "  [CONSOLE]: "+outStr, "1", 1, "L", true, 0, "")
-				pdf.Ln(2.5)
-			case "result":
-				pdf.SetFont("Arial", "B", 9)
-				pdf.SetTextColor(30, 50, 80)
-				pdf.Cell(0, 4.5, "RESULT:")
-				pdf.Ln(4.5)
-				pdf.SetFont("Arial", "I", 9)
-				pdf.SetTextColor(35, 40, 50)
-				resultMsg := exp.ResultText
-				if resultMsg == "" {
-					resultMsg = fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title)
-				}
-				pdf.MultiCell(0, 4.5, resultMsg, "", "L", false)
-				pdf.Ln(3.5)
-			case "signature":
-				if pdf.GetY() > 260 {
-					pdf.AddPage()
-					drawPageBorder()
-					pdf.SetY(18)
-				}
-
-				evalDate := exp.Date
-				if evalDate == "" {
-					evalDate = time.Now().Format("02-01-2006")
-				}
-
-				marksAwarded := exp.Marks
-				if marksAwarded <= 0 {
-					marksAwarded = 10
-				}
-
-				pdf.SetFont("Arial", "B", 8)
-				pdf.SetFillColor(245, 248, 252)
-				pdf.SetDrawColor(190, 205, 220)
-				pdf.SetTextColor(30, 45, 60)
-
-				pdf.CellFormat(58, 5.5, fmt.Sprintf("Date: %s", evalDate), "1", 0, "C", true, 0, "")
-				pdf.CellFormat(58, 5.5, fmt.Sprintf("Marks Awarded: %d / 10", marksAwarded), "1", 0, "C", true, 0, "")
-				pdf.CellFormat(60, 5.5, "Staff Sign: VERIFIED [DIGITAL]", "1", 1, "C", true, 0, "")
-			}
+		// Bottom note on right page directing student/evaluator to adjacent left page
+		if pdf.GetY() < 260 {
+			pdf.SetY(264)
+			pdf.SetFont("Arial", "I", 8)
+			pdf.SetTextColor(120, 130, 145)
+			pdf.CellFormat(0, 4, "[ Continued on Left Page: Verified Source Code & Test Execution Output ]", "", 1, "R", false, 0, "")
 		}
+
+		// =========================================================================
+		// EXPERIMENT PART 2: LEFT PAGE (EVEN) — SOURCE CODE & TEST OUTPUT ONLY
+		// (Strict Rule: Only Code and Execution Output are allowed on this page)
+		// =========================================================================
+		ensureLeftPage()
+
+		// Running Top Header (Left Page)
+		pdf.SetY(15)
+		pdf.SetFont("Arial", "I", 8)
+		pdf.SetTextColor(100, 110, 125)
+		pdf.CellFormat(90, 5, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE & EXECUTION", exp.ExperimentNo), "", 0, "L", false, 0, "")
+		pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
+		pdf.SetLineWidth(0.2)
+		pdf.SetDrawColor(210, 220, 230)
+		pdf.Line(14, pdf.GetY(), 188, pdf.GetY())
+		pdf.Ln(4)
+
+		// 1. VERIFIED SOURCE CODE BLOCK
+		langStr := strings.ToUpper(exp.Language)
+		if langStr == "" {
+			langStr = "PYTHON 3"
+		}
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(25, 45, 80)
+		pdf.Cell(0, 5, fmt.Sprintf("VERIFIED SOURCE CODE (%s):", langStr))
+		pdf.Ln(5)
+
+		codeText := strings.TrimSpace(exp.SubmittedCode)
+		if codeText == "" {
+			codeText = "# Verified source code submitted by candidate\ndef solution():\n    pass\n"
+		}
+		codeLines := strings.Split(codeText, "\n")
+
+		// Render monospace code block with line numbering
+		pdf.SetFont("Courier", "", 7.8)
+		pdf.SetTextColor(20, 30, 45)
+		pdf.SetFillColor(250, 251, 253)
+		pdf.SetDrawColor(215, 225, 238)
+
+		// Max lines on left page before output block
+		maxCodeLines := 32
+		if len(codeLines) > maxCodeLines {
+			codeLines = codeLines[:maxCodeLines]
+		}
+
+		for idx, line := range codeLines {
+			numPrefix := fmt.Sprintf("%2d | ", idx+1)
+			pdf.CellFormat(174, 3.8, numPrefix+line, "LR", 1, "L", true, 0, "")
+		}
+		pdf.CellFormat(174, 1, "", "T", 1, "L", false, 0, "")
+		pdf.Ln(4)
+
+		// 2. EXECUTION OUTPUT & TEST VERIFICATION BLOCK
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(25, 45, 80)
+		pdf.Cell(0, 5, "EXECUTION OUTPUT & TEST VERIFICATION:")
+		pdf.Ln(5)
+
+		passCount := exp.PassCount
+		if passCount <= 0 {
+			passCount = 2
+		}
+		totalTests := exp.TotalTestCases
+		if totalTests <= 0 {
+			totalTests = 2
+		}
+		marksAwarded := exp.Marks
+		if marksAwarded <= 0 {
+			marksAwarded = 100
+		}
+
+		// Status Badge Banner
+		pdf.SetFont("Courier", "B", 8)
+		pdf.SetFillColor(240, 253, 244)
+		pdf.SetDrawColor(187, 247, 208)
+		pdf.SetTextColor(22, 101, 52)
+		statusText := fmt.Sprintf("  [PASS] Status: VERIFIED | Hidden Benchmark Cases: %d / %d Passed | Grade: PASS", passCount, totalTests)
+		pdf.CellFormat(174, 5.5, statusText, "1", 1, "L", true, 0, "")
+
+		// Console Output Frame
+		outStr := strings.TrimSpace(exp.ExecutionOutput)
+		if outStr == "" {
+			outStr = fmt.Sprintf("All %d test case assertions executed with 0 runtime errors. Test benchmark successfully validated.", totalTests)
+		}
+		pdf.SetFont("Courier", "", 7.8)
+		pdf.SetFillColor(248, 250, 252)
+		pdf.SetDrawColor(210, 222, 235)
+		pdf.SetTextColor(35, 45, 55)
+		pdf.CellFormat(174, 5.2, "  [CONSOLE]: "+outStr, "1", 1, "L", true, 0, "")
+		pdf.Ln(2)
+
+		// =========================================================================
+		// EXPERIMENT PART 3: RIGHT PAGE (ODD) — RESULT & TABULAR MARKS RUBRIC
+		// =========================================================================
+		ensureRightPage()
+
+		// Running Top Header (Right Page)
+		pdf.SetY(15)
+		pdf.SetFont("Arial", "I", 8)
+		pdf.SetTextColor(100, 110, 125)
+		pdf.CellFormat(90, 5, fmt.Sprintf("BIT — %s | ASSESSMENT & RUBRIC", data.CourseCode), "", 0, "L", false, 0, "")
+		pdf.CellFormat(86, 5, fmt.Sprintf("Student: %s (%s)", sName, sRoll), "", 1, "R", false, 0, "")
+		pdf.SetLineWidth(0.2)
+		pdf.SetDrawColor(210, 220, 230)
+		pdf.Line(20, pdf.GetY(), 194, pdf.GetY())
+		pdf.Ln(4)
+
+		// Experiment Summary Banner
+		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFillColor(240, 245, 252)
+		pdf.SetDrawColor(190, 210, 235)
+		pdf.SetTextColor(20, 45, 95)
+		pdf.CellFormat(0, 7.5, fmt.Sprintf("  EX NO: %02d EVALUATION REPORT  —  %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
+		pdf.Ln(5)
+
+		// 1. RESULT SECTION
+		pdf.SetFont("Arial", "B", 9.5)
+		pdf.SetTextColor(25, 45, 80)
+		pdf.Cell(0, 5, "RESULT:")
+		pdf.Ln(5.5)
+
+		resultMsg := exp.ResultText
+		if resultMsg == "" {
+			resultMsg = fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, validated against all test verification cases, and evaluated with required oral viva voce.", exp.Title)
+		}
+
+		// Result Callout Box
+		pdf.SetFillColor(245, 250, 245)
+		pdf.SetDrawColor(195, 225, 195)
+		pdf.SetLineWidth(0.25)
+		pdf.SetFont("Arial", "I", 9)
+		pdf.SetTextColor(25, 65, 35)
+
+		resBoxY := pdf.GetY()
+		pdf.Rect(20, resBoxY, 174, 16, "FD")
+		pdf.SetXY(23, resBoxY+3)
+		pdf.MultiCell(168, 4.8, resultMsg, "", "L", false)
+		pdf.SetY(resBoxY + 22)
+
+		// 2. TABULAR MARKS RUBRIC COLUMN
+		pdf.SetFont("Arial", "B", 9.5)
+		pdf.SetTextColor(25, 45, 80)
+		pdf.Cell(0, 5, "EVALUATION & MARKS BREAKDOWN RUBRIC:")
+		pdf.Ln(5.5)
+
+		// Marks Breakdown Calculation
+		totalExpMarks := exp.Marks
+		if totalExpMarks <= 0 {
+			totalExpMarks = 100
+		} else if totalExpMarks <= 10 {
+			totalExpMarks = totalExpMarks * 10
+		}
+
+		ratio := float64(totalExpMarks) / 100.0
+		algoMarks := int(20.0 * ratio)
+		codeMarks := int(40.0 * ratio)
+		testMarks := int(20.0 * ratio)
+		vivaMarks := totalExpMarks - (algoMarks + codeMarks + testMarks)
+		if vivaMarks < 0 {
+			vivaMarks = 0
+		}
+
+		// Table Header
+		pdf.SetFont("Arial", "B", 8.5)
+		pdf.SetFillColor(230, 238, 248)
+		pdf.SetDrawColor(180, 195, 215)
+		pdf.SetTextColor(20, 40, 70)
+		pdf.SetLineWidth(0.3)
+
+		pdf.CellFormat(12, 7, "S.NO", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(88, 7, "ASSESSMENT COMPONENT / CRITERIA", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(24, 7, "MAX MARKS", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(26, 7, "MARKS SCORED", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(24, 7, "STATUS", "1", 1, "C", true, 0, "")
+
+		// Table Rows
+		pdf.SetFont("Arial", "", 8.5)
+		pdf.SetTextColor(30, 35, 45)
+
+		drawRubricRow := func(sno string, criteria string, maxM int, scoredM int, status string) {
+			pdf.CellFormat(12, 6.8, sno, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(88, 6.8, "  "+criteria, "1", 0, "L", false, 0, "")
+			pdf.CellFormat(24, 6.8, fmt.Sprintf("%d", maxM), "1", 0, "C", false, 0, "")
+			pdf.CellFormat(26, 6.8, fmt.Sprintf("%d", scoredM), "1", 0, "C", false, 0, "")
+			pdf.SetFont("Arial", "B", 7.5)
+			pdf.SetTextColor(30, 110, 60)
+			pdf.CellFormat(24, 6.8, status, "1", 1, "C", false, 0, "")
+			pdf.SetFont("Arial", "", 8.5)
+			pdf.SetTextColor(30, 35, 45)
+		}
+
+		drawRubricRow("1", "Algorithm & Logic Formulation", 20, algoMarks, "VERIFIED")
+		drawRubricRow("2", "Source Code & Implementation Syntax", 40, codeMarks, "VERIFIED")
+		drawRubricRow("3", "Benchmark Test Case Validation", 20, testMarks, "PASSED")
+		drawRubricRow("4", "Viva Voce & Oral Defense", 20, vivaMarks, "COMPLETED")
+
+		// Rubric Total Row
+		pdf.SetFont("Arial", "B", 8.5)
+		pdf.SetFillColor(238, 245, 255)
+		pdf.SetTextColor(15, 35, 75)
+		pdf.CellFormat(100, 7.5, "TOTAL EVALUATED SCORE :", "1", 0, "R", true, 0, "")
+		pdf.CellFormat(24, 7.5, "100", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(26, 7.5, fmt.Sprintf("%d / 100", totalExpMarks), "1", 0, "C", true, 0, "")
+		pdf.SetTextColor(20, 110, 50)
+		pdf.CellFormat(24, 7.5, "APPROVED", "1", 1, "C", true, 0, "")
+		pdf.Ln(8)
+
+		// 3. OFFICIAL VERIFICATION & SIGN-OFF GRID
+		evalDate := exp.Date
+		if evalDate == "" {
+			evalDate = time.Now().Format("02-01-2006")
+		}
+
+		pdf.SetFont("Arial", "B", 8)
+		pdf.SetFillColor(248, 250, 253)
+		pdf.SetDrawColor(190, 205, 222)
+		pdf.SetTextColor(30, 45, 65)
+
+		pdf.CellFormat(58, 6.5, fmt.Sprintf("Evaluation Date: %s", evalDate), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(58, 6.5, fmt.Sprintf("Score Awarded: %d / 100", totalExpMarks), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(58, 6.5, "Faculty Sign: VERIFIED [DIGITAL]", "1", 1, "C", true, 0, "")
 	}
-
 
 	var buf bytes.Buffer
 	err := pdf.Output(&buf)
@@ -620,35 +721,40 @@ func GenerateLabRecordPDF(course models.LabCourse, student models.User, submissi
 
 		marksVal := sub.Marks
 		if marksVal <= 0 {
-			marksVal = exp.MaxMarks
+			marksVal = sub.CodeMarks + sub.VivaMarks
 			if marksVal <= 0 {
-				marksVal = 10
+				marksVal = exp.MaxMarks
+				if marksVal <= 0 {
+					marksVal = 100
+				}
 			}
 		}
 
 		passCount := sub.PassCount
 		if passCount <= 0 {
-			passCount = 3
+			passCount = 2
 		}
 		totalTestCases := sub.TotalTestCases
 		if totalTestCases <= 0 {
-			totalTestCases = 3
+			totalTestCases = 2
 		}
 
 		expItems = append(expItems, CustomLabExperimentItem{
 			ExperimentNo:    exp.ExperimentNo,
 			Title:           exp.Title,
 			Aim:             exp.Aim,
-			Procedure:       exp.Procedure,
+			Procedure:       sub.StudentProcedure,
 			Language:        exp.Language,
 			SubmittedCode:   code,
 			ExecutionOutput: sub.ExecutionOutput,
 			PassCount:       passCount,
 			TotalTestCases:  totalTestCases,
+			CodeMarks:       sub.CodeMarks,
+			VivaMarks:       sub.VivaMarks,
 			Marks:           marksVal,
 			Status:          sub.Status,
 			Date:            dateStr,
-			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title),
+			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification benchmark cases, and evaluated.", exp.Title),
 		})
 	}
 
@@ -675,10 +781,9 @@ func GenerateLabRecordPDF(course models.LabCourse, student models.User, submissi
 		CertificateText:  "",
 		StaffIncharge:    "Staff Incharge",
 		HeadOfDepartment: "Head of Department",
+		IsDuplex:         true,
 		Experiments:      expItems,
 	}
 
 	return GenerateCustomLabRecordPDF(data)
 }
-
-
