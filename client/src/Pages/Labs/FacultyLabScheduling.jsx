@@ -62,10 +62,12 @@ export default function FacultyLabScheduling() {
   // Inline Experiment Schedule Drafts: { [expId]: { is_unlocked, starts_at, ends_at, max_attempts, allow_late_submission, notes } }
   const [scheduleDrafts, setScheduleDrafts] = useState({});
 
-  // Student Override Inline Form State
+  // Multi-Select Student & Experiment Override Inline Form State
+  const [selectedOverrideStudentIds, setSelectedOverrideStudentIds] = useState([]);
+  const [selectedOverrideExpIds, setSelectedOverrideExpIds] = useState([]);
+  const [overrideStudentSection, setOverrideStudentSection] = useState('ALL');
+  const [overrideStudentQuery, setOverrideStudentQuery] = useState('');
   const [overrideForm, setOverrideForm] = useState({
-    student_id: '',
-    experiment_id: '',
     is_unlocked: true,
     bypass_prerequisite: false,
     starts_at: '',
@@ -136,135 +138,88 @@ export default function FacultyLabScheduling() {
     });
     setScheduleDrafts(drafts);
 
-    if (activeCourseExperiments.length > 0 && !overrideForm.experiment_id) {
-      setOverrideForm((prev) => ({ ...prev, experiment_id: String(activeCourseExperiments[0].id) }));
+    if (activeCourseExperiments.length > 0 && selectedOverrideExpIds.length === 0) {
+      setSelectedOverrideExpIds([activeCourseExperiments[0].id]);
     }
   }, [selectedUnlockCourseId, selectedUnlockSection, unlockData.unlocks, activeCourseExperiments.length]);
 
-  const formatDateForInput = (dt) => {
-    if (!dt) return '';
-    try {
-      const d = new Date(dt);
-      if (isNaN(d.getTime())) return '';
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    } catch {
-      return '';
+  // Multi-select helpers for Override Form
+  const filteredOverrideStudents = (unlockData.students || []).filter((s) => {
+    const matchesSec =
+      overrideStudentSection === 'ALL' ||
+      !s.section ||
+      s.section.toUpperCase() === overrideStudentSection.toUpperCase();
+    if (!matchesSec) return false;
+    if (!overrideStudentQuery.trim()) return true;
+    const q = overrideStudentQuery.toLowerCase();
+    return (
+      s.name?.toLowerCase().includes(q) ||
+      s.roll_no?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q)
+    );
+  });
+
+  const toggleStudentSelection = (sId) => {
+    setSelectedOverrideStudentIds((prev) =>
+      prev.includes(sId) ? prev.filter((id) => id !== sId) : [...prev, sId]
+    );
+  };
+
+  const handleSelectAllFilteredStudents = () => {
+    const filteredIds = filteredOverrideStudents.map((s) => s.id);
+    const allSelected =
+      filteredIds.length > 0 && filteredIds.every((id) => selectedOverrideStudentIds.includes(id));
+    if (allSelected) {
+      setSelectedOverrideStudentIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setSelectedOverrideStudentIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
     }
   };
 
-  // 2. Toggle Unlock Status Instantly
-  const handleToggleUnlock = async (expId, newStatus) => {
-    try {
-      setTogglingExpId(expId);
-      await api.post('/lab-incharge/unlocks/toggle', {
-        course_id: Number(selectedUnlockCourseId),
-        experiment_id: Number(expId),
-        section: selectedUnlockSection || 'ALL',
-        is_unlocked: newStatus,
-      });
+  const toggleExpSelection = (eId) => {
+    setSelectedOverrideExpIds((prev) =>
+      prev.includes(eId) ? prev.filter((id) => id !== eId) : [...prev, eId]
+    );
+  };
 
-      setScheduleDrafts((prev) => ({
-        ...prev,
-        [expId]: {
-          ...prev[expId],
-          is_unlocked: newStatus,
-        },
-      }));
-
-      showToast(
-        newStatus
-          ? `Experiment released for section ${selectedUnlockSection}!`
-          : `Experiment locked for section ${selectedUnlockSection}!`,
-        'success'
-      );
-      fetchUnlockMatrix();
-    } catch {
-      showToast('Failed to update unlock status.', 'error');
-    } finally {
-      setTogglingExpId(null);
+  const handleSelectAllExperiments = () => {
+    const allExpIds = activeCourseExperiments.map((e) => e.id);
+    const allSelected =
+      allExpIds.length > 0 && allExpIds.every((id) => selectedOverrideExpIds.includes(id));
+    if (allSelected) {
+      setSelectedOverrideExpIds([]);
+    } else {
+      setSelectedOverrideExpIds(allExpIds);
     }
   };
 
-  // 3. Save Single Experiment Schedule Inline
-  const handleSaveExpSchedule = async (expId) => {
-    const draft = scheduleDrafts[expId];
-    if (!draft) return;
-    try {
-      setSavingScheduleExpId(expId);
-      await api.post('/lab-incharge/unlocks/schedule', {
-        course_id: Number(selectedUnlockCourseId),
-        experiment_ids: [Number(expId)],
-        section: selectedUnlockSection || 'ALL',
-        is_unlocked: draft.is_unlocked,
-        starts_at: draft.starts_at ? new Date(draft.starts_at).toISOString() : null,
-        ends_at: draft.ends_at ? new Date(draft.ends_at).toISOString() : null,
-        max_attempts: Number(draft.max_attempts) || 0,
-        allow_late_submission: draft.allow_late_submission,
-        notes: draft.notes || '',
-      });
-      showToast(`Schedule window saved for Experiment!`);
-      fetchUnlockMatrix();
-    } catch {
-      showToast('Failed to save experiment schedule.', 'error');
-    } finally {
-      setSavingScheduleExpId(null);
-    }
-  };
-
-  // 4. Quick Preset Window (e.g. 24 hours, 7 days)
-  const applyQuickWindow = (expId, hours) => {
+  const applyOverrideQuickWindow = (hours) => {
     const now = new Date();
     const end = new Date(now.getTime() + hours * 60 * 60 * 1000);
-    setScheduleDrafts((prev) => ({
+    setOverrideForm((prev) => ({
       ...prev,
-      [expId]: {
-        ...prev[expId],
-        is_unlocked: true,
-        starts_at: formatDateForInput(now),
-        ends_at: formatDateForInput(end),
-      },
+      starts_at: formatDateForInput(now),
+      ends_at: formatDateForInput(end),
     }));
   };
 
-  // 5. Bulk Unlock / Lock All
-  const handleBulkSetStatus = async (isUnlockAll) => {
-    if (activeCourseExperiments.length === 0) return;
-    try {
-      setLoading(true);
-      const expIds = activeCourseExperiments.map((e) => e.id);
-      await api.post('/lab-incharge/unlocks/schedule', {
-        course_id: Number(selectedUnlockCourseId),
-        experiment_ids: expIds,
-        section: selectedUnlockSection || 'ALL',
-        is_unlocked: isUnlockAll,
-      });
-      showToast(
-        isUnlockAll
-          ? `All ${expIds.length} experiments unlocked for section ${selectedUnlockSection}!`
-          : `All ${expIds.length} experiments locked for section ${selectedUnlockSection}!`
-      );
-      fetchUnlockMatrix();
-    } catch {
-      showToast('Failed to apply bulk unlock status.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 6. Save Individual Student Override Inline
+  // 6. Save Multi-Student / Multi-Experiment Override Inline
   const handleSaveStudentOverride = async (e) => {
     e.preventDefault();
-    if (!overrideForm.student_id || !overrideForm.experiment_id) {
-      showToast('Please select both a student and an experiment.', 'error');
+    if (selectedOverrideStudentIds.length === 0) {
+      showToast('Please select at least one student.', 'error');
+      return;
+    }
+    if (selectedOverrideExpIds.length === 0) {
+      showToast('Please select at least one experiment.', 'error');
       return;
     }
     try {
       setOverrideSubmitting(true);
       await api.post('/lab-incharge/unlocks/student-override', {
         course_id: Number(selectedUnlockCourseId),
-        experiment_id: Number(overrideForm.experiment_id),
-        student_id: Number(overrideForm.student_id),
+        student_ids: selectedOverrideStudentIds,
+        experiment_ids: selectedOverrideExpIds,
         is_unlocked: overrideForm.is_unlocked,
         bypass_prerequisite: overrideForm.bypass_prerequisite,
         starts_at: overrideForm.starts_at ? new Date(overrideForm.starts_at).toISOString() : null,
@@ -273,18 +228,10 @@ export default function FacultyLabScheduling() {
         allow_late_submission: overrideForm.allow_late_submission,
         notes: overrideForm.notes || '',
       });
-      showToast('Individual student window override saved successfully!');
-      setOverrideForm({
-        student_id: '',
-        experiment_id: activeCourseExperiments[0] ? String(activeCourseExperiments[0].id) : '',
-        is_unlocked: true,
-        bypass_prerequisite: false,
-        starts_at: '',
-        ends_at: '',
-        max_attempts: 0,
-        allow_late_submission: false,
-        notes: '',
-      });
+      showToast(
+        `Override granted to ${selectedOverrideStudentIds.length} student(s) for ${selectedOverrideExpIds.length} experiment(s)!`
+      );
+      setSelectedOverrideStudentIds([]);
       fetchUnlockMatrix();
     } catch {
       showToast('Failed to save student override.', 'error');
@@ -634,118 +581,329 @@ export default function FacultyLabScheduling() {
       </div>
 
       {/* CARD 3: Individual Student Overrides & Deadline Extensions (INLINE, NO MODAL) */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4 shadow-[var(--shadow-xs)]">
-        <div className="pb-3 border-b border-[var(--border)]">
-          <h2 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <UserCheck className="w-4 h-4 text-[var(--accent)]" />
-            Individual Student Window Overrides & Prerequisite Waivers
-          </h2>
-          <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-            Grant single students special deadline extensions, custom attempt limits, or bypass the sequential prerequisite rule.
-          </p>
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-5 shadow-[var(--shadow-xs)]">
+        <div className="pb-3 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-[var(--accent)]" />
+              Individual Student Window Overrides & Prerequisite Waivers
+            </h2>
+            <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+              Select multiple students and multiple experiments simultaneously to grant deadline extensions, custom attempt quotas, or prerequisite bypasses.
+            </p>
+          </div>
+          {(selectedOverrideStudentIds.length > 0 || selectedOverrideExpIds.length > 0) && (
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              <span className="px-2.5 py-1 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20">
+                {selectedOverrideStudentIds.length} Students
+              </span>
+              <span className="text-[var(--text-muted)]">×</span>
+              <span className="px-2.5 py-1 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20">
+                {selectedOverrideExpIds.length} Experiments
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Inline Override Form */}
+        {/* Inline Multi-Select Override Form */}
         <form
           onSubmit={handleSaveStudentOverride}
-          className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-3.5"
+          className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-4"
         >
-          <div className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-            <UserPlus className="w-4 h-4 text-[var(--accent)]" />
-            Create / Update Student Override
+          {/* Step 1: Experiment Multi-Select */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label className={labelCls}>
+                1. Select Target Experiments ({selectedOverrideExpIds.length} of {activeCourseExperiments.length} Selected) *
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllExperiments}
+                  className="text-[11px] font-semibold text-[var(--accent)] hover:underline cursor-pointer"
+                >
+                  {selectedOverrideExpIds.length === activeCourseExperiments.length && activeCourseExperiments.length > 0
+                    ? 'Deselect All'
+                    : 'Select All Experiments'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {activeCourseExperiments.length === 0 ? (
+                <div className="col-span-full py-3 text-center text-xs text-[var(--text-muted)] italic">
+                  No experiments found for this course.
+                </div>
+              ) : (
+                activeCourseExperiments.map((exp) => {
+                  const isSelected = selectedOverrideExpIds.includes(exp.id);
+                  return (
+                    <button
+                      key={exp.id}
+                      type="button"
+                      onClick={() => toggleExpSelection(exp.id)}
+                      className={`text-left p-2.5 rounded-[var(--radius-sm)] border text-xs font-semibold transition-all flex items-start gap-2.5 cursor-pointer ${
+                        isSelected
+                          ? 'bg-[var(--accent-dim)] border-[var(--accent)] text-[var(--text-primary)] shadow-sm'
+                          : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded mt-0.5 shrink-0 flex items-center justify-center border transition-all ${
+                          isSelected
+                            ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                            : 'border-[var(--border-strong)] bg-[var(--bg-card)]'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-[var(--text-primary)] flex items-center justify-between gap-1">
+                          <span>Exp #{exp.experiment_no}</span>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">#{exp.id}</span>
+                        </div>
+                        <div className="text-[11px] text-[var(--text-secondary)] truncate mt-0.5">
+                          {exp.title}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Student Selector */}
-            <div className="space-y-1">
-              <label className={labelCls}>Select Student *</label>
-              <select
-                value={overrideForm.student_id}
-                onChange={(e) => setOverrideForm((p) => ({ ...p, student_id: e.target.value }))}
-                className={inputCls}
-                required
-              >
-                <option value="">-- Choose Student --</option>
-                {unlockData.students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.roll_no || s.email}) — Sec: {s.section || 'Unassigned'}
-                  </option>
-                ))}
-              </select>
+          {/* Step 2: Student Multi-Select Roster */}
+          <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <label className={labelCls}>
+                2. Select Target Students ({selectedOverrideStudentIds.length} Selected) *
+              </label>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Section filter */}
+                <select
+                  value={overrideStudentSection}
+                  onChange={(e) => setOverrideStudentSection(e.target.value)}
+                  className="px-2.5 py-1 text-[11px] rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer"
+                >
+                  <option value="ALL">All Sections ({unlockData.students.length})</option>
+                  {unlockData.sections.map((sec) => (
+                    <option key={sec} value={sec}>
+                      Section {sec}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Search query */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={overrideStudentQuery}
+                    onChange={(e) => setOverrideStudentQuery(e.target.value)}
+                    placeholder="Search name / roll no..."
+                    className="pl-7 pr-2.5 py-1 text-[11px] rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] w-36 sm:w-44"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSelectAllFilteredStudents}
+                  className="text-[11px] font-semibold text-[var(--accent)] hover:underline cursor-pointer"
+                >
+                  {filteredOverrideStudents.length > 0 &&
+                  filteredOverrideStudents.every((s) => selectedOverrideStudentIds.includes(s.id))
+                    ? 'Deselect Filtered'
+                    : `Select All (${filteredOverrideStudents.length})`}
+                </button>
+
+                {selectedOverrideStudentIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOverrideStudentIds([])}
+                    className="text-[11px] font-semibold text-[var(--red)] hover:underline cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Experiment Selector */}
-            <div className="space-y-1">
-              <label className={labelCls}>Target Experiment *</label>
-              <select
-                value={overrideForm.experiment_id}
-                onChange={(e) => setOverrideForm((p) => ({ ...p, experiment_id: e.target.value }))}
-                className={inputCls}
-                required
-              >
-                {activeCourseExperiments.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    Exp #{e.experiment_no} — {e.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Override Starts At */}
-            <div className="space-y-1">
-              <label className={labelCls}>Override Starts At</label>
-              <input
-                type="datetime-local"
-                value={overrideForm.starts_at}
-                onChange={(e) => setOverrideForm((p) => ({ ...p, starts_at: e.target.value }))}
-                className={inputCls}
-              />
-            </div>
-
-            {/* Override Ends At */}
-            <div className="space-y-1">
-              <label className={labelCls}>Extended Deadline (Ends At)</label>
-              <input
-                type="datetime-local"
-                value={overrideForm.ends_at}
-                onChange={(e) => setOverrideForm((p) => ({ ...p, ends_at: e.target.value }))}
-                className={inputCls}
-              />
+            {/* Student Roster Checkbox Grid */}
+            <div className="max-h-56 overflow-y-auto border border-[var(--border)] rounded-[var(--radius-sm)] bg-[var(--bg-input)] p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {filteredOverrideStudents.length === 0 ? (
+                <div className="col-span-full py-6 text-center text-xs text-[var(--text-muted)] italic">
+                  No students match the selected section/filter.
+                </div>
+              ) : (
+                filteredOverrideStudents.map((s) => {
+                  const isSelected = selectedOverrideStudentIds.includes(s.id);
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => toggleStudentSelection(s.id)}
+                      className={`p-2 rounded-[var(--radius-sm)] border text-xs transition-all flex items-center gap-2.5 cursor-pointer select-none ${
+                        isSelected
+                          ? 'bg-[var(--accent-dim)] border-[var(--accent)] text-[var(--text-primary)] shadow-xs'
+                          : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded shrink-0 flex items-center justify-center border transition-all ${
+                          isSelected
+                            ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                            : 'border-[var(--border-strong)] bg-[var(--bg-input)]'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-[var(--text-primary)] truncate text-[11px]">
+                          {s.name}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-muted)] font-mono truncate flex items-center gap-1.5">
+                          <span>{s.roll_no || s.email}</span>
+                          <span className="px-1 py-0.2 rounded bg-[var(--bg-raised)] text-[var(--text-secondary)] font-bold">
+                            {s.section || 'Unassigned'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
-          {/* Checkboxes & Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-4 flex-wrap">
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={overrideForm.bypass_prerequisite}
-                  onChange={(e) => setOverrideForm((p) => ({ ...p, bypass_prerequisite: e.target.checked }))}
-                  className="rounded text-[var(--accent)] focus:ring-0 cursor-pointer"
-                />
-                <span>Bypass Sequential Prerequisite Requirement</span>
-              </label>
+          {/* Step 3: Override Parameters */}
+          <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+            <label className={labelCls}>3. Override Timings & Waiver Settings</label>
 
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)] cursor-pointer">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Starts At */}
+              <div className="space-y-1">
+                <label className={labelCls}>Override Starts At</label>
                 <input
-                  type="checkbox"
-                  checked={overrideForm.allow_late_submission}
-                  onChange={(e) => setOverrideForm((p) => ({ ...p, allow_late_submission: e.target.checked }))}
-                  className="rounded text-[var(--accent)] focus:ring-0 cursor-pointer"
+                  type="datetime-local"
+                  value={overrideForm.starts_at}
+                  onChange={(e) => setOverrideForm((p) => ({ ...p, starts_at: e.target.value }))}
+                  className={inputCls}
                 />
-                <span>Allow Late Submission</span>
-              </label>
+              </div>
+
+              {/* Ends At */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className={labelCls}>Extended Deadline (Ends At)</label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => applyOverrideQuickWindow(24)}
+                      className="text-[10px] font-bold text-[var(--accent)] hover:underline cursor-pointer"
+                    >
+                      +24h
+                    </button>
+                    <span className="text-[var(--text-muted)] text-[10px]">·</span>
+                    <button
+                      type="button"
+                      onClick={() => applyOverrideQuickWindow(72)}
+                      className="text-[10px] font-bold text-[var(--accent)] hover:underline cursor-pointer"
+                    >
+                      +3d
+                    </button>
+                    <span className="text-[var(--text-muted)] text-[10px]">·</span>
+                    <button
+                      type="button"
+                      onClick={() => applyOverrideQuickWindow(168)}
+                      className="text-[10px] font-bold text-[var(--accent)] hover:underline cursor-pointer"
+                    >
+                      +7d
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="datetime-local"
+                  value={overrideForm.ends_at}
+                  onChange={(e) => setOverrideForm((p) => ({ ...p, ends_at: e.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Max Attempts */}
+              <div className="space-y-1">
+                <label className={labelCls}>Max Attempts (0 = Unlimited)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  value={overrideForm.max_attempts}
+                  onChange={(e) => setOverrideForm((p) => ({ ...p, max_attempts: e.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Notes / Reason */}
+              <div className="space-y-1">
+                <label className={labelCls}>Faculty Reason / Notes</label>
+                <input
+                  type="text"
+                  value={overrideForm.notes}
+                  onChange={(e) => setOverrideForm((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="e.g. Medical leave extension, Lab make-up"
+                  className={inputCls}
+                />
+              </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={overrideSubmitting || !overrideForm.student_id}
-              className="px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
-            >
-              {overrideSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              Grant Student Override
-            </button>
+            {/* Checkboxes & Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+              <div className="flex items-center gap-4 flex-wrap">
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overrideForm.bypass_prerequisite}
+                    onChange={(e) => setOverrideForm((p) => ({ ...p, bypass_prerequisite: e.target.checked }))}
+                    className="rounded text-[var(--accent)] focus:ring-0 cursor-pointer"
+                  />
+                  <span>Bypass Sequential Prerequisite Requirement</span>
+                </label>
+
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overrideForm.allow_late_submission}
+                    onChange={(e) => setOverrideForm((p) => ({ ...p, allow_late_submission: e.target.checked }))}
+                    className="rounded text-[var(--accent)] focus:ring-0 cursor-pointer"
+                  />
+                  <span>Allow Late Submission</span>
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={
+                  overrideSubmitting ||
+                  selectedOverrideStudentIds.length === 0 ||
+                  selectedOverrideExpIds.length === 0
+                }
+                className="px-5 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+              >
+                {overrideSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                <span>
+                  Grant Override
+                  {selectedOverrideStudentIds.length > 0 && selectedOverrideExpIds.length > 0
+                    ? ` (${selectedOverrideStudentIds.length} Student${
+                        selectedOverrideStudentIds.length > 1 ? 's' : ''
+                      } × ${selectedOverrideExpIds.length} Exp)`
+                    : ''}
+                </span>
+              </button>
+            </div>
           </div>
         </form>
 

@@ -1278,8 +1278,10 @@ func FacultyScheduleWindowBulk(c *gin.Context) {
 
 type SetStudentOverrideReq struct {
 	CourseID            uint       `json:"course_id" binding:"required"`
-	ExperimentID        uint       `json:"experiment_id" binding:"required"`
-	StudentID           uint       `json:"student_id" binding:"required"`
+	ExperimentID        uint       `json:"experiment_id"`
+	ExperimentIDs       []uint     `json:"experiment_ids"`
+	StudentID           uint       `json:"student_id"`
+	StudentIDs          []uint     `json:"student_ids"`
 	IsUnlocked          bool       `json:"is_unlocked"`
 	BypassPrerequisite  bool       `json:"bypass_prerequisite"`
 	StartsAt            *time.Time `json:"starts_at"`
@@ -1289,7 +1291,7 @@ type SetStudentOverrideReq struct {
 	Notes               string     `json:"notes"`
 }
 
-// FacultySetStudentOverride creates or updates an individual student window extension or unlock
+// FacultySetStudentOverride creates or updates individual or multi-student window extensions / waivers
 func FacultySetStudentOverride(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
@@ -1301,52 +1303,74 @@ func FacultySetStudentOverride(c *gin.Context) {
 		return
 	}
 
-	var student models.User
-	if err := database.DB.First(&student, req.StudentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
+	// 1. Resolve Student IDs
+	sIDs := req.StudentIDs
+	if len(sIDs) == 0 && req.StudentID > 0 {
+		sIDs = []uint{req.StudentID}
+	}
+	if len(sIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please select at least one student"})
+		return
+	}
+
+	// 2. Resolve Experiment IDs
+	eIDs := req.ExperimentIDs
+	if len(eIDs) == 0 && req.ExperimentID > 0 {
+		eIDs = []uint{req.ExperimentID}
+	}
+	if len(eIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please select at least one experiment"})
+		return
+	}
+
+	var students []models.User
+	if err := database.DB.Where("id IN ?", sIDs).Find(&students).Error; err != nil || len(students) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Selected students not found"})
 		return
 	}
 
 	now := time.Now()
-	var override models.LabExperimentUnlock
-	err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ?", req.CourseID, req.ExperimentID, req.StudentID).First(&override).Error
+	count := 0
 
-	override.CourseID = req.CourseID
-	override.ExperimentID = req.ExperimentID
-	override.StudentID = &req.StudentID
-	override.Section = student.Section
-	if override.Section == "" {
-		override.Section = "ALL"
-	}
-	override.FacultyID = facultyID
-	override.IsUnlocked = req.IsUnlocked
-	override.BypassPrerequisite = req.BypassPrerequisite
-	override.StartsAt = req.StartsAt
-	override.EndsAt = req.EndsAt
-	override.MaxAttempts = req.MaxAttempts
-	override.AllowLateSubmission = req.AllowLateSubmission
-	override.Notes = strings.TrimSpace(req.Notes)
-	if req.IsUnlocked {
-		override.UnlockedAt = &now
-	}
-
-	if err != nil {
-		if createErr := database.DB.Create(&override).Error; createErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create student override: " + createErr.Error()})
-			return
+	for _, student := range students {
+		sec := student.Section
+		if strings.TrimSpace(sec) == "" {
+			sec = "ALL"
 		}
-	} else {
-		if saveErr := database.DB.Save(&override).Error; saveErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student override: " + saveErr.Error()})
-			return
+		sID := student.ID
+
+		for _, expID := range eIDs {
+			var override models.LabExperimentUnlock
+			err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ?", req.CourseID, expID, sID).First(&override).Error
+
+			override.CourseID = req.CourseID
+			override.ExperimentID = expID
+			override.StudentID = &sID
+			override.Section = sec
+			override.FacultyID = facultyID
+			override.IsUnlocked = req.IsUnlocked
+			override.BypassPrerequisite = req.BypassPrerequisite
+			override.StartsAt = req.StartsAt
+			override.EndsAt = req.EndsAt
+			override.MaxAttempts = req.MaxAttempts
+			override.AllowLateSubmission = req.AllowLateSubmission
+			override.Notes = strings.TrimSpace(req.Notes)
+			if req.IsUnlocked {
+				override.UnlockedAt = &now
+			}
+
+			if err != nil {
+				database.DB.Create(&override)
+			} else {
+				database.DB.Save(&override)
+			}
+			count++
 		}
 	}
-
-	database.DB.Preload("Course").Preload("Experiment").Preload("Student").First(&override, override.ID)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  fmt.Sprintf("Window override configured for %s (%s)!", student.Name, student.RollNo),
-		"override": override,
+		"message": fmt.Sprintf("Successfully configured window overrides for %d student(s) across %d experiment(s)!", len(students), len(eIDs)),
+		"count":   count,
 	})
 }
 
