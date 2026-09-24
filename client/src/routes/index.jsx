@@ -404,19 +404,35 @@ export const router = createBrowserRouter([
           },
           {
             path: 'faculty/labs',
-            element: <LabInchargeDashboard />,
+            element: (
+              <DynamicPageRoute pageKey="lab_incharge_verification">
+                <LabInchargeDashboard />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'faculty/labs/evaluation',
-            element: <FacultyLabEvaluation />,
+            element: (
+              <DynamicPageRoute pageKey="faculty_lab_evaluation">
+                <FacultyLabEvaluation />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'faculty/labs/scheduling',
-            element: <FacultyLabScheduling />,
+            element: (
+              <DynamicPageRoute pageKey="faculty_lab_scheduling">
+                <FacultyLabScheduling />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'faculty/labs/evaluate/:subId',
-            element: <LabEvaluationPage />,
+            element: (
+              <DynamicPageRoute pageKey="faculty_lab_evaluation">
+                <LabEvaluationPage />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'admin/labs/mapping',
