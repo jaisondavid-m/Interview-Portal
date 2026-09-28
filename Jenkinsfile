@@ -84,11 +84,14 @@ pipeline {
                         '''
                     } else {
                         echo '🚀 Executing Blue-Green Zero-Downtime Deployment...'
-                        def tag = params.RELEASE_TAG?.trim() ?: "RELEASE_${env.BUILD_NUMBER}_$(date +%Y%m%d_%H%M%S)"
-                        sh """
+                        sh '''
                             cd "${PROJECT_DIR}"
-                            ./deploy.sh "${tag}"
-                        """
+                            TAG="${RELEASE_TAG}"
+                            if [ -z "${TAG}" ]; then
+                                TAG="RELEASE_${BUILD_NUMBER}_$(date +%Y%m%d_%H%M%S)"
+                            fi
+                            ./deploy.sh "${TAG}"
+                        '''
                     }
                 }
             }
