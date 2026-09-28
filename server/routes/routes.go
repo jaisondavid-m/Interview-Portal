@@ -24,8 +24,10 @@ func SetupRouter() *gin.Engine {
 
 	// Helper function to register auth, student, developer & admin routes on any router group
 	registerRoutes := func(g *gin.RouterGroup) {
-		g.GET("/health", controllers.HealthCheck)
-		g.GET("/version", controllers.VersionCheck)
+		if g.BasePath() != "" && g.BasePath() != "/" {
+			g.GET("/health", controllers.HealthCheck)
+			g.GET("/version", controllers.VersionCheck)
+		}
 
 		// Auth Routes
 		auth := g.Group("/auth")

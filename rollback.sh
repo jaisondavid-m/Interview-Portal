@@ -71,15 +71,22 @@ fi
 
 echo -e "\n${BOLD}[2/4] Testing ${TARGET_COLOR^^} health check on port ${TARGET_PORT}...${NC}"
 TARGET_HEALTH_URL="http://127.0.0.1:${TARGET_PORT}/health"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_HEALTH_URL}" 2>/dev/null || true)
+RETRIES=0
+MAX_RETRIES=20
+HEALTHY=false
 
-if [ "${HTTP_CODE}" != "200" ]; then
-    echo -e "${YELLOW}! Waiting for ${TARGET_COLOR^^} to respond on ${TARGET_HEALTH_URL}...${NC}"
-    sleep 3
+while [ ${RETRIES} -lt ${MAX_RETRIES} ]; do
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_HEALTH_URL}" 2>/dev/null || true)
-fi
+    if [ "${HTTP_CODE}" = "200" ]; then
+        HEALTHY=true
+        break
+    fi
+    echo -e "  [Attempt $((RETRIES+1))/${MAX_RETRIES}] Waiting for ${TARGET_COLOR^^} on ${TARGET_HEALTH_URL} (status: ${HTTP_CODE:-N/A})..."
+    sleep 2
+    RETRIES=$((RETRIES+1))
+done
 
-if [ "${HTTP_CODE}" != "200" ]; then
+if [ "${HEALTHY}" = false ]; then
     echo -e "${RED}✗ FATAL: Rollback target ${TARGET_COLOR^^} failed health check (HTTP ${HTTP_CODE:-N/A}).${NC}"
     echo -e "${RED}  Cannot safely rollback to an unhealthy target.${NC}"
     exit 1
