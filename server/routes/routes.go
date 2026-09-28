@@ -17,12 +17,16 @@ func SetupRouter() *gin.Engine {
 	router.Use(middlewares.RateLimitMiddleware())
 	router.Use(gin.Recovery())
 
-	// Public Health Check
+	// Public Health & Version Checks
 	router.GET("/", controllers.HealthCheck)
 	router.GET("/health", controllers.HealthCheck)
+	router.GET("/version", controllers.VersionCheck)
 
 	// Helper function to register auth, student, developer & admin routes on any router group
 	registerRoutes := func(g *gin.RouterGroup) {
+		g.GET("/health", controllers.HealthCheck)
+		g.GET("/version", controllers.VersionCheck)
+
 		// Auth Routes
 		auth := g.Group("/auth")
 		{

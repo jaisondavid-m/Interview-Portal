@@ -33,6 +33,7 @@ RUN rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
 RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*
 
 # Copy custom reverse proxy & SPA configuration
+RUN echo 'upstream active_backend { server mockmate-app-blue:8080; }' > /etc/nginx/conf.d/active_upstream.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy pre-compiled Vite production bundle from builder

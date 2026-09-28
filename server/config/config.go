@@ -22,9 +22,11 @@ type Config struct {
 	DBMaxIdleConns    int
 	DBMaxOpenConns    int
 	DBConnMaxLifetime time.Duration
-	JWTSecret         string
-	GoogleClientID    string
+	JWTSecret          string
+	GoogleClientID     string
 	GoogleClientSecret string
+	AppColor           string
+	AppVersion         string
 }
 
 // AppConfig is the global configuration instance
@@ -65,6 +67,8 @@ func LoadConfig() *Config {
 		JWTSecret:          getEnv("JWT_SECRET", "mock_mate_secure_jwt_secret_2026"),
 		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", getEnv("VITE_GOOGLE_CLIENT_ID", "")),
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+		AppColor:           getEnv("APP_COLOR", "blue"),
+		AppVersion:         getEnv("APP_VERSION", "v1.0.0"),
 	}
 
 	return AppConfig

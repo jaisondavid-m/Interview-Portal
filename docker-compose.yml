@@ -202,17 +202,19 @@ services:
       retries: 5
 
   # ============================================================
-  # 7. Go Backend API Service (Read/Write Splitting with GORM)
+  # 7. Go Backend API Service - BLUE Environment (Port 8081)
   # ============================================================
-  server:
+  app-blue:
     build:
       context: ./server
       dockerfile: Dockerfile
       network: host
-    container_name: mockmate-server
+    container_name: mockmate-app-blue
     restart: unless-stopped
     environment:
       PORT: 8080
+      APP_COLOR: ${BLUE_COLOR:-blue}
+      APP_VERSION: ${BLUE_VERSION:-v1.0.0}
       GIN_MODE: ${GIN_MODE:-release}
       DB_HOST: mysql-primary
       DB_PORT: 3306
@@ -232,7 +234,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: ${REDIS_DB:-0}
     ports:
-      - "${SERVER_PORT:-8080}:8080"
+      - "${BLUE_PORT:-8081}:8080"
     tmpfs:
       - /tmp:rw,size=4G,mode=1777
     ulimits:
@@ -253,9 +255,76 @@ services:
         condition: service_healthy
     networks:
       - mockmate-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health | grep -q 'success' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   # ============================================================
-  # 8. React Frontend (Nginx SPA + Reverse Proxy on Port 80)
+  # 8. Go Backend API Service - GREEN Environment (Port 8082)
+  # ============================================================
+  app-green:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      network: host
+    container_name: mockmate-app-green
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      APP_COLOR: ${GREEN_COLOR:-green}
+      APP_VERSION: ${GREEN_VERSION:-v1.1.0}
+      GIN_MODE: ${GIN_MODE:-release}
+      DB_HOST: mysql-primary
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-jaison}
+      DB_NAME: ${MYSQL_DATABASE:-mock_mate}
+      DB_REPLICA_HOSTS: mysql-replica-1:3306,mysql-replica-2:3306
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-500}
+      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-50}
+      SANDBOX_DB_HOST: ${SANDBOX_DB_HOST:-sandbox-db}
+      SANDBOX_DB_PORT: ${SANDBOX_DB_PORT:-3306}
+      SANDBOX_DB_USER: ${SANDBOX_DB_USER:-root}
+      SANDBOX_DB_PASSWORD: ${SANDBOX_DB_PASSWORD:-sandbox_root_pass_2026}
+      JWT_SECRET: ${JWT_SECRET:-mock_mate_secure_jwt_secret_2026}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+    ports:
+      - "${GREEN_PORT:-8082}:8080"
+    tmpfs:
+      - /tmp:rw,size=4G,mode=1777
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+      nproc: 65535
+    volumes:
+      - audio_recordings:/app/uploads
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+      mysql-replica-1:
+        condition: service_healthy
+      mysql-replica-2:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mockmate-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health | grep -q 'success' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ============================================================
+  # 9. React Frontend & Nginx Router (Port 80)
   # ============================================================
   client:
     build:
@@ -268,13 +337,15 @@ services:
     restart: unless-stopped
     ports:
       - "${CLIENT_PORT:-80}:80"
+    volumes:
+      - ./infrastructure/nginx/active_upstream.conf:/etc/nginx/conf.d/active_upstream.conf:ro
     depends_on:
-      - server
+      - app-blue
     networks:
       - mockmate-network
 
   # ============================================================
-  # 9. Cloudflare Tunnel (Optional)
+  # 10. Cloudflare Tunnel (Ingress to Nginx Port 80)
   # ============================================================
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -289,7 +360,6 @@ services:
       - tunnel
     depends_on:
       - client
-      - server
 
 volumes:
   mysql-primary-data:
