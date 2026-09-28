@@ -69,19 +69,55 @@ if ! docker ps --format '{{.Names}}' | grep -q "${TARGET_CONTAINER}"; then
     docker compose up -d "${TARGET_SERVICE}"
 fi
 
+# Multi-network probe helper (supports host localhost, container network DNS, and docker bridge gateway)
+probe_endpoint() {
+    local container="$1"
+    local port="$2"
+    local endpoint="${3:-/health}"
+    local code="000"
+
+    # 1. Direct container network probe (works within Docker / Jenkins)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://${container}:8080${endpoint}" 2>/dev/null || echo "000")
+    if [ "$code" = "200" ]; then
+        echo "$code"
+        return 0
+    fi
+
+    # 2. Host localhost probe (works on host WSL)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}${endpoint}" 2>/dev/null || echo "000")
+    if [ "$code" = "200" ]; then
+        echo "$code"
+        return 0
+    fi
+
+    # 3. Docker bridge gateway probe (works from container to host port)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://172.17.0.1:${port}${endpoint}" 2>/dev/null || echo "000")
+    if [ "$code" = "200" ]; then
+        echo "$code"
+        return 0
+    fi
+
+    # 4. In-container docker exec probe fallback
+    if docker exec "${container}" wget -qO- "http://127.0.0.1:8080${endpoint}" 2>/dev/null | grep -q -E "success|version|release"; then
+        echo "200"
+        return 0
+    fi
+
+    echo "$code"
+}
+
 echo -e "\n${BOLD}[2/4] Testing ${TARGET_COLOR^^} health check on port ${TARGET_PORT}...${NC}"
-TARGET_HEALTH_URL="http://127.0.0.1:${TARGET_PORT}/health"
 RETRIES=0
 MAX_RETRIES=20
 HEALTHY=false
 
 while [ ${RETRIES} -lt ${MAX_RETRIES} ]; do
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_HEALTH_URL}" 2>/dev/null || true)
+    HTTP_CODE=$(probe_endpoint "${TARGET_CONTAINER}" "${TARGET_PORT}" "/health")
     if [ "${HTTP_CODE}" = "200" ]; then
         HEALTHY=true
         break
     fi
-    echo -e "  [Attempt $((RETRIES+1))/${MAX_RETRIES}] Waiting for ${TARGET_COLOR^^} on ${TARGET_HEALTH_URL} (status: ${HTTP_CODE:-N/A})..."
+    echo -e "  [Attempt $((RETRIES+1))/${MAX_RETRIES}] Waiting for ${TARGET_COLOR^^} (${TARGET_CONTAINER}) (status: ${HTTP_CODE:-N/A})..."
     sleep 2
     RETRIES=$((RETRIES+1))
 done

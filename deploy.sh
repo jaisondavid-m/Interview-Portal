@@ -85,17 +85,76 @@ fi
 
 docker compose up -d --build "${TARGET_SERVICE}"
 
+# Multi-network probe helper (supports host localhost, container network DNS, and docker bridge gateway)
+probe_endpoint() {
+    local container="$1"
+    local port="$2"
+    local endpoint="${3:-/health}"
+    local code="000"
+
+    # 1. Direct container network probe (works within Docker / Jenkins)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://${container}:8080${endpoint}" 2>/dev/null || echo "000")
+    if [ "$code" = "200" ]; then
+        echo "$code"
+        return 0
+    fi
+
+    # 2. Host localhost probe (works on host WSL)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}${endpoint}" 2>/dev/null || echo "000")
+    if [ "$code" = "200" ]; then
+        echo "$code"
+        return 0
+    fi
+
+    # 3. Docker bridge gateway probe (works from container to host port)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://172.17.0.1:${port}${endpoint}" 2>/dev/null || echo "000")
+    if [ "$code" = "200" ]; then
+        echo "$code"
+        return 0
+    fi
+
+    # 4. In-container docker exec probe fallback
+    if docker exec "${container}" wget -qO- "http://127.0.0.1:8080${endpoint}" 2>/dev/null | grep -q -E "success|version|release"; then
+        echo "200"
+        return 0
+    fi
+
+    echo "$code"
+}
+
+fetch_endpoint_body() {
+    local container="$1"
+    local port="$2"
+    local endpoint="${3:-/health}"
+
+    local body=$(curl -s "http://${container}:8080${endpoint}" 2>/dev/null || true)
+    if [ -n "$body" ] && [ "$body" != "{}" ]; then
+        echo "$body"
+        return 0
+    fi
+    body=$(curl -s "http://127.0.0.1:${port}${endpoint}" 2>/dev/null || true)
+    if [ -n "$body" ] && [ "$body" != "{}" ]; then
+        echo "$body"
+        return 0
+    fi
+    body=$(curl -s "http://172.17.0.1:${port}${endpoint}" 2>/dev/null || true)
+    if [ -n "$body" ] && [ "$body" != "{}" ]; then
+        echo "$body"
+        return 0
+    fi
+    docker exec "${container}" wget -qO- "http://127.0.0.1:8080${endpoint}" 2>/dev/null || echo "{}"
+}
+
 # 5. Health Check Loop on Inactive Target
 echo -e "\n${BOLD}[3/6] Waiting for ${TARGET_COLOR^^} instance to become healthy on port ${TARGET_PORT}...${NC}"
-TARGET_HEALTH_URL="http://127.0.0.1:${TARGET_PORT}/health"
 RETRIES=0
 HEALTHY=false
 
 while [ ${RETRIES} -lt ${MAX_HEALTH_RETRIES} ]; do
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_HEALTH_URL}" 2>/dev/null || true)
+    HTTP_CODE=$(probe_endpoint "${TARGET_CONTAINER}" "${TARGET_PORT}" "/health")
     
     if [ "${HTTP_CODE}" = "200" ]; then
-        HEALTH_BODY=$(curl -s "${TARGET_HEALTH_URL}" 2>/dev/null || true)
+        HEALTH_BODY=$(fetch_endpoint_body "${TARGET_CONTAINER}" "${TARGET_PORT}" "/health")
         echo -e "${GREEN}✓ ${TARGET_COLOR^^} health check passed (HTTP 200)${NC}"
         echo -e "  Response: ${HEALTH_BODY}"
         HEALTHY=true
@@ -108,7 +167,7 @@ while [ ${RETRIES} -lt ${MAX_HEALTH_RETRIES} ]; do
 done
 
 if [ "${HEALTHY}" = false ]; then
-    echo -e "\n${RED}✗ FATAL: Health check failed for ${TARGET_COLOR^^} on ${TARGET_HEALTH_URL}${NC}"
+    echo -e "\n${RED}✗ FATAL: Health check failed for ${TARGET_COLOR^^} (${TARGET_CONTAINER})${NC}"
     echo -e "${RED}  Aborting deployment. Production traffic remains safely on ${CURRENT_COLOR^^}.${NC}"
     echo -e "${YELLOW}Container logs for ${TARGET_CONTAINER}:${NC}"
     docker logs --tail 30 "${TARGET_CONTAINER}" || true
@@ -117,7 +176,7 @@ fi
 
 # 6. Verify Candidate Version Endpoint
 echo -e "\n${BOLD}[4/6] Verifying ${TARGET_COLOR^^} version endpoint...${NC}"
-VERSION_RESP=$(curl -s "http://127.0.0.1:${TARGET_PORT}/version" 2>/dev/null || echo "{}")
+VERSION_RESP=$(fetch_endpoint_body "${TARGET_CONTAINER}" "${TARGET_PORT}" "/version")
 echo -e "  Candidate Version: ${CYAN}${VERSION_RESP}${NC}"
 
 # 7. Switch Nginx Traffic to Target Color
@@ -148,9 +207,18 @@ fi
 
 # 8. Verify Live Production Endpoint
 echo -e "\n${BOLD}[6/6] Verifying live production endpoint on port ${PROD_PORT}...${NC}"
-sleep 1
-PROD_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PROD_PORT}/version" 2>/dev/null || echo "000")
-PROD_VERSION_BODY=$(curl -s "http://127.0.0.1:${PROD_PORT}/version" 2>/dev/null || echo "{}")
+sleep 2
+
+PROD_STATUS="000"
+PROD_VERSION_BODY="{}"
+for check_url in "http://127.0.0.1:${PROD_PORT}/version" "http://mockmate-client:80/version" "http://172.17.0.1:${PROD_PORT}/version"; do
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${check_url}" 2>/dev/null || echo "000")
+    if [ "${STATUS}" = "200" ]; then
+        PROD_STATUS="200"
+        PROD_VERSION_BODY=$(curl -s "${check_url}" 2>/dev/null || echo "{}")
+        break
+    fi
+done
 
 if [ "${PROD_STATUS}" = "200" ]; then
     echo -e "${GREEN}✓ Production verification passed (HTTP 200)${NC}"

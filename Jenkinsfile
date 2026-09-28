@@ -109,15 +109,31 @@ pipeline {
                     fi
                     PROD_PORT="${CLIENT_PORT:-8081}"
 
-                    echo "Checking production gateway on port ${PROD_PORT}..."
-                    VERSION_RESP=$(curl -sf "http://127.0.0.1:${PROD_PORT}/version" || echo "{}")
+                    echo "Checking production gateway..."
+                    VERSION_RESP="{}"
+                    for u in "http://mockmate-client:80/version" "http://127.0.0.1:${PROD_PORT}/version" "http://172.17.0.1:${PROD_PORT}/version"; do
+                        RESP=$(curl -sf "${u}" 2>/dev/null || true)
+                        if [ -n "${RESP}" ] && [ "${RESP}" != "{}" ]; then
+                            VERSION_RESP="${RESP}"
+                            break
+                        fi
+                    done
                     echo "Version Check Response: ${VERSION_RESP}"
 
                     echo "Checking backend database health..."
-                    curl -sf "http://127.0.0.1:${PROD_PORT}/health" | grep -q "success" || {
+                    HEALTH_OK=false
+                    for u in "http://mockmate-client:80/health" "http://127.0.0.1:${PROD_PORT}/health" "http://172.17.0.1:${PROD_PORT}/health"; do
+                        if curl -sf "${u}" 2>/dev/null | grep -q "success"; then
+                            HEALTH_OK=true
+                            echo "✅ Health check succeeded via ${u}"
+                            break
+                        fi
+                    done
+
+                    if [ "${HEALTH_OK}" = false ]; then
                         echo "❌ Health check response missing 'success'!"
                         exit 1
-                    }
+                    fi
 
                     ACTIVE_COLOR="unknown"
                     if [ -f .active_deployment ]; then
