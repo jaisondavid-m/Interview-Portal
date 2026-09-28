@@ -11,6 +11,7 @@
 !server/.env.example
 !client/.env.example
 .active_deployment
+infrastructure/nginx/active_upstream.conf
 
 # ==========================================
 # Client (Node.js / React / Vite)

@@ -104,7 +104,7 @@ pipeline {
                     cd "${PROJECT_DIR}"
                     if [ -f .env ]; then
                         set -a
-                        source .env
+                        . ./.env
                         set +a
                     fi
                     PROD_PORT="${CLIENT_PORT:-8081}"
