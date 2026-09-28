@@ -1,124 +1,154 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(name: 'ACTION', choices: ['deploy', 'rollback'], description: 'Select deployment rollout or instant rollback')
+        string(name: 'RELEASE_TAG', defaultValue: '', description: 'Optional custom release tag (e.g. v2.1.0). If blank, auto-generates timestamp release tag.')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Run automated backend unit tests prior to deployment')
+    }
+
+    triggers {
+        // Poll SCM every 2 minutes for new git commits
+        pollSCM('H/2 * * * *')
+        githubPush()
+    }
+
     options {
-        // Keep only last 10 build logs to preserve disk space
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        // Abort pipeline if stuck for more than 15 minutes
+        buildDiscarder(logRotator(numToKeepStr: '20'))
         timeout(time: 15, unit: 'MINUTES')
         disableConcurrentBuilds()
     }
 
     environment {
-        APP_DIR = "/mnt/e/Projects/mock-mate"
+        PROJECT_DIR = "/home/ssg-admin/projects/Mock-Mate"
         DOCKER_BUILDKIT = "1"
         COMPOSE_DOCKER_CLI_BUILD = "1"
     }
 
     stages {
-        stage('1. Checkout Source') {
+        stage('1. Synchronize Source') {
             steps {
-                echo '📥 Checking out latest source code from repository...'
-                checkout scm
+                echo '📥 Synchronizing codebase with repository...'
+                sh '''
+                    cd "${PROJECT_DIR}"
+                    git fetch origin main || true
+                    git reset --hard origin/main || true
+                    echo "Latest Commit: $(git log -1 --oneline)"
+                    chmod +x deploy.sh rollback.sh
+                '''
             }
         }
 
-        stage('2. Prepare Environment & Secrets') {
+        stage('2. Prepare Environment') {
             steps {
-                echo '⚙️ Validating deployment environment and secrets...'
-                script {
-                    sh '''
-                        mkdir -p "${APP_DIR}"
-                        cp -Rf . "${APP_DIR}/" || true
-
-                        if [ ! -f "${APP_DIR}/.env" ]; then
-                            if [ -f "${APP_DIR}/.env.example" ]; then
-                                echo "⚠️ .env not found in ${APP_DIR}. Creating from .env.example..."
-                                cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
-                            else
-                                echo "❌ Error: Neither .env nor .env.example found!"
-                                exit 1
-                            fi
+                echo '⚙️ Validating environment and configurations...'
+                sh '''
+                    cd "${PROJECT_DIR}"
+                    if [ ! -f .env ]; then
+                        if [ -f .env.example ]; then
+                            echo "⚠️ .env not found. Creating from .env.example..."
+                            cp .env.example .env
                         fi
-                    '''
-                }
+                    fi
+                    grep -q "BLUE_PORT" .env || echo "BLUE_PORT=8083" >> .env
+                    grep -q "GREEN_PORT" .env || echo "GREEN_PORT=8084" >> .env
+                '''
             }
         }
 
         stage('3. Run Automated Tests') {
+            when {
+                expression { return params.ACTION == 'deploy' && params.RUN_TESTS }
+            }
             steps {
-                echo '🧪 Running Go backend tests...'
+                echo '🧪 Running Go backend unit tests in isolated container...'
                 sh '''
-                    if command -v go >/dev/null 2>&1; then
-                        (cd "${APP_DIR}/server" && GOWORK=off go test -v ./... -timeout 60s)
-                    else
-                        echo "⚠️ Running tests inside Go Docker container..."
-                        docker run --rm -v "${APP_DIR}/server:/app" -w /app -e GOWORK=off golang:1.24-alpine go test -v ./... -timeout 60s || true
+                    docker run --rm \
+                        -v "${PROJECT_DIR}/server:/app" \
+                        -w /app \
+                        -e GOWORK=off \
+                        golang:1.24-alpine \
+                        go test -mod=mod -v ./... -timeout 60s
+                '''
+            }
+        }
+
+        stage('4. Execute Blue-Green Rollout') {
+            steps {
+                script {
+                    if (params.ACTION == 'rollback') {
+                        echo '⏪ Executing Instant Rollback...'
+                        sh '''
+                            cd "${PROJECT_DIR}"
+                            ./rollback.sh
+                        '''
+                    } else {
+                        echo '🚀 Executing Blue-Green Zero-Downtime Deployment...'
+                        sh '''
+                            cd "${PROJECT_DIR}"
+                            TAG="${RELEASE_TAG}"
+                            if [ -z "${TAG}" ]; then
+                                TAG="RELEASE_${BUILD_NUMBER}_$(date +%Y%m%d_%H%M%S)"
+                            fi
+                            ./deploy.sh "${TAG}"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('5. Verify Ingress & Telemetry') {
+            steps {
+                echo '🩺 Verifying production gateway & health probes...'
+                sh '''
+                    cd "${PROJECT_DIR}"
+                    if [ -f .env ]; then
+                        set -a
+                        . ./.env
+                        set +a
                     fi
-                '''
-            }
-        }
+                    PROD_PORT="${CLIENT_PORT:-8081}"
 
-        stage('4. Build & Deploy Docker Containers') {
-            steps {
-                echo '🚀 Building images and rolling out Docker Compose services...'
-                sh '''
-                    docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v "${APP_DIR}:/app" \
-                        -w /app \
-                        docker/compose:1.29.2 up -d --build --remove-orphans
-                '''
-            }
-        }
-
-        stage('5. Healthcheck Verification') {
-            steps {
-                echo '🩺 Verifying services health status...'
-                sh '''
-                    echo "Waiting 15 seconds for containers to stabilize..."
-                    sleep 15
-
-                    # 1. Check all Docker Compose services status
-                    docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v "${APP_DIR}:/app" \
-                        -w /app \
-                        docker/compose:1.29.2 ps
-
-                    # 2. Check Backend API Health
-                    echo "Checking Backend API on port 8080..."
-                    for i in {1..10}; do
-                        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || true)
-                        if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "404" ] || [ "$HTTP_STATUS" = "401" ]; then
-                            echo "✅ Backend API responded with HTTP ${HTTP_STATUS}"
+                    echo "Checking production gateway..."
+                    VERSION_RESP="{}"
+                    for u in "http://mockmate-client:80/version" "http://127.0.0.1:${PROD_PORT}/version" "http://172.17.0.1:${PROD_PORT}/version"; do
+                        RESP=$(curl -sf "${u}" 2>/dev/null || true)
+                        if [ -n "${RESP}" ] && [ "${RESP}" != "{}" ]; then
+                            VERSION_RESP="${RESP}"
                             break
                         fi
-                        echo "Attempt $i/10: Backend not ready yet. Retrying in 3s..."
-                        sleep 3
+                    done
+                    echo "Version Check Response: ${VERSION_RESP}"
+
+                    echo "Checking backend database health..."
+                    HEALTH_OK=false
+                    for u in "http://mockmate-client:80/health" "http://127.0.0.1:${PROD_PORT}/health" "http://172.17.0.1:${PROD_PORT}/health"; do
+                        if curl -sf "${u}" 2>/dev/null | grep -q "success"; then
+                            HEALTH_OK=true
+                            echo "✅ Health check succeeded via ${u}"
+                            break
+                        fi
                     done
 
-                    # 3. Check Sandbox DB Container Status
-                    if docker ps | grep -q "mockmate-sandbox-db"; then
-                        echo "✅ Sandbox DB container is running healthy"
-                    else
-                        echo "❌ Error: mockmate-sandbox-db container failed to start"
+                    if [ "${HEALTH_OK}" = false ]; then
+                        echo "❌ Health check response missing 'success'!"
                         exit 1
                     fi
 
-                    # 4. Check Frontend Web Server
-                    HTTP_CLIENT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:80 || true)
-                    echo "✅ Client Frontend responded with HTTP ${HTTP_CLIENT}"
+                    ACTIVE_COLOR="unknown"
+                    if [ -f .active_deployment ]; then
+                        ACTIVE_COLOR=$(cat .active_deployment)
+                    fi
+                    echo "✅ Live Production traffic actively served by: [${ACTIVE_COLOR}]"
                 '''
             }
         }
 
-        stage('6. Clean Dangling Docker Resources') {
+        stage('6. Docker Hygiene') {
             steps {
-                echo '🧹 Pruning old unused Docker build cache & dangling images...'
+                echo '🧹 Pruning old dangling Docker images...'
                 sh '''
-                    docker image prune -f
-                    docker builder prune -f --filter "until=48h" || true
+                    docker image prune -f --filter "until=72h" || true
                 '''
             }
         }
@@ -127,16 +157,20 @@ pipeline {
     post {
         success {
             echo '🎉 ========================================================'
-            echo '🎉 Mock-Mate deployment completed successfully!'
+            echo "🎉 Build #${BUILD_NUMBER}: Mock-Mate Blue-Green deployment completed successfully!"
             echo '🎉 ========================================================'
         }
         failure {
             echo '❌ ========================================================'
-            echo '❌ Deployment failed! Please inspect logs above.'
+            echo "❌ Build #${BUILD_NUMBER} FAILED! Triggering automatic rollback safeguard..."
             echo '❌ ========================================================'
-        }
-        always {
-            cleanWs notFailBuild: true
+            sh '''
+                cd "${PROJECT_DIR}"
+                if [ "${ACTION}" = "deploy" ]; then
+                    echo "Initiating emergency rollback..."
+                    ./rollback.sh || true
+                fi
+            '''
         }
     }
 }

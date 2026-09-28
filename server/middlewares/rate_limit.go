@@ -145,6 +145,9 @@ func getRateLimitConfig(scope string) (*models.RateLimitConfig, error) {
 	}
 
 	// Database Fallback
+	if database.DB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
 	var cfg models.RateLimitConfig
 	err := database.DB.Where("scope = ?", scope).First(&cfg).Error
 	if err != nil {
