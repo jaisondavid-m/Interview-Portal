@@ -139,7 +139,7 @@ pipeline {
                     if [ -f .active_deployment ]; then
                         ACTIVE_COLOR=$(cat .active_deployment)
                     fi
-                    echo "✅ Live Production traffic actively served by: [${ACTIVE_COLOR^^}]"
+                    echo "✅ Live Production traffic actively served by: [${ACTIVE_COLOR}]"
                 '''
             }
         }
