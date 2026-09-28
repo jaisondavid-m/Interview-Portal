@@ -19,9 +19,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UPSTREAM_CONF="${ROOT_DIR}/infrastructure/nginx/active_upstream.conf"
 STATE_FILE="${ROOT_DIR}/.active_deployment"
 
-BLUE_PORT="${BLUE_PORT:-8081}"
-GREEN_PORT="${GREEN_PORT:-8082}"
-PROD_PORT="${CLIENT_PORT:-80}"
+if [ -f "${ROOT_DIR}/.env" ]; then
+    set -a
+    source "${ROOT_DIR}/.env"
+    set +a
+fi
+
+BLUE_PORT="${BLUE_PORT:-8083}"
+GREEN_PORT="${GREEN_PORT:-8084}"
+PROD_PORT="${CLIENT_PORT:-8081}"
 
 MAX_HEALTH_RETRIES=30
 HEALTH_INTERVAL=2
