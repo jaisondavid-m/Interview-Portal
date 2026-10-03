@@ -394,6 +394,15 @@ export default function LabDashboard() {
             )}
           </div>
         )}
+
+        {/* Mark Verticals Modal */}
+        <LabMarkVerticalsModal
+          isOpen={Boolean(verticalsModalData)}
+          onClose={() => setVerticalsModalData(null)}
+          experiment={verticalsModalData?.experiment}
+          course={verticalsModalData?.course}
+          submission={verticalsModalData?.submission}
+        />
       </div>
     );
   }
