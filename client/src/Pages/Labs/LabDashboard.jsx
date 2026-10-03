@@ -20,9 +20,11 @@ import {
   ShieldAlert,
   Award,
   RotateCcw,
+  SlidersHorizontal,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import LabMarkVerticalsModal from '../../Components/LabMarkVerticalsModal';
 
 export default function LabDashboard() {
   const navigate = useNavigate();
@@ -39,6 +41,7 @@ export default function LabDashboard() {
   const [expError, setExpError] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [verticalsModalData, setVerticalsModalData] = useState(null);
 
   // 1. Load enrolled courses on mount
   useEffect(() => {
@@ -253,8 +256,9 @@ export default function LabDashboard() {
                   const isUnlocked = Boolean(exp.is_unlocked);
                   const isApproved = sub?.status === 'APPROVED';
                   const isSubmitted = sub?.status === 'SUBMITTED_FOR_VERIFICATION';
-                  const isResubmit = sub?.status === 'RESUBMISSION_REQUESTED';
-                  const hasDraft = sub && !isApproved && !isSubmitted;
+                  const isFinished = isApproved || isSubmitted;
+                  const isResubmit = sub?.status === 'RESUBMISSION_REQUESTED' || sub?.status === 'REVISION_REQUIRED';
+                  const hasDraft = sub && !isFinished && !isResubmit;
 
                   return (
                     <div
@@ -326,8 +330,30 @@ export default function LabDashboard() {
 
                       {/* Card Footer Actions */}
                       <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
-                        {isUnlocked ? (
-                          /* Faculty Allowed the Student to Write -> Show Launch Assessment Button */
+                        {isFinished ? (
+                          /* Experiment already finished -> DO NOT show Launch Assessment. Show View Record & View Mark Verticals */
+                          <div className="w-full flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <button
+                              onClick={() =>
+                                navigate(`/labs/${selectedCourse.id}/experiment/${exp.id}`)
+                              }
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--border-accent)] hover:text-[var(--accent)] text-xs font-semibold shadow-[var(--shadow-xs)] transition-all cursor-pointer min-w-[130px]"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-[var(--accent)]" />
+                              View Record
+                            </button>
+                            <button
+                              onClick={() =>
+                                setVerticalsModalData({ experiment: exp, course: selectedCourse, submission: sub })
+                              }
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white text-xs font-bold shadow-[var(--shadow-xs)] transition-all cursor-pointer min-w-[140px]"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              View Mark Verticals
+                            </button>
+                          </div>
+                        ) : isUnlocked ? (
+                          /* Experiment not finished & Unlocked -> Show Launch Assessment */
                           <button
                             onClick={() =>
                               navigate(`/labs/${selectedCourse.id}/experiment/${exp.id}`)
@@ -335,11 +361,11 @@ export default function LabDashboard() {
                             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all shadow-[var(--shadow-sm)] cursor-pointer"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
-                            {hasDraft ? 'Resume Assessment' : 'Launch Assessment'}
+                            {hasDraft ? 'Resume Assessment' : isResubmit ? 'Revise Submission' : 'Launch Assessment'}
                             <ArrowRight className="w-3.5 h-3.5 ml-1" />
                           </button>
                         ) : (
-                          /* Faculty Has NOT Allowed Student to Write -> Do NOT Show Launch Assessment Button */
+                          /* Locked by faculty */
                           <div className="w-full flex items-center justify-between gap-2">
                             <div className="inline-flex items-center gap-2 text-[11px] font-medium text-[var(--text-muted)]">
                               <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
@@ -541,6 +567,15 @@ export default function LabDashboard() {
           )}
         </div>
       )}
+
+      {/* Mark Verticals Modal */}
+      <LabMarkVerticalsModal
+        isOpen={Boolean(verticalsModalData)}
+        onClose={() => setVerticalsModalData(null)}
+        experiment={verticalsModalData?.experiment}
+        course={verticalsModalData?.course}
+        submission={verticalsModalData?.submission}
+      />
     </div>
   );
 }
