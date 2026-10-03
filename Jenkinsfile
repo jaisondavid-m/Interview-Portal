@@ -68,7 +68,7 @@ pipeline {
                         -w /app \
                         -e GOWORK=off \
                         golang:1.24-alpine \
-                        go test -mod=mod -v ./... -timeout 60s
+                        go test -mod=vendor -v ./... -timeout 60s
                 '''
             }
         }
