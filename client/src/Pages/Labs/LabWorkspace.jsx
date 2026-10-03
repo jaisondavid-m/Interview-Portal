@@ -401,9 +401,9 @@ export default function LabWorkspace() {
 
       {/* In-Queue / Verified Notice Banner */}
       {submission?.status === 'SUBMITTED_FOR_VERIFICATION' && (
-        <div className="bg-indigo-500/10 border-b border-indigo-500/20 px-4 py-2.5 flex items-center justify-between gap-3 text-indigo-900 text-xs shrink-0 flex-wrap">
+        <div className="bg-[var(--accent-dim)] border-b border-[var(--border-accent)] px-4 py-2.5 flex items-center justify-between gap-3 text-[var(--text-primary)] text-xs shrink-0 flex-wrap">
           <div className="flex items-center gap-2 font-medium">
-            <MessageSquareCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+            <MessageSquareCheck className="w-4 h-4 text-[var(--accent)] shrink-0" />
             <span>
               <strong>Experiment Locked & Sent for Verification:</strong> Please approach your faculty incharge for in-person oral viva evaluation.
             </span>
@@ -412,35 +412,35 @@ export default function LabWorkspace() {
             <button
               type="button"
               onClick={() => setShowVerticalsModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition cursor-pointer shadow-sm shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition cursor-pointer shadow-sm shrink-0"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               View Mark Verticals
             </button>
-            <span className="text-[11px] font-mono opacity-80 font-bold">Oral Viva Pending</span>
+            <span className="text-[11px] font-mono text-[var(--accent)] font-bold">Oral Viva Pending</span>
           </div>
         </div>
       )}
 
       {submission?.status === 'APPROVED' && (
-        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2.5 flex items-center justify-between gap-3 text-emerald-900 text-xs shrink-0 flex-wrap">
+        <div className="bg-[var(--accent-dim)] border-b border-[var(--border-accent)] px-4 py-2.5 flex items-center justify-between gap-3 text-[var(--text-primary)] text-xs shrink-0 flex-wrap">
           <div className="flex items-center gap-2 font-medium">
-            <Award className="w-4 h-4 text-emerald-600 shrink-0" />
+            <Award className="w-4 h-4 text-[var(--accent)] shrink-0" />
             <span>
               <strong>Experiment Verified by Lab Incharge!</strong> Total Marks: <strong>{submission.marks}/{assignedQuestion?.max_marks || 100}</strong> (Code: {submission.code_marks || 0}, Viva: {submission.viva_marks || 0}).
-              {submission.faculty_notes && <span className="ml-2 italic opacity-90">"{submission.faculty_notes}"</span>}
+              {submission.faculty_notes && <span className="ml-2 italic text-[var(--text-secondary)]">"{submission.faculty_notes}"</span>}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setShowVerticalsModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition cursor-pointer shadow-sm shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition cursor-pointer shadow-sm shrink-0"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               View Mark Verticals
             </button>
-            <span className="text-[11px] font-mono opacity-80 font-bold">Officially Signed</span>
+            <span className="text-[11px] font-mono text-[var(--accent)] font-bold">Officially Signed</span>
           </div>
         </div>
       )}

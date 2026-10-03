@@ -101,12 +101,12 @@ export default function LabMarkVerticalsModal({
 
   // Grade Pill Helper
   const getGradeInfo = (pct) => {
-    if (pct >= 90) return { label: 'Outstanding (O)', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' };
-    if (pct >= 80) return { label: 'Excellent (A+)', color: 'bg-blue-500/10 text-blue-600 border-blue-500/30' };
-    if (pct >= 70) return { label: 'Very Good (A)', color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30' };
+    if (pct >= 90) return { label: 'Outstanding (O)', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]' };
+    if (pct >= 80) return { label: 'Excellent (A+)', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]' };
+    if (pct >= 70) return { label: 'Very Good (A)', color: 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]' };
     if (pct >= 60) return { label: 'Good (B+)', color: 'bg-amber-500/10 text-amber-600 border-amber-500/30' };
     if (pct >= 50) return { label: 'Pass (B)', color: 'bg-orange-500/10 text-orange-600 border-orange-500/30' };
-    return { label: 'Needs Improvement (F)', color: 'bg-rose-500/10 text-rose-600 border-rose-500/30' };
+    return { label: 'Needs Improvement (F)', color: 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-border)]' };
   };
 
   const gradeInfo = getGradeInfo(percentage);
@@ -133,9 +133,9 @@ export default function LabMarkVerticalsModal({
                 <span
                   className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border ${
                     isApproved
-                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                      ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
                       : isSubmitted
-                      ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30'
+                      ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
                       : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
                   }`}
                 >
@@ -212,9 +212,9 @@ export default function LabMarkVerticalsModal({
 
           {/* Faculty Remarks / Notes */}
           {sub.faculty_notes && (
-            <div className="p-3.5 rounded-[var(--radius-sm)] bg-indigo-500/5 border border-indigo-500/20 text-xs space-y-1">
-              <div className="font-semibold text-indigo-900 flex items-center gap-1.5">
-                <MessageSquareCheck className="w-4 h-4 text-indigo-600" />
+            <div className="p-3.5 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-xs space-y-1">
+              <div className="font-semibold text-[var(--accent)] flex items-center gap-1.5">
+                <MessageSquareCheck className="w-4 h-4 text-[var(--accent)]" />
                 <span>Faculty Incharge Remarks:</span>
               </div>
               <p className="text-[var(--text-secondary)] italic leading-relaxed pl-5">
@@ -283,12 +283,12 @@ export default function LabMarkVerticalsModal({
                           <div
                             className={`h-full rounded-full transition-all duration-300 ${
                               itemPct >= 85
-                                ? 'bg-emerald-500'
+                                ? 'bg-[var(--accent)]'
                                 : itemPct >= 70
-                                ? 'bg-indigo-500'
+                                ? 'bg-[var(--accent)]/80'
                                 : itemPct >= 50
                                 ? 'bg-amber-500'
-                                : 'bg-rose-500'
+                                : 'bg-[var(--red)]'
                             }`}
                             style={{ width: `${itemPct}%` }}
                           />
