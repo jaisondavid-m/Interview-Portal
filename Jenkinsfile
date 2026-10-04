@@ -8,8 +8,6 @@ pipeline {
     }
 
     triggers {
-        // Poll SCM every 2 minutes for new git commits
-        pollSCM('H/2 * * * *')
         githubPush()
     }
 
