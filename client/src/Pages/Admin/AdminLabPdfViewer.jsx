@@ -181,8 +181,10 @@ export default function AdminLabPdfViewer() {
             <option value="spread">📑 Facing Book Spread (2-Page View)</option>
             <option value="flyleaf">📄 Page 1: Blank Flyleaf</option>
             <option value="cover">📄 Page 2: Title & Cover Page</option>
-            <option value="certificate">📜 Page 3: Bonafide Certificate</option>
-            <option value="index">📑 Page 4: Index Sheet</option>
+            <option value="cert_blank">📄 Page 3: Blank Page (Verso)</option>
+            <option value="certificate">📜 Page 4: Bonafide Certificate (Recto)</option>
+            <option value="index_blank">📄 Page 5: Blank Page (Verso)</option>
+            <option value="index">📑 Page 6: Index & Evaluation Criteria (Recto)</option>
             {experiments.map((exp, idx) => {
               const expNo = exp.experiment_no || idx + 1;
               return (
@@ -191,7 +193,13 @@ export default function AdminLabPdfViewer() {
                     🔬 Ex {expNo} [Left Page]: Program & Output
                   </option>
                   <option value={`exp_${expNo}_right`}>
-                    🔬 Ex {expNo} [Right Page]: Aim, Algorithm & Result
+                    🔬 Ex {expNo} [Right Page]: Aim & Algorithm
+                  </option>
+                  <option value={`exp_${expNo}_eval_left`}>
+                    🔬 Ex {expNo} [Left Page]: Blank Page
+                  </option>
+                  <option value={`exp_${expNo}_eval_right`}>
+                    🔬 Ex {expNo} [Right Page]: Rubrics & Result
                   </option>
                 </React.Fragment>
               );

@@ -173,7 +173,7 @@ export default function LabRecordDocument({
   const defaultCertText = certificate_text ||
     `Certified that this is the bonafide record of practical work done by Mr./Ms. ${student_name} (Register No: ${register_no || roll_no}) of ${semester}, ${department} in the ${course_code} – ${course_title} Laboratory during the academic year ${academic_year}.`;
 
-  const totalDocPages = 4 + (experiments.length * 4);
+  const totalDocPages = 6 + (experiments.length * 4);
 
   return (
     <div className="lab-record-wrapper font-serif text-black selection:bg-neutral-200">
@@ -419,12 +419,12 @@ export default function LabRecordDocument({
         style={{ zoom: scale, transformOrigin: 'top center' }}
       >
         {/* =========================================================
-            FRONT MATTER PAIR 1: Page 1 (Flyleaf) + Page 2 (Cover Sheet)
+            FRONT MATTER PAIR 1: Page 1 (Flyleaf - Left) + Page 2 (Cover - Right)
             ========================================================= */}
         <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
-          {/* PAGE 1: EMPTY / BLANK FRONT FLYLEAF PAGE */}
+          {/* PAGE 1: EMPTY / BLANK FRONT FLYLEAF PAGE (LEFT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'flyleaf') && (
-            <div className="academic-page page-odd flex flex-col justify-between">
+            <div className="academic-page page-even flex flex-col justify-between">
               <div className="text-right text-[8pt] text-neutral-300 select-none">
                 [Front Flyleaf Page]
               </div>
@@ -450,9 +450,9 @@ export default function LabRecordDocument({
             </div>
           )}
 
-          {/* PAGE 2: TITLE & OFFICIAL COVER PAGE */}
+          {/* PAGE 2: TITLE & OFFICIAL COVER PAGE (RIGHT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'cover') && (
-            <div className="academic-page page-even">
+            <div className="academic-page page-odd">
               {/* Top Row: Course Code & Register Boxes */}
               <table className="top-row-table">
                 <tbody>
@@ -602,10 +602,26 @@ export default function LabRecordDocument({
         </div>
 
         {/* =========================================================
-            FRONT MATTER PAIR 2: Page 3 (Certificate) + Page 4 (Index Sheet)
+            FRONT MATTER PAIR 2: Page 3 (Blank - Left) + Page 4 (Bonafide Certificate - Right)
             ========================================================= */}
         <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
-          {/* PAGE 3: BONAFIDE CERTIFICATE */}
+          {/* PAGE 3: BLANK LEFT PAGE */}
+          {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'cert_blank') && (
+            <div className="academic-page page-even flex flex-col justify-between">
+              <div className="text-right text-[8pt] text-neutral-300 select-none">
+                [This page is intentionally left blank]
+              </div>
+
+              <div className="flex-1" />
+
+              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                <span className="text-neutral-400 font-normal italic">Blank Page</span>
+                <span>Page 3 of {totalDocPages}</span>
+              </div>
+            </div>
+          )}
+
+          {/* PAGE 4: BONAFIDE CERTIFICATE (RIGHT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'certificate') && (
             <div className="academic-page page-odd">
               {/* Top Row */}
@@ -744,14 +760,35 @@ export default function LabRecordDocument({
               {/* Footer */}
               <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
                 <span>{course_code} — Bonafide Certificate</span>
-                <span>Page 3 of {totalDocPages}</span>
+                <span>Page 4 of {totalDocPages}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* =========================================================
+            FRONT MATTER PAIR 3: Page 5 (Blank - Left) + Page 6 (Index & Criteria - Right)
+            ========================================================= */}
+        <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
+          {/* PAGE 5: BLANK LEFT PAGE */}
+          {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'index_blank') && (
+            <div className="academic-page page-even flex flex-col justify-between">
+              <div className="text-right text-[8pt] text-neutral-300 select-none">
+                [This page is intentionally left blank]
+              </div>
+
+              <div className="flex-1" />
+
+              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                <span className="text-neutral-400 font-normal italic">Blank Page</span>
+                <span>Page 5 of {totalDocPages}</span>
               </div>
             </div>
           )}
 
-          {/* PAGE 4: INDEX OF LABORATORY EXPERIMENTS */}
+          {/* PAGE 6: INDEX OF LABORATORY EXPERIMENTS & EVALUATION CRITERIA (RIGHT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'index') && (
-            <div className="academic-page page-even">
+            <div className="academic-page page-odd">
               {/* Top Row */}
               <table className="top-row-table">
                 <tbody>
@@ -805,7 +842,7 @@ export default function LabRecordDocument({
                     </tr>
                   ) : (
                     experiments.map((exp, idx) => {
-                      const startPage = 5 + (idx * 4);
+                      const startPage = 7 + (idx * 4);
                       const rubricsData = getExperimentRubrics(exp, 100);
                       return (
                         <tr key={idx}>
@@ -890,7 +927,7 @@ export default function LabRecordDocument({
               {/* Footer */}
               <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
                 <span>{course_code} — Index Sheet</span>
-                <span>Page 4 of {totalDocPages}</span>
+                <span>Page 6 of {totalDocPages}</span>
               </div>
             </div>
           )}
@@ -902,24 +939,23 @@ export default function LabRecordDocument({
             - Page 2 (Right/Odd): Aim & Algorithm / Procedure ONLY
             - Page 3 (Left/Even): Empty / Blank Page
             - Page 4 (Right/Odd): Evaluation Rubrics (Centre) & Result (Bottom)
-            Pages 3 & 4 are displayed side-by-side on screen
+            Pages displayed side-by-side in book spread pairs
             ========================================================= */}
         {experiments.map((exp, index) => {
           const expNo = exp.experiment_no || index + 1;
-          const page1Num = 5 + (index * 4);      // Left: Program & Output
-          const page2Num = 6 + (index * 4);       // Right: Aim & Algorithm
-          const page3Num = 7 + (index * 4);       // Left: Empty
-          const page4Num = 8 + (index * 4);       // Right: Rubrics & Result
+          const page1Num = 7 + (index * 4);      // Left: Program & Output
+          const page2Num = 8 + (index * 4);       // Right: Aim & Algorithm
+          const page3Num = 9 + (index * 4);       // Left: Empty
+          const page4Num = 10 + (index * 4);      // Right: Rubrics & Result
 
-          const showPage1 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_left` || viewMode === expNo;
-          const showPage2 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_right` || viewMode === expNo;
-          const showPage3 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_left` || viewMode === expNo;
-          const showPage4 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_right` || viewMode === expNo;
+          const showPage1 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_left` || viewMode === `exp_${expNo}_code` || viewMode === expNo;
+          const showPage2 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_right` || viewMode === `exp_${expNo}_aim` || viewMode === expNo;
+          const showPage3 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_left` || viewMode === `exp_${expNo}_blank` || viewMode === expNo;
+          const showPage4 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_right` || viewMode === `exp_${expNo}_eval` || viewMode === expNo;
 
           const procedureSteps = parseProcedureSteps(exp.procedure);
           const cleanOutput = cleanExecutionOutput(exp.execution_output, exp.title);
           const rubricsData = getExperimentRubrics(exp, 100);
-
 
           return (
             <React.Fragment key={index}>
@@ -964,12 +1000,12 @@ export default function LabRecordDocument({
                       </tbody>
                     </table>
 
-                    {/* 3. PROGRAM */}
+                    {/* PROGRAM SOURCE CODE */}
                     <table className="section-bar-table" style={{ marginTop: '14px' }}>
                       <tbody>
                         <tr>
                           <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>3. PROGRAM SOURCE CODE</span>
+                            <span>PROGRAM SOURCE CODE</span>
                             <span style={{ fontSize: '8.5pt', fontFamily: 'Courier New', textTransform: 'none', fontWeight: 'normal' }}>
                               Language: {exp.language || 'Python'}
                             </span>
@@ -981,14 +1017,14 @@ export default function LabRecordDocument({
                       {exp.submitted_code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                     </pre>
 
-                    {/* 4. SAMPLE INPUT & OUTPUT */}
+                    {/* SAMPLE INPUT & CONSOLE OUTPUT */}
                     {showOutputs && (
                       <>
                         <table className="section-bar-table">
                           <tbody>
                             <tr>
                               <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                4. SAMPLE INPUT & CONSOLE OUTPUT
+                                SAMPLE INPUT & CONSOLE OUTPUT
                               </td>
                             </tr>
                           </tbody>
@@ -1047,12 +1083,12 @@ export default function LabRecordDocument({
                         </tbody>
                       </table>
 
-                      {/* 1. AIM */}
+                      {/* AIM */}
                       <table className="section-bar-table" style={{ marginTop: '12px' }}>
                         <tbody>
                           <tr>
                             <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                              1. AIM
+                              AIM
                             </td>
                           </tr>
                         </tbody>
@@ -1061,12 +1097,12 @@ export default function LabRecordDocument({
                         {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
                       </div>
 
-                      {/* 2. ALGORITHM / PROCEDURE */}
+                      {/* ALGORITHM / PROCEDURE */}
                       <table className="section-bar-table" style={{ marginTop: '10px' }}>
                         <tbody>
                           <tr>
                             <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                              2. ALGORITHM / PROCEDURE
+                              ALGORITHM / PROCEDURE
                             </td>
                           </tr>
                         </tbody>
@@ -1125,7 +1161,7 @@ export default function LabRecordDocument({
                 {/* -------------------------------------------------------------
                     PAGE 4 - RIGHT-HAND PAGE (ODD):
                     - Centre: Evaluation Rubrics Matrix (100 Marks breakdown)
-                    - Bottom: 5. Result & Staff Signature
+                    - Bottom: Result & Staff Signature
                     ------------------------------------------------------------- */}
                 {showPage4 && (
                   <div className="academic-page page-odd flex flex-col">
@@ -1212,15 +1248,15 @@ export default function LabRecordDocument({
                     <div className="flex-1" />
 
                     {/* --------------------------------------------------------
-                        BOTTOM: 5. RESULT & STAFF SIGNATURE
+                        BOTTOM: RESULT & STAFF SIGNATURE
                         -------------------------------------------------------- */}
                     <div className="prevent-break" style={{ marginBottom: '12mm' }}>
-                      {/* 5. RESULT */}
+                      {/* RESULT */}
                       <table className="section-bar-table">
                         <tbody>
                           <tr>
                             <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                              5. RESULT
+                              RESULT
                             </td>
                           </tr>
                         </tbody>
