@@ -576,17 +576,37 @@ func GetUserPagePermissions(c *gin.Context) {
 
 	roleName := strings.ToLower(fmt.Sprintf("%v", roleVal))
 
-	var permissions []models.RolePagePermission
-	database.DB.Where("role_name = ? AND can_access = ?", roleName, true).Find(&permissions)
-
 	allowedKeys := make([]string, 0)
-	for _, p := range permissions {
-		allowedKeys = append(allowedKeys, p.PageKey)
-	}
-
 	var pages []models.AppPage
-	if len(allowedKeys) > 0 {
-		database.DB.Where("`key` IN ?", allowedKeys).Order("order_index asc").Find(&pages)
+
+	if roleName == "admin" {
+		var allPages []models.AppPage
+		database.DB.Order("order_index asc").Find(&allPages)
+
+		var deniedPerms []models.RolePagePermission
+		database.DB.Where("role_name = ? AND can_access = ?", "admin", false).Find(&deniedPerms)
+		deniedMap := make(map[string]bool)
+		for _, p := range deniedPerms {
+			deniedMap[p.PageKey] = true
+		}
+
+		for _, p := range allPages {
+			if !deniedMap[p.Key] {
+				allowedKeys = append(allowedKeys, p.Key)
+				pages = append(pages, p)
+			}
+		}
+	} else {
+		var permissions []models.RolePagePermission
+		database.DB.Where("role_name = ? AND can_access = ?", roleName, true).Find(&permissions)
+
+		for _, p := range permissions {
+			allowedKeys = append(allowedKeys, p.PageKey)
+		}
+
+		if len(allowedKeys) > 0 {
+			database.DB.Where("`key` IN ?", allowedKeys).Order("order_index asc").Find(&pages)
+		}
 	}
 
 	var userRole models.Role

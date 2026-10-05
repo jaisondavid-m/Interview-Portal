@@ -627,24 +627,24 @@ func syncAppPagesCatalog(db *gorm.DB) {
 	db.Exec("DELETE FROM role_page_permissions WHERE page_key = 'admin_lab_mapping'")
 	db.Exec("DELETE FROM app_pages WHERE `key` = 'admin_lab_mapping'")
 
+	// Helper to ensure role permission exists
+	ensureRolePermission := func(roleName, pageKey string) {
+		var permCount int64
+		db.Model(&models.RolePagePermission{}).Where("role_name = ? AND page_key = ?", roleName, pageKey).Count(&permCount)
+		if permCount == 0 {
+			db.Create(&models.RolePagePermission{
+				RoleName:  roleName,
+				PageKey:   pageKey,
+				CanAccess: true,
+			})
+		}
+	}
+
 	for _, page := range labPages {
 		var pageCount int64
 		db.Model(&models.AppPage{}).Where("`key` = ?", page.Key).Count(&pageCount)
 		if pageCount == 0 {
-			if err := db.Create(&page).Error; err == nil {
-				// Default role mappings
-				if page.Key == "practical_labs" {
-					db.Create(&models.RolePagePermission{RoleName: "student", PageKey: page.Key, CanAccess: true})
-					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
-				}
-				if page.Key == "lab_incharge_verification" || page.Key == "faculty_lab_evaluation" || page.Key == "faculty_lab_scheduling" {
-					db.Create(&models.RolePagePermission{RoleName: "faculty", PageKey: page.Key, CanAccess: true})
-					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
-				}
-				if page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" || page.Key == "admin_lab_dashboard" {
-					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
-				}
-			}
+			db.Create(&page)
 		} else {
 			db.Model(&models.AppPage{}).Where("`key` = ?", page.Key).Updates(map[string]interface{}{
 				"name":        page.Name,
@@ -654,6 +654,19 @@ func syncAppPagesCatalog(db *gorm.DB) {
 				"description": page.Description,
 				"order_index": page.OrderIndex,
 			})
+		}
+
+		// Ensure default role mappings
+		if page.Key == "practical_labs" {
+			ensureRolePermission("student", page.Key)
+			ensureRolePermission("admin", page.Key)
+		}
+		if page.Key == "lab_incharge_verification" || page.Key == "faculty_lab_evaluation" || page.Key == "faculty_lab_scheduling" {
+			ensureRolePermission("faculty", page.Key)
+			ensureRolePermission("admin", page.Key)
+		}
+		if page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" || page.Key == "admin_lab_dashboard" {
+			ensureRolePermission("admin", page.Key)
 		}
 	}
 }
