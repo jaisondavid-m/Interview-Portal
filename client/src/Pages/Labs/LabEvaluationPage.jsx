@@ -262,6 +262,10 @@ export default function LabEvaluationPage() {
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  const handleResetAllocation = () => {
+    setShowResetConfirm(true);
+  };
+
   const executeResetAllocation = async () => {
     setShowResetConfirm(false);
     if (!student?.id || !exp?.id) return;
@@ -1078,7 +1082,7 @@ export default function LabEvaluationPage() {
         onClose={() => setShowResetConfirm(false)}
         onConfirm={executeResetAllocation}
         title="Re-assign Question Variant"
-        message={`Are you sure you want to re-assign a new random question variant for student ${student.name || 'this student'}?`}
+        message={`Are you sure you want to re-assign a new random question variant for student ${student?.name || 'this student'}?`}
         confirmText="Reset & Re-assign"
         variant="warning"
       />

@@ -181,7 +181,7 @@ export default function LabStudentAnalyticsDrawer({
                     <div>
                       <span className="text-[10px] text-[var(--text-muted)] block">Attempts</span>
                       <strong className="text-[var(--text-primary)] font-mono">
-                        {exp.attempt_count > 0 ? `${exp.attempt_count} Runs` : '0 Runs'}
+                        {exp.attempt_count > 0 ? `${exp.attempt_count} ${exp.attempt_count === 1 ? 'Attempt' : 'Attempts'}` : '0 Attempts'}
                       </strong>
                     </div>
 

@@ -40,6 +40,19 @@ const inputCls =
   'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
 const labelCls = 'text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider';
 
+const formatDateForInput = (dateStringOrDate) => {
+  if (!dateStringOrDate) return '';
+  const d = new Date(dateStringOrDate);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 export default function FacultyLabScheduling() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -209,6 +222,95 @@ export default function FacultyLabScheduling() {
       setSelectedOverrideExpIds([]);
     } else {
       setSelectedOverrideExpIds(allExpIds);
+    }
+  };
+
+  const handleToggleUnlock = async (expId, newStatus) => {
+    if (!selectedUnlockCourseId) return;
+    try {
+      setTogglingExpId(expId);
+      await api.post('/lab-incharge/unlocks/toggle', {
+        course_id: Number(selectedUnlockCourseId),
+        experiment_id: Number(expId),
+        section: selectedUnlockSection || 'ALL',
+        is_unlocked: newStatus,
+      });
+      setScheduleDrafts((prev) => ({
+        ...prev,
+        [expId]: {
+          ...(prev[expId] || {}),
+          is_unlocked: newStatus,
+        },
+      }));
+      const expNo = activeCourseExperiments.find((e) => e.id === expId)?.experiment_no || expId;
+      showToast(`Experiment #${expNo} ${newStatus ? 'unlocked' : 'locked'} successfully.`);
+      fetchUnlockMatrix();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to toggle unlock status.', 'error');
+    } finally {
+      setTogglingExpId(null);
+    }
+  };
+
+  const handleBulkSetStatus = async (newStatus) => {
+    if (!selectedUnlockCourseId || activeCourseExperiments.length === 0) return;
+    try {
+      setLoading(true);
+      const expIds = activeCourseExperiments.map((e) => e.id);
+      await api.post('/lab-incharge/unlocks/schedule', {
+        course_id: Number(selectedUnlockCourseId),
+        experiment_ids: expIds,
+        section: selectedUnlockSection || 'ALL',
+        is_unlocked: newStatus,
+      });
+      showToast(`All experiments ${newStatus ? 'unlocked' : 'locked'} for Section ${selectedUnlockSection}.`);
+      fetchUnlockMatrix();
+    } catch (err) {
+      console.error(err);
+      showToast(`Failed to ${newStatus ? 'unlock' : 'lock'} all experiments.`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyQuickWindow = (expId, hours) => {
+    const now = new Date();
+    const end = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    setScheduleDrafts((prev) => ({
+      ...prev,
+      [expId]: {
+        ...(prev[expId] || {}),
+        starts_at: formatDateForInput(now),
+        ends_at: formatDateForInput(end),
+      },
+    }));
+  };
+
+  const handleSaveExpSchedule = async (expId) => {
+    if (!selectedUnlockCourseId) return;
+    const draft = scheduleDrafts[expId] || {};
+    try {
+      setSavingScheduleExpId(expId);
+      await api.post('/lab-incharge/unlocks/schedule', {
+        course_id: Number(selectedUnlockCourseId),
+        experiment_ids: [Number(expId)],
+        section: selectedUnlockSection || 'ALL',
+        is_unlocked: draft.is_unlocked || false,
+        starts_at: draft.starts_at ? new Date(draft.starts_at).toISOString() : null,
+        ends_at: draft.ends_at ? new Date(draft.ends_at).toISOString() : null,
+        max_attempts: Number(draft.max_attempts) || 0,
+        allow_late_submission: draft.allow_late_submission || false,
+        notes: draft.notes || '',
+      });
+      const expNo = activeCourseExperiments.find((e) => e.id === expId)?.experiment_no || expId;
+      showToast(`Schedule window saved for Experiment #${expNo}!`);
+      fetchUnlockMatrix();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to save experiment schedule.', 'error');
+    } finally {
+      setSavingScheduleExpId(null);
     }
   };
 
