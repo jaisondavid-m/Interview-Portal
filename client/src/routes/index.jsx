@@ -49,6 +49,7 @@ import AdminLabCourses from '../Pages/Admin/AdminLabCourses';
 import AdminLabBatches from '../Pages/Admin/AdminLabBatches';
 import AdminLabFacultyMapping from '../Pages/Admin/AdminLabFacultyMapping';
 import AdminLabCourseExperiments from '../Pages/Admin/AdminLabCourseExperiments';
+import AdminLabDashboard from '../Pages/Admin/AdminLabDashboard';
 
 // Route Guards & Error Boundary
 import ProtectedRoute from '../Components/ProtectedRoute';
@@ -433,6 +434,14 @@ export const router = createBrowserRouter([
                 <LabEvaluationPage />
               </DynamicPageRoute>
             ),
+          },
+          {
+            path: 'admin/labs',
+            element: <Navigate to="/admin/labs/dashboard" replace />,
+          },
+          {
+            path: 'admin/labs/dashboard',
+            element: <AdminLabDashboard />,
           },
           {
             path: 'admin/labs/mapping',

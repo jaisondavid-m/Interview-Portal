@@ -1229,4 +1229,261 @@ func AdminBulkCreateQuestionVariants(c *gin.Context) {
 	})
 }
 
+// GetAdminLabDashboardAnalytics provides a comprehensive analytical payload for Admin Lab Dashboard
+func GetAdminLabDashboardAnalytics(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+
+	facultyIDStr := strings.TrimSpace(c.Query("faculty_id"))
+	courseIDStr := strings.TrimSpace(c.Query("course_id"))
+	sectionFilter := strings.TrimSpace(c.Query("section"))
+	searchQuery := strings.TrimSpace(c.Query("search"))
+
+	// 1. Fetch courses
+	var courses []models.LabCourse
+	database.DB.Order("title asc").Find(&courses)
+
+	var targetCourseID uint
+	if courseIDStr != "" && courseIDStr != "ALL" {
+		if id, err := strconv.ParseUint(courseIDStr, 10, 64); err == nil && id > 0 {
+			targetCourseID = uint(id)
+		}
+	}
+
+	// 2. Fetch all mappings
+	mappingQuery := database.DB.Preload("Course").Preload("Faculty")
+	if facultyIDStr != "" && facultyIDStr != "ALL" {
+		if fID, err := strconv.ParseUint(facultyIDStr, 10, 64); err == nil && fID > 0 {
+			mappingQuery = mappingQuery.Where("faculty_id = ?", fID)
+		}
+	}
+	if targetCourseID > 0 {
+		mappingQuery = mappingQuery.Where("course_id = ?", targetCourseID)
+	}
+	if sectionFilter != "" && sectionFilter != "ALL" {
+		mappingQuery = mappingQuery.Where("section = ?", sectionFilter)
+	}
+	var mappings []models.LabMapping
+	mappingQuery.Find(&mappings)
+
+	// 3. Fetch faculty members
+	var facultyList []models.User
+	database.DB.Where("LOWER(role) = ?", "faculty").Order("name asc").Find(&facultyList)
+
+	// 4. Fetch distinct student sections
+	var sectionList []string
+	database.DB.Model(&models.User{}).
+		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
+		Distinct().
+		Pluck("section", &sectionList)
+
+	// 5. Query students
+	studentQuery := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
+	if sectionFilter != "" && sectionFilter != "ALL" {
+		studentQuery = studentQuery.Where("section = ?", sectionFilter)
+	}
+	if searchQuery != "" {
+		s := "%" + strings.ToLower(searchQuery) + "%"
+		studentQuery = studentQuery.Where("LOWER(name) LIKE ? OR LOWER(roll_no) LIKE ? OR LOWER(email) LIKE ?", s, s, s)
+	}
+	var students []models.User
+	studentQuery.Order("roll_no asc, name asc").Find(&students)
+
+	// 6. Resolve target experiments
+	expQuery := database.DB.Model(&models.LabExperiment{})
+	if targetCourseID > 0 {
+		expQuery = expQuery.Where("course_id = ?", targetCourseID)
+	}
+	var experiments []models.LabExperiment
+	expQuery.Order("course_id asc, experiment_no asc").Find(&experiments)
+
+	expIDs := make([]uint, len(experiments))
+	for i, e := range experiments {
+		expIDs[i] = e.ID
+	}
+
+	// 7. Fetch submissions
+	var submissions []models.LabSubmission
+	if len(expIDs) > 0 {
+		database.DB.Where("experiment_id IN ?", expIDs).Find(&submissions)
+	}
+
+	subMap := make(map[uint]map[uint]models.LabSubmission)
+	pendingReviewsCount := 0
+	approvedSubmissionsCount := 0
+
+	for _, sub := range submissions {
+		if subMap[sub.StudentID] == nil {
+			subMap[sub.StudentID] = make(map[uint]models.LabSubmission)
+		}
+		subMap[sub.StudentID][sub.ExperimentID] = sub
+		if sub.Status == "SUBMITTED_FOR_VERIFICATION" {
+			pendingReviewsCount++
+		} else if sub.Status == "APPROVED" {
+			approvedSubmissionsCount++
+		}
+	}
+
+	// 8. Build Student Progress Matrix
+	type StudentExpStatus struct {
+		ExperimentID uint   `json:"experiment_id"`
+		ExperimentNo int    `json:"experiment_no"`
+		CourseID     uint   `json:"course_id"`
+		Status       string `json:"status"`
+		Marks        int    `json:"marks"`
+		AttemptCount int    `json:"attempt_count"`
+	}
+
+	type StudentMatrixRow struct {
+		StudentID        uint               `json:"student_id"`
+		Name             string             `json:"name"`
+		RollNo           string             `json:"roll_no"`
+		Section          string             `json:"section"`
+		Department       string             `json:"department"`
+		Email            string             `json:"email"`
+		CompletedCount   int                `json:"completed_count"`
+		TotalExperiments int                `json:"total_experiments"`
+		TotalMarks       int                `json:"total_marks"`
+		OverallPct       float64            `json:"overall_pct"`
+		Experiments      []StudentExpStatus `json:"experiments"`
+	}
+
+	var studentMatrix []StudentMatrixRow
+	totalPctSum := 0.0
+
+	for _, st := range students {
+		completed := 0
+		marks := 0
+		var expStatuses []StudentExpStatus
+
+		for _, exp := range experiments {
+			sub, hasSub := subMap[st.ID][exp.ID]
+			stStatus := "NOT_STARTED"
+			stMarks := 0
+			stAttempts := 0
+
+			if hasSub {
+				stStatus = sub.Status
+				stMarks = sub.Marks
+				stAttempts = sub.AttemptCount
+
+				if sub.Status == "APPROVED" {
+					completed++
+					marks += sub.Marks
+				}
+			}
+
+			expStatuses = append(expStatuses, StudentExpStatus{
+				ExperimentID: exp.ID,
+				ExperimentNo: exp.ExperimentNo,
+				CourseID:     exp.CourseID,
+				Status:       stStatus,
+				Marks:        stMarks,
+				AttemptCount: stAttempts,
+			})
+		}
+
+		totalExpCount := len(experiments)
+		if totalExpCount == 0 {
+			totalExpCount = 7
+		}
+
+		pct := 0.0
+		if completed > 0 && totalExpCount > 0 {
+			pct = (float64(completed) / float64(totalExpCount)) * 100.0
+			if pct > 100.0 {
+				pct = 100.0
+			}
+		}
+
+		totalPctSum += pct
+
+		studentMatrix = append(studentMatrix, StudentMatrixRow{
+			StudentID:        st.ID,
+			Name:             st.Name,
+			RollNo:           st.RollNo,
+			Section:          st.Section,
+			Department:       st.Department,
+			Email:            st.Email,
+			CompletedCount:   completed,
+			TotalExperiments: totalExpCount,
+			TotalMarks:       marks,
+			OverallPct:       float64(int(pct*10)) / 10.0,
+			Experiments:      expStatuses,
+		})
+	}
+
+	avgCompPct := 0.0
+	if len(students) > 0 {
+		avgCompPct = float64(int((totalPctSum/float64(len(students)))*10)) / 10.0
+	}
+
+	// 9. Build Course Overview Stats
+	type CourseOverview struct {
+		models.LabCourse
+		AssignedFaculty  []string `json:"assigned_faculty"`
+		AssignedSections []string `json:"assigned_sections"`
+		EnrolledStudents int      `json:"enrolled_students"`
+		AvgCompletionPct float64  `json:"avg_completion_pct"`
+	}
+
+	courseFacultyMap := make(map[uint][]string)
+	courseSectionMap := make(map[uint][]string)
+	for _, m := range mappings {
+		if m.Faculty.Name != "" {
+			exists := false
+			for _, fn := range courseFacultyMap[m.CourseID] {
+				if fn == m.Faculty.Name {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				courseFacultyMap[m.CourseID] = append(courseFacultyMap[m.CourseID], m.Faculty.Name)
+			}
+		}
+		if m.Section != "" {
+			exists := false
+			for _, sec := range courseSectionMap[m.CourseID] {
+				if sec == m.Section {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				courseSectionMap[m.CourseID] = append(courseSectionMap[m.CourseID], m.Section)
+			}
+		}
+	}
+
+	var courseOverviews []CourseOverview
+	for _, crs := range courses {
+		courseOverviews = append(courseOverviews, CourseOverview{
+			LabCourse:        crs,
+			AssignedFaculty:  courseFacultyMap[crs.ID],
+			AssignedSections: courseSectionMap[crs.ID],
+			EnrolledStudents: len(students),
+			AvgCompletionPct: avgCompPct,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"summary": gin.H{
+			"total_courses":        len(courses),
+			"mapped_faculty_count": len(facultyList),
+			"active_sections_count": len(sectionList),
+			"total_students":       len(students),
+			"total_submissions":    len(submissions),
+			"approved_submissions": approvedSubmissionsCount,
+			"pending_reviews":      pendingReviewsCount,
+			"avg_completion_pct":   avgCompPct,
+		},
+		"courses":          courseOverviews,
+		"faculty_mappings": mappings,
+		"faculty":          facultyList,
+		"sections":         sectionList,
+		"experiments":      experiments,
+		"student_matrix":   studentMatrix,
+	})
+}
+
 

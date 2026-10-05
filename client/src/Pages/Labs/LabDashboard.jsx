@@ -32,6 +32,8 @@ export default function LabDashboard() {
   const { user } = useAuth();
 
   const [courses, setCourses] = useState([]);
+  const [availableSections, setAvailableSections] = useState([]);
+  const [selectedSectionFilter, setSelectedSectionFilter] = useState('ALL');
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [courseError, setCourseError] = useState('');
 
@@ -76,6 +78,7 @@ export default function LabDashboard() {
       const res = await api.get('/labs/courses');
       const courseList = res?.courses || [];
       setCourses(courseList);
+      setAvailableSections(res?.sections || []);
 
       // Check if URL already has a courseId param
       const courseIdParam = searchParams.get('courseId');
@@ -120,12 +123,20 @@ export default function LabDashboard() {
   // Filtered courses for top view
   const filteredCourses = courses.filter((c) => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesQuery =
       c.title?.toLowerCase().includes(q) ||
       c.course_code?.toLowerCase().includes(q) ||
       c.department?.toLowerCase().includes(q) ||
-      c.semester?.toLowerCase().includes(q)
-    );
+      c.semester?.toLowerCase().includes(q) ||
+      (c.assigned_faculty && c.assigned_faculty.some((f) => f.toLowerCase().includes(q)));
+
+    const matchesSection =
+      selectedSectionFilter === 'ALL' ||
+      !c.assigned_sections ||
+      c.assigned_sections.length === 0 ||
+      c.assigned_sections.includes(selectedSectionFilter);
+
+    return matchesQuery && matchesSection;
   });
 
   // Filtered experiments for course view
@@ -434,15 +445,15 @@ export default function LabDashboard() {
         )}
       </div>
 
-      {/* Search Bar */}
-      <div className="panel-card p-4">
+      {/* Controls Bar: Search & Section / Batch Filter */}
+      <div className="panel-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full max-w-md flex items-center">
           <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search enrolled practical courses (e.g. 22AI304, Data Structures)..."
+            placeholder="Search practical courses, code, or faculty..."
             className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-9 pr-8 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
           />
           {searchQuery && (
@@ -456,6 +467,24 @@ export default function LabDashboard() {
             </button>
           )}
         </div>
+
+        {availableSections.length > 0 && (
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <span className="text-xs font-semibold text-[var(--text-muted)]">Batch / Section:</span>
+            <select
+              value={selectedSectionFilter}
+              onChange={(e) => setSelectedSectionFilter(e.target.value)}
+              className="bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-1.5 text-xs text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--border-accent)]"
+            >
+              <option value="ALL">ALL Batches / Sections</option>
+              {availableSections.map((sec) => (
+                <option key={sec} value={sec}>
+                  Section {sec}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Loading Courses */}
@@ -491,13 +520,13 @@ export default function LabDashboard() {
             <div className="panel-card p-12 text-center space-y-3">
               <FlaskConical className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
               <p className="text-[14px] font-semibold text-[var(--text-primary)]">
-                {searchQuery
-                  ? 'No lab courses matching your search.'
+                {searchQuery || selectedSectionFilter !== 'ALL'
+                  ? 'No lab courses matching your criteria.'
                   : 'No practical lab courses assigned to your batch.'}
               </p>
               <p className="text-[12px] text-[var(--text-muted)] max-w-md mx-auto">
-                {searchQuery
-                  ? 'Try modifying your search term or clear the filter.'
+                {searchQuery || selectedSectionFilter !== 'ALL'
+                  ? 'Try modifying your search or section filter.'
                   : 'Please check with your department lab coordinator to map your section.'}
               </p>
             </div>
@@ -505,11 +534,15 @@ export default function LabDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredCourses.map((course) => {
                 const totalExperiments = course.total_experiments || 7;
+                const completedExps = course.completed_experiments || 0;
+                const overallPct = course.overall_pct || 0;
+                const assignedFaculty = course.assigned_faculty || [];
+                const assignedSections = course.assigned_sections || [];
 
                 return (
                   <div
                     key={course.id}
-                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all"
+                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all border hover:border-[var(--border-accent)] shadow-sm"
                     onClick={() => handleSelectCourse(course)}
                   >
                     <div className="space-y-3.5">
@@ -520,13 +553,13 @@ export default function LabDashboard() {
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                          <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                          <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
                             {course.course_code}
                           </span>
                         </div>
                       </div>
 
-                      {/* Semester / Academic Year Badges */}
+                      {/* Semester / Regulation / Batches Badges */}
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {course.semester && (
                           <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
@@ -534,13 +567,16 @@ export default function LabDashboard() {
                             {course.semester}
                           </span>
                         )}
-                        {(course.regulation || course.academic_year) && (
-                          <span className="text-[10px] font-mono text-[var(--accent)] font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)]">
-                            {course.regulation
-                              ? course.regulation.toLowerCase().includes('regulation')
-                                ? course.regulation
-                                : `Regulation ${course.regulation.replace(/^r/i, '')}`
-                              : 'Regulation 2022'}
+                        <span className="text-[10px] font-mono text-[var(--accent)] font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] border border-[var(--border-accent)]">
+                          {course.regulation
+                            ? course.regulation.toLowerCase().includes('regulation')
+                              ? course.regulation
+                              : `Regulation ${course.regulation.replace(/^r/i, '')}`
+                            : 'Regulation 2022'}
+                        </span>
+                        {assignedSections.length > 0 && (
+                          <span className="text-[10px] font-mono text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-semibold">
+                            {assignedSections.join(', ')}
                           </span>
                         )}
                       </div>
@@ -555,9 +591,37 @@ export default function LabDashboard() {
                             'Practical laboratory assessments and viva voce evaluations.'}
                         </p>
                       </div>
+
+                      {/* Assigned Faculty Details */}
+                      <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 pt-1">
+                        <span className="font-semibold text-[var(--text-secondary)]">Faculty:</span>
+                        <span className="truncate">
+                          {assignedFaculty.length > 0
+                            ? assignedFaculty.join(', ')
+                            : 'Unassigned / Department Core'}
+                        </span>
+                      </div>
+
+                      {/* Student Progress Bar if student */}
+                      {user?.role?.toLowerCase() === 'student' && (
+                        <div className="pt-2 space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px] font-mono">
+                            <span className="text-[var(--text-muted)]">Progress</span>
+                            <span className="font-bold text-[var(--accent)]">
+                              {completedExps}/{totalExperiments} Done ({overallPct}%)
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-[var(--bg-input)] overflow-hidden">
+                            <div
+                              className="h-full bg-[var(--accent)] transition-all duration-300"
+                              style={{ width: `${overallPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Card Footer: Metadata dot stats + Action Link */}
+                    {/* Card Footer: Metadata stats + Action Link */}
                     <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                       <div className="flex items-center gap-2.5">
                         <span className="text-[var(--text-primary)] font-semibold flex items-center gap-1">

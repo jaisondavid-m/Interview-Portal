@@ -73,6 +73,7 @@ export default function Sidebar() {
     : isAdmin
     ? [
         { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+        { name: 'Lab Overview Dashboard', path: '/admin/labs/dashboard', icon: BarChart3 },
         { name: 'Lab Configuration', path: '/admin/labs/config', icon: FlaskConical },
         { name: 'Student Lab PDF Audit', path: '/admin/labs/pdf-preview', icon: FileCode2 },
         { name: 'User Management', path: '/admin/users', icon: Users },

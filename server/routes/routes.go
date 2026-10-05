@@ -340,6 +340,7 @@ func SetupRouter() *gin.Engine {
 		adminLabs.Use(middlewares.AuthMiddleware())
 		{
 			adminLabs.GET("/data", controllers.GetAdminLabData)
+			adminLabs.GET("/dashboard-analytics", controllers.GetAdminLabDashboardAnalytics)
 			adminLabs.GET("/faculty", controllers.AdminGetLabFacultyList)
 			adminLabs.POST("/courses", controllers.CreateLabCourse)
 			adminLabs.PUT("/courses/:id", controllers.UpdateLabCourse)

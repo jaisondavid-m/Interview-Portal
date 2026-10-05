@@ -188,13 +188,20 @@ func isExperimentUnlockedForStudent(courseID uint, expID uint, userID uint, user
 	return status.IsUnlocked, status.Section
 }
 
-// GetStudentLabCourses returns active lab courses for student
+// GetStudentLabCourses returns active lab courses for student with assigned faculty, sections, and progress statistics
 func GetStudentLabCourses(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	userIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
+	userID, _ := userIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
+
 	var courses []models.LabCourse
 	if err := database.DB.Order("title asc").Find(&courses).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch lab courses"})
 		return
 	}
+
 	for i := range courses {
 		if strings.TrimSpace(courses[i].Regulation) == "" {
 			if courses[i].AcademicYear != "" && !strings.Contains(courses[i].AcademicYear, "-") {
@@ -204,7 +211,124 @@ func GetStudentLabCourses(c *gin.Context) {
 			}
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"courses": courses})
+
+	var mappings []models.LabMapping
+	database.DB.Preload("Faculty").Find(&mappings)
+
+	// Build maps of courseID -> faculty names & sections
+	courseFacultyMap := make(map[uint][]string)
+	courseSectionMap := make(map[uint][]string)
+	for _, m := range mappings {
+		if m.Faculty.Name != "" {
+			exists := false
+			for _, fn := range courseFacultyMap[m.CourseID] {
+				if fn == m.Faculty.Name {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				courseFacultyMap[m.CourseID] = append(courseFacultyMap[m.CourseID], m.Faculty.Name)
+			}
+		}
+		if m.Section != "" {
+			exists := false
+			for _, sec := range courseSectionMap[m.CourseID] {
+				if sec == m.Section {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				courseSectionMap[m.CourseID] = append(courseSectionMap[m.CourseID], m.Section)
+			}
+		}
+	}
+
+	type SubStat struct {
+		CompletedCount int
+		EarnedMarks    int
+	}
+	studentStats := make(map[uint]*SubStat)
+
+	if userID > 0 {
+		var submissions []models.LabSubmission
+		database.DB.Preload("Experiment").Where("student_id = ?", userID).Find(&submissions)
+		for _, sub := range submissions {
+			cID := sub.Experiment.CourseID
+			if cID > 0 {
+				if studentStats[cID] == nil {
+					studentStats[cID] = &SubStat{}
+				}
+				if sub.Status == "APPROVED" {
+					studentStats[cID].CompletedCount++
+					studentStats[cID].EarnedMarks += sub.Marks
+				}
+			}
+		}
+	}
+
+	type EnhancedCourse struct {
+		models.LabCourse
+		AssignedFaculty  []string `json:"assigned_faculty"`
+		AssignedSections []string `json:"assigned_sections"`
+		CompletedExps    int      `json:"completed_experiments"`
+		EarnedMarks      int      `json:"earned_marks"`
+		OverallPct       float64  `json:"overall_pct"`
+	}
+
+	var result []EnhancedCourse
+	for _, course := range courses {
+		facs := courseFacultyMap[course.ID]
+		if facs == nil {
+			facs = []string{}
+		}
+		secs := courseSectionMap[course.ID]
+		if secs == nil {
+			secs = []string{}
+		}
+
+		completed := 0
+		marks := 0
+		if st, ok := studentStats[course.ID]; ok {
+			completed = st.CompletedCount
+			marks = st.EarnedMarks
+		}
+
+		total := course.TotalExperiments
+		if total <= 0 {
+			total = 7
+		}
+
+		pct := 0.0
+		if completed > 0 && total > 0 {
+			pct = (float64(completed) / float64(total)) * 100.0
+			if pct > 100.0 {
+				pct = 100.0
+			}
+		}
+
+		result = append(result, EnhancedCourse{
+			LabCourse:        course,
+			AssignedFaculty:  facs,
+			AssignedSections: secs,
+			CompletedExps:    completed,
+			EarnedMarks:      marks,
+			OverallPct:       float64(int(pct*10)) / 10.0,
+		})
+	}
+
+	var allSections []string
+	database.DB.Model(&models.User{}).
+		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
+		Distinct().
+		Pluck("section", &allSections)
+
+	c.JSON(http.StatusOK, gin.H{
+		"courses":  result,
+		"sections": allSections,
+		"role":     userRole,
+	})
 }
 
 // GetCourseExperimentsForStudent returns experiments of a course with student-specific unlock status
