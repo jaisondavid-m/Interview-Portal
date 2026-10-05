@@ -27,12 +27,14 @@ pipeline {
     stages {
         stage('1. Synchronize Source') {
             steps {
-                echo '📥 Synchronizing codebase with repository...'
+                echo '📥 Synchronizing codebase with origin/deploy...'
                 sh '''
                     cd "${PROJECT_DIR}"
-                    git fetch origin main || true
-                    git reset --hard origin/main || true
-                    echo "Latest Commit: $(git log -1 --oneline)"
+                    git fetch origin deploy:deploy || true
+                    git fetch origin main:main || true
+                    git checkout deploy || git checkout -b deploy origin/deploy
+                    git reset --hard origin/deploy || true
+                    echo "Latest Deploy Commit: $(git log -1 --oneline)"
                     chmod +x deploy.sh rollback.sh
                 '''
             }
@@ -143,7 +145,26 @@ pipeline {
             }
         }
 
-        stage('6. Docker Hygiene') {
+        stage('6. Promote Verified Code (deploy ➔ main)') {
+            when {
+                expression { return params.ACTION == 'deploy' }
+            }
+            steps {
+                echo '🚀 Promoting verified deploy branch to main...'
+                sh '''
+                    cd "${PROJECT_DIR}"
+                    git fetch origin main deploy
+                    git checkout main
+                    git reset --hard origin/main
+                    git merge --ff-only origin/deploy || git merge -m "chore(release): automated promotion from deploy to main [skip ci]" origin/deploy
+                    git push origin main
+                    git checkout deploy
+                    echo "✅ origin/main successfully updated with verified deploy commit: $(git log -1 --oneline origin/main)"
+                '''
+            }
+        }
+
+        stage('7. Docker Hygiene') {
             steps {
                 echo '🧹 Pruning old dangling Docker images...'
                 sh '''
