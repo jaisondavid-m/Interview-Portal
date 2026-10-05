@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import LabStudentAnalyticsDrawer from '../../Components/AdminLabs/LabStudentAnalyticsDrawer';
+import SearchableSelect from '../../Components/SearchableSelect';
 
 export default function LabInchargeDashboard() {
   const navigate = useNavigate();
@@ -236,42 +237,50 @@ export default function LabInchargeDashboard() {
         </div>
       </div>
 
-      {/* Controls Bar: Course Selector, Section Filter, Search, Export */}
+      {/* Controls Bar: Searchable Course Selector, Searchable Section Filter, Search, Export */}
       <div className="panel-card p-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 rounded-2xl">
         <div className="flex items-center gap-3 flex-wrap flex-1">
-          <div className="space-y-1 min-w-[240px]">
+          <div className="space-y-1 min-w-[280px] flex-1 max-w-md">
             <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
               Active Practical Course
             </label>
-            <select
+            <SearchableSelect
+              options={courses.map((c) => ({
+                value: String(c.id),
+                label: `${c.course_code} - ${c.title}`,
+                badge: c.regulation || c.academic_year,
+                sublabel: `${c.total_experiments || 0} Experiments`,
+              }))}
               value={analyticsCourseId}
-              onChange={(e) => handleCourseChange(e.target.value)}
-              className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-            >
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.course_code} - {c.title}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => handleCourseChange(val)}
+              placeholder="Search or select course..."
+              searchPlaceholder="Search course code, title..."
+              className="w-full text-xs font-semibold py-2 rounded-xl"
+              menuWidth="w-full min-w-[320px]"
+              fullWidth
+            />
           </div>
 
-          <div className="space-y-1 min-w-[160px]">
+          <div className="space-y-1 min-w-[180px]">
             <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
               Section Filter
             </label>
-            <select
+            <SearchableSelect
+              options={[
+                { value: 'ALL', label: 'ALL Sections' },
+                ...(analyticsData?.sections || []).map((sec) => ({
+                  value: sec,
+                  label: sec.toLowerCase().startsWith('section') || sec.includes('-') ? sec : `Section ${sec}`,
+                })),
+              ]}
               value={analyticsSection}
-              onChange={(e) => handleSectionChange(e.target.value)}
-              className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-            >
-              <option value="ALL">ALL Sections</option>
-              {(analyticsData?.sections || []).map((sec) => (
-                <option key={sec} value={sec}>
-                  {sec.toLowerCase().startsWith('section') || sec.includes('-') ? sec : `Section ${sec}`}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => handleSectionChange(val)}
+              placeholder="Select section..."
+              searchPlaceholder="Search section..."
+              className="w-full text-xs font-semibold py-2 rounded-xl"
+              menuWidth="w-full min-w-[200px]"
+              fullWidth
+            />
           </div>
 
           <div className="space-y-1 flex-1 min-w-[200px]">

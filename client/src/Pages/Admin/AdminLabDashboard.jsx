@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import LabStudentAnalyticsDrawer from '../../Components/AdminLabs/LabStudentAnalyticsDrawer';
+import SearchableSelect from '../../Components/SearchableSelect';
 
 export default function AdminLabDashboard() {
   const navigate = useNavigate();
@@ -263,18 +264,23 @@ export default function AdminLabDashboard() {
             <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
               Handling Faculty
             </label>
-            <select
+            <SearchableSelect
+              options={[
+                { value: 'ALL', label: 'ALL Faculty Members' },
+                ...(analytics?.faculty || []).map((f) => ({
+                  value: String(f.id),
+                  label: f.name,
+                  sublabel: f.department || 'Faculty',
+                })),
+              ]}
               value={selectedFaculty}
-              onChange={(e) => setSelectedFaculty(e.target.value)}
-              className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-            >
-              <option value="ALL">ALL Faculty Members</option>
-              {(analytics?.faculty || []).map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name} ({f.department || 'Faculty'})
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedFaculty(val)}
+              placeholder="Search faculty..."
+              searchPlaceholder="Search faculty name, dept..."
+              className="w-full text-xs font-semibold py-2 rounded-xl"
+              menuWidth="w-full min-w-[240px]"
+              fullWidth
+            />
           </div>
 
           {/* 2. Course Filter */}
@@ -282,18 +288,22 @@ export default function AdminLabDashboard() {
             <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
               Practical Course
             </label>
-            <select
+            <SearchableSelect
+              options={[
+                { value: 'ALL', label: 'ALL Practical Courses' },
+                ...(analytics?.courses || []).map((c) => ({
+                  value: String(c.id),
+                  label: `${c.course_code} - ${c.title}`,
+                })),
+              ]}
               value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
-              className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-            >
-              <option value="ALL">ALL Practical Courses</option>
-              {(analytics?.courses || []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.course_code} - {c.title}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedCourse(val)}
+              placeholder="Search course..."
+              searchPlaceholder="Search course code, title..."
+              className="w-full text-xs font-semibold py-2 rounded-xl"
+              menuWidth="w-full min-w-[260px]"
+              fullWidth
+            />
           </div>
 
           {/* 3. Batch / Section Filter */}
@@ -301,18 +311,22 @@ export default function AdminLabDashboard() {
             <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
               Batch / Section
             </label>
-            <select
+            <SearchableSelect
+              options={[
+                { value: 'ALL', label: 'ALL Batches & Sections' },
+                ...(analytics?.sections || ['A', 'B', 'C']).map((sec) => ({
+                  value: sec,
+                  label: sec.toLowerCase().startsWith('section') || sec.includes('-') ? sec : `Section ${sec}`,
+                })),
+              ]}
               value={selectedSection}
-              onChange={(e) => setSelectedSection(e.target.value)}
-              className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
-            >
-              <option value="ALL">ALL Batches & Sections</option>
-              {(analytics?.sections || ['A', 'B', 'C']).map((sec) => (
-                <option key={sec} value={sec}>
-                  Section {sec}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedSection(val)}
+              placeholder="Search section..."
+              searchPlaceholder="Search batch / section..."
+              className="w-full text-xs font-semibold py-2 rounded-xl"
+              menuWidth="w-full min-w-[200px]"
+              fullWidth
+            />
           </div>
 
           {/* 4. Student Search Input */}
