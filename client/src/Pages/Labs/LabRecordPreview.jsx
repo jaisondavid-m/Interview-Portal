@@ -115,22 +115,29 @@ export default function LabRecordPreview() {
           {/* Section Selector */}
           <select
             value={viewMode}
-            onChange={(e) => {
-              const val = e.target.value;
-              setViewMode(val === 'all' || val === 'cover' || val === 'certificate' || val === 'index' ? val : Number(val));
-            }}
+            onChange={(e) => setViewMode(e.target.value)}
             disabled={loading || !templateData}
             className="px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
           >
-            <option value="all">📖 All Pages (Continuous)</option>
-            <option value="cover">📄 1. Title & Cover Page</option>
-            <option value="certificate">📜 2. Bonafide Certificate</option>
-            <option value="index">📑 3. Experiments Index Table</option>
-            {experiments.map((exp, idx) => (
-              <option key={idx} value={exp.experiment_no || idx + 1}>
-                🔬 Ex {exp.experiment_no || idx + 1}: {exp.title ? exp.title.slice(0, 30) + '...' : `Experiment ${idx + 1}`}
-              </option>
-            ))}
+            <option value="all">📖 All Pages (Continuous Record)</option>
+            <option value="spread">📑 Facing Book Spread (2-Page View)</option>
+            <option value="flyleaf">📄 Page 1: Blank Flyleaf</option>
+            <option value="cover">📄 Page 2: Title & Cover Page</option>
+            <option value="certificate">📜 Page 3: Bonafide Certificate</option>
+            <option value="index">📑 Page 4: Index Sheet</option>
+            {experiments.map((exp, idx) => {
+              const expNo = exp.experiment_no || idx + 1;
+              return (
+                <React.Fragment key={idx}>
+                  <option value={`exp_${expNo}_left`}>
+                    🔬 Ex {expNo} [Left Page]: Program & Output
+                  </option>
+                  <option value={`exp_${expNo}_right`}>
+                    🔬 Ex {expNo} [Right Page]: Aim, Algorithm & Result
+                  </option>
+                </React.Fragment>
+              );
+            })}
           </select>
 
           {/* Duplex Toggle */}

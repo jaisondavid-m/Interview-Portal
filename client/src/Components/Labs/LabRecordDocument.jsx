@@ -58,7 +58,7 @@ export const getRegisterCells = (regNo, totalCells = 12) => {
 export default function LabRecordDocument({
   data = {},
   isDuplex = true,
-  viewMode = 'all', // 'all', 'cover', 'certificate', 'index', or experiment_no (number)
+  viewMode = 'all', // 'all', 'spread', 'flyleaf', 'cover', 'certificate', 'index', or `exp_${expNo}_left`, `exp_${expNo}_right`
   scale = 1,
   showSignatures = true,
   showRubrics = true,
@@ -90,6 +90,9 @@ export default function LabRecordDocument({
 
   const defaultCertText = certificate_text ||
     `Certified that this is the bonafide record of practical work done by Mr./Ms. ${student_name} (Register No: ${register_no || roll_no}) of ${semester}, ${department} in the ${course_code} – ${course_title} Laboratory during the academic year ${academic_year}.`;
+
+  // Calculate total pages: Page 1 (Flyleaf) + Page 2 (Cover) + Page 3 (Certificate) + Page 4 (Index) + (2 pages per experiment)
+  const totalDocPages = 4 + (experiments.length * 2);
 
   return (
     <div className="lab-record-wrapper font-serif text-black selection:bg-neutral-200">
@@ -142,6 +145,12 @@ export default function LabRecordDocument({
             break-after: auto !important;
           }
 
+          .booklet-spread-container {
+            display: block !important;
+            width: 100% !important;
+            gap: 0 !important;
+          }
+
           table {
             page-break-inside: auto;
           }
@@ -156,7 +165,7 @@ export default function LabRecordDocument({
           }
         }
 
-        /* Screen & Document Page Styling - Spacious & Breathable */
+        /* Screen & Document Page Styling */
         .academic-page {
           background: #ffffff;
           color: #000000;
@@ -172,14 +181,15 @@ export default function LabRecordDocument({
           position: relative;
         }
 
-        .academic-page.duplex-odd {
-          padding-left: 22mm;
+        /* Duplex binding gutter margins */
+        .academic-page.page-odd {
+          padding-left: ${isDuplex ? '24mm' : '18mm'};
           padding-right: 14mm;
         }
 
-        .academic-page.duplex-even {
+        .academic-page.page-even {
           padding-left: 14mm;
-          padding-right: 22mm;
+          padding-right: ${isDuplex ? '24mm' : '18mm'};
         }
 
         .top-row-table {
@@ -314,6 +324,14 @@ export default function LabRecordDocument({
           font-weight: bold;
           color: #444444;
         }
+
+        .booklet-spread-container {
+          display: flex;
+          flex-direction: row;
+          justify-content: center;
+          gap: 20px;
+          width: 100%;
+        }
       `}</style>
 
       <div
@@ -321,10 +339,40 @@ export default function LabRecordDocument({
         style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
       >
         {/* =========================================================
-            PAGE 1: OFFICIAL COVER & TITLE PAGE
+            PAGE 1: EMPTY / BLANK FRONT FLYLEAF PAGE
+            ========================================================= */}
+        {(viewMode === 'all' || viewMode === 'flyleaf') && (
+          <div className="academic-page page-odd flex flex-col justify-between">
+            <div className="text-right text-[8pt] text-neutral-300 select-none">
+              [Front Flyleaf Page]
+            </div>
+
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-12">
+              <div className="w-16 h-16 mb-4 opacity-15">
+                <img
+                  src={logo || '/logo.png'}
+                  alt="Institute Crest"
+                  className="w-full h-full object-contain filter grayscale"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+              <p className="text-xs uppercase tracking-widest text-neutral-300 font-serif">
+                Laboratory Record Notebook
+              </p>
+            </div>
+
+            <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+              <span className="text-neutral-400 font-normal italic">Blank Flyleaf</span>
+              <span>Page 1 of {totalDocPages}</span>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            PAGE 2: TITLE & OFFICIAL COVER PAGE
             ========================================================= */}
         {(viewMode === 'all' || viewMode === 'cover') && (
-          <div className={`academic-page ${isDuplex ? 'duplex-odd' : ''}`}>
+          <div className="academic-page page-even">
             {/* Top Row: Course Code & Register Boxes */}
             <table className="top-row-table">
               <tbody>
@@ -380,7 +428,7 @@ export default function LabRecordDocument({
                   </td>
                 </tr>
                 <tr>
-                  <td colSpan={2} style={{ fontSize: '11.5pt', fontWeight: 'bold', textTransform: 'uppercase', background: '#f4f4f5', padding: '7px 10px' }}>
+                  <td colSpan={2} style={{ fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase', background: '#f4f4f5', padding: '8px 10px' }}>
                     LABORATORY RECORD NOTEBOOK
                   </td>
                 </tr>
@@ -406,7 +454,7 @@ export default function LabRecordDocument({
             <table className="section-bar-table">
               <tbody>
                 <tr>
-                  <td>STUDENT DETAILS</td>
+                  <td>STUDENT RECORD DETAILS</td>
                 </tr>
               </tbody>
             </table>
@@ -466,17 +514,17 @@ export default function LabRecordDocument({
 
             {/* Footer */}
             <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-              <span>{course_code} — Laboratory Record Manual</span>
-              <span>Page 1 of {experiments.length + 3}</span>
+              <span>{course_code} — Title & Cover Sheet</span>
+              <span>Page 2 of {totalDocPages}</span>
             </div>
           </div>
         )}
 
         {/* =========================================================
-            PAGE 2: BONAFIDE CERTIFICATE
+            PAGE 3: BONAFIDE CERTIFICATE
             ========================================================= */}
         {(viewMode === 'all' || viewMode === 'certificate') && (
-          <div className={`academic-page ${isDuplex ? 'duplex-even' : ''}`}>
+          <div className="academic-page page-odd">
             {/* Top Row */}
             <table className="top-row-table">
               <tbody>
@@ -612,17 +660,17 @@ export default function LabRecordDocument({
 
             {/* Footer */}
             <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-              <span>{course_code} — Laboratory Record Manual</span>
-              <span>Page 2 of {experiments.length + 3}</span>
+              <span>{course_code} — Bonafide Certificate</span>
+              <span>Page 3 of {totalDocPages}</span>
             </div>
           </div>
         )}
 
         {/* =========================================================
-            PAGE 3: INDEX OF LABORATORY EXPERIMENTS
+            PAGE 4: INDEX OF LABORATORY EXPERIMENTS
             ========================================================= */}
         {(viewMode === 'all' || viewMode === 'index') && (
-          <div className={`academic-page ${isDuplex ? 'duplex-odd' : ''}`}>
+          <div className="academic-page page-even">
             {/* Top Row */}
             <table className="top-row-table">
               <tbody>
@@ -675,20 +723,23 @@ export default function LabRecordDocument({
                     </td>
                   </tr>
                 ) : (
-                  experiments.map((exp, idx) => (
-                    <tr key={idx}>
-                      <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>{exp.experiment_no || idx + 1}</td>
-                      <td style={{ textAlign: 'center', fontSize: '9.5pt', padding: '8px 6px' }}>{exp.date || '05-10-2026'}</td>
-                      <td style={{ fontWeight: '500', padding: '8px 10px' }}>{exp.title}</td>
-                      <td style={{ textAlign: 'center', padding: '8px 6px' }}>{idx + 4}</td>
-                      <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>
-                        {exp.marks !== undefined ? exp.marks : 10}
-                      </td>
-                      <td style={{ textAlign: 'center', fontSize: '8.5pt', padding: '8px 6px' }}>
-                        Verified
-                      </td>
-                    </tr>
-                  ))
+                  experiments.map((exp, idx) => {
+                    const startPage = 5 + (idx * 2);
+                    return (
+                      <tr key={idx}>
+                        <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>{exp.experiment_no || idx + 1}</td>
+                        <td style={{ textAlign: 'center', fontSize: '9.5pt', padding: '8px 6px' }}>{exp.date || '05-10-2026'}</td>
+                        <td style={{ fontWeight: '500', padding: '8px 10px' }}>{exp.title}</td>
+                        <td style={{ textAlign: 'center', padding: '8px 6px' }}>{startPage} – {startPage + 1}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>
+                          {exp.marks !== undefined ? exp.marks : 10}
+                        </td>
+                        <td style={{ textAlign: 'center', fontSize: '8.5pt', padding: '8px 6px' }}>
+                          Verified
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
                 {/* Total Summary Row */}
                 {experiments.length > 0 && (
@@ -746,192 +797,252 @@ export default function LabRecordDocument({
 
             {/* Footer */}
             <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-              <span>{course_code} — Laboratory Record Manual</span>
-              <span>Page 3 of {experiments.length + 3}</span>
+              <span>{course_code} — Index Sheet</span>
+              <span>Page 4 of {totalDocPages}</span>
             </div>
           </div>
         )}
 
         {/* =========================================================
-            PAGES 4+: LABORATORY EXPERIMENT DETAILS
+            EXPERIMENTS: DUAL-PAGE RECORD NOTEBOOK STRUCTURE
+            - Left Page (Even): Program Source Code & Output
+            - Right Page (Odd): Aim, Algorithm, Result, Rubrics & Sign
             ========================================================= */}
         {experiments.map((exp, index) => {
           const expNo = exp.experiment_no || index + 1;
-          const pageNum = index + 4;
-          const isOdd = pageNum % 2 !== 0;
+          const leftPageNum = 5 + (index * 2);      // Facing Left Sheet (Program & Output)
+          const rightPageNum = 6 + (index * 2);     // Main Right Sheet (Aim, Algorithm, Result)
 
-          if (viewMode !== 'all' && viewMode !== expNo) {
-            return null;
-          }
+          const showLeft = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_left` || viewMode === expNo;
+          const showRight = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_right` || viewMode === expNo;
 
           const procedureSteps = parseProcedureSteps(exp.procedure);
           const cleanOutput = cleanExecutionOutput(exp.execution_output, exp.title);
 
+          const isSpread = viewMode === 'spread';
+
           return (
-            <div key={index} className={`academic-page ${isDuplex ? (isOdd ? 'duplex-odd' : 'duplex-even') : ''}`}>
-              {/* Top Row */}
-              <table className="top-row-table">
-                <tbody>
-                  <tr>
-                    <td style={{ textAlign: 'left' }}>
-                      EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
-                    </td>
-                    <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                    <td style={{ width: '195px' }}>
-                      <table className="register-boxes">
+            <div key={index} className={isSpread ? 'booklet-spread-container' : 'w-full'}>
+              {/* -------------------------------------------------------------
+                  LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE & EXECUTION OUTPUT
+                  ------------------------------------------------------------- */}
+              {showLeft && (
+                <div className="academic-page page-even">
+                  {/* Top Row: Left Page Header */}
+                  <table className="top-row-table">
+                    <tbody>
+                      <tr>
+                        <td style={{ textAlign: 'left' }}>
+                          EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [PROGRAM & OUTPUT]
+                        </td>
+                        <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                        <td style={{ width: '195px' }}>
+                          <table className="register-boxes">
+                            <tbody>
+                              <tr>
+                                {regCells.map((char, idx) => (
+                                  <td key={idx}>{char}</td>
+                                ))}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Left Page Title Bar */}
+                  <table className="section-bar-table">
+                    <tbody>
+                      <tr>
+                        <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                          EXPERIMENT {expNo} : SOURCE CODE & EXECUTION OUTPUT
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* 3. PROGRAM */}
+                  <table className="section-bar-table" style={{ marginTop: '14px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>3. PROGRAM SOURCE CODE</span>
+                          <span style={{ fontSize: '8.5pt', fontFamily: 'Courier New', textTransform: 'none', fontWeight: 'normal' }}>
+                            Language: {exp.language || 'Python'}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <pre className="code-container" style={{ minHeight: '340px' }}>
+                    {exp.submitted_code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
+                  </pre>
+
+                  {/* 4. SAMPLE INPUT & OUTPUT */}
+                  {showOutputs && (
+                    <>
+                      <table className="section-bar-table">
                         <tbody>
                           <tr>
-                            {regCells.map((char, idx) => (
-                              <td key={idx}>{char}</td>
-                            ))}
+                            <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                              4. SAMPLE INPUT & CONSOLE OUTPUT
+                            </td>
                           </tr>
                         </tbody>
                       </table>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      <div className="output-container" style={{ minHeight: '130px' }}>
+                        {cleanOutput}
+                      </div>
+                    </>
+                  )}
 
-              {/* Experiment Title Bar */}
-              <table className="section-bar-table">
-                <tbody>
-                  <tr>
-                    <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                      EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                  {/* Footer */}
+                  <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                    <span>{course_code} — Experiment {expNo} (Left Page)</span>
+                    <span>Page {leftPageNum} of {totalDocPages}</span>
+                  </div>
+                </div>
+              )}
 
-              {/* 1. AIM */}
-              <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                      1. AIM
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <div className="content-box">
-                {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
-              </div>
+              {/* -------------------------------------------------------------
+                  RIGHT-HAND PAGE (ODD): AIM, ALGORITHM, RESULT & RUBRICS SIGN-OFF
+                  ------------------------------------------------------------- */}
+              {showRight && (
+                <div className="academic-page page-odd">
+                  {/* Top Row: Right Page Header */}
+                  <table className="top-row-table">
+                    <tbody>
+                      <tr>
+                        <td style={{ textAlign: 'left' }}>
+                          EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
+                        </td>
+                        <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                        <td style={{ width: '195px' }}>
+                          <table className="register-boxes">
+                            <tbody>
+                              <tr>
+                                {regCells.map((char, idx) => (
+                                  <td key={idx}>{char}</td>
+                                ))}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-              {/* 2. ALGORITHM / PROCEDURE */}
-              <table className="section-bar-table">
-                <tbody>
-                  <tr>
-                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                      2. ALGORITHM / PROCEDURE
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <div className="content-box">
-                {procedureSteps.length > 0 ? (
-                  <ol style={{ margin: 0, paddingLeft: '22px' }}>
-                    {procedureSteps.map((step, sIdx) => (
-                      <li key={sIdx} style={{ marginBottom: '6px' }}>
-                        {step.replace(/^Step\s*\d+:\s*/i, '').replace(/^\d+[\.\)]\s*/, '')}
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p style={{ margin: 0, lineHeight: '1.6' }}>
-                    1. Start the program.<br />
-                    2. Read the required input values.<br />
-                    3. Perform the necessary operations and calculations for {exp.title}.<br />
-                    4. Display the calculated result.<br />
-                    5. Stop the program execution.
-                  </p>
-                )}
-              </div>
+                  {/* Right Page Title Bar */}
+                  <table className="section-bar-table">
+                    <tbody>
+                      <tr>
+                        <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                          EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-              {/* 3. PROGRAM */}
-              <table className="section-bar-table">
-                <tbody>
-                  <tr>
-                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                      3. PROGRAM
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <pre className="code-container">
-                {exp.submitted_code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
-              </pre>
+                  {/* 1. AIM */}
+                  <table className="section-bar-table" style={{ marginTop: '14px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                          1. AIM
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="content-box">
+                    {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
+                  </div>
 
-              {/* 4. SAMPLE INPUT & OUTPUT */}
-              {showOutputs && (
-                <>
+                  {/* 2. ALGORITHM / PROCEDURE */}
                   <table className="section-bar-table">
                     <tbody>
                       <tr>
                         <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                          4. SAMPLE INPUT & OUTPUT
+                          2. ALGORITHM / PROCEDURE
                         </td>
                       </tr>
                     </tbody>
                   </table>
-                  <div className="output-container">
-                    {cleanOutput}
+                  <div className="content-box" style={{ minHeight: '160px' }}>
+                    {procedureSteps.length > 0 ? (
+                      <ol style={{ margin: 0, paddingLeft: '22px' }}>
+                        {procedureSteps.map((step, sIdx) => (
+                          <li key={sIdx} style={{ marginBottom: '6px' }}>
+                            {step.replace(/^Step\s*\d+:\s*/i, '').replace(/^\d+[\.\)]\s*/, '')}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p style={{ margin: 0, lineHeight: '1.6' }}>
+                        1. Start the program.<br />
+                        2. Read the required input parameters and initialize data structures.<br />
+                        3. Implement the logic and algorithm operations for {exp.title}.<br />
+                        4. Compute and display the verified output.<br />
+                        5. Stop the program execution.
+                      </p>
+                    )}
                   </div>
-                </>
-              )}
 
-              {/* 5. RESULT */}
-              <table className="section-bar-table">
-                <tbody>
-                  <tr>
-                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                      5. RESULT
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <div className="content-box">
-                {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and verified.`}
-              </div>
-
-              {/* 6. MARKS & SIGN-OFF */}
-              {showRubrics && (
-                <div className="prevent-break">
-                  <table className="grid-table" style={{ marginTop: '14px' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ width: '25%', padding: '6px' }}>Aim & Algorithm (3)</th>
-                        <th style={{ width: '25%', padding: '6px' }}>Program Coding (4)</th>
-                        <th style={{ width: '25%', padding: '6px' }}>Execution & Viva (3)</th>
-                        <th style={{ width: '25%', padding: '6px' }}>Total Marks (10)</th>
-                      </tr>
-                    </thead>
+                  {/* 5. RESULT */}
+                  <table className="section-bar-table">
                     <tbody>
                       <tr>
-                        <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.algorithm_marks || 3}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.code_marks || 4}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.viva_marks || 3}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', background: '#f4f4f5', padding: '6px' }}>
-                          {exp.marks !== undefined ? exp.marks : 10} / 10
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan={2} style={{ fontSize: '9pt', padding: '8px 10px' }}>
-                          Staff In-Charge: <strong>{staff_incharge}</strong>
-                        </td>
-                        <td colSpan={2} style={{ textAlign: 'right', fontSize: '9pt', padding: '8px 10px', fontWeight: 'bold' }}>
-                          Staff Signature: ____________________
+                        <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                          5. RESULT
                         </td>
                       </tr>
                     </tbody>
                   </table>
+                  <div className="content-box">
+                    {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
+                  </div>
+
+                  {/* 6. MARKS & SIGN-OFF */}
+                  {showRubrics && (
+                    <div className="prevent-break">
+                      <table className="grid-table" style={{ marginTop: '16px' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ width: '25%', padding: '6px' }}>Aim & Algorithm (3)</th>
+                            <th style={{ width: '25%', padding: '6px' }}>Program Coding (4)</th>
+                            <th style={{ width: '25%', padding: '6px' }}>Execution & Viva (3)</th>
+                            <th style={{ width: '25%', padding: '6px' }}>Total Marks (10)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.algorithm_marks || 3}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.code_marks || 4}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.viva_marks || 3}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', background: '#f4f4f5', padding: '6px' }}>
+                              {exp.marks !== undefined ? exp.marks : 10} / 10
+                            </td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} style={{ fontSize: '9pt', padding: '10px' }}>
+                              Staff In-Charge: <strong>{staff_incharge}</strong>
+                            </td>
+                            <td colSpan={2} style={{ textAlign: 'right', fontSize: '9pt', padding: '10px', fontWeight: 'bold' }}>
+                              Staff Signature: ____________________
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                    <span>{course_code} — Experiment {expNo} (Right Page)</span>
+                    <span>Page {rightPageNum} of {totalDocPages}</span>
+                  </div>
                 </div>
               )}
-
-              {/* Footer */}
-              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                <span>{course_code} — Experiment {expNo}</span>
-                <span>Page {pageNum} of {experiments.length + 3}</span>
-              </div>
             </div>
           );
         })}
