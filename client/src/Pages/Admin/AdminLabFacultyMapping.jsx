@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import SearchableSelect from '../../Components/SearchableSelect';
+import ConfirmModal from '../../Components/ConfirmModal';
 
 const inputCls =
   'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
@@ -184,8 +185,12 @@ export default function AdminLabFacultyMapping() {
     }
   };
 
-  const handleDeleteMapping = async (id) => {
-    if (!window.confirm('Delete this faculty lab mapping?')) return;
+  const [deletingMappingId, setDeletingMappingId] = useState(null);
+
+  const executeDeleteMapping = async () => {
+    if (!deletingMappingId) return;
+    const id = deletingMappingId;
+    setDeletingMappingId(null);
     try {
       await api.delete(`/admin/labs/mappings/${id}`);
       showToast('Faculty mapping deleted.');
@@ -471,7 +476,7 @@ export default function AdminLabFacultyMapping() {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteMapping(m.id)}
+                          onClick={() => setDeletingMappingId(m.id)}
                           className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/20 text-[var(--red)] hover:bg-[var(--red)]/15 cursor-pointer transition-all"
                           title="Remove mapping"
                         >
@@ -762,6 +767,18 @@ export default function AdminLabFacultyMapping() {
           )}
         </div>
       </div>
+
+      {/* Confirm Mapping Delete Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingMappingId)}
+        onClose={() => setDeletingMappingId(null)}
+        onConfirm={executeDeleteMapping}
+        title="Delete Faculty Mapping"
+        message="Are you sure you want to delete this faculty lab mapping?"
+        confirmText="Delete Mapping"
+        variant="danger"
+        isDanger={true}
+      />
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
   Sliders
 } from 'lucide-react';
 import api from '../../api/axios';
+import ConfirmModal from '../ConfirmModal';
 
 export default function LabScheduleModal({
   isOpen,
@@ -178,8 +179,12 @@ export default function LabScheduleModal({
     }
   };
 
-  const handleDeleteOverride = async (id) => {
-    if (!window.confirm('Revoke this student window override?')) return;
+  const [confirmDeleteOverrideId, setConfirmDeleteOverrideId] = useState(null);
+
+  const executeDeleteOverride = async () => {
+    if (!confirmDeleteOverrideId) return;
+    const id = confirmDeleteOverrideId;
+    setConfirmDeleteOverrideId(null);
     try {
       setDeletingOverrideId(id);
       await api.delete(`/lab-incharge/unlocks/student-override/${id}`);
@@ -718,7 +723,7 @@ export default function LabScheduleModal({
                         <button
                           type="button"
                           disabled={isDeleting}
-                          onClick={() => handleDeleteOverride(ov.id)}
+                          onClick={() => setConfirmDeleteOverrideId(ov.id)}
                           className="p-2 rounded-lg bg-[var(--red-bg)] text-[var(--red)] border border-[var(--red)]/20 hover:opacity-80 transition-all cursor-pointer disabled:opacity-50"
                           title="Revoke student override"
                         >
@@ -733,6 +738,19 @@ export default function LabScheduleModal({
           )}
         </div>
       </div>
+
+      {/* Confirm Override Delete Modal */}
+      <ConfirmModal
+        isOpen={Boolean(confirmDeleteOverrideId)}
+        onClose={() => setConfirmDeleteOverrideId(null)}
+        onConfirm={executeDeleteOverride}
+        title="Revoke Student Override"
+        message="Are you sure you want to revoke this student window override?"
+        confirmText="Revoke Override"
+        variant="danger"
+        isDanger={true}
+        loading={Boolean(deletingOverrideId)}
+      />
     </div>
   );
 }

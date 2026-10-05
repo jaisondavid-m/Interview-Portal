@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import SearchableSelect from '../../Components/SearchableSelect';
+import ConfirmModal from '../../Components/ConfirmModal';
 
 const inputCls =
   'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
@@ -150,8 +151,12 @@ export default function AdminLabCourses() {
     }
   };
 
-  const handleDeleteCourse = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete the lab course "${title}"?`)) return;
+  const [deletingCourse, setDeletingCourse] = useState(null);
+
+  const executeDeleteCourse = async () => {
+    if (!deletingCourse) return;
+    const { id } = deletingCourse;
+    setDeletingCourse(null);
     try {
       await api.delete(`/labs/courses/${id}`);
       showToast('Lab course deleted successfully.');
@@ -309,7 +314,7 @@ export default function AdminLabCourses() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteCourse(c.id, c.title);
+                          setDeletingCourse({ id: c.id, title: c.title });
                         }}
                         className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] rounded hover:bg-[var(--red-bg)] transition cursor-pointer"
                         title="Delete Course"
@@ -507,6 +512,18 @@ export default function AdminLabCourses() {
           </div>
         </div>
       )}
+
+      {/* Confirm Course Delete Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingCourse)}
+        onClose={() => setDeletingCourse(null)}
+        onConfirm={executeDeleteCourse}
+        title="Delete Practical Lab Course"
+        message={`Are you sure you want to delete the lab course "${deletingCourse?.title || ''}"? This action cannot be undone.`}
+        confirmText="Delete Course"
+        variant="danger"
+        isDanger={true}
+      />
     </div>
   );
 }

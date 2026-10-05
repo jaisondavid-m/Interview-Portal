@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import SearchableSelect from '../../Components/SearchableSelect';
+import ConfirmModal from '../../Components/ConfirmModal';
 
 const inputCls =
   'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
@@ -323,8 +324,12 @@ export default function AdminLabBatches() {
     setEditingBatch(null);
   };
 
-  const handleDeleteBatch = (id, name) => {
-    if (!window.confirm(`Delete batch "${name}"? Students allocated to this batch will not be deleted.`)) return;
+  const [deletingBatch, setDeletingBatch] = useState(null);
+
+  const executeDeleteBatch = () => {
+    if (!deletingBatch) return;
+    const { id, name } = deletingBatch;
+    setDeletingBatch(null);
     const filtered = batches.filter((b) => b.id !== id);
     saveBatches(filtered);
     showToast(`Batch "${name}" deleted.`);
@@ -762,7 +767,7 @@ export default function AdminLabBatches() {
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDeleteBatch(b.id, b.name)}
+                      onClick={() => setDeletingBatch({ id: b.id, name: b.name })}
                       className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] transition-colors cursor-pointer"
                       title="Delete batch"
                     >
@@ -1741,6 +1746,18 @@ export default function AdminLabBatches() {
           </div>
         </div>
       )}
+
+      {/* Confirm Batch Delete Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingBatch)}
+        onClose={() => setDeletingBatch(null)}
+        onConfirm={executeDeleteBatch}
+        title="Delete Batch Cohort"
+        message={`Delete batch "${deletingBatch?.name || ''}"? Students allocated to this batch will not be deleted.`}
+        confirmText="Delete Batch"
+        variant="danger"
+        isDanger={true}
+      />
     </div>
   );
 }

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import ConfirmModal from '../../Components/ConfirmModal';
 
 export const DEFAULT_LAB_RUBRIC = [
   {
@@ -259,9 +260,11 @@ export default function LabEvaluationPage() {
     }
   };
 
-  const handleResetAllocation = async () => {
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const executeResetAllocation = async () => {
+    setShowResetConfirm(false);
     if (!student?.id || !exp?.id) return;
-    if (!window.confirm(`Re-assign a new random question variant for student ${student.name || 'this student'}?`)) return;
 
     try {
       await api.post('/lab-incharge/student-allocation/reset', {
@@ -1068,6 +1071,17 @@ export default function LabEvaluationPage() {
           </div>
         </div>
       </div>
+
+      {/* Confirm Question Variant Reset Modal */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={executeResetAllocation}
+        title="Re-assign Question Variant"
+        message={`Are you sure you want to re-assign a new random question variant for student ${student.name || 'this student'}?`}
+        confirmText="Reset & Re-assign"
+        variant="warning"
+      />
     </div>
   );
 }

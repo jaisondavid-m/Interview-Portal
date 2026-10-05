@@ -18,6 +18,7 @@ import {
   Lock
 } from 'lucide-react';
 import api from '../api/axios';
+import ConfirmModal from '../Components/ConfirmModal';
 
 export default function DeveloperRateLimits() {
   const [loading, setLoading] = useState(true);
@@ -103,8 +104,10 @@ export default function DeveloperRateLimits() {
     }
   };
 
-  const handleResetCounters = async () => {
-    if (!window.confirm('Are you sure you want to flush all active Redis rate limit window keys and counters?')) return;
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const executeResetCounters = async () => {
+    setShowResetConfirm(false);
     try {
       setResetting(true);
       const res = await api.post('/developer/rate-limits/reset-counters');
@@ -182,7 +185,7 @@ export default function DeveloperRateLimits() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleResetCounters}
+            onClick={() => setShowResetConfirm(true)}
             disabled={resetting || !redisStatus?.available}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
           >
@@ -462,6 +465,19 @@ export default function DeveloperRateLimits() {
           );
         })}
       </div>
+
+      {/* Confirm Flush Modal */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={executeResetCounters}
+        title="Flush Redis Rate Limit Counters"
+        message="Are you sure you want to flush all active Redis rate limit window keys and counters?"
+        confirmText="Flush Counters"
+        variant="danger"
+        isDanger={true}
+        loading={resetting}
+      />
     </div>
   );
 }
