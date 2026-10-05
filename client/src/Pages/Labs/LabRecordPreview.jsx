@@ -38,10 +38,29 @@ export default function LabRecordPreview() {
   const [showSettings, setShowSettings] = useState(false);
 
   const documentRef = useRef(null);
+  const containerRef = useRef(null);
+  const [autoScale, setAutoScale] = useState(1);
 
   useEffect(() => {
     fetchLabRecordData();
   }, [courseId]);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      const availableWidth = containerRef.current.clientWidth - 48;
+      if (availableWidth <= 0) return;
+
+      // 2-page spread width (420mm + gap = ~1620px) vs single page (210mm = ~810px)
+      const docWidth = isDuplex ? 1620 : 810;
+      const fitRatio = Math.min(availableWidth / docWidth, 1.0);
+      setAutoScale(Math.round(fitRatio * 100) / 100);
+    };
+
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [isDuplex, templateData]);
 
   const fetchLabRecordData = async () => {
     try {
@@ -281,13 +300,13 @@ export default function LabRecordPreview() {
           </button>
         </div>
       ) : templateData ? (
-        <div className="w-full bg-[#383b40] rounded-[var(--radius-lg)] py-8 px-2 sm:px-6 border border-[var(--border)] shadow-2xl overflow-x-auto min-h-[80vh] flex flex-col items-center">
+        <div ref={containerRef} className="w-full bg-[#383b40] rounded-[var(--radius-lg)] py-8 px-2 sm:px-6 border border-[var(--border)] shadow-2xl overflow-x-auto min-h-[80vh] flex flex-col items-center">
           <div ref={documentRef} className="w-full max-w-full flex justify-center">
             <LabRecordDocument
               data={templateData}
               isDuplex={isDuplex}
               viewMode={viewMode}
-              scale={zoomScale}
+              scale={autoScale * zoomScale}
               showSignatures={showSignatures}
               showRubrics={showRubrics}
               showOutputs={showOutputs}

@@ -36,6 +36,9 @@ export default function AdminLabPdfViewer() {
   const [showOutputs, setShowOutputs] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
 
+  const containerRef = useRef(null);
+  const [autoScale, setAutoScale] = useState(1);
+
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
@@ -44,6 +47,22 @@ export default function AdminLabPdfViewer() {
   useEffect(() => {
     fetchCourses();
   }, []);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      const availableWidth = containerRef.current.clientWidth - 48;
+      if (availableWidth <= 0) return;
+
+      const docWidth = isDuplex ? 1620 : 810;
+      const fitRatio = Math.min(availableWidth / docWidth, 1.0);
+      setAutoScale(Math.round(fitRatio * 100) / 100);
+    };
+
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [isDuplex, template]);
 
   useEffect(() => {
     if (selectedCourseId) {
@@ -333,13 +352,13 @@ export default function AdminLabPdfViewer() {
           </button>
         </div>
       ) : template ? (
-        <div className="w-full bg-[#383b40] rounded-[var(--radius-lg)] py-8 px-2 sm:px-6 border border-[var(--border)] shadow-2xl overflow-x-auto min-h-[80vh] flex flex-col items-center">
+        <div ref={containerRef} className="w-full bg-[#383b40] rounded-[var(--radius-lg)] py-8 px-2 sm:px-6 border border-[var(--border)] shadow-2xl overflow-x-auto min-h-[80vh] flex flex-col items-center">
           <div className="w-full max-w-full flex justify-center">
             <LabRecordDocument
               data={template}
               isDuplex={isDuplex}
               viewMode={viewMode}
-              scale={zoomScale}
+              scale={autoScale * zoomScale}
               showSignatures={showSignatures}
               showRubrics={showRubrics}
               showOutputs={showOutputs}

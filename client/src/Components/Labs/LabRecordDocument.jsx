@@ -416,7 +416,7 @@ export default function LabRecordDocument({
 
       <div
         className="document-canvas flex flex-col items-center transition-all duration-200"
-        style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
+        style={{ zoom: scale, transformOrigin: 'top center' }}
       >
         {/* =========================================================
             FRONT MATTER PAIR 1: Page 1 (Flyleaf) + Page 2 (Cover Sheet)
