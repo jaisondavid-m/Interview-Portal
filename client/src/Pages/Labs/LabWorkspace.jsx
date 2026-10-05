@@ -39,11 +39,7 @@ export default function LabWorkspace() {
   const [courseExperiments, setCourseExperiments] = useState([]);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
-  const [procedureSteps, setProcedureSteps] = useState([
-    'Step 1: Read input parameters and initialize core data structures.',
-    'Step 2: Implement logic rules and computational transforms.',
-    'Step 3: Generate and display the required output result.',
-  ]);
+  const [procedureSteps, setProcedureSteps] = useState([]);
   const [submission, setSubmission] = useState(null);
   const [isUnlocked, setIsUnlocked] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -102,7 +98,7 @@ export default function LabWorkspace() {
         if (sub.submitted_code) {
           setCode(sub.submitted_code);
         } else {
-          setCode('# Write your solution below\n\ndef solution():\n    pass\n');
+          setCode('');
         }
         setLanguage(sub.language || assignedQ?.language || 'python');
 
@@ -115,9 +111,12 @@ export default function LabWorkspace() {
               sub.student_procedure.split('\n').filter((l) => l.trim().length > 0)
             );
           }
+        } else {
+          setProcedureSteps([]);
         }
       } else {
-        setCode('# Write your solution below\n\ndef solution():\n    pass\n');
+        setCode('');
+        setProcedureSteps([]);
         setLanguage(assignedQ?.language || data?.language || 'python');
       }
     } catch (err) {
@@ -131,7 +130,7 @@ export default function LabWorkspace() {
   const handleAddProcedureStep = () => {
     setProcedureSteps((prev) => [
       ...prev,
-      `Step ${prev.length + 1}: Explain execution logic operation`,
+      '',
     ]);
   };
 
@@ -142,10 +141,6 @@ export default function LabWorkspace() {
   };
 
   const handleDeleteProcedureStep = (index) => {
-    if (procedureSteps.length <= 1) {
-      showToast('Algorithm must contain at least one step.', 'error');
-      return;
-    }
     const updated = procedureSteps.filter((_, i) => i !== index);
     setProcedureSteps(updated);
   };
@@ -556,35 +551,53 @@ export default function LabWorkspace() {
                   </div>
                 </div>
 
-                <div className="space-y-2.5">
-                  {procedureSteps.map((step, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-start gap-2 p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)]"
-                    >
-                      <span className="font-mono text-[11px] font-bold text-[var(--accent)] px-2 py-1 rounded bg-[var(--bg-input)] border border-[var(--border)] shrink-0">
-                        Step {idx + 1}
-                      </span>
-                      <textarea
-                        rows={2}
-                        value={step}
-                        onChange={(e) => handleEditProcedureStep(idx, e.target.value)}
-                        disabled={isSubmittedOrApproved}
-                        placeholder={`Describe operation in step ${idx + 1}...`}
-                        className="flex-1 bg-[var(--bg-input)] border border-[var(--border)] rounded px-2.5 py-1 text-xs text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--border-accent)] disabled:bg-transparent disabled:border-transparent"
-                      />
-                      {!isSubmittedOrApproved && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteProcedureStep(idx)}
-                          className="text-[var(--text-muted)] hover:text-[var(--red)] p-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {procedureSteps.length === 0 ? (
+                  <div className="p-8 text-center bg-[var(--bg-card)] rounded-[var(--radius-md)] border border-dashed border-[var(--border)] space-y-3">
+                    <p className="text-xs text-[var(--text-muted)]">
+                      No algorithm steps added yet. Click &quot;Add Step&quot; to write your procedure.
+                    </p>
+                    {!isSubmittedOrApproved && (
+                      <button
+                        type="button"
+                        onClick={handleAddProcedureStep}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 cursor-pointer shadow-sm"
+                      >
+                        <ListPlus className="w-3.5 h-3.5" />
+                        Add First Step
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {procedureSteps.map((step, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2 p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)]"
+                      >
+                        <span className="font-mono text-[11px] font-bold text-[var(--accent)] px-2 py-1 rounded bg-[var(--bg-input)] border border-[var(--border)] shrink-0">
+                          Step {idx + 1}
+                        </span>
+                        <textarea
+                          rows={2}
+                          value={step}
+                          onChange={(e) => handleEditProcedureStep(idx, e.target.value)}
+                          disabled={isSubmittedOrApproved}
+                          placeholder={`Describe operation in step ${idx + 1}...`}
+                          className="flex-1 bg-[var(--bg-input)] border border-[var(--border)] rounded px-2.5 py-1 text-xs text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--border-accent)] disabled:bg-transparent disabled:border-transparent"
+                        />
+                        {!isSubmittedOrApproved && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProcedureStep(idx)}
+                            className="text-[var(--text-muted)] hover:text-[var(--red)] p-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
