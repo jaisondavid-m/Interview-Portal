@@ -83,7 +83,7 @@ else
     export BLUE_COLOR="blue"
 fi
 
-docker compose up -d --build "${TARGET_SERVICE}"
+docker compose up -d --build "${TARGET_SERVICE}" client
 
 # Multi-network probe helper (supports host localhost, container network DNS, and docker bridge gateway)
 probe_endpoint() {

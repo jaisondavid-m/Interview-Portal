@@ -21,6 +21,7 @@ pipeline {
         PROJECT_DIR = "/home/ssg-admin/projects/Mock-Mate"
         DOCKER_BUILDKIT = "1"
         COMPOSE_DOCKER_CLI_BUILD = "1"
+        TZ = "Asia/Kolkata"
     }
 
     stages {
