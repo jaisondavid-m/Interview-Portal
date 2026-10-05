@@ -66,7 +66,7 @@ pipeline {
                         -w /app \
                         -e GOWORK=off \
                         golang:1.24-alpine \
-                        sh -c 'go mod vendor && go test -mod=vendor -v ./... -timeout 60s'
+                        sh -c 'if [ ! -d vendor ] || [ ! -f vendor/modules.txt ]; then go mod vendor; fi && go test -mod=vendor -v ./... -timeout 60s'
                 '''
             }
         }
