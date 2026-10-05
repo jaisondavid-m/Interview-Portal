@@ -188,6 +188,39 @@ func isExperimentUnlockedForStudent(courseID uint, expID uint, userID uint, user
 	return status.IsUnlocked, status.Section
 }
 
+// isSectionMatch checks whether a mapped section (e.g. "ALL", "CSE-A", "A", "Section A") matches a student's assigned section
+func isSectionMatch(mappedSec, studentSec string) bool {
+	m := strings.TrimSpace(strings.ToLower(mappedSec))
+	s := strings.TrimSpace(strings.ToLower(studentSec))
+	if m == "" || s == "" {
+		return false
+	}
+	if m == "all" || s == "all" {
+		return true
+	}
+	if m == s {
+		return true
+	}
+	mClean := strings.TrimPrefix(m, "section ")
+	sClean := strings.TrimPrefix(s, "section ")
+	if mClean == sClean {
+		return true
+	}
+	if strings.Contains(sClean, "-") {
+		parts := strings.Split(sClean, "-")
+		if parts[len(parts)-1] == mClean {
+			return true
+		}
+	}
+	if strings.Contains(mClean, "-") {
+		parts := strings.Split(mClean, "-")
+		if parts[len(parts)-1] == sClean {
+			return true
+		}
+	}
+	return strings.Contains(sClean, mClean) || strings.Contains(mClean, sClean)
+}
+
 // GetStudentLabCourses returns active lab courses for student with assigned faculty, sections, and progress statistics
 func GetStudentLabCourses(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
@@ -214,6 +247,63 @@ func GetStudentLabCourses(c *gin.Context) {
 
 	var mappings []models.LabMapping
 	database.DB.Preload("Faculty").Find(&mappings)
+
+	// Fetch current user details if student
+	var currentUser models.User
+	studentSection := ""
+	if userID > 0 {
+		database.DB.First(&currentUser, userID)
+		studentSection = strings.TrimSpace(currentUser.Section)
+	}
+
+	// Determine assigned courses for student users
+	assignedCourseIDs := make(map[uint]bool)
+	isStudentRole := strings.ToLower(userRole) == "student" || strings.ToLower(userRole) == "user"
+
+	type SubStat struct {
+		CompletedCount int
+		EarnedMarks    int
+	}
+	studentStats := make(map[uint]*SubStat)
+
+	if userID > 0 {
+		var submissions []models.LabSubmission
+		database.DB.Preload("Experiment").Where("student_id = ?", userID).Find(&submissions)
+		for _, sub := range submissions {
+			cID := sub.Experiment.CourseID
+			if cID > 0 {
+				if studentStats[cID] == nil {
+					studentStats[cID] = &SubStat{}
+				}
+				if sub.Status == "APPROVED" {
+					studentStats[cID].CompletedCount++
+					studentStats[cID].EarnedMarks += sub.Marks
+				}
+			}
+		}
+	}
+
+	if isStudentRole {
+		for _, m := range mappings {
+			sec := strings.TrimSpace(m.Section)
+			if strings.ToUpper(sec) == "ALL" {
+				assignedCourseIDs[m.CourseID] = true
+			} else if studentSection != "" && isSectionMatch(sec, studentSection) {
+				assignedCourseIDs[m.CourseID] = true
+			}
+		}
+
+		// Also include courses with existing submissions or question allocations
+		for cID := range studentStats {
+			assignedCourseIDs[cID] = true
+		}
+
+		var allocCourseIDs []uint
+		database.DB.Model(&models.LabQuestionAllocation{}).Where("student_id = ?", userID).Distinct().Pluck("course_id", &allocCourseIDs)
+		for _, cID := range allocCourseIDs {
+			assignedCourseIDs[cID] = true
+		}
+	}
 
 	// Build maps of courseID -> faculty names & sections
 	courseFacultyMap := make(map[uint][]string)
@@ -245,29 +335,6 @@ func GetStudentLabCourses(c *gin.Context) {
 		}
 	}
 
-	type SubStat struct {
-		CompletedCount int
-		EarnedMarks    int
-	}
-	studentStats := make(map[uint]*SubStat)
-
-	if userID > 0 {
-		var submissions []models.LabSubmission
-		database.DB.Preload("Experiment").Where("student_id = ?", userID).Find(&submissions)
-		for _, sub := range submissions {
-			cID := sub.Experiment.CourseID
-			if cID > 0 {
-				if studentStats[cID] == nil {
-					studentStats[cID] = &SubStat{}
-				}
-				if sub.Status == "APPROVED" {
-					studentStats[cID].CompletedCount++
-					studentStats[cID].EarnedMarks += sub.Marks
-				}
-			}
-		}
-	}
-
 	type EnhancedCourse struct {
 		models.LabCourse
 		AssignedFaculty  []string `json:"assigned_faculty"`
@@ -279,6 +346,13 @@ func GetStudentLabCourses(c *gin.Context) {
 
 	var result []EnhancedCourse
 	for _, course := range courses {
+		// Filter out unassigned courses for students if lab mappings exist in system
+		if isStudentRole && len(mappings) > 0 {
+			if !assignedCourseIDs[course.ID] {
+				continue
+			}
+		}
+
 		facs := courseFacultyMap[course.ID]
 		if facs == nil {
 			facs = []string{}
