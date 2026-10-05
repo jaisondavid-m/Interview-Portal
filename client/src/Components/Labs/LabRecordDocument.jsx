@@ -45,6 +45,88 @@ export const cleanExecutionOutput = (output, title) => {
   return cleaned;
 };
 
+// Calculate 100-mark rubric breakdown dynamically from faculty entries
+export const getExperimentRubrics = (exp, defaultMax = 100) => {
+  const maxMarks = Number(exp.max_marks) > 0 ? Number(exp.max_marks) : defaultMax;
+  const totalScore = exp.marks !== undefined && exp.marks !== null ? Number(exp.marks) : maxMarks;
+
+  // Check if faculty entered marks_breakdown object or string
+  let breakdown = null;
+  if (exp.marks_breakdown) {
+    if (typeof exp.marks_breakdown === 'object') {
+      breakdown = exp.marks_breakdown;
+    } else {
+      try {
+        breakdown = JSON.parse(exp.marks_breakdown);
+      } catch {}
+    }
+  }
+
+  if (maxMarks === 100) {
+    const aimMax = 10;
+    const codeMax = 40;
+    const outputMax = 20;
+    const vivaMax = 20;
+    const resultMax = 10;
+
+    let aimAwarded = breakdown?.algorithm !== undefined ? Number(breakdown.algorithm) : (exp.algorithm_marks || 10);
+    let codeAwarded = breakdown?.program !== undefined ? Number(breakdown.program) : (exp.code_marks || 40);
+    let outputAwarded = breakdown?.output !== undefined ? Number(breakdown.output) : (exp.output_marks || 20);
+    let vivaAwarded = breakdown?.viva !== undefined ? Number(breakdown.viva) : (exp.viva_marks || 20);
+    let resultAwarded = breakdown?.result !== undefined ? Number(breakdown.result) : (exp.result_marks || 10);
+
+    // If totalScore differs from sum, adjust proportionally
+    const sum = aimAwarded + codeAwarded + outputAwarded + vivaAwarded + resultAwarded;
+    if (sum !== totalScore && totalScore <= 100) {
+      const ratio = totalScore / 100;
+      aimAwarded = Math.round(aimMax * ratio);
+      codeAwarded = Math.round(codeMax * ratio);
+      outputAwarded = Math.round(outputMax * ratio);
+      vivaAwarded = Math.round(vivaMax * ratio);
+      resultAwarded = totalScore - (aimAwarded + codeAwarded + outputAwarded + vivaAwarded);
+      if (resultAwarded < 0) resultAwarded = 0;
+    }
+
+    return {
+      maxMarks: 100,
+      totalScore,
+      items: [
+        { label: 'Aim, Logic Formulation & Algorithm', max: aimMax, awarded: aimAwarded },
+        { label: 'Program Implementation & Syntax', max: codeMax, awarded: codeAwarded },
+        { label: 'Execution & Output Verification', max: outputMax, awarded: outputAwarded },
+        { label: 'Viva-Voce Assessment', max: vivaMax, awarded: vivaAwarded },
+        { label: 'Result, Discussion & Record Regularity', max: resultMax, awarded: resultAwarded },
+      ]
+    };
+  }
+
+  // Proportional calculation for any custom maxMarks
+  const aimMax = Math.round(maxMarks * 0.1);
+  const codeMax = Math.round(maxMarks * 0.4);
+  const outputMax = Math.round(maxMarks * 0.2);
+  const vivaMax = Math.round(maxMarks * 0.2);
+  const resultMax = maxMarks - (aimMax + codeMax + outputMax + vivaMax);
+
+  const ratio = totalScore / maxMarks;
+  const aimAwarded = Math.round(aimMax * ratio);
+  const codeAwarded = Math.round(codeMax * ratio);
+  const outputAwarded = Math.round(outputMax * ratio);
+  const vivaAwarded = Math.round(vivaMax * ratio);
+  const resultAwarded = totalScore - (aimAwarded + codeAwarded + outputAwarded + vivaAwarded);
+
+  return {
+    maxMarks,
+    totalScore,
+    items: [
+      { label: 'Aim, Logic Formulation & Algorithm', max: aimMax, awarded: aimAwarded },
+      { label: 'Program Implementation & Syntax', max: codeMax, awarded: codeAwarded },
+      { label: 'Execution & Output Verification', max: outputMax, awarded: outputAwarded },
+      { label: 'Viva-Voce Assessment', max: vivaMax, awarded: vivaAwarded },
+      { label: 'Result, Discussion & Record Regularity', max: resultMax, awarded: Math.max(0, resultAwarded) },
+    ]
+  };
+};
+
 // Split roll/register number into 12 discrete boxed cells
 export const getRegisterCells = (regNo, totalCells = 12) => {
   const str = String(regNo || '').replace(/\s+/g, '').toUpperCase();
@@ -85,13 +167,12 @@ export default function LabRecordDocument({
   } = data;
 
   const regCells = getRegisterCells(register_no || roll_no, 12);
-  const totalMarks = experiments.reduce((acc, exp) => acc + (Number(exp.marks) || 0), 0);
-  const avgMarks = experiments.length ? (totalMarks / experiments.length).toFixed(1) : '10.0';
+  const totalMarks = experiments.reduce((acc, exp) => acc + (Number(exp.marks) || 100), 0);
+  const avgMarks = experiments.length ? (totalMarks / experiments.length).toFixed(1) : '100.0';
 
   const defaultCertText = certificate_text ||
     `Certified that this is the bonafide record of practical work done by Mr./Ms. ${student_name} (Register No: ${register_no || roll_no}) of ${semester}, ${department} in the ${course_code} – ${course_title} Laboratory during the academic year ${academic_year}.`;
 
-  // Calculate total pages: Page 1 (Flyleaf) + Page 2 (Cover) + Page 3 (Certificate) + Page 4 (Index) + (2 pages per experiment)
   const totalDocPages = 4 + (experiments.length * 2);
 
   return (
@@ -112,7 +193,6 @@ export default function LabRecordDocument({
             print-color-adjust: exact !important;
           }
 
-          /* Hide everything except printable lab record */
           body > *:not(#root),
           #root > *:not(.lab-record-print-root) {
             display: none !important;
@@ -241,7 +321,7 @@ export default function LabRecordDocument({
         .section-bar-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 16px;
+          margin-top: 14px;
           margin-bottom: 0;
         }
 
@@ -480,8 +560,8 @@ export default function LabRecordDocument({
                 <tr>
                   <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Total Experiments</td>
                   <td>{experiments.length} Experiments</td>
-                  <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Average Marks</td>
-                  <td style={{ fontWeight: 'bold' }}>{avgMarks} / 10</td>
+                  <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Average Score</td>
+                  <td style={{ fontWeight: 'bold' }}>{avgMarks} / 100 Marks</td>
                 </tr>
               </tbody>
             </table>
@@ -711,7 +791,7 @@ export default function LabRecordDocument({
                   <th style={{ width: '85px', padding: '8px 6px' }}>Date</th>
                   <th style={{ padding: '8px 10px', textAlign: 'left' }}>Name of the Experiment</th>
                   <th style={{ width: '70px', padding: '8px 6px' }}>Page No.</th>
-                  <th style={{ width: '80px', padding: '8px 6px' }}>Marks (10)</th>
+                  <th style={{ width: '90px', padding: '8px 6px' }}>Marks (100)</th>
                   <th style={{ width: '95px', padding: '8px 6px' }}>Staff Sign</th>
                 </tr>
               </thead>
@@ -725,6 +805,7 @@ export default function LabRecordDocument({
                 ) : (
                   experiments.map((exp, idx) => {
                     const startPage = 5 + (idx * 2);
+                    const rubricsData = getExperimentRubrics(exp, 100);
                     return (
                       <tr key={idx}>
                         <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>{exp.experiment_no || idx + 1}</td>
@@ -732,7 +813,7 @@ export default function LabRecordDocument({
                         <td style={{ fontWeight: '500', padding: '8px 10px' }}>{exp.title}</td>
                         <td style={{ textAlign: 'center', padding: '8px 6px' }}>{startPage} – {startPage + 1}</td>
                         <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>
-                          {exp.marks !== undefined ? exp.marks : 10}
+                          {rubricsData.totalScore} / 100
                         </td>
                         <td style={{ textAlign: 'center', fontSize: '8.5pt', padding: '8px 6px' }}>
                           Verified
@@ -745,10 +826,10 @@ export default function LabRecordDocument({
                 {experiments.length > 0 && (
                   <tr style={{ background: '#fafafa', fontWeight: 'bold' }}>
                     <td colSpan={4} style={{ textAlign: 'right', padding: '10px 14px' }}>
-                      AVERAGE SCORE:
+                      CUMULATIVE AVERAGE SCORE:
                     </td>
                     <td colSpan={2} style={{ textAlign: 'center', padding: '10px 8px' }}>
-                      {avgMarks} / 10 Marks
+                      {avgMarks} / 100 Marks
                     </td>
                   </tr>
                 )}
@@ -759,7 +840,7 @@ export default function LabRecordDocument({
             <table className="section-bar-table" style={{ marginTop: '24px' }}>
               <tbody>
                 <tr>
-                  <td>EVALUATION CRITERIA & WEIGHTAGE</td>
+                  <td>CONTINUOUS PRACTICAL EVALUATION CRITERIA & WEIGHTAGE</td>
                 </tr>
               </tbody>
             </table>
@@ -767,30 +848,40 @@ export default function LabRecordDocument({
             <table className="grid-table">
               <thead>
                 <tr>
-                  <th style={{ width: '15%', padding: '8px' }}>S.No</th>
-                  <th style={{ width: '55%', padding: '8px', textAlign: 'left' }}>Assessment Component</th>
-                  <th style={{ width: '30%', padding: '8px' }}>Marks Split-up</th>
+                  <th style={{ width: '12%', padding: '8px' }}>S.No</th>
+                  <th style={{ width: '58%', padding: '8px', textAlign: 'left' }}>Assessment Criteria / Component</th>
+                  <th style={{ width: '30%', padding: '8px' }}>Marks Distribution</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td style={{ textAlign: 'center', fontWeight: 'bold' }}>1</td>
                   <td style={{ padding: '8px 10px' }}>Aim, Logic Formulation & Algorithm / Procedure</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>3 Marks</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>10 Marks</td>
                 </tr>
                 <tr>
                   <td style={{ textAlign: 'center', fontWeight: 'bold' }}>2</td>
-                  <td style={{ padding: '8px 10px' }}>Program Implementation & Execution</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>4 Marks</td>
+                  <td style={{ padding: '8px 10px' }}>Program Implementation & Correct Syntax</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>40 Marks</td>
                 </tr>
                 <tr>
                   <td style={{ textAlign: 'center', fontWeight: 'bold' }}>3</td>
-                  <td style={{ padding: '8px 10px' }}>Viva-Voce & Record Regularity</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>3 Marks</td>
+                  <td style={{ padding: '8px 10px' }}>Execution, Verification & Console Output</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>20 Marks</td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>4</td>
+                  <td style={{ padding: '8px 10px' }}>Oral Viva-Voce Assessment</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>20 Marks</td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>5</td>
+                  <td style={{ padding: '8px 10px' }}>Result, Discussion & Record Regularity</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>10 Marks</td>
                 </tr>
                 <tr style={{ background: '#fafafa', fontWeight: 'bold' }}>
-                  <td colSpan={2} style={{ textAlign: 'right', padding: '8px 14px' }}>TOTAL:</td>
-                  <td style={{ textAlign: 'center' }}>10 Marks</td>
+                  <td colSpan={2} style={{ textAlign: 'right', padding: '8px 14px' }}>TOTAL SCORE PER EXPERIMENT:</td>
+                  <td style={{ textAlign: 'center' }}>100 Marks</td>
                 </tr>
               </tbody>
             </table>
@@ -806,18 +897,19 @@ export default function LabRecordDocument({
         {/* =========================================================
             EXPERIMENTS: DUAL-PAGE RECORD NOTEBOOK STRUCTURE
             - Left Page (Even): Program Source Code & Output
-            - Right Page (Odd): Aim, Algorithm, Result, Rubrics & Sign
+            - Right Page (Odd): Aim, Algorithm, Rubrics (Centre), Result (Bottom)
             ========================================================= */}
         {experiments.map((exp, index) => {
           const expNo = exp.experiment_no || index + 1;
           const leftPageNum = 5 + (index * 2);      // Facing Left Sheet (Program & Output)
-          const rightPageNum = 6 + (index * 2);     // Main Right Sheet (Aim, Algorithm, Result)
+          const rightPageNum = 6 + (index * 2);     // Main Right Sheet (Aim, Algorithm, Rubric Centre, Result Bottom)
 
           const showLeft = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_left` || viewMode === expNo;
           const showRight = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_right` || viewMode === expNo;
 
           const procedureSteps = parseProcedureSteps(exp.procedure);
           const cleanOutput = cleanExecutionOutput(exp.execution_output, exp.title);
+          const rubricsData = getExperimentRubrics(exp, 100);
 
           const isSpread = viewMode === 'spread';
 
@@ -856,7 +948,7 @@ export default function LabRecordDocument({
                     <tbody>
                       <tr>
                         <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                          EXPERIMENT {expNo} : SOURCE CODE & EXECUTION OUTPUT
+                          EXPERIMENT {expNo} : PROGRAM & EXECUTION OUTPUT
                         </td>
                       </tr>
                     </tbody>
@@ -906,135 +998,169 @@ export default function LabRecordDocument({
               )}
 
               {/* -------------------------------------------------------------
-                  RIGHT-HAND PAGE (ODD): AIM, ALGORITHM, RESULT & RUBRICS SIGN-OFF
+                  RIGHT-HAND PAGE (ODD): 
+                  - Top: 1. Aim & 2. Algorithm / Procedure
+                  - Centre: Evaluation Rubrics Matrix (100 Marks breakdown)
+                  - Bottom: 5. Result & Staff Signature
                   ------------------------------------------------------------- */}
               {showRight && (
-                <div className="academic-page page-odd">
-                  {/* Top Row: Right Page Header */}
-                  <table className="top-row-table">
-                    <tbody>
-                      <tr>
-                        <td style={{ textAlign: 'left' }}>
-                          EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
-                        </td>
-                        <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                        <td style={{ width: '195px' }}>
-                          <table className="register-boxes">
-                            <tbody>
-                              <tr>
-                                {regCells.map((char, idx) => (
-                                  <td key={idx}>{char}</td>
-                                ))}
+                <div className="academic-page page-odd flex flex-col justify-between">
+                  <div>
+                    {/* Top Row: Right Page Header */}
+                    <table className="top-row-table">
+                      <tbody>
+                        <tr>
+                          <td style={{ textAlign: 'left' }}>
+                            EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
+                          </td>
+                          <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                          <td style={{ width: '195px' }}>
+                            <table className="register-boxes">
+                              <tbody>
+                                <tr>
+                                  {regCells.map((char, idx) => (
+                                    <td key={idx}>{char}</td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Right Page Title Bar */}
+                    <table className="section-bar-table">
+                      <tbody>
+                        <tr>
+                          <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                            EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* 1. AIM */}
+                    <table className="section-bar-table" style={{ marginTop: '12px' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                            1. AIM
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div className="content-box" style={{ marginBottom: '10px' }}>
+                      {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
+                    </div>
+
+                    {/* 2. ALGORITHM / PROCEDURE */}
+                    <table className="section-bar-table" style={{ marginTop: '10px' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                            2. ALGORITHM / PROCEDURE
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div className="content-box" style={{ minHeight: '130px', marginBottom: '14px' }}>
+                      {procedureSteps.length > 0 ? (
+                        <ol style={{ margin: 0, paddingLeft: '22px' }}>
+                          {procedureSteps.map((step, sIdx) => (
+                            <li key={sIdx} style={{ marginBottom: '4px' }}>
+                              {step.replace(/^Step\s*\d+:\s*/i, '').replace(/^\d+[\.\)]\s*/, '')}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p style={{ margin: 0, lineHeight: '1.6' }}>
+                          1. Start the program.<br />
+                          2. Read the required input parameters and initialize data structures.<br />
+                          3. Implement the logic and algorithm operations for {exp.title}.<br />
+                          4. Compute and display the verified output.<br />
+                          5. Stop the program execution.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* --------------------------------------------------------
+                        CENTRE OF RIGHT PAGE: EVALUATION RUBRIC & MARKS BREAKDOWN
+                        -------------------------------------------------------- */}
+                    {showRubrics && (
+                      <div className="prevent-break my-3">
+                        <table className="section-bar-table" style={{ marginTop: '10px' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ fontSize: '10pt', padding: '5px 10px' }}>
+                                EVALUATION RUBRIC & MARKS MATRIX
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <table className="grid-table" style={{ marginBottom: '10px' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ width: '60%', padding: '6px 10px', textAlign: 'left' }}>Assessment Criteria</th>
+                              <th style={{ width: '20%', padding: '6px' }}>Max Marks</th>
+                              <th style={{ width: '20%', padding: '6px' }}>Marks Awarded</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rubricsData.items.map((item, rIdx) => (
+                              <tr key={rIdx}>
+                                <td style={{ padding: '6px 10px' }}>{item.label}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{item.max}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{item.awarded}</td>
                               </tr>
-                            </tbody>
-                          </table>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {/* Right Page Title Bar */}
-                  <table className="section-bar-table">
-                    <tbody>
-                      <tr>
-                        <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                          EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {/* 1. AIM */}
-                  <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                    <tbody>
-                      <tr>
-                        <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                          1. AIM
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="content-box">
-                    {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
-                  </div>
-
-                  {/* 2. ALGORITHM / PROCEDURE */}
-                  <table className="section-bar-table">
-                    <tbody>
-                      <tr>
-                        <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                          2. ALGORITHM / PROCEDURE
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="content-box" style={{ minHeight: '160px' }}>
-                    {procedureSteps.length > 0 ? (
-                      <ol style={{ margin: 0, paddingLeft: '22px' }}>
-                        {procedureSteps.map((step, sIdx) => (
-                          <li key={sIdx} style={{ marginBottom: '6px' }}>
-                            {step.replace(/^Step\s*\d+:\s*/i, '').replace(/^\d+[\.\)]\s*/, '')}
-                          </li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p style={{ margin: 0, lineHeight: '1.6' }}>
-                        1. Start the program.<br />
-                        2. Read the required input parameters and initialize data structures.<br />
-                        3. Implement the logic and algorithm operations for {exp.title}.<br />
-                        4. Compute and display the verified output.<br />
-                        5. Stop the program execution.
-                      </p>
+                            ))}
+                            <tr style={{ background: '#f4f4f5', fontWeight: 'bold' }}>
+                              <td style={{ textAlign: 'right', padding: '7px 10px' }}>TOTAL SCORE:</td>
+                              <td style={{ textAlign: 'center' }}>{rubricsData.maxMarks}</td>
+                              <td style={{ textAlign: 'center', fontSize: '11pt' }}>
+                                {rubricsData.totalScore} / {rubricsData.maxMarks}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
 
-                  {/* 5. RESULT */}
-                  <table className="section-bar-table">
-                    <tbody>
-                      <tr>
-                        <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                          5. RESULT
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="content-box">
-                    {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
-                  </div>
+                  {/* --------------------------------------------------------
+                      BOTTOM OF RIGHT PAGE: 5. RESULT & STAFF SIGNATURE
+                      -------------------------------------------------------- */}
+                  <div className="prevent-break" style={{ marginBottom: '12mm' }}>
+                    {/* 5. RESULT */}
+                    <table className="section-bar-table">
+                      <tbody>
+                        <tr>
+                          <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                            5. RESULT
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div className="content-box" style={{ marginBottom: '12px' }}>
+                      {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
+                    </div>
 
-                  {/* 6. MARKS & SIGN-OFF */}
-                  {showRubrics && (
-                    <div className="prevent-break">
-                      <table className="grid-table" style={{ marginTop: '16px' }}>
-                        <thead>
-                          <tr>
-                            <th style={{ width: '25%', padding: '6px' }}>Aim & Algorithm (3)</th>
-                            <th style={{ width: '25%', padding: '6px' }}>Program Coding (4)</th>
-                            <th style={{ width: '25%', padding: '6px' }}>Execution & Viva (3)</th>
-                            <th style={{ width: '25%', padding: '6px' }}>Total Marks (10)</th>
-                          </tr>
-                        </thead>
+                    {/* Staff Sign-off Table */}
+                    {showSignatures && (
+                      <table className="grid-table" style={{ marginTop: '8px', marginBottom: '0' }}>
                         <tbody>
                           <tr>
-                            <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.algorithm_marks || 3}</td>
-                            <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.code_marks || 4}</td>
-                            <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '6px' }}>{exp.viva_marks || 3}</td>
-                            <td style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', background: '#f4f4f5', padding: '6px' }}>
-                              {exp.marks !== undefined ? exp.marks : 10} / 10
+                            <td style={{ width: '50%', fontSize: '9pt', padding: '10px' }}>
+                              Evaluated by: <strong>{staff_incharge}</strong>
                             </td>
-                          </tr>
-                          <tr>
-                            <td colSpan={2} style={{ fontSize: '9pt', padding: '10px' }}>
-                              Staff In-Charge: <strong>{staff_incharge}</strong>
-                            </td>
-                            <td colSpan={2} style={{ textAlign: 'right', fontSize: '9pt', padding: '10px', fontWeight: 'bold' }}>
+                            <td style={{ width: '50%', textAlign: 'right', fontSize: '9pt', padding: '10px', fontWeight: 'bold' }}>
                               Staff Signature: ____________________
                             </td>
                           </tr>
                         </tbody>
                       </table>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Footer */}
                   <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
