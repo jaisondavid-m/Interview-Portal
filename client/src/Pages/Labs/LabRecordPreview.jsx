@@ -1,17 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  Printer,
   Download,
   ShieldCheck,
   Loader2,
-  FileText,
   AlertCircle,
   RefreshCw,
-  Columns2
+  Columns2,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  SlidersHorizontal,
+  CheckCircle2,
+  BookOpen,
+  FileText
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import LabRecordDocument from '../../Components/Labs/LabRecordDocument';
 
 export default function LabRecordPreview() {
   const { courseId = 1 } = useParams();
@@ -19,68 +27,70 @@ export default function LabRecordPreview() {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
   const [error, setError] = useState('');
+  const [templateData, setTemplateData] = useState(null);
   const [isDuplex, setIsDuplex] = useState(true);
-  const [courseInfo, setCourseInfo] = useState(null);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [viewMode, setViewMode] = useState('all'); // 'all', 'cover', 'certificate', 'index', or experiment_no
+  const [showSignatures, setShowSignatures] = useState(true);
+  const [showRubrics, setShowRubrics] = useState(true);
+  const [showOutputs, setShowOutputs] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const documentRef = useRef(null);
 
   useEffect(() => {
-    generateAndLoadPDF();
-    return () => {
-      if (pdfBlobUrl) {
-        window.URL.revokeObjectURL(pdfBlobUrl);
-      }
-    };
-  }, [courseId, isDuplex]);
+    fetchLabRecordData();
+  }, [courseId]);
 
-  const generateAndLoadPDF = async () => {
+  const fetchLabRecordData = async () => {
     try {
       setLoading(true);
       setError('');
 
-      // 1. Fetch template metadata
-      const tRes = await api.get(`/labs/courses/${courseId}/pdf-template`);
-      const template = tRes?.template || {};
-      setCourseInfo(template);
+      // Fetch template metadata and populated student experiment submissions
+      const res = await api.get(`/labs/courses/${courseId}/pdf-template`);
+      const template = res?.template || {};
 
-      // 2. Fetch the compiled PDF stream directly from backend
-      const payload = {
+      // Enrich template with student credentials if needed
+      const enriched = {
         ...template,
-        is_duplex: isDuplex,
-        student_name: user?.name || template.student_name,
-        roll_no: user?.roll_no || template.roll_no,
+        student_name: user?.name || template.student_name || 'STUDENT RECORD COPY',
+        roll_no: user?.roll_no || template.roll_no || '7376222CS101',
+        register_no: user?.roll_no || template.register_no || '7376222CS101',
+        department: template.department || user?.department || 'DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING'
       };
 
-      const pdfRes = await api.post('/labs/record-pdf/custom', payload, {
-        responseType: 'blob',
-      });
-
-      const blob = new Blob([pdfRes.data || pdfRes], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      setPdfBlobUrl(url);
+      setTemplateData(enriched);
     } catch (err) {
-      setError('Failed to compile laboratory record PDF preview.');
+      console.error('Error loading lab record template:', err);
+      setError('Failed to load laboratory record document data from server.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownloadPDF = () => {
-    if (!pdfBlobUrl) return;
-    const link = document.createElement('a');
-    link.href = pdfBlobUrl;
-    const fileName = `${user?.roll_no || courseInfo?.roll_no || 'Student'}_${courseInfo?.course_code || 'Lab'}_LabRecord.pdf`;
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  const handlePrint = () => {
+    window.print();
   };
+
+  const handleZoom = (delta) => {
+    setZoomScale((prev) => {
+      const next = Math.round((prev + delta) * 10) / 10;
+      return Math.min(Math.max(next, 0.5), 1.6);
+    });
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1);
+  };
+
+  const experiments = templateData?.experiments || [];
 
   return (
     <div className="space-y-4">
-      {/* Page Header */}
-      <div className="pb-3 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Top Bar Navigation & Actions - Screen Only */}
+      <div className="no-print pb-3 border-b border-[var(--border)] flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/labs')}
@@ -92,76 +102,187 @@ export default function LabRecordPreview() {
           <div>
             <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] mb-1">
               <ShieldCheck className="w-3 h-3" />
-              Verified Laboratory Record Manual
+              Verified Laboratory Manual PDF
             </div>
             <h1 className="text-[18px] sm:text-[22px] font-bold text-[var(--text-primary)] tracking-tight">
-              {courseInfo?.course_code ? `${courseInfo.course_code} — ${courseInfo.course_title}` : 'Laboratory Record Manual'}
+              {templateData?.course_code ? `${templateData.course_code} — ${templateData.course_title}` : 'Laboratory Record Manual'}
             </h1>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        {/* Action Controls & Navigation */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Section Selector */}
+          <select
+            value={viewMode}
+            onChange={(e) => {
+              const val = e.target.value;
+              setViewMode(val === 'all' || val === 'cover' || val === 'certificate' || val === 'index' ? val : Number(val));
+            }}
+            disabled={loading || !templateData}
+            className="px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
+          >
+            <option value="all">📖 All Pages (Continuous)</option>
+            <option value="cover">📄 1. Title & Cover Page</option>
+            <option value="certificate">📜 2. Bonafide Certificate</option>
+            <option value="index">📑 3. Experiments Index Table</option>
+            {experiments.map((exp, idx) => (
+              <option key={idx} value={exp.experiment_no || idx + 1}>
+                🔬 Ex {exp.experiment_no || idx + 1}: {exp.title ? exp.title.slice(0, 30) + '...' : `Experiment ${idx + 1}`}
+              </option>
+            ))}
+          </select>
+
+          {/* Duplex Toggle */}
           <button
             onClick={() => setIsDuplex(!isDuplex)}
             title="Toggle alternating inside binding gutter margins for double-sided booklet printing"
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] border text-xs font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] border text-xs font-semibold transition-all cursor-pointer ${
               isDuplex
                 ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--accent)]'
                 : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-muted)]'
             }`}
           >
             <Columns2 className="w-3.5 h-3.5" />
-            {isDuplex ? 'Duplex Margins: ON' : 'Duplex Margins: OFF'}
+            <span className="hidden sm:inline">{isDuplex ? 'Duplex: ON' : 'Duplex: OFF'}</span>
           </button>
 
+          {/* Zoom Controls */}
+          <div className="hidden sm:inline-flex items-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] overflow-hidden">
+            <button
+              onClick={() => handleZoom(-0.1)}
+              disabled={zoomScale <= 0.6}
+              title="Zoom Out"
+              className="px-2 py-1.5 hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleResetZoom}
+              title="Reset Zoom to 100%"
+              className="px-2 py-1 text-[11px] font-mono font-bold text-[var(--text-primary)] hover:bg-[var(--bg-hover)] cursor-pointer border-x border-[var(--border)]"
+            >
+              {Math.round(zoomScale * 100)}%
+            </button>
+            <button
+              onClick={() => handleZoom(0.1)}
+              disabled={zoomScale >= 1.5}
+              title="Zoom In"
+              className="px-2 py-1.5 hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Options Dropdown / Toggle */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] border text-xs font-semibold transition-all cursor-pointer ${
+                showSettings
+                  ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                  : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+              title="Toggle formatting options"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Options</span>
+            </button>
+
+            {showSettings && (
+              <div className="absolute right-0 top-full mt-1.5 w-56 p-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-2xl z-30 space-y-2 text-xs">
+                <div className="font-bold text-[var(--text-primary)] pb-1.5 border-b border-[var(--border)]">
+                  Display & Print Options
+                </div>
+                <label className="flex items-center gap-2 text-[var(--text-primary)] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showSignatures}
+                    onChange={(e) => setShowSignatures(e.target.checked)}
+                    className="accent-[var(--accent)]"
+                  />
+                  <span>Official Signature Blocks</span>
+                </label>
+                <label className="flex items-center gap-2 text-[var(--text-primary)] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showRubrics}
+                    onChange={(e) => setShowRubrics(e.target.checked)}
+                    className="accent-[var(--accent)]"
+                  />
+                  <span>Evaluation Rubric Tables</span>
+                </label>
+                <label className="flex items-center gap-2 text-[var(--text-primary)] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showOutputs}
+                    onChange={(e) => setShowOutputs(e.target.checked)}
+                    className="accent-[var(--accent)]"
+                  />
+                  <span>Execution Output Logs</span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Refresh Button */}
           <button
-            onClick={generateAndLoadPDF}
+            onClick={fetchLabRecordData}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] text-xs font-semibold text-[var(--text-primary)] transition-all cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] text-xs font-semibold text-[var(--text-primary)] transition-all cursor-pointer disabled:opacity-50"
+            title="Reload backend data"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
 
+          {/* Print / Save PDF Button */}
           <button
-            onClick={handleDownloadPDF}
-            disabled={loading || !pdfBlobUrl}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-md)]"
+            onClick={handlePrint}
+            disabled={loading || !templateData}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-md)]"
+            title="Print or Save as PDF with crisp vector fonts and proper A4 margins"
           >
-            <Download className="w-4 h-4" />
-            Download Complete PDF
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print / Save PDF</span>
           </button>
         </div>
       </div>
 
-      {/* PDF Viewport */}
+      {/* Viewport Content */}
       {loading ? (
         <div className="p-20 text-center space-y-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)] mx-auto" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">Compiling laboratory record document...</p>
-          <p className="text-xs text-[var(--text-muted)]">Formatting verified source code, execution logs, algorithms, and evaluation rubrics.</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Loading verified laboratory data...</p>
+          <p className="text-xs text-[var(--text-muted)]">Formatting student submissions, algorithm procedures, source code, and rubrics.</p>
         </div>
       ) : error ? (
         <div className="p-8 text-center space-y-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
           <p className="text-sm font-semibold text-rose-500">{error}</p>
           <button
-            onClick={generateAndLoadPDF}
+            onClick={fetchLabRecordData}
             className="px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition cursor-pointer"
           >
             Try Again
           </button>
         </div>
-      ) : pdfBlobUrl ? (
-        <div className="w-full bg-slate-900 rounded-[var(--radius-lg)] p-1 border border-[var(--border)] shadow-2xl overflow-hidden">
-          <iframe
-            src={`${pdfBlobUrl}#toolbar=1&navpanes=0&view=FitH`}
-            className="w-full h-[82vh] rounded-[calc(var(--radius-lg)-4px)] border-none"
-            title="Laboratory Record PDF Preview"
-          />
+      ) : templateData ? (
+        <div className="w-full bg-[#383b40] rounded-[var(--radius-lg)] py-8 px-2 sm:px-6 border border-[var(--border)] shadow-2xl overflow-x-auto min-h-[80vh] flex flex-col items-center">
+          <div ref={documentRef} className="w-full max-w-full flex justify-center">
+            <LabRecordDocument
+              data={templateData}
+              isDuplex={isDuplex}
+              viewMode={viewMode}
+              scale={zoomScale}
+              showSignatures={showSignatures}
+              showRubrics={showRubrics}
+              showOutputs={showOutputs}
+            />
+          </div>
         </div>
       ) : null}
     </div>
   );
 }
+
