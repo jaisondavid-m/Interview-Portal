@@ -419,480 +419,482 @@ export default function LabRecordDocument({
         style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
       >
         {/* =========================================================
-            PAGE 1: EMPTY / BLANK FRONT FLYLEAF PAGE
+            FRONT MATTER PAIR 1: Page 1 (Flyleaf) + Page 2 (Cover Sheet)
             ========================================================= */}
-        {(viewMode === 'all' || viewMode === 'flyleaf') && (
-          <div className="academic-page page-odd flex flex-col justify-between">
-            <div className="text-right text-[8pt] text-neutral-300 select-none">
-              [Front Flyleaf Page]
-            </div>
-
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12">
-              <div className="w-16 h-16 mb-4 opacity-15">
-                <img
-                  src={logo || '/logo.png'}
-                  alt="Institute Crest"
-                  className="w-full h-full object-contain filter grayscale"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
+        <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
+          {/* PAGE 1: EMPTY / BLANK FRONT FLYLEAF PAGE */}
+          {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'flyleaf') && (
+            <div className="academic-page page-odd flex flex-col justify-between">
+              <div className="text-right text-[8pt] text-neutral-300 select-none">
+                [Front Flyleaf Page]
               </div>
-              <p className="text-xs uppercase tracking-widest text-neutral-300 font-serif">
-                Laboratory Record Notebook
-              </p>
+
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-12">
+                <div className="w-16 h-16 mb-4 opacity-15">
+                  <img
+                    src={logo || '/logo.png'}
+                    alt="Institute Crest"
+                    className="w-full h-full object-contain filter grayscale"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                </div>
+                <p className="text-xs uppercase tracking-widest text-neutral-300 font-serif">
+                  Laboratory Record Notebook
+                </p>
+              </div>
+
+              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                <span className="text-neutral-400 font-normal italic">Blank Flyleaf</span>
+                <span>Page 1 of {totalDocPages}</span>
+              </div>
             </div>
+          )}
 
-            <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-              <span className="text-neutral-400 font-normal italic">Blank Flyleaf</span>
-              <span>Page 1 of {totalDocPages}</span>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================
-            PAGE 2: TITLE & OFFICIAL COVER PAGE
-            ========================================================= */}
-        {(viewMode === 'all' || viewMode === 'cover') && (
-          <div className="academic-page page-even">
-            {/* Top Row: Course Code & Register Boxes */}
-            <table className="top-row-table">
-              <tbody>
-                <tr>
-                  <td style={{ textAlign: 'left', width: '45%' }}>
-                    COURSE CODE: <span>{course_code}</span>
-                  </td>
-                  <td style={{ textAlign: 'right', paddingRight: '8px' }}>
-                    REGISTER NO.:
-                  </td>
-                  <td style={{ width: '195px' }}>
-                    <table className="register-boxes">
-                      <tbody>
-                        <tr>
-                          {regCells.map((char, idx) => (
-                            <td key={idx}>{char}</td>
-                          ))}
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Institutional Header Table */}
-            <table className="header-table">
-              <tbody>
-                <tr>
-                  <td rowSpan={2} style={{ width: '18%', padding: '8px', textAlign: 'center' }}>
-                    <img
-                      src={logo || '/logo.png'}
-                      alt="Institute Logo"
-                      style={{
-                        maxHeight: '75px',
-                        maxWidth: '90px',
-                        objectFit: 'contain',
-                        display: 'block',
-                        margin: '0 auto'
-                      }}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  </td>
-                  <td style={{ fontSize: '14pt', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '8px 10px' }}>
-                    {institution_name}
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ fontSize: '9pt', fontStyle: 'italic', padding: '4px 10px' }}>
-                    {institution_sub}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan={2} style={{ fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase', background: '#f4f4f5', padding: '8px 10px' }}>
-                    LABORATORY RECORD NOTEBOOK
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan={2} style={{ fontWeight: 'bold', fontSize: '10pt', padding: '6px 10px' }}>
-                    ACADEMIC YEAR: {academic_year} &nbsp;&nbsp;|&nbsp;&nbsp; {semester}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan={2} style={{ fontWeight: 'bold', fontSize: '10pt', textTransform: 'uppercase', padding: '6px 10px' }}>
-                    {department}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan={2} style={{ fontSize: '11pt', fontWeight: 'bold', background: '#f9f9fa', padding: '8px 10px' }}>
-                    {course_code} – {course_title}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Candidate Metadata Box */}
-            <table className="section-bar-table">
-              <tbody>
-                <tr>
-                  <td>STUDENT RECORD DETAILS</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <table className="grid-table">
-              <tbody>
-                <tr>
-                  <td style={{ width: '24%', fontWeight: 'bold', background: '#fafafa' }}>Student Name</td>
-                  <td style={{ width: '26%', fontWeight: 'bold' }}>{student_name}</td>
-                  <td style={{ width: '24%', fontWeight: 'bold', background: '#fafafa' }}>Register Number</td>
-                  <td style={{ width: '26%', fontFamily: 'Courier New', fontWeight: 'bold' }}>{register_no || roll_no}</td>
-                </tr>
-                <tr>
-                  <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Degree & Branch</td>
-                  <td>{degree} – {department}</td>
-                  <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Section</td>
-                  <td>{branch_section || 'Section A'}</td>
-                </tr>
-                <tr>
-                  <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Course Title</td>
-                  <td colSpan={3} style={{ fontWeight: 'bold' }}>{course_code} — {course_title}</td>
-                </tr>
-                <tr>
-                  <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Total Experiments</td>
-                  <td>{experiments.length} Experiments</td>
-                  <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Average Score</td>
-                  <td style={{ fontWeight: 'bold' }}>{avgMarks} / 100 Marks</td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* General Instructions */}
-            <table className="section-bar-table" style={{ marginTop: '20px' }}>
-              <tbody>
-                <tr>
-                  <td>LABORATORY INSTRUCTIONS & CODE OF CONDUCT</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div className="content-box" style={{ lineHeight: '1.7', padding: '14px 18px' }}>
-              <ol style={{ margin: 0, paddingLeft: '22px' }}>
-                <li style={{ marginBottom: '8px' }}>
-                  Students must maintain neatness, discipline, and regularity in all laboratory sessions.
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  The aim, step-by-step algorithm, and program must be prepared before beginning practical execution.
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  All program outputs must be verified with appropriate test cases and recorded accurately.
-                </li>
-                <li>
-                  The completed laboratory record must be submitted to the faculty in-charge on time for regular evaluation.
-                </li>
-              </ol>
-            </div>
-
-            {/* Footer */}
-            <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-              <span>{course_code} — Title & Cover Sheet</span>
-              <span>Page 2 of {totalDocPages}</span>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================
-            PAGE 3: BONAFIDE CERTIFICATE
-            ========================================================= */}
-        {(viewMode === 'all' || viewMode === 'certificate') && (
-          <div className="academic-page page-odd">
-            {/* Top Row */}
-            <table className="top-row-table">
-              <tbody>
-                <tr>
-                  <td style={{ textAlign: 'left' }}>COURSE CODE: <span>{course_code}</span></td>
-                  <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                  <td style={{ width: '195px' }}>
-                    <table className="register-boxes">
-                      <tbody>
-                        <tr>
-                          {regCells.map((char, idx) => (
-                            <td key={idx}>{char}</td>
-                          ))}
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Institutional Header */}
-            <table className="header-table">
-              <tbody>
-                <tr>
-                  <td rowSpan={3} style={{ width: '18%', padding: '8px', textAlign: 'center' }}>
-                    <img
-                      src={logo || '/logo.png'}
-                      alt="Institute Logo"
-                      style={{
-                        maxHeight: '70px',
-                        maxWidth: '85px',
-                        objectFit: 'contain',
-                        display: 'block',
-                        margin: '0 auto'
-                      }}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  </td>
-                  <td style={{ fontSize: '14pt', fontWeight: 'bold', textTransform: 'uppercase', padding: '8px 10px' }}>
-                    {institution_name}
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ fontSize: '9pt', fontStyle: 'italic', padding: '3px 10px' }}>
-                    {institution_sub}
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ fontWeight: 'bold', fontSize: '10pt', textTransform: 'uppercase', padding: '6px 10px' }}>
-                    {department}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Certificate Header Box */}
-            <table className="section-bar-table" style={{ marginTop: '32px' }}>
-              <tbody>
-                <tr>
-                  <td style={{ fontSize: '13pt', padding: '8px', letterSpacing: '1px' }}>
-                    BONAFIDE CERTIFICATE
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Certificate Body Statement */}
-            <div style={{
-              border: '1px solid #000000',
-              borderTop: 'none',
-              padding: '36px 28px',
-              fontSize: '11pt',
-              lineHeight: '2.0',
-              textAlign: 'justify',
-              minHeight: '200px'
-            }}>
-              <p style={{ textIndent: '40px', margin: 0 }}>
-                {defaultCertText}
-              </p>
-            </div>
-
-            {/* Signatures Table */}
-            {showSignatures && (
-              <table className="grid-table" style={{ marginTop: '50px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '50%', padding: '10px', fontSize: '10pt' }}>STAFF IN-CHARGE</th>
-                    <th style={{ width: '50%', padding: '10px', fontSize: '10pt' }}>HEAD OF THE DEPARTMENT</th>
-                  </tr>
-                </thead>
+          {/* PAGE 2: TITLE & OFFICIAL COVER PAGE */}
+          {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'cover') && (
+            <div className="academic-page page-even">
+              {/* Top Row: Course Code & Register Boxes */}
+              <table className="top-row-table">
                 <tbody>
                   <tr>
-                    <td style={{ height: '90px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
-                      <div className="font-bold">{staff_incharge}</div>
-                      <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature & Date</div>
+                    <td style={{ textAlign: 'left', width: '45%' }}>
+                      COURSE CODE: <span>{course_code}</span>
                     </td>
-                    <td style={{ height: '90px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
-                      <div className="font-bold">{head_of_department}</div>
-                      <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature with Seal</div>
+                    <td style={{ textAlign: 'right', paddingRight: '8px' }}>
+                      REGISTER NO.:
+                    </td>
+                    <td style={{ width: '195px' }}>
+                      <table className="register-boxes">
+                        <tbody>
+                          <tr>
+                            {regCells.map((char, idx) => (
+                              <td key={idx}>{char}</td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
                     </td>
                   </tr>
                 </tbody>
               </table>
-            )}
 
-            {/* University Practical Examination Sign-off */}
-            {showSignatures && (
-              <table className="grid-table" style={{ marginTop: '30px' }}>
-                <thead>
-                  <tr>
-                    <th colSpan={2} style={{ padding: '8px', fontSize: '10pt' }}>
-                      SUBMITTED FOR THE PRACTICAL EXAMINATION HELD ON: ____________________
-                    </th>
-                  </tr>
-                </thead>
+              {/* Institutional Header Table */}
+              <table className="header-table">
                 <tbody>
                   <tr>
-                    <td style={{ width: '50%', height: '85px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
-                      <div className="font-bold">INTERNAL EXAMINER</div>
-                      <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature & Date</div>
+                    <td rowSpan={2} style={{ width: '18%', padding: '8px', textAlign: 'center' }}>
+                      <img
+                        src={logo || '/logo.png'}
+                        alt="Institute Logo"
+                        style={{
+                          maxHeight: '75px',
+                          maxWidth: '90px',
+                          objectFit: 'contain',
+                          display: 'block',
+                          margin: '0 auto'
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
                     </td>
-                    <td style={{ width: '50%', height: '85px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
-                      <div className="font-bold">EXTERNAL EXAMINER</div>
-                      <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature & Date</div>
+                    <td style={{ fontSize: '14pt', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '8px 10px' }}>
+                      {institution_name}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontSize: '9pt', fontStyle: 'italic', padding: '4px 10px' }}>
+                      {institution_sub}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={2} style={{ fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase', background: '#f4f4f5', padding: '8px 10px' }}>
+                      LABORATORY RECORD NOTEBOOK
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={2} style={{ fontWeight: 'bold', fontSize: '10pt', padding: '6px 10px' }}>
+                      ACADEMIC YEAR: {academic_year} &nbsp;&nbsp;|&nbsp;&nbsp; {semester}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={2} style={{ fontWeight: 'bold', fontSize: '10pt', textTransform: 'uppercase', padding: '6px 10px' }}>
+                      {department}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={2} style={{ fontSize: '11pt', fontWeight: 'bold', background: '#f9f9fa', padding: '8px 10px' }}>
+                      {course_code} – {course_title}
                     </td>
                   </tr>
                 </tbody>
               </table>
-            )}
 
-            {/* Footer */}
-            <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-              <span>{course_code} — Bonafide Certificate</span>
-              <span>Page 3 of {totalDocPages}</span>
+              {/* Candidate Metadata Box */}
+              <table className="section-bar-table">
+                <tbody>
+                  <tr>
+                    <td>STUDENT RECORD DETAILS</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <table className="grid-table">
+                <tbody>
+                  <tr>
+                    <td style={{ width: '24%', fontWeight: 'bold', background: '#fafafa' }}>Student Name</td>
+                    <td style={{ width: '26%', fontWeight: 'bold' }}>{student_name}</td>
+                    <td style={{ width: '24%', fontWeight: 'bold', background: '#fafafa' }}>Register Number</td>
+                    <td style={{ width: '26%', fontFamily: 'Courier New', fontWeight: 'bold' }}>{register_no || roll_no}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Degree & Branch</td>
+                    <td>{degree} – {department}</td>
+                    <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Section</td>
+                    <td>{branch_section || 'Section A'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Course Title</td>
+                    <td colSpan={3} style={{ fontWeight: 'bold' }}>{course_code} — {course_title}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Total Experiments</td>
+                    <td>{experiments.length} Experiments</td>
+                    <td style={{ fontWeight: 'bold', background: '#fafafa' }}>Average Score</td>
+                    <td style={{ fontWeight: 'bold' }}>{avgMarks} / 100 Marks</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* General Instructions */}
+              <table className="section-bar-table" style={{ marginTop: '20px' }}>
+                <tbody>
+                  <tr>
+                    <td>LABORATORY INSTRUCTIONS & CODE OF CONDUCT</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="content-box" style={{ lineHeight: '1.7', padding: '14px 18px' }}>
+                <ol style={{ margin: 0, paddingLeft: '22px' }}>
+                  <li style={{ marginBottom: '8px' }}>
+                    Students must maintain neatness, discipline, and regularity in all laboratory sessions.
+                  </li>
+                  <li style={{ marginBottom: '8px' }}>
+                    The aim, step-by-step algorithm, and program must be prepared before beginning practical execution.
+                  </li>
+                  <li style={{ marginBottom: '8px' }}>
+                    All program outputs must be verified with appropriate test cases and recorded accurately.
+                  </li>
+                  <li>
+                    The completed laboratory record must be submitted to the faculty in-charge on time for regular evaluation.
+                  </li>
+                </ol>
+              </div>
+
+              {/* Footer */}
+              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                <span>{course_code} — Title & Cover Sheet</span>
+                <span>Page 2 of {totalDocPages}</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* =========================================================
-            PAGE 4: INDEX OF LABORATORY EXPERIMENTS
+            FRONT MATTER PAIR 2: Page 3 (Certificate) + Page 4 (Index Sheet)
             ========================================================= */}
-        {(viewMode === 'all' || viewMode === 'index') && (
-          <div className="academic-page page-even">
-            {/* Top Row */}
-            <table className="top-row-table">
-              <tbody>
-                <tr>
-                  <td style={{ textAlign: 'left' }}>COURSE CODE: <span>{course_code}</span></td>
-                  <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                  <td style={{ width: '195px' }}>
-                    <table className="register-boxes">
-                      <tbody>
-                        <tr>
-                          {regCells.map((char, idx) => (
-                            <td key={idx}>{char}</td>
-                          ))}
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Title Header */}
-            <table className="section-bar-table">
-              <tbody>
-                <tr>
-                  <td style={{ fontSize: '12pt', padding: '8px' }}>
-                    INDEX OF LABORATORY EXPERIMENTS
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Index Grid Table */}
-            <table className="grid-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '45px', padding: '8px 6px' }}>Ex. No</th>
-                  <th style={{ width: '85px', padding: '8px 6px' }}>Date</th>
-                  <th style={{ padding: '8px 10px', textAlign: 'left' }}>Name of the Experiment</th>
-                  <th style={{ width: '70px', padding: '8px 6px' }}>Page No.</th>
-                  <th style={{ width: '90px', padding: '8px 6px' }}>Marks (100)</th>
-                  <th style={{ width: '95px', padding: '8px 6px' }}>Staff Sign</th>
-                </tr>
-              </thead>
-              <tbody>
-                {experiments.length === 0 ? (
+        <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
+          {/* PAGE 3: BONAFIDE CERTIFICATE */}
+          {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'certificate') && (
+            <div className="academic-page page-odd">
+              {/* Top Row */}
+              <table className="top-row-table">
+                <tbody>
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
-                      No laboratory experiments scheduled for this course.
+                    <td style={{ textAlign: 'left' }}>COURSE CODE: <span>{course_code}</span></td>
+                    <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                    <td style={{ width: '195px' }}>
+                      <table className="register-boxes">
+                        <tbody>
+                          <tr>
+                            {regCells.map((char, idx) => (
+                              <td key={idx}>{char}</td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
                     </td>
                   </tr>
-                ) : (
-                  experiments.map((exp, idx) => {
-                    const startPage = 5 + (idx * 4);
-                    const rubricsData = getExperimentRubrics(exp, 100);
-                    return (
-                      <tr key={idx}>
-                        <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>{exp.experiment_no || idx + 1}</td>
-                        <td style={{ textAlign: 'center', fontSize: '9.5pt', padding: '8px 6px' }}>{exp.date || '05-10-2026'}</td>
-                        <td style={{ fontWeight: '500', padding: '8px 10px' }}>{exp.title}</td>
-                        <td style={{ textAlign: 'center', padding: '8px 6px' }}>{startPage} – {startPage + 3}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>
-                          {rubricsData.totalScore} / 100
-                        </td>
-                        <td style={{ textAlign: 'center', fontSize: '8.5pt', padding: '8px 6px' }}>
-                          Verified
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-                {/* Total Summary Row */}
-                {experiments.length > 0 && (
+                </tbody>
+              </table>
+
+              {/* Institutional Header */}
+              <table className="header-table">
+                <tbody>
+                  <tr>
+                    <td rowSpan={3} style={{ width: '18%', padding: '8px', textAlign: 'center' }}>
+                      <img
+                        src={logo || '/logo.png'}
+                        alt="Institute Logo"
+                        style={{
+                          maxHeight: '70px',
+                          maxWidth: '85px',
+                          objectFit: 'contain',
+                          display: 'block',
+                          margin: '0 auto'
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </td>
+                    <td style={{ fontSize: '14pt', fontWeight: 'bold', textTransform: 'uppercase', padding: '8px 10px' }}>
+                      {institution_name}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontSize: '9pt', fontStyle: 'italic', padding: '3px 10px' }}>
+                      {institution_sub}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 'bold', fontSize: '10pt', textTransform: 'uppercase', padding: '6px 10px' }}>
+                      {department}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Certificate Header Box */}
+              <table className="section-bar-table" style={{ marginTop: '32px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ fontSize: '13pt', padding: '8px', letterSpacing: '1px' }}>
+                      BONAFIDE CERTIFICATE
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Certificate Body Statement */}
+              <div style={{
+                border: '1px solid #000000',
+                borderTop: 'none',
+                padding: '36px 28px',
+                fontSize: '11pt',
+                lineHeight: '2.0',
+                textAlign: 'justify',
+                minHeight: '200px'
+              }}>
+                <p style={{ textIndent: '40px', margin: 0 }}>
+                  {defaultCertText}
+                </p>
+              </div>
+
+              {/* Signatures Table */}
+              {showSignatures && (
+                <table className="grid-table" style={{ marginTop: '50px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '50%', padding: '10px', fontSize: '10pt' }}>STAFF IN-CHARGE</th>
+                      <th style={{ width: '50%', padding: '10px', fontSize: '10pt' }}>HEAD OF THE DEPARTMENT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ height: '90px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
+                        <div className="font-bold">{staff_incharge}</div>
+                        <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature & Date</div>
+                      </td>
+                      <td style={{ height: '90px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
+                        <div className="font-bold">{head_of_department}</div>
+                        <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature with Seal</div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* University Practical Examination Sign-off */}
+              {showSignatures && (
+                <table className="grid-table" style={{ marginTop: '30px' }}>
+                  <thead>
+                    <tr>
+                      <th colSpan={2} style={{ padding: '8px', fontSize: '10pt' }}>
+                        SUBMITTED FOR THE PRACTICAL EXAMINATION HELD ON: ____________________
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ width: '50%', height: '85px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
+                        <div className="font-bold">INTERNAL EXAMINER</div>
+                        <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature & Date</div>
+                      </td>
+                      <td style={{ width: '50%', height: '85px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '10px' }}>
+                        <div className="font-bold">EXTERNAL EXAMINER</div>
+                        <div style={{ fontSize: '8.5pt', color: '#666' }}>Signature & Date</div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* Footer */}
+              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                <span>{course_code} — Bonafide Certificate</span>
+                <span>Page 3 of {totalDocPages}</span>
+              </div>
+            </div>
+          )}
+
+          {/* PAGE 4: INDEX OF LABORATORY EXPERIMENTS */}
+          {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'index') && (
+            <div className="academic-page page-even">
+              {/* Top Row */}
+              <table className="top-row-table">
+                <tbody>
+                  <tr>
+                    <td style={{ textAlign: 'left' }}>COURSE CODE: <span>{course_code}</span></td>
+                    <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                    <td style={{ width: '195px' }}>
+                      <table className="register-boxes">
+                        <tbody>
+                          <tr>
+                            {regCells.map((char, idx) => (
+                              <td key={idx}>{char}</td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Title Header */}
+              <table className="section-bar-table">
+                <tbody>
+                  <tr>
+                    <td style={{ fontSize: '12pt', padding: '8px' }}>
+                      INDEX OF LABORATORY EXPERIMENTS
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Index Grid Table */}
+              <table className="grid-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '45px', padding: '8px 6px' }}>Ex. No</th>
+                    <th style={{ width: '85px', padding: '8px 6px' }}>Date</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left' }}>Name of the Experiment</th>
+                    <th style={{ width: '70px', padding: '8px 6px' }}>Page No.</th>
+                    <th style={{ width: '90px', padding: '8px 6px' }}>Marks (100)</th>
+                    <th style={{ width: '95px', padding: '8px 6px' }}>Staff Sign</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {experiments.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                        No laboratory experiments scheduled for this course.
+                      </td>
+                    </tr>
+                  ) : (
+                    experiments.map((exp, idx) => {
+                      const startPage = 5 + (idx * 4);
+                      const rubricsData = getExperimentRubrics(exp, 100);
+                      return (
+                        <tr key={idx}>
+                          <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>{exp.experiment_no || idx + 1}</td>
+                          <td style={{ textAlign: 'center', fontSize: '9.5pt', padding: '8px 6px' }}>{exp.date || '05-10-2026'}</td>
+                          <td style={{ fontWeight: '500', padding: '8px 10px' }}>{exp.title}</td>
+                          <td style={{ textAlign: 'center', padding: '8px 6px' }}>{startPage} – {startPage + 3}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>
+                            {rubricsData.totalScore} / 100
+                          </td>
+                          <td style={{ textAlign: 'center', fontSize: '8.5pt', padding: '8px 6px' }}>
+                            Verified
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                  {/* Total Summary Row */}
+                  {experiments.length > 0 && (
+                    <tr style={{ background: '#fafafa', fontWeight: 'bold' }}>
+                      <td colSpan={4} style={{ textAlign: 'right', padding: '10px 14px' }}>
+                        CUMULATIVE AVERAGE SCORE:
+                      </td>
+                      <td colSpan={2} style={{ textAlign: 'center', padding: '10px 8px' }}>
+                        {avgMarks} / 100 Marks
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Evaluation Criteria */}
+              <table className="section-bar-table" style={{ marginTop: '24px' }}>
+                <tbody>
+                  <tr>
+                    <td>CONTINUOUS PRACTICAL EVALUATION CRITERIA & WEIGHTAGE</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <table className="grid-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '12%', padding: '8px' }}>S.No</th>
+                    <th style={{ width: '58%', padding: '8px', textAlign: 'left' }}>Assessment Criteria / Component</th>
+                    <th style={{ width: '30%', padding: '8px' }}>Marks Distribution</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>1</td>
+                    <td style={{ padding: '8px 10px' }}>Aim, Logic Formulation & Algorithm / Procedure</td>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>10 Marks</td>
+                  </tr>
+                  <tr>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>2</td>
+                    <td style={{ padding: '8px 10px' }}>Program Implementation & Correct Syntax</td>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>40 Marks</td>
+                  </tr>
+                  <tr>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>3</td>
+                    <td style={{ padding: '8px 10px' }}>Execution, Verification & Console Output</td>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>20 Marks</td>
+                  </tr>
+                  <tr>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>4</td>
+                    <td style={{ padding: '8px 10px' }}>Oral Viva-Voce Assessment</td>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>20 Marks</td>
+                  </tr>
+                  <tr>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>5</td>
+                    <td style={{ padding: '8px 10px' }}>Result, Discussion & Record Regularity</td>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>10 Marks</td>
+                  </tr>
                   <tr style={{ background: '#fafafa', fontWeight: 'bold' }}>
-                    <td colSpan={4} style={{ textAlign: 'right', padding: '10px 14px' }}>
-                      CUMULATIVE AVERAGE SCORE:
-                    </td>
-                    <td colSpan={2} style={{ textAlign: 'center', padding: '10px 8px' }}>
-                      {avgMarks} / 100 Marks
-                    </td>
+                    <td colSpan={2} style={{ textAlign: 'right', padding: '8px 14px' }}>TOTAL SCORE PER EXPERIMENT:</td>
+                    <td style={{ textAlign: 'center' }}>100 Marks</td>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
 
-            {/* Evaluation Criteria */}
-            <table className="section-bar-table" style={{ marginTop: '24px' }}>
-              <tbody>
-                <tr>
-                  <td>CONTINUOUS PRACTICAL EVALUATION CRITERIA & WEIGHTAGE</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <table className="grid-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '12%', padding: '8px' }}>S.No</th>
-                  <th style={{ width: '58%', padding: '8px', textAlign: 'left' }}>Assessment Criteria / Component</th>
-                  <th style={{ width: '30%', padding: '8px' }}>Marks Distribution</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>1</td>
-                  <td style={{ padding: '8px 10px' }}>Aim, Logic Formulation & Algorithm / Procedure</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>10 Marks</td>
-                </tr>
-                <tr>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>2</td>
-                  <td style={{ padding: '8px 10px' }}>Program Implementation & Correct Syntax</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>40 Marks</td>
-                </tr>
-                <tr>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>3</td>
-                  <td style={{ padding: '8px 10px' }}>Execution, Verification & Console Output</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>20 Marks</td>
-                </tr>
-                <tr>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>4</td>
-                  <td style={{ padding: '8px 10px' }}>Oral Viva-Voce Assessment</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>20 Marks</td>
-                </tr>
-                <tr>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>5</td>
-                  <td style={{ padding: '8px 10px' }}>Result, Discussion & Record Regularity</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>10 Marks</td>
-                </tr>
-                <tr style={{ background: '#fafafa', fontWeight: 'bold' }}>
-                  <td colSpan={2} style={{ textAlign: 'right', padding: '8px 14px' }}>TOTAL SCORE PER EXPERIMENT:</td>
-                  <td style={{ textAlign: 'center' }}>100 Marks</td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Footer */}
-            <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-              <span>{course_code} — Index Sheet</span>
-              <span>Page 4 of {totalDocPages}</span>
+              {/* Footer */}
+              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                <span>{course_code} — Index Sheet</span>
+                <span>Page 4 of {totalDocPages}</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* =========================================================
             EXPERIMENTS: FOUR-PAGE RECORD NOTEBOOK STRUCTURE
@@ -922,7 +924,7 @@ export default function LabRecordDocument({
           return (
             <React.Fragment key={index}>
               {/* ===== PAIR 1: Program (Left) + Aim/Algorithm (Right) ===== */}
-              <div className="booklet-spread-container">
+              <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
                 {/* -------------------------------------------------------------
                     PAGE 1 - LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE & EXECUTION OUTPUT
                     ------------------------------------------------------------- */}
@@ -1099,8 +1101,8 @@ export default function LabRecordDocument({
                 )}
               </div>
 
-              {/* ===== PAIR 2: Blank (Left) + Rubrics & Result (Right) — SIDE-BY-SIDE ===== */}
-              <div className="booklet-spread-container">
+              {/* ===== PAIR 2: Blank (Left) + Rubrics & Result (Right) ===== */}
+              <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
                 {/* -------------------------------------------------------------
                     PAGE 3 - LEFT-HAND PAGE (EVEN): BLANK / EMPTY PAGE
                     ------------------------------------------------------------- */}

@@ -149,7 +149,7 @@ export default function LabRecordPreview() {
           {/* Duplex Toggle */}
           <button
             onClick={() => setIsDuplex(!isDuplex)}
-            title="Toggle alternating inside binding gutter margins for double-sided booklet printing"
+            title="Toggle 2-Page Spread View (Duplex ON) vs Single Page View (Duplex OFF)"
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] border text-xs font-semibold transition-all cursor-pointer ${
               isDuplex
                 ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--accent)]'
@@ -157,7 +157,7 @@ export default function LabRecordPreview() {
             }`}
           >
             <Columns2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{isDuplex ? 'Duplex: ON' : 'Duplex: OFF'}</span>
+            <span className="hidden sm:inline">{isDuplex ? 'Duplex: ON (2-Page View)' : 'Duplex: OFF (Single Page)'}</span>
           </button>
 
           {/* Zoom Controls */}
