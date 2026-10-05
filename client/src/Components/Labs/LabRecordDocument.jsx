@@ -47,6 +47,7 @@ export default function LabRecordDocument({
   const {
     institution_name = 'INSTITUTE OF TECHNOLOGY & HIGHER EDUCATION',
     institution_sub = 'An Autonomous Institution, Affiliated to University',
+    logo = '/logo.png',
     department = 'DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING',
     degree = 'B.E. / B.Tech',
     semester = 'III SEMESTER',
@@ -322,11 +323,21 @@ export default function LabRecordDocument({
             <table className="header-table">
               <tbody>
                 <tr>
-                  <td rowSpan={2} style={{ width: '15%', padding: '6px' }}>
-                    {/* Crest/Emblem */}
-                    <div className="w-14 h-14 mx-auto flex items-center justify-center border border-black rounded-full bg-slate-50 font-bold text-xs tracking-tighter text-slate-800 text-center leading-tight">
-                      INSTITUTE<br />CREST
-                    </div>
+                  <td rowSpan={2} style={{ width: '18%', padding: '6px', textAlign: 'center' }}>
+                    <img
+                      src={logo || '/logo.png'}
+                      alt="Institute Logo"
+                      style={{
+                        maxHeight: '68px',
+                        maxWidth: '85px',
+                        objectFit: 'contain',
+                        display: 'block',
+                        margin: '0 auto'
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
                   </td>
                   <td style={{ fontSize: '13pt', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {institution_name}
@@ -466,6 +477,22 @@ export default function LabRecordDocument({
             <table className="header-table">
               <tbody>
                 <tr>
+                  <td rowSpan={3} style={{ width: '18%', padding: '6px', textAlign: 'center' }}>
+                    <img
+                      src={logo || '/logo.png'}
+                      alt="Institute Logo"
+                      style={{
+                        maxHeight: '62px',
+                        maxWidth: '80px',
+                        objectFit: 'contain',
+                        display: 'block',
+                        margin: '0 auto'
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </td>
                   <td style={{ fontSize: '13pt', fontWeight: 'bold', textTransform: 'uppercase' }}>
                     {institution_name}
                   </td>
