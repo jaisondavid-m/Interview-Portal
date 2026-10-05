@@ -130,10 +130,16 @@ export default function LabRecordPreview() {
               return (
                 <React.Fragment key={idx}>
                   <option value={`exp_${expNo}_left`}>
-                    🔬 Ex {expNo} [Left Page]: Program & Output
+                    🔬 Ex {expNo} [Page 1]: Program & Output
                   </option>
                   <option value={`exp_${expNo}_right`}>
-                    🔬 Ex {expNo} [Right Page]: Aim, Algorithm & Result
+                    🔬 Ex {expNo} [Page 2]: Aim & Algorithm
+                  </option>
+                  <option value={`exp_${expNo}_eval_left`}>
+                    📝 Ex {expNo} [Page 3]: Blank Page
+                  </option>
+                  <option value={`exp_${expNo}_eval_right`}>
+                    📝 Ex {expNo} [Page 4]: Rubrics & Result
                   </option>
                 </React.Fragment>
               );
