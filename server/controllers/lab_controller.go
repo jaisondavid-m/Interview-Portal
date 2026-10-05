@@ -1561,12 +1561,61 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 		return
 	}
 
+	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
+	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
+
 	sectionFilter := strings.TrimSpace(c.Query("section"))
 
 	var course models.LabCourse
 	if err := database.DB.First(&course, courseID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
 		return
+	}
+
+	// 1. Fetch lab mappings for assigned sections
+	var mappings []models.LabMapping
+	mapQuery := database.DB.Where("course_id = ?", courseID)
+	if strings.ToLower(userRole) != "admin" && facultyID > 0 {
+		mapQuery = mapQuery.Where("faculty_id = ?", facultyID)
+	}
+	mapQuery.Find(&mappings)
+
+	mappedSecSet := make(map[string]bool)
+	var assignedSections []string
+	for _, m := range mappings {
+		sec := strings.TrimSpace(m.Section)
+		if sec != "" && !mappedSecSet[sec] {
+			mappedSecSet[sec] = true
+			assignedSections = append(assignedSections, sec)
+		}
+	}
+
+	// Fetch all distinct sections across student users
+	var allStudentSections []string
+	database.DB.Model(&models.User{}).
+		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
+		Distinct().
+		Pluck("section", &allStudentSections)
+
+	finalSectionsMap := make(map[string]bool)
+	var finalSections []string
+
+	for _, s := range assignedSections {
+		if strings.ToUpper(s) != "ALL" && !finalSectionsMap[s] {
+			finalSectionsMap[s] = true
+			finalSections = append(finalSections, s)
+		}
+	}
+
+	if len(finalSections) == 0 {
+		for _, s := range allStudentSections {
+			if !finalSectionsMap[s] {
+				finalSectionsMap[s] = true
+				finalSections = append(finalSections, s)
+			}
+		}
 	}
 
 	// Fetch all experiments for course
@@ -1580,9 +1629,23 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 
 	// Fetch all students (filtered by section if specified)
 	studentQuery := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
+
 	if sectionFilter != "" && sectionFilter != "ALL" {
-		studentQuery = studentQuery.Where("section = ?", sectionFilter)
+		sFilter := strings.TrimSpace(sectionFilter)
+		sPattern := "%" + strings.ToLower(sFilter) + "%"
+		studentQuery = studentQuery.Where("section = ? OR LOWER(section) LIKE ?", sFilter, sPattern)
+	} else if strings.ToLower(userRole) != "admin" && len(finalSections) > 0 {
+		var secConds []string
+		var secArgs []interface{}
+		for _, s := range finalSections {
+			secConds = append(secConds, "section = ? OR LOWER(section) LIKE ?")
+			secArgs = append(secArgs, s, "%"+strings.ToLower(s)+"%")
+		}
+		if len(secConds) > 0 {
+			studentQuery = studentQuery.Where(strings.Join(secConds, " OR "), secArgs...)
+		}
 	}
+
 	var students []models.User
 	studentQuery.Order("roll_no asc, name asc").Find(&students)
 
@@ -1750,6 +1813,7 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 	studentMatrix := make([]StudentMatrixRow, len(students))
 	totalApprovedAll := 0
 	grandTotalMarksAll := 0
+	pendingReviewCount := 0
 
 	for i, st := range students {
 		compCount := 0
@@ -1778,6 +1842,8 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 				if sub.Status == "APPROVED" {
 					compCount++
 					totMarks += sub.Marks
+				} else if sub.Status == "SUBMITTED_FOR_VERIFICATION" {
+					pendingReviewCount++
 				}
 				attempts := sub.AttemptCount
 				if attempts <= 0 {
@@ -1861,6 +1927,14 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 		"average_score":           avgScoreAll,
 		"experiment_stats":        expStats,
 		"student_matrix":          studentMatrix,
+		"sections":                finalSections,
+		"summary": gin.H{
+			"total_students":         totalStudentsCount,
+			"completion_rate_pct":    overallCompletionPct,
+			"completed_submissions":  totalApprovedAll,
+			"avg_score_pct":          avgScoreAll,
+			"pending_review_count":   pendingReviewCount,
+		},
 	})
 }
 

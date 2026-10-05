@@ -266,9 +266,9 @@ export default function LabInchargeDashboard() {
               className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
             >
               <option value="ALL">ALL Sections</option>
-              {(analyticsData?.sections || ['A', 'B', 'C']).map((sec) => (
+              {(analyticsData?.sections || []).map((sec) => (
                 <option key={sec} value={sec}>
-                  Section {sec}
+                  {sec.toLowerCase().startsWith('section') || sec.includes('-') ? sec : `Section ${sec}`}
                 </option>
               ))}
             </select>
