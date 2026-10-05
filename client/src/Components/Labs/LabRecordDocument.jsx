@@ -918,12 +918,11 @@ export default function LabRecordDocument({
           const cleanOutput = cleanExecutionOutput(exp.execution_output, exp.title);
           const rubricsData = getExperimentRubrics(exp, 100);
 
-          const isSpread = viewMode === 'spread';
 
           return (
             <React.Fragment key={index}>
               {/* ===== PAIR 1: Program (Left) + Aim/Algorithm (Right) ===== */}
-              <div className={isSpread ? 'booklet-spread-container' : 'w-full'}>
+              <div className="booklet-spread-container">
                 {/* -------------------------------------------------------------
                     PAGE 1 - LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE & EXECUTION OUTPUT
                     ------------------------------------------------------------- */}
