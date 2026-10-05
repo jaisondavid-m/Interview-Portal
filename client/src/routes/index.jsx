@@ -441,7 +441,11 @@ export const router = createBrowserRouter([
           },
           {
             path: 'admin/labs/dashboard',
-            element: <AdminLabDashboard />,
+            element: (
+              <DynamicPageRoute pageKey="admin_lab_dashboard">
+                <AdminLabDashboard />
+              </DynamicPageRoute>
+            ),
           },
           {
             path: 'admin/labs/mapping',

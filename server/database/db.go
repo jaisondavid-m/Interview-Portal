@@ -595,13 +595,22 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			OrderIndex:  33,
 		},
 		{
+			Key:         "admin_lab_dashboard",
+			Name:        "Lab Overview Dashboard",
+			Path:        "/admin/labs/dashboard",
+			Icon:        "BarChart3",
+			Category:    "Academic Labs",
+			Description: "System-wide practical lab control dashboard with flexible filtering by faculty, courses, and student batches",
+			OrderIndex:  34,
+		},
+		{
 			Key:         "admin_lab_config",
 			Name:        "Lab Configuration",
 			Path:        "/admin/labs/config",
 			Icon:        "FlaskConical",
 			Category:    "Academic Labs",
 			Description: "Add lab courses, configure experiments & test cases, manage sections/semesters/academic years, and map students to faculty lab incharges",
-			OrderIndex:  34,
+			OrderIndex:  35,
 		},
 		{
 			Key:         "admin_lab_pdf_audit",
@@ -610,7 +619,7 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			Icon:        "FileCode2",
 			Category:    "Academic Labs",
 			Description: "Preview and audit official server-generated student PDF lab records",
-			OrderIndex:  35,
+			OrderIndex:  36,
 		},
 	}
 
@@ -632,7 +641,7 @@ func syncAppPagesCatalog(db *gorm.DB) {
 					db.Create(&models.RolePagePermission{RoleName: "faculty", PageKey: page.Key, CanAccess: true})
 					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
 				}
-				if page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" {
+				if page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" || page.Key == "admin_lab_dashboard" {
 					db.Create(&models.RolePagePermission{RoleName: "admin", PageKey: page.Key, CanAccess: true})
 				}
 			}
