@@ -543,7 +543,7 @@ export default function LabEvaluationPage() {
         {/* Left Column: Multi-tab Content Explorer (Viva, Code, Algo, Problem Statement) */}
         <div className="lg:col-span-8 space-y-4">
           {/* Tab Navigation Pill Bar */}
-          <div className="panel-card p-1.5 flex items-center gap-1.5 overflow-x-auto bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl">
+          <div className="panel-card p-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl">
             <button
               type="button"
               onClick={() => setActiveTab('problem')}
