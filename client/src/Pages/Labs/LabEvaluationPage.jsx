@@ -73,8 +73,8 @@ export default function LabEvaluationPage() {
   const [toast, setToast] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Active view tab: 'viva' | 'code' | 'algo' | 'problem'
-  const [activeTab, setActiveTab] = useState('viva');
+  // Active view tab: 'problem' | 'code' | 'algo' | 'viva'
+  const [activeTab, setActiveTab] = useState('problem');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedRefCode, setCopiedRefCode] = useState(false);
 
@@ -546,15 +546,15 @@ export default function LabEvaluationPage() {
           <div className="panel-card p-1.5 flex items-center gap-1.5 overflow-x-auto bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl">
             <button
               type="button"
-              onClick={() => setActiveTab('viva')}
+              onClick={() => setActiveTab('problem')}
               className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTab === 'viva'
+                activeTab === 'problem'
                   ? 'bg-[var(--accent)] text-white shadow-sm'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
-              <MessageSquareCheck className="w-4 h-4" />
-              Oral Viva Voce ({vivaQuestions.length})
+              <BookOpen className="w-4 h-4" />
+              Problem Description & I/O
             </button>
 
             <button
@@ -585,66 +585,81 @@ export default function LabEvaluationPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('problem')}
+              onClick={() => setActiveTab('viva')}
               className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTab === 'problem'
+                activeTab === 'viva'
                   ? 'bg-[var(--accent)] text-white shadow-sm'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
-              <BookOpen className="w-4 h-4" />
-              Problem Description & I/O
+              <MessageSquareCheck className="w-4 h-4" />
+              Oral Viva Voce ({vivaQuestions.length})
             </button>
           </div>
 
-          {/* TAB 1: ORAL VIVA VOCE QUESTIONS */}
-          {activeTab === 'viva' && (
-            <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1.5 shadow-sm">
-                <div className="font-bold flex items-center gap-2 text-indigo-700 dark:text-indigo-400 text-sm">
-                  <MessageSquareCheck className="w-4 h-4" />
-                  Oral Viva Voce Instructions for Faculty
-                </div>
-                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-                  Ask the student the questions below verbally to verify conceptual understanding, logic formulation, algorithmic complexity, and problem-solving depth against the verified model answers. Award oral viva marks in the grading cockpit on the right.
-                </p>
+          {/* TAB 1: PROBLEM DESCRIPTION & I/O */}
+          {activeTab === 'problem' && (
+            <div className="panel-card p-6 space-y-5 rounded-2xl animate-in fade-in duration-200">
+              <div className="space-y-2">
+                <h3 className="text-base font-bold text-[var(--text-primary)]">
+                  {question?.title || exp?.title}
+                </h3>
+                {question?.aim && (
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed italic bg-[var(--bg-raised)] p-3 rounded-xl border border-[var(--border)]">
+                    <strong className="text-[var(--text-primary)] not-italic">Aim: </strong>
+                    {question.aim}
+                  </p>
+                )}
               </div>
 
-              {vivaQuestions.length === 0 ? (
-                <div className="panel-card p-12 text-center text-xs text-[var(--text-muted)] italic space-y-2">
-                  <MessageSquareCheck className="w-8 h-8 mx-auto opacity-40" />
-                  <p>No viva questions configured for this question variant.</p>
+              {question?.description && (
+                <div className="space-y-1.5 text-xs">
+                  <h4 className="font-bold text-[var(--text-primary)]">Problem Statement & Description</h4>
+                  <div className="text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
+                    {question.description}
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {vivaQuestions.map((vq, idx) => (
-                    <div
-                      key={idx}
-                      className="panel-card p-5 space-y-3 hover:border-[var(--accent)]/50 transition-all rounded-2xl"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-mono font-bold text-[var(--accent)] px-2.5 py-0.5 rounded-md bg-[var(--accent-dim)] border border-[var(--border-accent)]">
-                          Viva Question #{idx + 1}
-                        </span>
-                        <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                          Conceptual Viva
-                        </span>
-                      </div>
+              )}
 
-                      <h3 className="text-sm font-bold text-[var(--text-primary)] leading-snug">
-                        {vq.question}
-                      </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {question?.input_format && (
+                  <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1 text-xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                      Input Format
+                    </span>
+                    <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{question.input_format}</p>
+                  </div>
+                )}
 
-                      <div className="p-4 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1 text-xs">
-                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
-                          Model Reference Answer:
-                        </span>
-                        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed font-sans">
-                          {vq.answer}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                {question?.output_format && (
+                  <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1 text-xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                      Output Format
+                    </span>
+                    <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{question.output_format}</p>
+                  </div>
+                )}
+              </div>
+
+              {(question?.sample_input || question?.sample_output) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="p-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] space-y-1.5 font-mono text-xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                      Sample Input
+                    </span>
+                    <pre className="text-[var(--text-primary)] whitespace-pre-wrap overflow-x-auto">
+                      {question.sample_input || 'N/A'}
+                    </pre>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] space-y-1.5 font-mono text-xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                      Sample Output
+                    </span>
+                    <pre className="text-[var(--text-primary)] whitespace-pre-wrap overflow-x-auto">
+                      {question.sample_output || 'N/A'}
+                    </pre>
+                  </div>
                 </div>
               )}
             </div>
@@ -819,69 +834,54 @@ export default function LabEvaluationPage() {
             </div>
           )}
 
-          {/* TAB 4: PROBLEM DESCRIPTION & I/O */}
-          {activeTab === 'problem' && (
-            <div className="panel-card p-6 space-y-5 rounded-2xl animate-in fade-in duration-200">
-              <div className="space-y-2">
-                <h3 className="text-base font-bold text-[var(--text-primary)]">
-                  {question?.title || exp?.title}
-                </h3>
-                {question?.aim && (
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed italic bg-[var(--bg-raised)] p-3 rounded-xl border border-[var(--border)]">
-                    <strong className="text-[var(--text-primary)] not-italic">Aim: </strong>
-                    {question.aim}
-                  </p>
-                )}
-              </div>
-
-              {question?.description && (
-                <div className="space-y-1.5 text-xs">
-                  <h4 className="font-bold text-[var(--text-primary)]">Problem Statement & Description</h4>
-                  <div className="text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
-                    {question.description}
-                  </div>
+          {/* TAB 4: ORAL VIVA VOCE QUESTIONS */}
+          {activeTab === 'viva' && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1.5 shadow-sm">
+                <div className="font-bold flex items-center gap-2 text-indigo-700 dark:text-indigo-400 text-sm">
+                  <MessageSquareCheck className="w-4 h-4" />
+                  Oral Viva Voce Instructions for Faculty
                 </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                {question?.input_format && (
-                  <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1 text-xs">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                      Input Format
-                    </span>
-                    <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{question.input_format}</p>
-                  </div>
-                )}
-
-                {question?.output_format && (
-                  <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1 text-xs">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                      Output Format
-                    </span>
-                    <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{question.output_format}</p>
-                  </div>
-                )}
+                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                  Ask the student the questions below verbally to verify conceptual understanding, logic formulation, algorithmic complexity, and problem-solving depth against the verified model answers. Award oral viva marks in the grading cockpit on the right.
+                </p>
               </div>
 
-              {(question?.sample_input || question?.sample_output) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="p-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] space-y-1.5 font-mono text-xs">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                      Sample Input
-                    </span>
-                    <pre className="text-[var(--text-primary)] whitespace-pre-wrap overflow-x-auto">
-                      {question.sample_input || 'N/A'}
-                    </pre>
-                  </div>
+              {vivaQuestions.length === 0 ? (
+                <div className="panel-card p-12 text-center text-xs text-[var(--text-muted)] italic space-y-2">
+                  <MessageSquareCheck className="w-8 h-8 mx-auto opacity-40" />
+                  <p>No viva questions configured for this question variant.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {vivaQuestions.map((vq, idx) => (
+                    <div
+                      key={idx}
+                      className="panel-card p-5 space-y-3 hover:border-[var(--accent)]/50 transition-all rounded-2xl"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-mono font-bold text-[var(--accent)] px-2.5 py-0.5 rounded-md bg-[var(--accent-dim)] border border-[var(--border-accent)]">
+                          Viva Question #{idx + 1}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                          Conceptual Viva
+                        </span>
+                      </div>
 
-                  <div className="p-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] space-y-1.5 font-mono text-xs">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                      Sample Output
-                    </span>
-                    <pre className="text-[var(--text-primary)] whitespace-pre-wrap overflow-x-auto">
-                      {question.sample_output || 'N/A'}
-                    </pre>
-                  </div>
+                      <h3 className="text-sm font-bold text-[var(--text-primary)] leading-snug">
+                        {vq.question}
+                      </h3>
+
+                      <div className="p-4 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] space-y-1 text-xs">
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
+                          Model Reference Answer:
+                        </span>
+                        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed font-sans">
+                          {vq.answer}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
