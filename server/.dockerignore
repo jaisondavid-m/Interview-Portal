@@ -12,5 +12,4 @@ uploads/
 .env
 .env.*
 cookies.txt
-vendor/
 

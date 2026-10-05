@@ -28,10 +28,8 @@ FROM node:22-alpine3.21
 
 WORKDIR /app
 
-# Install GCC, G++, libc-dev for native C/C++ compilation with high-speed mirror
-RUN echo "http://mirrors.aliyun.com/alpine/v3.21/main" > /etc/apk/repositories && \
-    echo "http://mirrors.aliyun.com/alpine/v3.21/community" >> /etc/apk/repositories && \
-    apk add --no-cache build-base
+# Install GCC, G++, libc-dev for native C/C++ compilation
+RUN apk add --no-cache build-base
 
 # Copy Java runtime from eclipse-temurin:17-alpine (instant multi-stage copy, zero APK network timeouts)
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
