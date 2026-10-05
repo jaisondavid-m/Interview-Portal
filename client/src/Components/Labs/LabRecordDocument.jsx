@@ -372,9 +372,9 @@ export default function LabRecordDocument({
           border-top: none;
           background: #fafafa;
           padding: 12px 14px;
-          font-family: "Courier New", "JetBrains Mono", Consolas, monospace;
-          font-size: 9.5pt;
-          line-height: 1.5;
+          font-family: "Times New Roman", Times, "Liberation Serif", serif;
+          font-size: 10pt;
+          line-height: 1.6;
           white-space: pre-wrap;
           word-break: break-word;
           margin-top: -1px;
@@ -386,10 +386,11 @@ export default function LabRecordDocument({
           border-top: none;
           background: #fafafa;
           padding: 10px 14px;
-          font-family: "Courier New", Consolas, monospace;
-          font-size: 9.5pt;
-          line-height: 1.45;
+          font-family: "Times New Roman", Times, "Liberation Serif", serif;
+          font-size: 10pt;
+          line-height: 1.5;
           white-space: pre-wrap;
+          word-break: break-word;
           margin-top: -1px;
           margin-bottom: 14px;
         }
@@ -1006,7 +1007,7 @@ export default function LabRecordDocument({
                         <tr>
                           <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>PROGRAM SOURCE CODE</span>
-                            <span style={{ fontSize: '8.5pt', fontFamily: 'Courier New', textTransform: 'none', fontWeight: 'normal' }}>
+                            <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
                               Language: {exp.language || 'Python'}
                             </span>
                           </td>
