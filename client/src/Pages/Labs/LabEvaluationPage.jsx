@@ -645,26 +645,6 @@ export default function LabEvaluationPage() {
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
-          {/* Real-time DB Autosave Status Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs shadow-sm">
-            {saveStatus === 'saving' ? (
-              <span className="flex items-center gap-1.5 text-[var(--accent)] font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Auto-saving draft...</span>
-              </span>
-            ) : saveStatus === 'saved' ? (
-              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Auto-saved to DB{lastSavedTime ? ` (${lastSavedTime})` : ''}</span>
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-rose-500 font-medium">
-                <AlertCircle className="w-3.5 h-3.5" />
-                <span>Auto-save failed</span>
-              </span>
-            )}
-          </div>
-
           <button
             type="button"
             onClick={handleResetAllocation}
@@ -1466,16 +1446,9 @@ export default function LabEvaluationPage() {
                   Evaluation Rubric Scoring
                 </h3>
               </div>
-              <div className="flex items-center gap-2">
-                {saveStatus === 'saving' && (
-                  <span className="text-[10px] text-[var(--accent)] flex items-center gap-1 font-mono">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Saving...
-                  </span>
-                )}
-                <span className="text-[11px] font-mono font-bold text-[var(--accent)]">
-                  Max 100 Marks
-                </span>
-              </div>
+              <span className="text-[11px] font-mono font-bold text-[var(--accent)]">
+                Max 100 Marks
+              </span>
             </div>
 
             {/* Quick Fill Presets */}
