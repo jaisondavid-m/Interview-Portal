@@ -179,64 +179,107 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
   const codeLines = (code || '').trim() ? (code || '').trim().split(/\r?\n/) : [];
   const outLines = (cleanOut || '').trim() ? (cleanOut || '').trim().split(/\r?\n/) : [];
 
-  const MAX_CODE_PER_PAGE = 26;
-  const MAX_OUT_PER_PAGE = 24;
+  const MAX_LINES_SINGLE_SECTION = 36; // Full page dedicated to code OR output
+  const MAX_LINES_COMBINED = 30;       // Page sharing both code and output
 
   const leftPages = [];
 
-  // Break code into chunks of up to MAX_CODE_PER_PAGE
-  if (codeLines.length > 0) {
-    let cIdx = 0;
-    const totalCodeChunks = Math.ceil(codeLines.length / MAX_CODE_PER_PAGE);
-    let codePart = 1;
-
-    while (cIdx < codeLines.length) {
-      const chunk = codeLines.slice(cIdx, cIdx + MAX_CODE_PER_PAGE);
-      leftPages.push({
-        type: 'code',
-        code: chunk.join('\n'),
-        output: '',
-        titleSuffix: totalCodeChunks > 1 ? `(PART ${codePart})` : '',
-      });
-      cIdx += MAX_CODE_PER_PAGE;
-      codePart++;
-    }
-  } else {
+  // Case 1: Standard experiment where code fits on Left Page 1 and output fits on Left Page 2
+  if (codeLines.length <= MAX_LINES_SINGLE_SECTION && outLines.length <= MAX_LINES_SINGLE_SECTION) {
+    // Pair 1 Left: Program Code
     leftPages.push({
       type: 'code',
-      code: `# Program for: ${title || 'Lab Experiment'}\ndef main():\n    print("Execution completed successfully")\n\nif __name__ == '__main__':\n    main()`,
+      code: codeLines.join('\n') || `# Program for: ${title || 'Lab Experiment'}\ndef main():\n    print("Execution completed successfully")\n\nif __name__ == '__main__':\n    main()`,
       output: '',
       titleSuffix: '',
     });
-  }
 
-  // Break output into chunks of up to MAX_OUT_PER_PAGE
-  if (outLines.length > 0) {
-    let oIdx = 0;
-    const totalOutChunks = Math.ceil(outLines.length / MAX_OUT_PER_PAGE);
-    let outPart = 1;
-
-    while (oIdx < outLines.length) {
-      const chunk = outLines.slice(oIdx, oIdx + MAX_OUT_PER_PAGE);
-      leftPages.push({
-        type: 'output',
-        code: '',
-        output: chunk.join('\n'),
-        titleSuffix: totalOutChunks > 1 ? `(PART ${outPart})` : '',
-      });
-      oIdx += MAX_OUT_PER_PAGE;
-      outPart++;
-    }
-  } else {
+    // Pair 2 Left: Sample Input & Output
     leftPages.push({
       type: 'output',
       code: '',
-      output: 'Sample Output:\n>> Execution completed successfully.',
+      output: outLines.join('\n') || 'Sample Output:\n>> Execution completed successfully.',
       titleSuffix: '',
+    });
+
+    return leftPages;
+  }
+
+  // Case 2: Code or output spans more than 36 lines
+  // Step 1: Chunk code lines
+  let cIdx = 0;
+  const codeChunks = [];
+  while (cIdx < codeLines.length) {
+    const chunk = codeLines.slice(cIdx, cIdx + MAX_LINES_SINGLE_SECTION);
+    codeChunks.push(chunk.join('\n'));
+    cIdx += MAX_LINES_SINGLE_SECTION;
+  }
+  if (codeChunks.length === 0) {
+    codeChunks.push(`# Program for: ${title || 'Lab Experiment'}\ndef main():\n    print("Execution completed successfully")\n\nif __name__ == '__main__':\n    main()`);
+  }
+
+  // Step 2: Chunk output lines
+  let oIdx = 0;
+  const outChunks = [];
+  while (oIdx < outLines.length) {
+    const chunk = outLines.slice(oIdx, oIdx + MAX_LINES_SINGLE_SECTION);
+    outChunks.push(chunk.join('\n'));
+    oIdx += MAX_LINES_SINGLE_SECTION;
+  }
+  if (outChunks.length === 0) {
+    outChunks.push('Sample Output:\n>> Execution completed successfully.');
+  }
+
+  const lastCodeLines = codeChunks[codeChunks.length - 1].split('\n').length;
+  const firstOutLines = outChunks[0].split('\n').length;
+
+  // Add all code chunks except the last one
+  for (let i = 0; i < codeChunks.length - 1; i++) {
+    leftPages.push({
+      type: 'code',
+      code: codeChunks[i],
+      output: '',
+      titleSuffix: `(PART ${i + 1})`,
     });
   }
 
-  // Ensure an experiment always has at least 2 Left pages (Pair 1: Code -> Aim/Algo, Pair 2: Output -> Eval/Result)
+  // Check if last code chunk and first output chunk can seamlessly share a page
+  if (codeChunks.length > 1 && lastCodeLines + firstOutLines <= MAX_LINES_COMBINED) {
+    leftPages.push({
+      type: 'combined',
+      code: codeChunks[codeChunks.length - 1],
+      output: outChunks[0],
+      titleSuffix: '(CONTINUATION & OUTPUT)',
+    });
+    for (let j = 1; j < outChunks.length; j++) {
+      leftPages.push({
+        type: 'output',
+        code: '',
+        output: outChunks[j],
+        titleSuffix: `(PART ${j + 1})`,
+      });
+    }
+  } else {
+    const codePartSuffix = codeChunks.length > 1 ? `(PART ${codeChunks.length})` : '';
+    leftPages.push({
+      type: 'code',
+      code: codeChunks[codeChunks.length - 1],
+      output: '',
+      titleSuffix: codePartSuffix,
+    });
+
+    for (let j = 0; j < outChunks.length; j++) {
+      const outPartSuffix = outChunks.length > 1 ? `(PART ${j + 1})` : '';
+      leftPages.push({
+        type: 'output',
+        code: '',
+        output: outChunks[j],
+        titleSuffix: outPartSuffix,
+      });
+    }
+  }
+
+  // Ensure at least 2 left pages
   if (leftPages.length < 2) {
     leftPages.push({
       type: 'output',
@@ -1252,13 +1295,46 @@ export default function LabRecordDocument({
                             <tbody>
                               <tr>
                                 <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
-                                  EXPERIMENT {expNo} &nbsp;|&nbsp; {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & OUTPUT'} {leftPageContent.titleSuffix || ''}
+                                  EXPERIMENT {expNo} &nbsp;|&nbsp; {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : leftPageContent.type === 'combined' ? 'PROGRAM CONTINUATION & SAMPLE OUTPUT' : 'SAMPLE INPUT & OUTPUT'} {leftPageContent.titleSuffix || ''}
                                 </td>
                               </tr>
                             </tbody>
                           </table>
 
-                          {leftPageContent.type === 'code' ? (
+                          {leftPageContent.type === 'combined' ? (
+                            <>
+                              {/* PROGRAM CONTINUATION */}
+                              <table className="section-bar-table" style={{ marginTop: '10px' }}>
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left', padding: '4px 10px', fontSize: '9.5pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span>PROGRAM SOURCE CODE (CONTINUED)</span>
+                                      <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
+                                        Language: {exp.language || 'Python'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <pre className="code-container" style={{ minHeight: '120px', maxHeight: '240px', overflow: 'hidden' }}>
+                                {leftPageContent.code}
+                              </pre>
+
+                              {/* SAMPLE INPUT & OUTPUT */}
+                              <table className="section-bar-table" style={{ marginTop: '10px' }}>
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left', padding: '4px 10px', fontSize: '9.5pt' }}>
+                                      SAMPLE INPUT & OUTPUT
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <div className="output-container" style={{ minHeight: '180px', maxHeight: '300px', overflow: 'hidden', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.5' }}>
+                                {renderFormattedOutput(leftPageContent.output)}
+                              </div>
+                            </>
+                          ) : leftPageContent.type === 'code' ? (
                             <>
                               <table className="section-bar-table" style={{ marginTop: '14px' }}>
                                 <tbody>
@@ -1306,7 +1382,7 @@ export default function LabRecordDocument({
 
                         {/* Footer */}
                         <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                          <span>{course_code} — Experiment {expNo} ({leftPageContent.type === 'code' ? 'Program' : 'Sample Input & Output'}{leftPageContent.titleSuffix ? ' ' + leftPageContent.titleSuffix : ''})</span>
+                          <span>{course_code} — Experiment {expNo} ({leftPageContent.type === 'code' ? 'Program' : leftPageContent.type === 'combined' ? 'Program & Output' : 'Sample Input & Output'}{leftPageContent.titleSuffix ? ' ' + leftPageContent.titleSuffix : ''})</span>
                           <span>Page {leftPageNum} of {totalDocPages}</span>
                         </div>
                       </div>
@@ -1315,7 +1391,7 @@ export default function LabRecordDocument({
                     {/* -------------------------------------------------------------
                         RIGHT-HAND PAGE (ODD):
                         - Pair 1: AIM & ALGORITHM (Big & Bold Title above Aim)
-                        - Intermediate Pairs: OBSERVATIONS & DIAGRAM NOTES
+                        - Intermediate Pairs: Clean Blank Page
                         - Final Pair: EVALUATION RUBRIC MATRIX & RESULT
                         ------------------------------------------------------------- */}
                     {showRight && (
@@ -1558,14 +1634,14 @@ export default function LabRecordDocument({
                             </div>
                           </>
                         ) : (
-                          /* Intermediate Pairs: Observations & Notes */
+                          /* Intermediate Pairs: Clean Empty Blank Page */
                           <div>
-                            {/* Top Row: Left/Right Page Header */}
+                            {/* Top Row: Right Page Header */}
                             <table className="top-row-table">
                               <tbody>
                                 <tr>
                                   <td style={{ textAlign: 'left' }}>
-                                    EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [NOTES & OBSERVATIONS]
+                                    EXP NO: <span className="font-bold">{expNo}</span>
                                   </td>
                                   <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
                                   <td style={{ width: '195px' }}>
@@ -1583,37 +1659,14 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            {/* Observations Page Title Bar (Minimal) */}
-                            <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
-                                    EXPERIMENT {expNo} &nbsp;|&nbsp; LABORATORY OBSERVATIONS & NOTES
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-
-                            <div className="content-box" style={{ minHeight: '360px', marginTop: '14px', lineHeight: '1.8' }}>
-                              <p style={{ fontWeight: 'bold', margin: '0 0 8px 0', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>
-                                Technical Observations & Analysis Notes:
-                              </p>
-                              <p style={{ margin: 0, color: '#4b5563' }}>
-                                1. Memory and execution timing metrics were evaluated against test case assertions.<br />
-                                2. Boundary condition inputs and exception handling were validated.<br />
-                                3. Interactive console output corresponds to laboratory specification requirements.<br />
-                                4. Verified by laboratory in-charge during practical evaluation.
-                              </p>
-                              <div style={{ marginTop: '80px', borderTop: '1px dashed #cccccc', paddingTop: '8px', color: '#9ca3af', fontSize: '8.5pt', textAlign: 'center' }}>
-                                [Space reserved for Student Observations, Timing Diagrams & Faculty Notes]
-                              </div>
-                            </div>
+                            {/* Completely Empty Content Area */}
+                            <div style={{ minHeight: '620px' }} />
                           </div>
                         )}
 
                         {/* Footer */}
                         <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                          <span>{course_code} — Experiment {expNo} ({isFirstPair ? 'Aim & Algorithm' : isLastPair ? 'Evaluation & Result' : 'Observations & Notes'})</span>
+                          <span>{course_code} — Experiment {expNo} ({isFirstPair ? 'Aim & Algorithm' : isLastPair ? 'Evaluation & Result' : 'Continuation'})</span>
                           <span>Page {rightPageNum} of {totalDocPages}</span>
                         </div>
                       </div>
