@@ -596,10 +596,10 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		}
 
 		ratio := float64(totalExpMarks) / 100.0
-		algoMarks := int(20.0 * ratio)
-		codeMarks := int(40.0 * ratio)
-		testMarks := int(20.0 * ratio)
-		vivaMarks := totalExpMarks - (algoMarks + codeMarks + testMarks)
+		algoMarks := int(25.0 * ratio)
+		codeMarks := int(45.0 * ratio)
+		resultMarks := int(10.0 * ratio)
+		vivaMarks := totalExpMarks - (algoMarks + codeMarks + resultMarks)
 		if vivaMarks < 0 {
 			vivaMarks = 0
 		}
@@ -627,10 +627,10 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 			pdf.CellFormat(28, 6.8, fmt.Sprintf("%d", scoredM), "1", 1, "C", false, 0, "")
 		}
 
-		drawRubricRow("1", "Algorithm & Logic Formulation", 20, algoMarks)
-		drawRubricRow("2", "Source Code & Implementation Syntax", 40, codeMarks)
-		drawRubricRow("3", "Benchmark Test Case Validation", 20, testMarks)
-		drawRubricRow("4", "Viva Voce & Oral Defense", 20, vivaMarks)
+		drawRubricRow("1", "Aim & Algorithm Formulation", 25, algoMarks)
+		drawRubricRow("2", "Program & Execution Output Verification", 45, codeMarks)
+		drawRubricRow("3", "Result & Technical Discussion", 10, resultMarks)
+		drawRubricRow("4", "Oral Viva Voce & Defense", 20, vivaMarks)
 
 		// Rubric Total Row
 		pdf.SetFont("Arial", "B", 8.5)

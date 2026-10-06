@@ -1051,9 +1051,115 @@ func GetFacultyQueue(c *gin.Context) {
 	var submissions []models.LabSubmission
 	database.DB.Preload("Student").Preload("Experiment").Preload("Question").Order("updated_at desc").Find(&submissions)
 
+	// Compute Semester Batch Sign-Off summaries grouped by (student_id, course_id)
+	var allExperiments []models.LabExperiment
+	database.DB.Find(&allExperiments)
+	courseExpCountMap := make(map[uint]int)
+	for _, e := range allExperiments {
+		courseExpCountMap[e.CourseID]++
+	}
+
+	// Fetch course titles
+	var allCourses []models.LabCourse
+	database.DB.Find(&allCourses)
+	courseMap := make(map[uint]models.LabCourse)
+	for _, c := range allCourses {
+		courseMap[c.ID] = c
+	}
+
+	// Fetch existing LabRecords for signed status
+	var allLabRecords []models.LabRecord
+	database.DB.Find(&allLabRecords)
+	recordMap := make(map[string]models.LabRecord)
+	for _, r := range allLabRecords {
+		key := fmt.Sprintf("%d_%d", r.StudentID, r.CourseID)
+		recordMap[key] = r
+	}
+
+	type SemesterStudentItem struct {
+		StudentID        uint        `json:"student_id"`
+		Student          models.User `json:"student"`
+		CourseID         uint        `json:"course_id"`
+		CourseTitle      string      `json:"course_title"`
+		CourseCode       string      `json:"course_code"`
+		Section          string      `json:"section"`
+		TotalExperiments int         `json:"total_experiments"`
+		CompletedCount   int         `json:"completed_count"`
+		ApprovedCount    int         `json:"approved_count"`
+		AllFinished      bool        `json:"all_finished"`
+		IsSemesterSigned bool        `json:"is_semester_signed"`
+		SignatureHash    string      `json:"signature_hash,omitempty"`
+		ApprovedAt       *time.Time  `json:"approved_at,omitempty"`
+	}
+
+	studentCourseMap := make(map[string]*SemesterStudentItem)
+	var orderedKeys []string
+
+	for _, sub := range submissions {
+		cID := sub.Experiment.CourseID
+		if cID == 0 && sub.Question != nil {
+			cID = sub.Question.CourseID
+		}
+		if cID == 0 {
+			cID = 1
+		}
+
+		key := fmt.Sprintf("%d_%d", sub.StudentID, cID)
+		item, exists := studentCourseMap[key]
+		if !exists {
+			tot := courseExpCountMap[cID]
+			if tot == 0 {
+				tot = 7
+			}
+
+			cTitle := "Practical Laboratory"
+			cCode := ""
+			if crs, ok := courseMap[cID]; ok {
+				if crs.Title != "" {
+					cTitle = crs.Title
+				}
+				cCode = crs.CourseCode
+			}
+
+			rec, isSigned := recordMap[key]
+			item = &SemesterStudentItem{
+				StudentID:        sub.StudentID,
+				Student:          sub.Student,
+				CourseID:         cID,
+				CourseTitle:      cTitle,
+				CourseCode:       cCode,
+				Section:          sub.Student.Section,
+				TotalExperiments: tot,
+				CompletedCount:   0,
+				ApprovedCount:    0,
+				AllFinished:      false,
+				IsSemesterSigned: isSigned && rec.OverallStatus == "SEMESTER_APPROVED",
+				SignatureHash:    rec.SignatureHash,
+				ApprovedAt:       rec.ApprovedAt,
+			}
+			studentCourseMap[key] = item
+			orderedKeys = append(orderedKeys, key)
+		}
+
+		item.CompletedCount++
+		if sub.Status == "APPROVED" {
+			item.ApprovedCount++
+		}
+	}
+
+	var semesterStudents []SemesterStudentItem
+	for _, key := range orderedKeys {
+		item := studentCourseMap[key]
+		if item.CompletedCount >= item.TotalExperiments && item.TotalExperiments > 0 {
+			item.AllFinished = true
+		}
+		semesterStudents = append(semesterStudents, *item)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"mappings":    mappings,
-		"submissions": submissions,
+		"mappings":          mappings,
+		"submissions":       submissions,
+		"semester_students": semesterStudents,
 	})
 }
 
@@ -1210,6 +1316,27 @@ func VerifySemesterRecord(c *gin.Context) {
 		return
 	}
 
+	// Count total experiments configured for this course
+	var totalExps int64
+	database.DB.Model(&models.LabExperiment{}).Where("course_id = ?", req.CourseID).Count(&totalExps)
+	if totalExps == 0 {
+		totalExps = 7
+	}
+
+	// Count completed experiments by student for this course
+	var completedCount int64
+	database.DB.Model(&models.LabSubmission{}).
+		Joins("JOIN lab_experiments ON lab_experiments.id = lab_submissions.experiment_id").
+		Where("lab_submissions.student_id = ? AND lab_experiments.course_id = ?", req.StudentID, req.CourseID).
+		Count(&completedCount)
+
+	if completedCount < totalExps {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("Cannot sign and verify semester record. Student has only completed %d of %d experiments. All experiments must be completed first.", completedCount, totalExps),
+		})
+		return
+	}
+
 	// Update all submissions of student to APPROVED
 	var submissions []models.LabSubmission
 	database.DB.Where("student_id = ?", req.StudentID).Find(&submissions)
@@ -1238,7 +1365,7 @@ func VerifySemesterRecord(c *gin.Context) {
 	record.CourseID = req.CourseID
 	record.OverallStatus = "SEMESTER_APPROVED"
 	record.TotalApproved = len(submissions)
-	record.TotalExperiments = 7
+	record.TotalExperiments = int(totalExps)
 	record.TotalMarks = totalMarks
 	record.SignatureHash = hash
 	record.ApprovedBy = &facultyID

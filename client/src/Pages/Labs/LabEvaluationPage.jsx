@@ -35,19 +35,13 @@ export const DEFAULT_LAB_RUBRIC = [
     key: 'algorithm',
     label: 'Aim & Algorithm',
     description: 'Structure, sequential clarity, and logical correctness of procedure steps.',
-    max_marks: 10,
+    max_marks: 25,
   },
   {
     key: 'program',
-    label: 'Program / Code Implementation',
-    description: 'Code organization, correct syntax, appropriate logic, and edge-case handling.',
-    max_marks: 40,
-  },
-  {
-    key: 'output',
-    label: 'Execution & Output',
-    description: 'Successful compilation, test case verification, and clean execution output.',
-    max_marks: 20,
+    label: 'Program & Output',
+    description: 'Code syntax correctness, test case execution, and benchmark output validation.',
+    max_marks: 45,
   },
   {
     key: 'result',
@@ -230,8 +224,8 @@ export default function LabEvaluationPage() {
       });
       breakdown['total'] = totalMarks;
 
-      const codeMarks = (Number(marksState['program']) || 0) + (Number(marksState['output']) || 0);
-      const vivaMarks = (Number(marksState['viva']) || 0) + (Number(marksState['algorithm']) || 0);
+      const codeMarks = Number(marksState['program']) || 0;
+      const vivaMarks = Number(marksState['viva']) || 0;
 
       await api.post('/lab-incharge/verify-single', {
         submission_id: Number(subId),

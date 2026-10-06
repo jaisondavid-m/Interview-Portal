@@ -16,7 +16,8 @@ import {
   Sliders,
   UserCheck,
   Lock,
-  Unlock
+  Unlock,
+  FileText
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -24,6 +25,7 @@ export default function FacultyLabEvaluation() {
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState([]);
   const [mappings, setMappings] = useState([]);
+  const [semesterStudents, setSemesterStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'semester'
   const [search, setSearch] = useState('');
@@ -46,6 +48,7 @@ export default function FacultyLabEvaluation() {
       const res = await api.get('/lab-incharge/queue');
       setSubmissions(res?.submissions || []);
       setMappings(res?.mappings || []);
+      setSemesterStudents(res?.semester_students || []);
     } catch (err) {
       console.error(err);
       setError('Could not load student lab submissions.');
@@ -62,8 +65,9 @@ export default function FacultyLabEvaluation() {
       });
       showToast('Entire semester record approved and signed!', 'success');
       fetchQueue();
-    } catch {
-      showToast('Failed to approve semester record.', 'error');
+    } catch (err) {
+      const errMsg = err?.response?.data?.error || 'Failed to approve semester record.';
+      showToast(errMsg, 'error');
     }
   };
 
@@ -77,6 +81,18 @@ export default function FacultyLabEvaluation() {
 
     if (statusFilter === 'ALL') return matchesSearch;
     return matchesSearch && sub.status === statusFilter;
+  });
+
+  const filteredSemesterStudents = semesterStudents.filter((item) => {
+    const term = search.toLowerCase();
+    return (
+      item.student?.name?.toLowerCase().includes(term) ||
+      item.student?.roll_no?.toLowerCase().includes(term) ||
+      item.section?.toLowerCase().includes(term) ||
+      item.student?.section?.toLowerCase().includes(term) ||
+      item.course_title?.toLowerCase().includes(term) ||
+      item.course_code?.toLowerCase().includes(term)
+    );
   });
 
   const pendingVivaCount = submissions.filter((s) => s.status === 'SUBMITTED_FOR_VERIFICATION').length;
@@ -322,15 +338,28 @@ export default function FacultyLabEvaluation() {
       {/* TAB 2: SEMESTER BATCH SIGN-OFF */}
       {activeTab === 'semester' && (
         <div className="panel-card p-6 space-y-4 rounded-2xl">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <CheckCheck className="w-4 h-4 text-[var(--accent)]" />
-              Semester Final Lab Record Approvals
-            </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[var(--border)]">
+            <div>
+              <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <CheckCheck className="w-4 h-4 text-[var(--accent)]" />
+                Semester Final Lab Record Approvals
+              </h2>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                When all experiments for a student are completed, perform a final digital batch sign-off and issue their certified lab record.
+              </p>
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search student or roll no..."
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
           </div>
-          <p className="text-xs text-[var(--text-secondary)]">
-            When all experiments for a student are completed, perform a final digital batch sign-off and issue their certified lab record.
-          </p>
 
           <div className="overflow-x-auto border border-[var(--border)] rounded-xl">
             <table className="w-full text-left text-xs border-collapse">
@@ -338,49 +367,120 @@ export default function FacultyLabEvaluation() {
                 <tr className="bg-[var(--bg-raised)] border-b border-[var(--border)] text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
                   <th className="py-3 px-4">Student</th>
                   <th className="py-3 px-3">Section</th>
+                  <th className="py-3 px-3">Course / Lab</th>
                   <th className="py-3 px-3">Completed Experiments</th>
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {submissions.length === 0 ? (
+                {filteredSemesterStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-xs text-[var(--text-muted)]">
-                      No student records eligible for batch sign-off.
+                    <td colSpan={6} className="py-10 text-center text-xs text-[var(--text-muted)]">
+                      {loading ? 'Loading student records...' : 'No student records found.'}
                     </td>
                   </tr>
                 ) : (
-                  submissions.slice(0, 15).map((sub, idx) => (
-                    <tr key={idx} className="hover:bg-[var(--bg-hover)] transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-[var(--text-primary)]">{sub.student?.name}</div>
-                        <div className="text-[10px] font-mono text-[var(--text-muted)]">{sub.student?.roll_no}</div>
-                      </td>
-                      <td className="py-3 px-3 font-mono text-[var(--text-secondary)]">
-                        Sec {sub.student?.section || 'A'}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="font-mono font-bold text-[var(--accent)]">
-                          Completed
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
-                          <CheckCircle2 className="w-3 h-3" /> Ready for Record Sign
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleVerifySemester(sub.student_id, sub.experiment?.course_id || 1)}
-                          className="px-3 py-1.5 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold transition-all cursor-pointer shadow-sm"
-                        >
-                          Sign & Certify Record
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  filteredSemesterStudents.map((item, idx) => {
+                    const total = item.total_experiments || 7;
+                    const completed = item.completed_count || 0;
+                    const pct = Math.min(100, Math.round((completed / total) * 100));
+                    const remaining = Math.max(0, total - completed);
+                    const isAllDone = item.all_finished || completed >= total;
+                    const isSigned = item.is_semester_signed;
+
+                    return (
+                      <tr key={idx} className="hover:bg-[var(--bg-hover)] transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-[var(--text-primary)]">{item.student?.name || 'Student'}</div>
+                          <div className="text-[10px] font-mono text-[var(--text-muted)]">{item.student?.roll_no || '—'}</div>
+                        </td>
+                        <td className="py-3.5 px-3 font-mono text-[var(--text-secondary)]">
+                          Sec: {item.section || item.student?.section || 'A'}
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="font-medium text-[var(--text-primary)] truncate max-w-[180px]">
+                            {item.course_title || 'Practical Laboratory'}
+                          </div>
+                          {item.course_code && (
+                            <div className="text-[10px] font-mono text-[var(--text-muted)]">{item.course_code}</div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-xs text-[var(--text-primary)]">
+                              {completed} / {total}
+                            </span>
+                            <span className="text-[10px] text-[var(--text-muted)] font-mono">({pct}%)</span>
+                          </div>
+                          <div className="w-28 bg-[var(--bg-raised)] h-1.5 rounded-full overflow-hidden mt-1 border border-[var(--border)]">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isAllDone ? 'bg-emerald-500' : 'bg-[var(--accent)]'
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          {isSigned ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Signed & Certified
+                            </span>
+                          ) : isAllDone ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Ready for Record Sign
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                              <Clock className="w-3.5 h-3.5" /> {remaining} Exp{remaining > 1 ? 's' : ''} Remaining
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          {isSigned ? (
+                            <div className="inline-flex items-center gap-1.5 justify-end">
+                              <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Signed
+                              </span>
+                              <a
+                                href={`/api/v1/lab-incharge/student-record/${item.student_id}/${item.course_id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2.5 py-1 rounded-lg bg-[var(--bg-raised)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] text-xs font-semibold inline-flex items-center gap-1 transition-all"
+                                title="Download Certified Record PDF"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-[var(--accent)]" /> PDF
+                              </a>
+                            </div>
+                          ) : isAllDone ? (
+                            <button
+                              type="button"
+                              onClick={() => handleVerifySemester(item.student_id, item.course_id)}
+                              className="px-3.5 py-1.5 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold transition-all cursor-pointer shadow-sm inline-flex items-center gap-1.5"
+                            >
+                              <Award className="w-3.5 h-3.5" />
+                              Sign & Certify Record
+                            </button>
+                          ) : (
+                            <div className="relative group inline-block">
+                              <button
+                                type="button"
+                                disabled
+                                className="px-3.5 py-1.5 rounded-lg bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)] text-xs font-semibold cursor-not-allowed opacity-60 inline-flex items-center gap-1.5"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                                Sign & Certify Record
+                              </button>
+                              <div className="hidden group-hover:block absolute right-0 bottom-full mb-1.5 z-20 w-52 p-2 text-[11px] leading-tight text-white bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl pointer-events-none text-center">
+                                Locked: Student must finish all {total} experiments ({completed}/{total} completed)
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

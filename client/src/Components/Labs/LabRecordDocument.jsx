@@ -63,49 +63,44 @@ export const getExperimentRubrics = (exp, defaultMax = 100) => {
   }
 
   if (maxMarks === 100) {
-    const aimMax = 10;
-    const codeMax = 40;
-    const outputMax = 20;
-    const vivaMax = 20;
+    const aimMax = 25;
+    const progMax = 45;
     const resultMax = 10;
+    const vivaMax = 20;
 
-    let aimAwarded = breakdown?.algorithm !== undefined ? Number(breakdown.algorithm) : (exp.algorithm_marks || 10);
-    let codeAwarded = breakdown?.program !== undefined ? Number(breakdown.program) : (exp.code_marks || 40);
-    let outputAwarded = breakdown?.output !== undefined ? Number(breakdown.output) : (exp.output_marks || 20);
-    let vivaAwarded = breakdown?.viva !== undefined ? Number(breakdown.viva) : (exp.viva_marks || 20);
+    let aimAwarded = breakdown?.algorithm !== undefined ? Number(breakdown.algorithm) : (exp.algorithm_marks || 25);
+    let progAwarded = breakdown?.program !== undefined ? Number(breakdown.program) : (exp.code_marks || 45);
     let resultAwarded = breakdown?.result !== undefined ? Number(breakdown.result) : (exp.result_marks || 10);
+    let vivaAwarded = breakdown?.viva !== undefined ? Number(breakdown.viva) : (exp.viva_marks || 20);
 
     // If totalScore differs from sum, adjust proportionally
-    const sum = aimAwarded + codeAwarded + outputAwarded + vivaAwarded + resultAwarded;
+    const sum = aimAwarded + progAwarded + resultAwarded + vivaAwarded;
     if (sum !== totalScore && totalScore <= 100) {
       const ratio = totalScore / 100;
       aimAwarded = Math.round(aimMax * ratio);
-      codeAwarded = Math.round(codeMax * ratio);
-      outputAwarded = Math.round(outputMax * ratio);
-      vivaAwarded = Math.round(vivaMax * ratio);
-      resultAwarded = totalScore - (aimAwarded + codeAwarded + outputAwarded + vivaAwarded);
-      if (resultAwarded < 0) resultAwarded = 0;
+      progAwarded = Math.round(progMax * ratio);
+      resultAwarded = Math.round(resultMax * ratio);
+      vivaAwarded = totalScore - (aimAwarded + progAwarded + resultAwarded);
+      if (vivaAwarded < 0) vivaAwarded = 0;
     }
 
     return {
       maxMarks: 100,
       totalScore,
       items: [
-        { label: 'Aim, Logic Formulation & Algorithm', max: aimMax, awarded: aimAwarded },
-        { label: 'Program Implementation & Syntax', max: codeMax, awarded: codeAwarded },
-        { label: 'Execution & Output Verification', max: outputMax, awarded: outputAwarded },
-        { label: 'Viva-Voce Assessment', max: vivaMax, awarded: vivaAwarded },
-        { label: 'Result, Discussion & Record Regularity', max: resultMax, awarded: resultAwarded },
+        { label: 'Aim & Algorithm Formulation', max: aimMax, awarded: aimAwarded },
+        { label: 'Program & Output Verification', max: progMax, awarded: progAwarded },
+        { label: 'Result & Technical Discussion', max: resultMax, awarded: resultAwarded },
+        { label: 'Viva-Voce Oral Assessment', max: vivaMax, awarded: vivaAwarded },
       ]
     };
   }
 
   // Proportional calculation for any custom maxMarks
-  const aimMax = Math.round(maxMarks * 0.1);
-  const codeMax = Math.round(maxMarks * 0.4);
-  const outputMax = Math.round(maxMarks * 0.2);
-  const vivaMax = Math.round(maxMarks * 0.2);
-  const resultMax = maxMarks - (aimMax + codeMax + outputMax + vivaMax);
+  const aimMax = Math.round(maxMarks * 0.25);
+  const progMax = Math.round(maxMarks * 0.45);
+  const resultMax = Math.round(maxMarks * 0.10);
+  const vivaMax = maxMarks - (aimMax + progMax + resultMax);
 
   const ratio = totalScore / maxMarks;
   const aimAwarded = Math.round(aimMax * ratio);
