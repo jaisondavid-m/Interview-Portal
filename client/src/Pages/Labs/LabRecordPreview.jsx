@@ -89,8 +89,37 @@ export default function LabRecordPreview() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!templateData) return;
+    try {
+      setDownloading(true);
+
+      const payload = {
+        ...templateData,
+        is_duplex: isDuplex
+      };
+
+      const res = await api.post('/labs/record-pdf/custom', payload, {
+        responseType: 'blob'
+      });
+
+      const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = `${templateData.roll_no || 'StudentRecord'}_${templateData.course_code || 'Lab'}.pdf`;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download error:', err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleZoom = (delta) => {
@@ -268,15 +297,19 @@ export default function LabRecordPreview() {
             <span className="hidden sm:inline">Refresh</span>
           </button>
 
-          {/* Print / Save PDF Button */}
+          {/* Direct PDF Download Button */}
           <button
-            onClick={handlePrint}
-            disabled={loading || !templateData}
+            onClick={handleDownloadPdf}
+            disabled={loading || downloading || !templateData}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-md)]"
-            title="Print or Save as PDF with crisp vector fonts and proper A4 margins"
+            title="Download full laboratory record PDF directly"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print / Save PDF</span>
+            {downloading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+            <span>{downloading ? 'Downloading...' : 'Download PDF'}</span>
           </button>
         </div>
       </div>

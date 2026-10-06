@@ -117,16 +117,40 @@ export default function AdminLabPdfViewer() {
     }
   };
 
-  const handlePrint = () => {
-    const prevMode = viewMode;
-    if (prevMode !== 'all') {
-      setViewMode('all');
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => setViewMode(prevMode), 600);
-      }, 150);
-    } else {
-      window.print();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!template) return;
+    try {
+      setDownloading(true);
+      showToast('Compiling official Lab Record PDF...', 'info');
+
+      const payload = {
+        ...template,
+        is_duplex: isDuplex
+      };
+
+      const res = await api.post('/admin/labs/record-pdf/custom', payload, {
+        responseType: 'blob'
+      });
+
+      const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = `${template.course_code || 'LabRecord'}_Audit_Document.pdf`;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('PDF downloaded successfully!', 'success');
+    } catch (err) {
+      console.error('Download error:', err);
+      showToast('Failed to download PDF. Please try again.', 'error');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -318,14 +342,19 @@ export default function AdminLabPdfViewer() {
             <span className="hidden sm:inline">Refresh</span>
           </button>
 
-          {/* Print PDF Button */}
+          {/* Direct PDF Download Button */}
           <button
-            onClick={handlePrint}
-            disabled={loading || !template}
+            onClick={handleDownloadPdf}
+            disabled={loading || downloading || !template}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 active:scale-[0.98] transition-all shadow-[var(--shadow-sm)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Download full laboratory manual PDF document directly"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print / Save PDF</span>
+            {downloading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+            <span>{downloading ? 'Downloading...' : 'Download PDF'}</span>
           </button>
         </div>
       </div>
