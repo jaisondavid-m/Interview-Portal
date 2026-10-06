@@ -4,8 +4,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { Copy, Check, Lock, ShieldAlert } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 
 const LANGUAGE_CONFIGS = [
   { id: 'c', label: 'C (GCC / Clang)', extension: () => cpp() },
@@ -113,27 +112,11 @@ export default function CodeEditor({
               </option>
             ))}
           </select>
-          {isLanguageLocked && (
-            <span
-              className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              title="Language engine is fixed for this practical experiment"
-            >
-              <Lock className="w-3 h-3" /> Fixed Engine
-            </span>
-          )}
         </div>
 
         {/* Actions Toolbar */}
         <div className="flex items-center gap-2">
-          {!allowCopyPaste ? (
-            <span
-              className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              title="Exam Environment: Clipboard copy & paste are strictly disabled"
-            >
-              <ShieldAlert className="w-3 h-3" />
-              <span>Exam Mode (Copy-Paste Disabled)</span>
-            </span>
-          ) : (
+          {allowCopyPaste && (
             <button
               onClick={handleCopy}
               title="Copy code to clipboard"
