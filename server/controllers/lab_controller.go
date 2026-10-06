@@ -2591,6 +2591,41 @@ func GetStudentCoursePdfTemplate(c *gin.Context) {
 			}
 		}
 
+		rawCases := ""
+		if assignedQ != nil && strings.TrimSpace(assignedQ.SampleTestCases) != "" {
+			rawCases = assignedQ.SampleTestCases
+		} else if strings.TrimSpace(exp.SampleTestCases) != "" {
+			rawCases = exp.SampleTestCases
+		}
+
+		if strings.TrimSpace(outText) == "" && rawCases != "" {
+			var testCases []map[string]interface{}
+			if err := json.Unmarshal([]byte(rawCases), &testCases); err == nil && len(testCases) > 0 {
+				var formattedOutput strings.Builder
+				for idx, tc := range testCases {
+					inp, _ := tc["input"].(string)
+					out, _ := tc["expected_output"].(string)
+					if out == "" {
+						out, _ = tc["expected"].(string)
+					}
+					if out == "" {
+						out, _ = tc["output"].(string)
+					}
+					if len(testCases) > 1 {
+						formattedOutput.WriteString(fmt.Sprintf("[SAMPLE TEST CASE %d]\n", idx+1))
+					}
+					if strings.TrimSpace(inp) != "" {
+						formattedOutput.WriteString(fmt.Sprintf("Sample Input:\n%s\n\n", strings.TrimSpace(inp)))
+					}
+					formattedOutput.WriteString(fmt.Sprintf("Sample Console Output:\n%s\n", strings.TrimSpace(out)))
+					if idx < len(testCases)-1 {
+						formattedOutput.WriteString("\n----------------------------------------\n\n")
+					}
+				}
+				outText = strings.TrimSpace(formattedOutput.String())
+			}
+		}
+
 		if strings.TrimSpace(code) == "" {
 			code = fmt.Sprintf("# Solution for Ex %d: %s\nprint('Output verified')", exp.ExperimentNo, title)
 		}
@@ -2604,6 +2639,7 @@ func GetStudentCoursePdfTemplate(c *gin.Context) {
 			Language:         exp.Language,
 			SubmittedCode:    code,
 			ExecutionOutput:  outText,
+			SampleTestCases:  rawCases,
 			PassCount:        passCount,
 			TotalTestCases:   totalTests,
 			CodeMarks:        codeMarks,

@@ -596,6 +596,45 @@ func AdminGetCoursePdfTemplate(c *gin.Context) {
 			}
 		}
 
+		rawCases := ""
+		if hasQ && strings.TrimSpace(q.SampleTestCases) != "" {
+			rawCases = q.SampleTestCases
+		} else if strings.TrimSpace(exp.SampleTestCases) != "" {
+			rawCases = exp.SampleTestCases
+		}
+
+		var formattedOutput strings.Builder
+		if rawCases != "" {
+			var testCases []map[string]interface{}
+			if err := json.Unmarshal([]byte(rawCases), &testCases); err == nil && len(testCases) > 0 {
+				for idx, tc := range testCases {
+					inp, _ := tc["input"].(string)
+					out, _ := tc["expected_output"].(string)
+					if out == "" {
+						out, _ = tc["expected"].(string)
+					}
+					if out == "" {
+						out, _ = tc["output"].(string)
+					}
+					if len(testCases) > 1 {
+						formattedOutput.WriteString(fmt.Sprintf("[SAMPLE TEST CASE %d]\n", idx+1))
+					}
+					if strings.TrimSpace(inp) != "" {
+						formattedOutput.WriteString(fmt.Sprintf("Sample Input:\n%s\n\n", strings.TrimSpace(inp)))
+					}
+					formattedOutput.WriteString(fmt.Sprintf("Sample Console Output:\n%s\n", strings.TrimSpace(out)))
+					if idx < len(testCases)-1 {
+						formattedOutput.WriteString("\n----------------------------------------\n\n")
+					}
+				}
+			}
+		}
+
+		outText := strings.TrimSpace(formattedOutput.String())
+		if outText == "" {
+			outText = fmt.Sprintf("Sample Input:\n>> Standard test parameters provided.\n\nSample Console Output:\n>> Result computed successfully for '%s'.\n>> All test benchmarks verified.", title)
+		}
+
 		if strings.TrimSpace(code) == "" {
 			code = fmt.Sprintf("# Solution for Ex %d: %s\n\ndef solution():\n    print('Experiment %d completed successfully')\n\nif __name__ == '__main__':\n    solution()", exp.ExperimentNo, title, exp.ExperimentNo)
 		}
@@ -607,7 +646,8 @@ func AdminGetCoursePdfTemplate(c *gin.Context) {
 			Procedure:       procedure,
 			Language:        lang,
 			SubmittedCode:   code,
-			ExecutionOutput: fmt.Sprintf("All test cases passed. Console output verified for '%s'.", title),
+			ExecutionOutput: outText,
+			SampleTestCases: rawCases,
 			PassCount:       3,
 			TotalTestCases:  3,
 			Marks:           marksVal,

@@ -27,6 +27,7 @@ type CustomLabExperimentItem struct {
 	Language         string   `json:"language"`
 	SubmittedCode    string   `json:"submitted_code"`
 	ExecutionOutput  string   `json:"execution_output"`
+	SampleTestCases  string   `json:"sample_test_cases"`
 	PassCount        int      `json:"pass_count"`
 	TotalTestCases   int      `json:"total_test_cases"`
 	CodeMarks        int      `json:"code_marks"`

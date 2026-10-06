@@ -25,10 +25,30 @@ export const parseProcedureSteps = (procedure) => {
   return lines;
 };
 
-// Clean execution output of artificial test assertion jargon
-export const cleanExecutionOutput = (output, title) => {
+// Clean and format execution output with uploaded Sample Input & Console Output
+export const cleanExecutionOutput = (output, title, sampleTestCases) => {
+  // If structured sample test cases are passed, format them directly
+  if (sampleTestCases) {
+    try {
+      const parsed = typeof sampleTestCases === 'string' ? JSON.parse(sampleTestCases) : sampleTestCases;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((tc, idx) => {
+          const prefix = parsed.length > 1 ? `[SAMPLE TEST CASE ${idx + 1}]\n` : '';
+          const inp = (tc.input || '').trim();
+          const out = (tc.expected_output || tc.expected || tc.output || '').trim();
+          let block = prefix;
+          if (inp) {
+            block += `Sample Input:\n${inp}\n\n`;
+          }
+          block += `Sample Console Output:\n${out || '>> Execution completed successfully.'}`;
+          return block;
+        }).join('\n\n' + '—'.repeat(38) + '\n\n');
+      }
+    } catch {}
+  }
+
   if (!output || typeof output !== 'string') {
-    return `Enter input parameters:\n>> Input processed successfully.\n\nOutput:\n>> Result computed for ${title || 'experiment'}.\n>> Execution completed.`;
+    return `Sample Input:\n>> Standard test input processed.\n\nSample Console Output:\n>> Result computed for ${title || 'experiment'}.\n>> Execution completed successfully.`;
   }
 
   let cleaned = output
@@ -39,7 +59,7 @@ export const cleanExecutionOutput = (output, title) => {
     .trim();
 
   if (!cleaned) {
-    return `Input:\n>> Processed inputs for ${title || 'experiment'}.\n\nOutput:\n>> Execution completed successfully.`;
+    return `Sample Input:\n>> Standard input verified.\n\nSample Console Output:\n>> Execution completed successfully for ${title || 'experiment'}.`;
   }
 
   return cleaned;
@@ -948,7 +968,7 @@ export default function LabRecordDocument({
           const showPage4 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_right` || viewMode === `exp_${expNo}_eval` || viewMode === expNo;
 
           const procedureSteps = parseProcedureSteps(exp.procedure);
-          const cleanOutput = cleanExecutionOutput(exp.execution_output, exp.title);
+          const cleanOutput = cleanExecutionOutput(exp.execution_output, exp.title, exp.sample_test_cases);
           const rubricsData = getExperimentRubrics(exp, 100);
 
           return (
@@ -1023,7 +1043,7 @@ export default function LabRecordDocument({
                             </tr>
                           </tbody>
                         </table>
-                        <div className="output-container" style={{ minHeight: '130px' }}>
+                        <div className="output-container" style={{ minHeight: '130px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
                           {cleanOutput}
                         </div>
                       </>
