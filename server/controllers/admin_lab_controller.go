@@ -549,32 +549,71 @@ func AdminGetCoursePdfTemplate(c *gin.Context) {
 	var experiments []models.LabExperiment
 	database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments)
 
+	// Fetch all uploaded question variants for this course
+	var allQuestions []models.LabExperimentQuestion
+	database.DB.Where("course_id = ? AND is_active = ?", courseID, true).Order("id asc").Find(&allQuestions)
+
+	// Map questions by experiment_id
+	questionMap := make(map[uint]models.LabExperimentQuestion)
+	for _, q := range allQuestions {
+		if _, exists := questionMap[q.ExperimentID]; !exists {
+			questionMap[q.ExperimentID] = q
+		}
+	}
+
 	var expItems []services.CustomLabExperimentItem
 	for _, exp := range experiments {
-		defaultCode := exp.StarterCode
-		if strings.TrimSpace(defaultCode) == "" {
-			defaultCode = fmt.Sprintf("# Solution for Ex %d: %s\n\ndef solution():\n    print('Experiment %d completed successfully')\n\nif __name__ == '__main__':\n    solution()", exp.ExperimentNo, exp.Title, exp.ExperimentNo)
-		}
+		q, hasQ := questionMap[exp.ID]
 
+		title := exp.Title
+		aim := exp.Aim
+		procedure := exp.Procedure
+		code := exp.StarterCode
+		lang := exp.Language
+		if lang == "" {
+			lang = "python"
+		}
 		marksVal := exp.MaxMarks
 		if marksVal <= 0 {
-			marksVal = 10
+			marksVal = 100
+		}
+
+		if hasQ {
+			if strings.TrimSpace(q.Title) != "" {
+				title = q.Title
+			}
+			if strings.TrimSpace(q.Aim) != "" {
+				aim = q.Aim
+			}
+			if strings.TrimSpace(q.ReferenceAlgorithm) != "" {
+				procedure = q.ReferenceAlgorithm
+			}
+			if strings.TrimSpace(q.SolutionCode) != "" {
+				code = q.SolutionCode
+			}
+			if strings.TrimSpace(q.Language) != "" {
+				lang = q.Language
+			}
+		}
+
+		if strings.TrimSpace(code) == "" {
+			code = fmt.Sprintf("# Solution for Ex %d: %s\n\ndef solution():\n    print('Experiment %d completed successfully')\n\nif __name__ == '__main__':\n    solution()", exp.ExperimentNo, title, exp.ExperimentNo)
 		}
 
 		expItems = append(expItems, services.CustomLabExperimentItem{
 			ExperimentNo:    exp.ExperimentNo,
-			Title:           exp.Title,
-			Aim:             exp.Aim,
-			Procedure:       exp.Procedure,
-			Language:        exp.Language,
-			SubmittedCode:   defaultCode,
-			ExecutionOutput: fmt.Sprintf("All test cases passed. Console output verified for '%s'.", exp.Title),
+			Title:           title,
+			Aim:             aim,
+			Procedure:       procedure,
+			Language:        lang,
+			SubmittedCode:   code,
+			ExecutionOutput: fmt.Sprintf("All test cases passed. Console output verified for '%s'.", title),
 			PassCount:       3,
 			TotalTestCases:  3,
 			Marks:           marksVal,
 			Status:          "APPROVED",
 			Date:            time.Now().Format("02-01-2006"),
-			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title),
+			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", title),
 		})
 	}
 
@@ -679,11 +718,34 @@ func AdminSaveCoursePdfTemplate(c *gin.Context) {
 			}
 			database.DB.Model(&exp).Updates(expUpdates)
 		}
+
+		// Also synchronize primary question variant if it exists
+		var primaryQ models.LabExperimentQuestion
+		if err := database.DB.Where("experiment_id = ?", exp.ID).Order("id asc").First(&primaryQ).Error; err == nil {
+			qUpdates := map[string]interface{}{}
+			if item.Title != "" {
+				qUpdates["title"] = item.Title
+			}
+			if item.Aim != "" {
+				qUpdates["aim"] = item.Aim
+			}
+			if item.Procedure != "" {
+				qUpdates["reference_algorithm"] = item.Procedure
+			}
+			if item.SubmittedCode != "" {
+				qUpdates["solution_code"] = item.SubmittedCode
+			}
+			if item.Language != "" {
+				qUpdates["language"] = item.Language
+			}
+			if len(qUpdates) > 0 {
+				database.DB.Model(&primaryQ).Updates(qUpdates)
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Course Lab Record template successfully saved for all experiments!",
-		"course":  course,
 	})
 }
 
