@@ -1535,7 +1535,7 @@ export default function LabEvaluationPage() {
                           value={currentVal}
                           onChange={(e) => handleMarkChange(crit.key, maxM, e.target.value)}
                           placeholder="0"
-                          className="w-14 text-center font-mono font-bold text-xs py-1.5 px-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                          className="w-14 text-center font-mono font-bold text-xs py-1.5 px-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-spinner"
                         />
                         <span className="text-[11px] font-mono text-[var(--text-muted)]">
                           / {maxM}
