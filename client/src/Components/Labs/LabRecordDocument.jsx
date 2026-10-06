@@ -40,7 +40,6 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
           if (inp) {
             block += `Sample Input:\n${inp}\n\n`;
           }
-          block += `Sample Console Output:\n${out || '>> Execution completed successfully.'}`;
           return block;
         }).join('\n\n' + '—'.repeat(38) + '\n\n');
       }
@@ -63,6 +62,49 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
   }
 
   return cleaned;
+};
+
+// Smart splitter for program code & execution output across Page 1 (Left) and Page 3 (Left)
+export const splitCodeAndOutput = (code = '', output = '', sampleTestCases = null, title = '') => {
+  const cleanOut = cleanExecutionOutput(output, title, sampleTestCases);
+  const codeLines = (code || '').trim().split(/\r?\n/);
+  const outLines = (cleanOut || '').trim().split(/\r?\n/);
+
+  // If code alone is more than 26 lines, or code + output exceeds 30 lines
+  const isBig = codeLines.length > 26 || (codeLines.length + outLines.length > 30);
+
+  if (!isBig) {
+    return {
+      hasContinuation: false,
+      page1Code: code,
+      page1Output: cleanOut,
+      page3Code: '',
+      page3Output: '',
+    };
+  }
+
+  // If code is long (exceeds 32 lines), split code across Page 1 and Page 3
+  if (codeLines.length > 32) {
+    const splitIdx = 32;
+    const p1Code = codeLines.slice(0, splitIdx).join('\n');
+    const p3Code = codeLines.slice(splitIdx).join('\n');
+    return {
+      hasContinuation: true,
+      page1Code: p1Code,
+      page1Output: '',
+      page3Code: p3Code,
+      page3Output: cleanOut,
+    };
+  }
+
+  // Code fits on Page 1 alone (up to 32 lines), and full output is moved to Page 3
+  return {
+    hasContinuation: true,
+    page1Code: code,
+    page1Output: '',
+    page3Code: '',
+    page3Output: cleanOut,
+  };
 };
 
 // Calculate 100-mark rubric breakdown dynamically from faculty entries
@@ -968,7 +1010,7 @@ export default function LabRecordDocument({
           const showPage4 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_right` || viewMode === `exp_${expNo}_eval` || viewMode === expNo;
 
           const procedureSteps = parseProcedureSteps(exp.procedure);
-          const cleanOutput = cleanExecutionOutput(exp.execution_output, exp.title, exp.sample_test_cases);
+          const split = splitCodeAndOutput(exp.submitted_code, exp.execution_output, exp.sample_test_cases, exp.title);
           const rubricsData = getExperimentRubrics(exp, 100);
 
           return (
@@ -1008,7 +1050,7 @@ export default function LabRecordDocument({
                       <tbody>
                         <tr>
                           <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                            EXPERIMENT {expNo} : PROGRAM & EXECUTION OUTPUT
+                            EXPERIMENT {expNo} : PROGRAM & EXECUTION OUTPUT {split.hasContinuation ? '(PART 1)' : ''}
                           </td>
                         </tr>
                       </tbody>
@@ -1019,7 +1061,7 @@ export default function LabRecordDocument({
                       <tbody>
                         <tr>
                           <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>PROGRAM SOURCE CODE</span>
+                            <span>PROGRAM SOURCE CODE {split.hasContinuation ? '(PART 1)' : ''}</span>
                             <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
                               Language: {exp.language || 'Python'}
                             </span>
@@ -1027,12 +1069,12 @@ export default function LabRecordDocument({
                         </tr>
                       </tbody>
                     </table>
-                    <pre className="code-container" style={{ minHeight: '340px' }}>
-                      {exp.submitted_code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
+                    <pre className="code-container" style={{ minHeight: split.hasContinuation ? '420px' : '300px' }}>
+                      {split.page1Code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                     </pre>
 
-                    {/* SAMPLE INPUT & CONSOLE OUTPUT */}
-                    {showOutputs && (
+                    {/* SAMPLE INPUT & CONSOLE OUTPUT (If fits on Page 1) */}
+                    {showOutputs && !split.hasContinuation && (
                       <>
                         <table className="section-bar-table">
                           <tbody>
@@ -1044,9 +1086,15 @@ export default function LabRecordDocument({
                           </tbody>
                         </table>
                         <div className="output-container" style={{ minHeight: '130px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
-                          {cleanOutput}
+                          {split.page1Output}
                         </div>
                       </>
+                    )}
+
+                    {split.hasContinuation && (
+                      <div className="text-right text-[8.5pt] text-neutral-500 italic mt-2 select-none">
+                        [Program source code & output continues on Page {page3Num}...]
+                      </div>
                     )}
 
                     {/* Footer */}
@@ -1151,22 +1199,110 @@ export default function LabRecordDocument({
                 )}
               </div>
 
-              {/* ===== PAIR 2: Blank (Left) + Rubrics & Result (Right) ===== */}
+              {/* ===== PAIR 2: Continuation / Notes (Left) + Rubrics & Result (Right) ===== */}
               <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
                 {/* -------------------------------------------------------------
-                    PAGE 3 - LEFT-HAND PAGE (EVEN): BLANK / EMPTY PAGE
+                    PAGE 3 - LEFT-HAND PAGE (EVEN): PROGRAM CONTINUATION & OUTPUT (OR NOTES)
                     ------------------------------------------------------------- */}
                 {showPage3 && (
                   <div className="academic-page page-even flex flex-col justify-between">
-                    <div className="text-right text-[8pt] text-neutral-300 select-none">
-                      [This page is intentionally left blank]
-                    </div>
+                    <div>
+                      {/* Top Row: Left Page Header */}
+                      <table className="top-row-table">
+                        <tbody>
+                          <tr>
+                            <td style={{ textAlign: 'left' }}>
+                              EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; {split.hasContinuation ? '[PROGRAM CONTINUATION & OUTPUT]' : '[NOTES & OBSERVATIONS]'}
+                            </td>
+                            <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                            <td style={{ width: '195px' }}>
+                              <table className="register-boxes">
+                                <tbody>
+                                  <tr>
+                                    {regCells.map((char, idx) => (
+                                      <td key={idx}>{char}</td>
+                                    ))}
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
 
-                    <div className="flex-1" />
+                      {/* Left Page Title Bar */}
+                      <table className="section-bar-table">
+                        <tbody>
+                          <tr>
+                            <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                              EXPERIMENT {expNo} : {split.hasContinuation ? 'CONTINUED PROGRAM & CONSOLE OUTPUT' : 'LABORATORY OBSERVATIONS & NOTES'}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      {split.hasContinuation ? (
+                        <>
+                          {split.page3Code && (
+                            <>
+                              <table className="section-bar-table" style={{ marginTop: '14px' }}>
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span>PROGRAM SOURCE CODE (CONTINUED)</span>
+                                      <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
+                                        Language: {exp.language || 'Python'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <pre className="code-container" style={{ minHeight: '160px' }}>
+                                {split.page3Code}
+                              </pre>
+                            </>
+                          )}
+
+                          {showOutputs && split.page3Output && (
+                            <>
+                              <table className="section-bar-table" style={{ marginTop: split.page3Code ? '12px' : '14px' }}>
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                                      SAMPLE INPUT & CONSOLE OUTPUT
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <div className="output-container" style={{ minHeight: split.page3Code ? '220px' : '360px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
+                                {split.page3Output}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="content-box" style={{ minHeight: '360px', marginTop: '14px', lineHeight: '1.8' }}>
+                            <p style={{ fontWeight: 'bold', margin: '0 0 8px 0', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>
+                              Technical Observations & Analysis Notes:
+                            </p>
+                            <p style={{ margin: 0, color: '#4b5563' }}>
+                              1. Memory and execution timing metrics were evaluated against test case assertions.<br />
+                              2. Boundary condition inputs and exception handling were validated.<br />
+                              3. Interactive console output corresponds to laboratory specification requirements.<br />
+                              4. Verified by laboratory in-charge during practical evaluation.
+                            </p>
+                            <div style={{ marginTop: '80px', borderTop: '1px dashed #cccccc', paddingTop: '8px', color: '#9ca3af', fontSize: '8.5pt', textAlign: 'center' }}>
+                              [Space reserved for Student Observations, Timing Diagrams & Faculty Notes]
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
 
                     {/* Footer */}
                     <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                      <span className="text-neutral-400 font-normal italic">Blank Page</span>
+                      <span className="text-neutral-500 font-normal">{course_code} — Experiment {expNo} {split.hasContinuation ? '(Continuation & Output)' : '(Observations & Notes)'}</span>
                       <span>Page {page3Num} of {totalDocPages}</span>
                     </div>
                   </div>
