@@ -30,10 +30,10 @@ pipeline {
                 echo '📥 Synchronizing codebase with origin/deploy...'
                 sh '''
                     cd "${PROJECT_DIR}"
-                    git fetch origin deploy:deploy || true
-                    git fetch origin main:main || true
+                    git config remote.origin.pushurl git@github.com:jaisondavid-m/Interview-Portal.git || true
+                    git fetch origin deploy main
                     git checkout deploy || git checkout -b deploy origin/deploy
-                    git reset --hard origin/deploy || true
+                    git reset --hard origin/deploy
                     echo "Latest Deploy Commit: $(git log -1 --oneline)"
                     chmod +x deploy.sh rollback.sh
                 '''
@@ -153,6 +153,7 @@ pipeline {
                 echo '🚀 Promoting verified deploy branch to main...'
                 sh '''
                     cd "${PROJECT_DIR}"
+                    git config remote.origin.pushurl git@github.com:jaisondavid-m/Interview-Portal.git || true
                     git fetch origin main deploy
                     git checkout main
                     git reset --hard origin/main
