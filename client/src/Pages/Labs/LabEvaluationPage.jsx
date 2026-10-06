@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -32,7 +32,9 @@ import {
   XCircle,
   Zap,
   RefreshCw,
-  Pencil
+  Pencil,
+  CloudCheck,
+  Save
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -85,6 +87,12 @@ export default function LabEvaluationPage() {
   const [isEditingCode, setIsEditingCode] = useState(false);
   const [customCode, setCustomCode] = useState('');
 
+  // Auto-save State (Marks, Notes, Edited Code)
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'error'
+  const [lastSavedTime, setLastSavedTime] = useState(null);
+  const isInitializedRef = useRef(false);
+  const saveTimeoutRef = useRef(null);
+
   // Test Case Runner & Verification State
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [testExecutionResults, setTestExecutionResults] = useState(null);
@@ -109,6 +117,7 @@ export default function LabEvaluationPage() {
   const fetchSubmissionDetails = async () => {
     try {
       setLoading(true);
+      isInitializedRef.current = false;
       setError('');
       const res = await api.get(`/lab-incharge/submission/${subId}`);
       setSubDetail(res);
@@ -167,9 +176,19 @@ export default function LabEvaluationPage() {
         initial['program'] = autoScore;
       }
 
-      setCustomCode(sub.submitted_code || '');
+      // Load faculty edited code if previously saved, else original student submission
+      const effectiveCode = (sub.faculty_edited_code !== undefined && sub.faculty_edited_code !== null && sub.faculty_edited_code !== '')
+        ? sub.faculty_edited_code
+        : (sub.submitted_code || '');
+
+      setCustomCode(effectiveCode);
       setMarksState(initial);
       setFacultyNotes(sub.faculty_notes || 'Verified by Lab Incharge');
+      setSaveStatus('saved');
+
+      setTimeout(() => {
+        isInitializedRef.current = true;
+      }, 300);
     } catch (err) {
       console.error(err);
       setError('Failed to load student experiment submission for evaluation.');
@@ -213,6 +232,57 @@ export default function LabEvaluationPage() {
     const pct = max > 0 ? Math.round((sum / max) * 100) : 0;
     return { totalMarks: sum, maxPossibleMarks: max, percentage: pct };
   }, [marksState, rubricList]);
+
+  // Debounced real-time draft autosave to database
+  useEffect(() => {
+    if (!isInitializedRef.current || loading || !subId) return;
+
+    setSaveStatus('saving');
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const breakdown = {};
+        rubricList.forEach((crit) => {
+          if (marksState[crit.key] !== '' && marksState[crit.key] !== undefined) {
+            breakdown[crit.key] = Number(marksState[crit.key]);
+          }
+        });
+        breakdown['total'] = totalMarks;
+
+        const codeMarks = marksState['program'] !== '' && marksState['program'] !== undefined
+          ? Number(marksState['program'])
+          : 0;
+        const vivaMarks = marksState['viva'] !== '' && marksState['viva'] !== undefined
+          ? Number(marksState['viva'])
+          : 0;
+
+        await api.post(`/lab-incharge/submission/${subId}/autosave-draft`, {
+          marks: totalMarks,
+          marks_breakdown: breakdown,
+          code_marks: codeMarks,
+          viva_marks: vivaMarks,
+          faculty_notes: facultyNotes,
+          faculty_edited_code: customCode,
+        });
+
+        setSaveStatus('saved');
+        setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      } catch (err) {
+        console.error('Draft autosave failed:', err);
+        setSaveStatus('error');
+      }
+    }, 650);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [marksState, facultyNotes, customCode, totalMarks, subId, rubricList, loading]);
 
   const handleMarkChange = (key, maxMarks, rawValue) => {
     if (rawValue === '') {
@@ -260,6 +330,7 @@ export default function LabEvaluationPage() {
         code_marks: codeMarks,
         viva_marks: vivaMarks,
         faculty_notes: facultyNotes,
+        faculty_edited_code: customCode,
       });
 
       showToast(
@@ -574,6 +645,26 @@ export default function LabEvaluationPage() {
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          {/* Real-time DB Autosave Status Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs shadow-sm">
+            {saveStatus === 'saving' ? (
+              <span className="flex items-center gap-1.5 text-[var(--accent)] font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Auto-saving draft...</span>
+              </span>
+            ) : saveStatus === 'saved' ? (
+              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Auto-saved to DB{lastSavedTime ? ` (${lastSavedTime})` : ''}</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-rose-500 font-medium">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Auto-save failed</span>
+              </span>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={handleResetAllocation}
@@ -1375,9 +1466,16 @@ export default function LabEvaluationPage() {
                   Evaluation Rubric Scoring
                 </h3>
               </div>
-              <span className="text-[11px] font-mono font-bold text-[var(--accent)]">
-                Max 100 Marks
-              </span>
+              <div className="flex items-center gap-2">
+                {saveStatus === 'saving' && (
+                  <span className="text-[10px] text-[var(--accent)] flex items-center gap-1 font-mono">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Saving...
+                  </span>
+                )}
+                <span className="text-[11px] font-mono font-bold text-[var(--accent)]">
+                  Max 100 Marks
+                </span>
+              </div>
             </div>
 
             {/* Quick Fill Presets */}

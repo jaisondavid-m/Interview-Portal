@@ -1340,7 +1340,11 @@ func FacultyRunSubmissionTestCases(c *gin.Context) {
 
 	code := req.Code
 	if strings.TrimSpace(code) == "" {
-		code = sub.SubmittedCode
+		if strings.TrimSpace(sub.FacultyEditedCode) != "" {
+			code = sub.FacultyEditedCode
+		} else {
+			code = sub.SubmittedCode
+		}
 	}
 	lang := req.Language
 	if strings.TrimSpace(lang) == "" {
@@ -1460,14 +1464,91 @@ func FacultyRunSubmissionTestCases(c *gin.Context) {
 	})
 }
 
+type FacultyAutosaveDraftReq struct {
+	CodeMarks         *int                   `json:"code_marks"`
+	VivaMarks         *int                   `json:"viva_marks"`
+	Marks             *int                   `json:"marks"`
+	MarksBreakdown    map[string]interface{} `json:"marks_breakdown"`
+	FacultyNotes      *string                `json:"faculty_notes"`
+	FacultyEditedCode *string                `json:"faculty_edited_code"`
+}
+
+// FacultyAutosaveSubmissionDraft autosaves marks, breakdown, faculty notes, and edited code in real time without approving
+func FacultyAutosaveSubmissionDraft(c *gin.Context) {
+	subIDStr := c.Param("subId")
+	subID, err := strconv.ParseUint(subIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+
+	var sub models.LabSubmission
+	if err := database.DB.First(&sub, subID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+		return
+	}
+
+	var req FacultyAutosaveDraftReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+		return
+	}
+
+	updates := make(map[string]interface{})
+
+	if req.FacultyEditedCode != nil {
+		updates["faculty_edited_code"] = *req.FacultyEditedCode
+		sub.FacultyEditedCode = *req.FacultyEditedCode
+	}
+
+	if req.FacultyNotes != nil {
+		updates["faculty_notes"] = *req.FacultyNotes
+		sub.FacultyNotes = *req.FacultyNotes
+	}
+
+	if req.MarksBreakdown != nil {
+		breakdownJSON, err := json.Marshal(req.MarksBreakdown)
+		if err == nil {
+			updates["marks_breakdown"] = string(breakdownJSON)
+			sub.MarksBreakdown = string(breakdownJSON)
+		}
+	}
+
+	if req.CodeMarks != nil {
+		updates["code_marks"] = *req.CodeMarks
+		sub.CodeMarks = *req.CodeMarks
+	}
+
+	if req.VivaMarks != nil {
+		updates["viva_marks"] = *req.VivaMarks
+		sub.VivaMarks = *req.VivaMarks
+	}
+
+	if req.Marks != nil {
+		updates["marks"] = *req.Marks
+		sub.Marks = *req.Marks
+	}
+
+	if len(updates) > 0 {
+		database.DB.Model(&sub).Updates(updates)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"message":    "Draft auto-saved successfully",
+		"submission": sub,
+	})
+}
+
 type VerifySingleReq struct {
-	SubmissionID   uint                   `json:"submission_id" binding:"required"`
-	Status         string                 `json:"status" binding:"required"` // APPROVED, REVISION_REQUIRED
-	CodeMarks      int                    `json:"code_marks"`
-	VivaMarks      int                    `json:"viva_marks"`
-	Marks          int                    `json:"marks"` // Total Marks (out of 100)
-	MarksBreakdown map[string]interface{} `json:"marks_breakdown"`
-	FacultyNotes   string                 `json:"faculty_notes"`
+	SubmissionID      uint                   `json:"submission_id" binding:"required"`
+	Status            string                 `json:"status" binding:"required"` // APPROVED, REVISION_REQUIRED
+	CodeMarks         int                    `json:"code_marks"`
+	VivaMarks         int                    `json:"viva_marks"`
+	Marks             int                    `json:"marks"` // Total Marks (out of 100)
+	MarksBreakdown    map[string]interface{} `json:"marks_breakdown"`
+	FacultyNotes      string                 `json:"faculty_notes"`
+	FacultyEditedCode string                 `json:"faculty_edited_code"`
 }
 
 // VerifySingleExperiment allows faculty to evaluate viva, award marks, and approve experiment
@@ -1503,6 +1584,9 @@ func VerifySingleExperiment(c *gin.Context) {
 		}
 	}
 	sub.FacultyNotes = req.FacultyNotes
+	if req.FacultyEditedCode != "" {
+		sub.FacultyEditedCode = req.FacultyEditedCode
+	}
 	sub.VerifiedBy = &facultyID
 	sub.VerifiedAt = &now
 	database.DB.Save(&sub)
@@ -2433,7 +2517,9 @@ func GetStudentCoursePdfTemplate(c *gin.Context) {
 		dateStr := time.Now().Format("02-01-2006")
 
 		if hasSub {
-			if strings.TrimSpace(sub.SubmittedCode) != "" {
+			if strings.TrimSpace(sub.FacultyEditedCode) != "" {
+				code = sub.FacultyEditedCode
+			} else if strings.TrimSpace(sub.SubmittedCode) != "" {
 				code = sub.SubmittedCode
 			}
 			if sub.ExecutionOutput != "" {

@@ -700,7 +700,10 @@ func GenerateLabRecordPDF(course models.LabCourse, student models.User, submissi
 			dateStr = time.Now().Format("02-01-2006")
 		}
 
-		code := sub.SubmittedCode
+		code := sub.FacultyEditedCode
+		if strings.TrimSpace(code) == "" {
+			code = sub.SubmittedCode
+		}
 		if strings.TrimSpace(code) == "" {
 			code = exp.StarterCode
 		}

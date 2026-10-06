@@ -17,6 +17,7 @@ type LabSubmission struct {
 	Question           *LabExperimentQuestion `gorm:"foreignKey:QuestionID" json:"question,omitempty"`
 	StudentProcedure   string                 `gorm:"type:text" json:"student_procedure"` // JSON array of student's step-by-step algorithm
 	SubmittedCode      string                 `gorm:"type:text;not null" json:"submitted_code"`
+	FacultyEditedCode  string                 `gorm:"type:text" json:"faculty_edited_code"` // Code edited/corrected by faculty during evaluation
 	Language           string                 `gorm:"size:50;not null" json:"language"`
 	ExecutionOutput    string                 `gorm:"type:text" json:"execution_output"`
 	PassCount          int                    `gorm:"default:0" json:"pass_count"`
