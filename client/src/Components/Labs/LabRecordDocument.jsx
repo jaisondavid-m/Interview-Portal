@@ -126,49 +126,98 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
     return `Sample Input:\n>> Standard input verified.\n\nSample Console Output:\n>> Execution completed successfully for ${title || 'experiment'}.`;
   }
 
+  if (!cleaned.includes('Sample Console Output:') && !cleaned.includes('Sample Input:')) {
+    cleaned = `Sample Console Output:\n${cleaned}`;
+  }
+
   return cleaned;
 };
 
-// Smart splitter for program code & execution output across Page 1 (Left) and Page 3 (Left)
-export const splitCodeAndOutput = (code = '', output = '', sampleTestCases = null, title = '') => {
+// Smart paginator for experiment code & output guaranteeing every page is strictly A4 height
+export const paginateExperimentContent = (code = '', output = '', sampleTestCases = null, title = '') => {
   const cleanOut = cleanExecutionOutput(output, title, sampleTestCases);
-  const codeLines = (code || '').trim().split(/\r?\n/);
-  const outLines = (cleanOut || '').trim().split(/\r?\n/);
+  const codeLines = (code || '').trim() ? (code || '').trim().split(/\r?\n/) : [];
+  const outLines = (cleanOut || '').trim() ? (cleanOut || '').trim().split(/\r?\n/) : [];
 
-  // If code alone is more than 26 lines, or code + output exceeds 30 lines
-  const isBig = codeLines.length > 26 || (codeLines.length + outLines.length > 30);
+  const MAX_CODE_PER_PAGE = 26;
+  const MAX_OUT_PER_PAGE = 24;
 
-  if (!isBig) {
-    return {
-      hasContinuation: false,
-      page1Code: code,
-      page1Output: cleanOut,
-      page3Code: '',
-      page3Output: '',
-    };
+  const leftPages = [];
+
+  // Break code into chunks of up to MAX_CODE_PER_PAGE
+  if (codeLines.length > 0) {
+    let cIdx = 0;
+    const totalCodeChunks = Math.ceil(codeLines.length / MAX_CODE_PER_PAGE);
+    let codePart = 1;
+
+    while (cIdx < codeLines.length) {
+      const chunk = codeLines.slice(cIdx, cIdx + MAX_CODE_PER_PAGE);
+      leftPages.push({
+        type: 'code',
+        code: chunk.join('\n'),
+        output: '',
+        titleSuffix: totalCodeChunks > 1 ? `(PART ${codePart})` : '',
+      });
+      cIdx += MAX_CODE_PER_PAGE;
+      codePart++;
+    }
+  } else {
+    leftPages.push({
+      type: 'code',
+      code: `# Program for: ${title || 'Lab Experiment'}\ndef main():\n    print("Execution completed successfully")\n\nif __name__ == '__main__':\n    main()`,
+      output: '',
+      titleSuffix: '',
+    });
   }
 
-  // If code is long (exceeds 32 lines), split code across Page 1 and Page 3
-  if (codeLines.length > 32) {
-    const splitIdx = 32;
-    const p1Code = codeLines.slice(0, splitIdx).join('\n');
-    const p3Code = codeLines.slice(splitIdx).join('\n');
-    return {
-      hasContinuation: true,
-      page1Code: p1Code,
-      page1Output: '',
-      page3Code: p3Code,
-      page3Output: cleanOut,
-    };
+  // Break output into chunks of up to MAX_OUT_PER_PAGE
+  if (outLines.length > 0) {
+    let oIdx = 0;
+    const totalOutChunks = Math.ceil(outLines.length / MAX_OUT_PER_PAGE);
+    let outPart = 1;
+
+    while (oIdx < outLines.length) {
+      const chunk = outLines.slice(oIdx, oIdx + MAX_OUT_PER_PAGE);
+      leftPages.push({
+        type: 'output',
+        code: '',
+        output: chunk.join('\n'),
+        titleSuffix: totalOutChunks > 1 ? `CONSOLE OUTPUT (PART ${outPart})` : 'CONSOLE OUTPUT',
+      });
+      oIdx += MAX_OUT_PER_PAGE;
+      outPart++;
+    }
+  } else {
+    leftPages.push({
+      type: 'output',
+      code: '',
+      output: 'Sample Console Output:\n>> Execution completed successfully.',
+      titleSuffix: 'CONSOLE OUTPUT',
+    });
   }
 
-  // Code fits on Page 1 alone (up to 32 lines), and full output is moved to Page 3
+  // Ensure an experiment always has at least 2 Left pages (Pair 1: Code -> Aim/Algo, Pair 2: Output -> Eval/Result)
+  if (leftPages.length < 2) {
+    leftPages.push({
+      type: 'output',
+      code: '',
+      output: cleanOut || 'Sample Console Output:\n>> Execution completed successfully.',
+      titleSuffix: 'CONSOLE OUTPUT',
+    });
+  }
+
+  return leftPages;
+};
+
+// Legacy compatibility export
+export const splitCodeAndOutput = (code = '', output = '', sampleTestCases = null, title = '') => {
+  const pages = paginateExperimentContent(code, output, sampleTestCases, title);
   return {
-    hasContinuation: true,
-    page1Code: code,
-    page1Output: '',
-    page3Code: '',
-    page3Output: cleanOut,
+    hasContinuation: pages.length > 1,
+    page1Code: pages[0]?.code || '',
+    page1Output: pages[0]?.output || '',
+    page3Code: pages[1]?.code || '',
+    page3Output: pages[1]?.output || '',
   };
 };
 
@@ -293,7 +342,27 @@ export default function LabRecordDocument({
   const defaultCertText = certificate_text ||
     `Certified that this is the bonafide record of practical work done by Mr./Ms. ${student_name} (Register No: ${register_no || roll_no}) of ${semester}, ${department} in the ${course_code} – ${course_title} Laboratory during the academic year ${academic_year}.`;
 
-  const totalDocPages = 6 + (experiments.length * 4);
+  // Compute smart dynamic pagination across all experiments
+  let runningPageCount = 6;
+  const experimentPaginator = experiments.map((exp, index) => {
+    const expNo = exp.experiment_no || index + 1;
+    const leftPages = paginateExperimentContent(exp.submitted_code, exp.execution_output, exp.sample_test_cases, exp.title);
+    const pairCount = leftPages.length;
+    const startPage = runningPageCount + 1;
+    const endPage = startPage + (pairCount * 2) - 1;
+    runningPageCount = endPage;
+
+    return {
+      exp,
+      expNo,
+      leftPages,
+      pairCount,
+      startPage,
+      endPage,
+    };
+  });
+
+  const totalDocPages = runningPageCount;
 
   return (
     <div className="lab-record-wrapper font-serif text-black selection:bg-neutral-200">
@@ -398,6 +467,9 @@ export default function LabRecordDocument({
           line-height: 1.5;
           width: 210mm;
           min-height: 297mm;
+          height: 297mm;
+          max-height: 297mm;
+          overflow: hidden;
           box-sizing: border-box;
           padding: 16mm 18mm 18mm 18mm;
           margin: 0 auto 28px auto;
@@ -986,15 +1058,15 @@ export default function LabRecordDocument({
                       </td>
                     </tr>
                   ) : (
-                    experiments.map((exp, idx) => {
-                      const startPage = 7 + (idx * 4);
+                    experimentPaginator.map((item, idx) => {
+                      const { exp, expNo, startPage, endPage } = item;
                       const rubricsData = getExperimentRubrics(exp, 100);
                       return (
                         <tr key={idx}>
-                          <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>{exp.experiment_no || idx + 1}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>{expNo}</td>
                           <td style={{ textAlign: 'center', fontSize: '9.5pt', padding: '8px 6px' }}>{exp.date || '05-10-2026'}</td>
                           <td style={{ fontWeight: '500', padding: '8px 10px' }}>{exp.title}</td>
-                          <td style={{ textAlign: 'center', padding: '8px 6px' }}>{startPage} – {startPage + 3}</td>
+                          <td style={{ textAlign: 'center', padding: '8px 6px' }}>{startPage} – {endPage}</td>
                           <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '8px 6px' }}>
                             {rubricsData.totalScore} / 100
                           </td>
@@ -1079,302 +1151,80 @@ export default function LabRecordDocument({
         </div>
 
         {/* =========================================================
-            EXPERIMENTS: FOUR-PAGE RECORD NOTEBOOK STRUCTURE
-            - Page 1 (Left/Even): Program Source Code & Output
-            - Page 2 (Right/Odd): Aim & Algorithm / Procedure ONLY
-            - Page 3 (Left/Even): Empty / Blank Page
-            - Page 4 (Right/Odd): Evaluation Rubrics (Centre) & Result (Bottom)
-            Pages displayed side-by-side in book spread pairs
+            EXPERIMENTS: DYNAMIC MULTI-PAIR RECORD NOTEBOOK STRUCTURE
+            - Pair 1 (Left/Even): Program Source Code (Part 1)
+            - Pair 1 (Right/Odd): Aim & Algorithm / Procedure
+            - Intermediate Pairs (if needed): Continued Code/Output (Left) & Notes/Diagrams (Right)
+            - Final Pair (Left/Even): Final Program / Console Output
+            - Final Pair (Right/Odd): Evaluation Rubrics & Result with Signature
+            All pages are strictly constrained to A4 sheet dimensions.
             ========================================================= */}
-        {experiments.map((exp, index) => {
-          const expNo = exp.experiment_no || index + 1;
-          const page1Num = 7 + (index * 4);      // Left: Program & Output
-          const page2Num = 8 + (index * 4);       // Right: Aim & Algorithm
-          const page3Num = 9 + (index * 4);       // Left: Empty
-          const page4Num = 10 + (index * 4);      // Right: Rubrics & Result
-
-          const showPage1 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_left` || viewMode === `exp_${expNo}_code` || viewMode === expNo;
-          const showPage2 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_right` || viewMode === `exp_${expNo}_aim` || viewMode === expNo;
-          const showPage3 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_left` || viewMode === `exp_${expNo}_blank` || viewMode === expNo;
-          const showPage4 = viewMode === 'all' || viewMode === 'spread' || viewMode === `exp_${expNo}_eval_right` || viewMode === `exp_${expNo}_eval` || viewMode === expNo;
-
+        {experimentPaginator.map((item, index) => {
+          const { exp, expNo, leftPages, pairCount, startPage } = item;
           const procedureSteps = parseProcedureSteps(exp.procedure);
-          const split = splitCodeAndOutput(exp.submitted_code, exp.execution_output, exp.sample_test_cases, exp.title);
           const rubricsData = getExperimentRubrics(exp, 100);
 
           return (
             <React.Fragment key={index}>
-              {/* ===== PAIR 1: Program (Left) + Aim/Algorithm (Right) ===== */}
-              <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
-                {/* -------------------------------------------------------------
-                    PAGE 1 - LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE & EXECUTION OUTPUT
-                    ------------------------------------------------------------- */}
-                {showPage1 && (
-                  <div className="academic-page page-even">
-                    {/* Top Row: Left Page Header */}
-                    <table className="top-row-table">
-                      <tbody>
-                        <tr>
-                          <td style={{ textAlign: 'left' }}>
-                            EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [PROGRAM & OUTPUT]
-                          </td>
-                          <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                          <td style={{ width: '195px' }}>
-                            <table className="register-boxes">
-                              <tbody>
-                                <tr>
-                                  {regCells.map((char, idx) => (
-                                    <td key={idx}>{char}</td>
-                                  ))}
-                                </tr>
-                              </tbody>
-                            </table>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+              {leftPages.map((leftPageContent, pairIdx) => {
+                const leftPageNum = startPage + (pairIdx * 2);
+                const rightPageNum = leftPageNum + 1;
+                const isFirstPair = (pairIdx === 0);
+                const isLastPair = (pairIdx === pairCount - 1);
+                const isIntermediatePair = (!isFirstPair && !isLastPair);
 
-                    {/* Left Page Title Bar */}
-                    <table className="section-bar-table">
-                      <tbody>
-                        <tr>
-                          <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                            EXPERIMENT {expNo} : PROGRAM & EXECUTION OUTPUT {split.hasContinuation ? '(PART 1)' : ''}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                const showLeft = viewMode === 'all' || viewMode === 'spread' || viewMode === expNo || viewMode === exp.id || viewMode === `exp_${expNo}_left` || viewMode === `exp_${expNo}_code` || viewMode === `exp_${expNo}_p${leftPageNum}`;
+                const showRight = viewMode === 'all' || viewMode === 'spread' || viewMode === expNo || viewMode === exp.id || viewMode === `exp_${expNo}_right` || viewMode === `exp_${expNo}_aim` || viewMode === `exp_${expNo}_eval` || viewMode === `exp_${expNo}_p${rightPageNum}`;
 
-                    {/* PROGRAM SOURCE CODE */}
-                    <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                      <tbody>
-                        <tr>
-                          <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>PROGRAM SOURCE CODE {split.hasContinuation ? '(PART 1)' : ''}</span>
-                            <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
-                              Language: {exp.language || 'Python'}
-                            </span>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <pre className="code-container" style={{ minHeight: split.hasContinuation ? '420px' : '300px' }}>
-                      {split.page1Code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
-                    </pre>
+                return (
+                  <div key={pairIdx} className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
+                    {/* -------------------------------------------------------------
+                        LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE OR CONSOLE OUTPUT
+                        ------------------------------------------------------------- */}
+                    {showLeft && (
+                      <div className="academic-page page-even flex flex-col justify-between">
+                        <div>
+                          {/* Top Row: Left Page Header */}
+                          <table className="top-row-table">
+                            <tbody>
+                              <tr>
+                                <td style={{ textAlign: 'left' }}>
+                                  EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [{leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'CONSOLE OUTPUT'}]
+                                </td>
+                                <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                                <td style={{ width: '195px' }}>
+                                  <table className="register-boxes">
+                                    <tbody>
+                                      <tr>
+                                        {regCells.map((char, idx) => (
+                                          <td key={idx}>{char}</td>
+                                        ))}
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
 
-                    {/* SAMPLE INPUT & CONSOLE OUTPUT (If fits on Page 1) */}
-                    {showOutputs && !split.hasContinuation && (
-                      <>
-                        <table className="section-bar-table">
-                          <tbody>
-                            <tr>
-                              <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                SAMPLE INPUT & CONSOLE OUTPUT
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        <div className="output-container" style={{ minHeight: '130px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
-                          {split.page1Output}
-                        </div>
-                      </>
-                    )}
+                          {/* Left Page Title Bar */}
+                          <table className="section-bar-table">
+                            <tbody>
+                              <tr>
+                                <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                                  EXPERIMENT {expNo} : {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & CONSOLE OUTPUT'} {leftPageContent.titleSuffix || ''}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
 
-                    {split.hasContinuation && (
-                      <div className="text-right text-[8.5pt] text-neutral-500 italic mt-2 select-none">
-                        [Program source code & output continues on Page {page3Num}...]
-                      </div>
-                    )}
-
-                    {/* Footer */}
-                    <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                      <span>{course_code} — Experiment {expNo} (Program & Output)</span>
-                      <span>Page {page1Num} of {totalDocPages}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* -------------------------------------------------------------
-                    PAGE 2 - RIGHT-HAND PAGE (ODD): AIM & ALGORITHM ONLY
-                    ------------------------------------------------------------- */}
-                {showPage2 && (
-                  <div className="academic-page page-odd flex flex-col justify-between">
-                    <div>
-                      {/* Top Row: Right Page Header */}
-                      <table className="top-row-table">
-                        <tbody>
-                          <tr>
-                            <td style={{ textAlign: 'left' }}>
-                              EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
-                            </td>
-                            <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                            <td style={{ width: '195px' }}>
-                              <table className="register-boxes">
-                                <tbody>
-                                  <tr>
-                                    {regCells.map((char, idx) => (
-                                      <td key={idx}>{char}</td>
-                                    ))}
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-
-                      {/* Right Page Title Bar */}
-                      <table className="section-bar-table">
-                        <tbody>
-                          <tr>
-                            <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                              EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-
-                      {/* AIM */}
-                      <table className="section-bar-table" style={{ marginTop: '12px' }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                              AIM
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                      <div className="content-box" style={{ marginBottom: '14px', padding: '12px 16px', lineHeight: '1.7', fontSize: '10.5pt' }}>
-                        {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
-                      </div>
-
-                      {/* ALGORITHM / PROCEDURE */}
-                      <table className="section-bar-table" style={{ marginTop: '12px' }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                              ALGORITHM / PROCEDURE
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                      <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '14px 16px' }}>
-                        {procedureSteps.length > 0 ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {procedureSteps.map((step, sIdx) => (
-                              <div
-                                key={sIdx}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'baseline',
-                                  gap: '8px',
-                                  lineHeight: '1.75',
-                                  fontSize: '10.5pt',
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    fontWeight: 'bold',
-                                    color: '#000000',
-                                    whiteSpace: 'nowrap',
-                                    minWidth: '58px',
-                                  }}
-                                >
-                                  Step {sIdx + 1}:
-                                </span>
-                                <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>
-                                  {step}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 1:</span>
-                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Start the program execution.</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 2:</span>
-                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Read the required input parameters and initialize the appropriate data structures.</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 3:</span>
-                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Implement the core algorithmic logic and computational operations for {exp.title}.</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 4:</span>
-                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Compute, format and display the verified output results.</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 5:</span>
-                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Stop the program execution and verify test case assertions.</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                      <span>{course_code} — Experiment {expNo} (Aim & Algorithm)</span>
-                      <span>Page {page2Num} of {totalDocPages}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ===== PAIR 2: Continuation / Notes (Left) + Rubrics & Result (Right) ===== */}
-              <div className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
-                {/* -------------------------------------------------------------
-                    PAGE 3 - LEFT-HAND PAGE (EVEN): PROGRAM CONTINUATION & OUTPUT (OR NOTES)
-                    ------------------------------------------------------------- */}
-                {showPage3 && (
-                  <div className="academic-page page-even flex flex-col justify-between">
-                    <div>
-                      {/* Top Row: Left Page Header */}
-                      <table className="top-row-table">
-                        <tbody>
-                          <tr>
-                            <td style={{ textAlign: 'left' }}>
-                              EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; {split.hasContinuation ? '[PROGRAM CONTINUATION & OUTPUT]' : '[NOTES & OBSERVATIONS]'}
-                            </td>
-                            <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                            <td style={{ width: '195px' }}>
-                              <table className="register-boxes">
-                                <tbody>
-                                  <tr>
-                                    {regCells.map((char, idx) => (
-                                      <td key={idx}>{char}</td>
-                                    ))}
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-
-                      {/* Left Page Title Bar */}
-                      <table className="section-bar-table">
-                        <tbody>
-                          <tr>
-                            <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                              EXPERIMENT {expNo} : {split.hasContinuation ? 'CONTINUED PROGRAM & CONSOLE OUTPUT' : 'LABORATORY OBSERVATIONS & NOTES'}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-
-                      {split.hasContinuation ? (
-                        <>
-                          {split.page3Code && (
+                          {leftPageContent.type === 'code' ? (
                             <>
                               <table className="section-bar-table" style={{ marginTop: '14px' }}>
                                 <tbody>
                                   <tr>
                                     <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <span>PROGRAM SOURCE CODE (CONTINUED)</span>
+                                      <span>PROGRAM SOURCE CODE {leftPageContent.titleSuffix || ''}</span>
                                       <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
                                         Language: {exp.language || 'Python'}
                                       </span>
@@ -1382,189 +1232,355 @@ export default function LabRecordDocument({
                                   </tr>
                                 </tbody>
                               </table>
-                              <pre className="code-container" style={{ minHeight: '160px' }}>
-                                {split.page3Code}
+                              <pre className="code-container" style={{ minHeight: '380px', maxHeight: '580px', overflow: 'hidden' }}>
+                                {leftPageContent.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                               </pre>
+                              {pairIdx < pairCount - 1 && leftPages[pairIdx + 1]?.type === 'code' && (
+                                <div className="text-right text-[8.5pt] text-neutral-500 italic mt-2 select-none">
+                                  [Program source code continues on Page {leftPageNum + 2}...]
+                                </div>
+                              )}
                             </>
-                          )}
-
-                          {showOutputs && split.page3Output && (
+                          ) : (
                             <>
-                              <table className="section-bar-table" style={{ marginTop: split.page3Code ? '12px' : '14px' }}>
+                              <table className="section-bar-table" style={{ marginTop: '14px' }}>
                                 <tbody>
                                   <tr>
                                     <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      SAMPLE INPUT & CONSOLE OUTPUT
+                                      SAMPLE INPUT & CONSOLE OUTPUT {leftPageContent.titleSuffix && leftPageContent.titleSuffix !== 'CONSOLE OUTPUT' ? leftPageContent.titleSuffix.replace('CONSOLE OUTPUT', '').trim() : ''}
                                     </td>
                                   </tr>
                                 </tbody>
                               </table>
-                              <div className="output-container" style={{ minHeight: split.page3Code ? '220px' : '360px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
-                                {split.page3Output}
+                              <div className="output-container" style={{ minHeight: '380px', maxHeight: '580px', overflow: 'hidden', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
+                                {leftPageContent.output}
                               </div>
+                              {pairIdx < pairCount - 1 && leftPages[pairIdx + 1]?.type === 'output' && (
+                                <div className="text-right text-[8.5pt] text-neutral-500 italic mt-2 select-none">
+                                  [Console output continues on Page {leftPageNum + 2}...]
+                                </div>
+                              )}
                             </>
                           )}
-                        </>
-                      ) : (
-                        <>
-                          <div className="content-box" style={{ minHeight: '360px', marginTop: '14px', lineHeight: '1.8' }}>
-                            <p style={{ fontWeight: 'bold', margin: '0 0 8px 0', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>
-                              Technical Observations & Analysis Notes:
-                            </p>
-                            <p style={{ margin: 0, color: '#4b5563' }}>
-                              1. Memory and execution timing metrics were evaluated against test case assertions.<br />
-                              2. Boundary condition inputs and exception handling were validated.<br />
-                              3. Interactive console output corresponds to laboratory specification requirements.<br />
-                              4. Verified by laboratory in-charge during practical evaluation.
-                            </p>
-                            <div style={{ marginTop: '80px', borderTop: '1px dashed #cccccc', paddingTop: '8px', color: '#9ca3af', fontSize: '8.5pt', textAlign: 'center' }}>
-                              [Space reserved for Student Observations, Timing Diagrams & Faculty Notes]
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                        </div>
 
-                    {/* Footer */}
-                    <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                      <span className="text-neutral-500 font-normal">{course_code} — Experiment {expNo} {split.hasContinuation ? '(Continuation & Output)' : '(Observations & Notes)'}</span>
-                      <span>Page {page3Num} of {totalDocPages}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* -------------------------------------------------------------
-                    PAGE 4 - RIGHT-HAND PAGE (ODD):
-                    - Centre: Evaluation Rubrics Matrix (100 Marks breakdown)
-                    - Bottom: Result & Staff Signature
-                    ------------------------------------------------------------- */}
-                {showPage4 && (
-                  <div className="academic-page page-odd flex flex-col">
-                    {/* Top Row Header */}
-                    <table className="top-row-table">
-                      <tbody>
-                        <tr>
-                          <td style={{ textAlign: 'left' }}>
-                            EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [EVALUATION & RESULT]
-                          </td>
-                          <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
-                          <td style={{ width: '195px' }}>
-                            <table className="register-boxes">
-                              <tbody>
-                                <tr>
-                                  {regCells.map((char, idx) => (
-                                    <td key={idx}>{char}</td>
-                                  ))}
-                                </tr>
-                              </tbody>
-                            </table>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-
-                    {/* Evaluation Page Title Bar */}
-                    <table className="section-bar-table">
-                      <tbody>
-                        <tr>
-                          <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                            EXPERIMENT {expNo} : EVALUATION & RESULT
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-
-                    {/* Spacer to push rubrics towards centre */}
-                    <div className="flex-1" />
-
-                    {/* --------------------------------------------------------
-                        CENTRE: EVALUATION RUBRIC & MARKS BREAKDOWN
-                        -------------------------------------------------------- */}
-                    {showRubrics && (
-                      <div className="prevent-break">
-                        <table className="section-bar-table" style={{ marginTop: '10px' }}>
-                          <tbody>
-                            <tr>
-                              <td style={{ fontSize: '10pt', padding: '5px 10px' }}>
-                                EVALUATION RUBRIC & MARKS MATRIX
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        <table className="grid-table" style={{ marginBottom: '10px' }}>
-                          <thead>
-                            <tr>
-                              <th style={{ width: '60%', padding: '6px 10px', textAlign: 'left' }}>Assessment Criteria</th>
-                              <th style={{ width: '20%', padding: '6px' }}>Max Marks</th>
-                              <th style={{ width: '20%', padding: '6px' }}>Marks Awarded</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rubricsData.items.map((item, rIdx) => (
-                              <tr key={rIdx}>
-                                <td style={{ padding: '6px 10px' }}>{item.label}</td>
-                                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{item.max}</td>
-                                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{item.awarded}</td>
-                              </tr>
-                            ))}
-                            <tr style={{ background: '#f4f4f5', fontWeight: 'bold' }}>
-                              <td style={{ textAlign: 'right', padding: '7px 10px' }}>TOTAL SCORE:</td>
-                              <td style={{ textAlign: 'center' }}>{rubricsData.maxMarks}</td>
-                              <td style={{ textAlign: 'center', fontSize: '11pt' }}>
-                                {rubricsData.totalScore} / {rubricsData.maxMarks}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+                        {/* Footer */}
+                        <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                          <span>{course_code} — Experiment {expNo} ({leftPageContent.type === 'code' ? 'Program' : 'Output'}{leftPageContent.titleSuffix ? ' ' + leftPageContent.titleSuffix : ''})</span>
+                          <span>Page {leftPageNum} of {totalDocPages}</span>
+                        </div>
                       </div>
                     )}
 
-                    {/* Spacer to push result to bottom */}
-                    <div className="flex-1" />
+                    {/* -------------------------------------------------------------
+                        RIGHT-HAND PAGE (ODD):
+                        - Pair 1: AIM & ALGORITHM
+                        - Intermediate Pairs: OBSERVATIONS & DIAGRAM NOTES
+                        - Final Pair: EVALUATION RUBRIC MATRIX & RESULT
+                        ------------------------------------------------------------- */}
+                    {showRight && (
+                      <div className="academic-page page-odd flex flex-col justify-between">
+                        {isFirstPair ? (
+                          <div>
+                            {/* Top Row: Right Page Header */}
+                            <table className="top-row-table">
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left' }}>
+                                    EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
+                                  </td>
+                                  <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                                  <td style={{ width: '195px' }}>
+                                    <table className="register-boxes">
+                                      <tbody>
+                                        <tr>
+                                          {regCells.map((char, idx) => (
+                                            <td key={idx}>{char}</td>
+                                          ))}
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
 
-                    {/* --------------------------------------------------------
-                        BOTTOM: RESULT & STAFF SIGNATURE
-                        -------------------------------------------------------- */}
-                    <div className="prevent-break" style={{ marginBottom: '12mm' }}>
-                      {/* RESULT */}
-                      <table className="section-bar-table">
-                        <tbody>
-                          <tr>
-                            <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                              RESULT
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                      <div className="content-box" style={{ marginBottom: '12px' }}>
-                        {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
+                            {/* Right Page Title Bar */}
+                            <table className="section-bar-table">
+                              <tbody>
+                                <tr>
+                                  <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                                    EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            {/* AIM */}
+                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                                    AIM
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div className="content-box" style={{ marginBottom: '14px', padding: '12px 16px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                              {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
+                            </div>
+
+                            {/* ALGORITHM / PROCEDURE */}
+                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                                    ALGORITHM / PROCEDURE
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '14px 16px' }}>
+                              {procedureSteps.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                  {procedureSteps.map((step, sIdx) => (
+                                    <div
+                                      key={sIdx}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'baseline',
+                                        gap: '8px',
+                                        lineHeight: '1.75',
+                                        fontSize: '10.5pt',
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontWeight: 'bold',
+                                          color: '#000000',
+                                          whiteSpace: 'nowrap',
+                                          minWidth: '58px',
+                                        }}
+                                      >
+                                        Step {sIdx + 1}:
+                                      </span>
+                                      <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>
+                                        {step}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 1:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Start the program execution.</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 2:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Read the required input parameters and initialize the appropriate data structures.</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 3:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Implement the core algorithmic logic and computational operations for {exp.title}.</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 4:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Compute, format and display the verified output results.</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 5:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Stop the program execution and verify test case assertions.</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : isLastPair ? (
+                          <>
+                            <div>
+                              {/* Top Row Header */}
+                              <table className="top-row-table">
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left' }}>
+                                      EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [EVALUATION & RESULT]
+                                    </td>
+                                    <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                                    <td style={{ width: '195px' }}>
+                                      <table className="register-boxes">
+                                        <tbody>
+                                          <tr>
+                                            {regCells.map((char, idx) => (
+                                              <td key={idx}>{char}</td>
+                                            ))}
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+
+                              {/* Evaluation Page Title Bar */}
+                              <table className="section-bar-table">
+                                <tbody>
+                                  <tr>
+                                    <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                                      EXPERIMENT {expNo} : EVALUATION & RESULT
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Spacer to push rubrics towards centre */}
+                            <div className="flex-1" />
+
+                            {/* --------------------------------------------------------
+                                CENTRE: EVALUATION RUBRIC & MARKS BREAKDOWN
+                                -------------------------------------------------------- */}
+                            {showRubrics && (
+                              <div className="prevent-break">
+                                <table className="section-bar-table" style={{ marginTop: '10px' }}>
+                                  <tbody>
+                                    <tr>
+                                      <td style={{ fontSize: '10pt', padding: '5px 10px' }}>
+                                        EVALUATION RUBRIC & MARKS MATRIX
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                                <table className="grid-table" style={{ marginBottom: '10px' }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ width: '60%', padding: '6px 10px', textAlign: 'left' }}>Assessment Criteria</th>
+                                      <th style={{ width: '20%', padding: '6px' }}>Max Marks</th>
+                                      <th style={{ width: '20%', padding: '6px' }}>Marks Awarded</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {rubricsData.items.map((rubItem, rIdx) => (
+                                      <tr key={rIdx}>
+                                        <td style={{ padding: '6px 10px' }}>{rubItem.label}</td>
+                                        <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{rubItem.max}</td>
+                                        <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{rubItem.awarded}</td>
+                                      </tr>
+                                    ))}
+                                    <tr style={{ background: '#f4f4f5', fontWeight: 'bold' }}>
+                                      <td style={{ textAlign: 'right', padding: '7px 10px' }}>TOTAL SCORE:</td>
+                                      <td style={{ textAlign: 'center' }}>{rubricsData.maxMarks}</td>
+                                      <td style={{ textAlign: 'center', fontSize: '11pt' }}>
+                                        {rubricsData.totalScore} / {rubricsData.maxMarks}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+
+                            {/* Spacer to push result to bottom */}
+                            <div className="flex-1" />
+
+                            {/* --------------------------------------------------------
+                                BOTTOM: RESULT & STAFF SIGNATURE
+                                -------------------------------------------------------- */}
+                            <div className="prevent-break" style={{ marginBottom: '12mm' }}>
+                              {/* RESULT */}
+                              <table className="section-bar-table">
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                                      RESULT
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <div className="content-box" style={{ marginBottom: '12px' }}>
+                                {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
+                              </div>
+
+                              {/* Staff Sign-off Table */}
+                              {showSignatures && (
+                                <table className="grid-table" style={{ marginTop: '8px', marginBottom: '0' }}>
+                                  <tbody>
+                                    <tr>
+                                      <td style={{ width: '50%', fontSize: '9pt', padding: '10px' }}>
+                                        Evaluated by: <strong>{staff_incharge}</strong>
+                                      </td>
+                                      <td style={{ width: '50%', textAlign: 'right', fontSize: '9pt', padding: '10px', fontWeight: 'bold' }}>
+                                        Staff Signature: ____________________
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          /* Intermediate Pairs: Observations & Notes */
+                          <div>
+                            {/* Top Row: Left/Right Page Header */}
+                            <table className="top-row-table">
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left' }}>
+                                    EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [NOTES & OBSERVATIONS]
+                                  </td>
+                                  <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                                  <td style={{ width: '195px' }}>
+                                    <table className="register-boxes">
+                                      <tbody>
+                                        <tr>
+                                          {regCells.map((char, idx) => (
+                                            <td key={idx}>{char}</td>
+                                          ))}
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            {/* Left Page Title Bar */}
+                            <table className="section-bar-table">
+                              <tbody>
+                                <tr>
+                                  <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                                    EXPERIMENT {expNo} : LABORATORY OBSERVATIONS & NOTES
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            <div className="content-box" style={{ minHeight: '360px', marginTop: '14px', lineHeight: '1.8' }}>
+                              <p style={{ fontWeight: 'bold', margin: '0 0 8px 0', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>
+                                Technical Observations & Analysis Notes:
+                              </p>
+                              <p style={{ margin: 0, color: '#4b5563' }}>
+                                1. Memory and execution timing metrics were evaluated against test case assertions.<br />
+                                2. Boundary condition inputs and exception handling were validated.<br />
+                                3. Interactive console output corresponds to laboratory specification requirements.<br />
+                                4. Verified by laboratory in-charge during practical evaluation.
+                              </p>
+                              <div style={{ marginTop: '80px', borderTop: '1px dashed #cccccc', paddingTop: '8px', color: '#9ca3af', fontSize: '8.5pt', textAlign: 'center' }}>
+                                [Space reserved for Student Observations, Timing Diagrams & Faculty Notes]
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Footer */}
+                        <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                          <span>{course_code} — Experiment {expNo} ({isFirstPair ? 'Aim & Algorithm' : isLastPair ? 'Evaluation & Result' : 'Observations & Notes'})</span>
+                          <span>Page {rightPageNum} of {totalDocPages}</span>
+                        </div>
                       </div>
-
-                      {/* Staff Sign-off Table */}
-                      {showSignatures && (
-                        <table className="grid-table" style={{ marginTop: '8px', marginBottom: '0' }}>
-                          <tbody>
-                            <tr>
-                              <td style={{ width: '50%', fontSize: '9pt', padding: '10px' }}>
-                                Evaluated by: <strong>{staff_incharge}</strong>
-                              </td>
-                              <td style={{ width: '50%', textAlign: 'right', fontSize: '9pt', padding: '10px', fontWeight: 'bold' }}>
-                                Staff Signature: ____________________
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-
-                    {/* Footer */}
-                    <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                      <span>{course_code} — Experiment {expNo} (Evaluation & Result)</span>
-                      <span>Page {page4Num} of {totalDocPages}</span>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })}
             </React.Fragment>
           );
         })}
