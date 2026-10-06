@@ -1345,21 +1345,9 @@ export default function LabEvaluationPage() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <label className="text-xs font-bold text-[var(--text-primary)] block">
-                            {crit.label}
-                          </label>
-                          {crit.key === 'program' && ((testExecutionSummary?.total_test_cases || sub?.total_test_cases) > 0) && (
-                            <button
-                              type="button"
-                              onClick={handleAutoCalculateProgramMarks}
-                              className="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-[var(--bg-input)] text-[var(--accent)] hover:underline border border-[var(--border)] cursor-pointer"
-                              title="Click to re-sync score from test cases pass rate"
-                            >
-                              Auto: {Math.round(((testExecutionSummary?.pass_count ?? sub?.pass_count ?? 0) / (testExecutionSummary?.total_test_cases ?? sub?.total_test_cases ?? 1)) * maxM)}/{maxM}
-                            </button>
-                          )}
-                        </div>
+                        <label className="text-xs font-bold text-[var(--text-primary)] block">
+                          {crit.label}
+                        </label>
                         <span className="text-[10px] text-[var(--text-muted)] leading-tight block">
                           {crit.description}
                         </span>

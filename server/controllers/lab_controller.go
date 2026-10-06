@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -842,15 +843,29 @@ func SubmitExperimentCode(c *gin.Context) {
 		})
 	}
 
-	maxMarks := assignedQ.MaxMarks
-	if maxMarks <= 0 {
-		maxMarks = 10
+	// Calculate Program & Output marks (out of 45 by default or according to course rubric)
+	programMaxMarks := 45
+	var course models.LabCourse
+	if exp.CourseID > 0 && database.DB.First(&course, exp.CourseID).Error == nil {
+		if course.EvaluationRubric != "" {
+			var rubricItems []struct {
+				Key      string `json:"key"`
+				MaxMarks int    `json:"max_marks"`
+			}
+			if err := json.Unmarshal([]byte(course.EvaluationRubric), &rubricItems); err == nil {
+				for _, item := range rubricItems {
+					if item.Key == "program" && item.MaxMarks > 0 {
+						programMaxMarks = item.MaxMarks
+						break
+					}
+				}
+			}
+		}
 	}
-	// Code marks account for 60% of total max marks (viva accounts for 40% during oral review)
+
 	codeMarks := 0
 	if totalCases > 0 {
-		codeWeight := float64(maxMarks) * 0.6
-		codeMarks = int(float64(passCount) / float64(totalCases) * codeWeight)
+		codeMarks = int(math.Round(float64(passCount) / float64(totalCases) * float64(programMaxMarks)))
 	}
 
 	// Save or update LabSubmission
@@ -866,6 +881,19 @@ func SubmitExperimentCode(c *gin.Context) {
 	sub.PassCount = passCount
 	sub.TotalTestCases = totalCases
 	sub.CodeMarks = codeMarks
+
+	// Auto-populate MarksBreakdown with calculated program marks in DB
+	var breakdownMap map[string]interface{}
+	if sub.MarksBreakdown != "" {
+		_ = json.Unmarshal([]byte(sub.MarksBreakdown), &breakdownMap)
+	}
+	if breakdownMap == nil {
+		breakdownMap = make(map[string]interface{})
+	}
+	breakdownMap["program"] = codeMarks
+	breakdownJSON, _ := json.Marshal(breakdownMap)
+	sub.MarksBreakdown = string(breakdownJSON)
+
 	if sub.Status != "SUBMITTED_FOR_VERIFICATION" && sub.Status != "APPROVED" {
 		if passCount == totalCases {
 			sub.Status = "TEST_PASSED"
@@ -883,12 +911,10 @@ func SubmitExperimentCode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":          "Hidden test cases executed successfully!",
+		"message":          "Code submitted and test cases executed successfully!",
 		"pass_count":       passCount,
 		"total_test_cases": totalCases,
 		"status":           sub.Status,
-		"code_marks":       codeMarks,
-		"submission":       sub,
 		"results":          sanitizedResults,
 	})
 }
@@ -1022,6 +1048,41 @@ func FinishAndSendForVerification(c *gin.Context) {
 		sub.AttemptCount = 1
 	} else {
 		sub.AttemptCount += 1
+	}
+
+	// Ensure auto-calculated Program & Output marks are saved into MarksBreakdown
+	if sub.TotalTestCases > 0 {
+		progMax := 45
+		if exp.CourseID > 0 {
+			var course models.LabCourse
+			if database.DB.First(&course, exp.CourseID).Error == nil && course.EvaluationRubric != "" {
+				var rubricItems []struct {
+					Key      string `json:"key"`
+					MaxMarks int    `json:"max_marks"`
+				}
+				if err := json.Unmarshal([]byte(course.EvaluationRubric), &rubricItems); err == nil {
+					for _, item := range rubricItems {
+						if item.Key == "program" && item.MaxMarks > 0 {
+							progMax = item.MaxMarks
+							break
+						}
+					}
+				}
+			}
+		}
+		autoProgMarks := int(math.Round(float64(sub.PassCount) / float64(sub.TotalTestCases) * float64(progMax)))
+		sub.CodeMarks = autoProgMarks
+
+		var breakdownMap map[string]interface{}
+		if sub.MarksBreakdown != "" {
+			_ = json.Unmarshal([]byte(sub.MarksBreakdown), &breakdownMap)
+		}
+		if breakdownMap == nil {
+			breakdownMap = make(map[string]interface{})
+		}
+		breakdownMap["program"] = autoProgMarks
+		breakdownJSON, _ := json.Marshal(breakdownMap)
+		sub.MarksBreakdown = string(breakdownJSON)
 	}
 
 	sub.Status = "SUBMITTED_FOR_VERIFICATION"
@@ -1193,6 +1254,43 @@ func GetFacultySubmissionDetail(c *gin.Context) {
 		database.DB.First(&course, sub.Experiment.CourseID)
 	} else if question.CourseID > 0 {
 		database.DB.First(&course, question.CourseID)
+	}
+
+	// Ensure auto-calculated program marks are set in MarksBreakdown if not already present
+	var breakdownMap map[string]interface{}
+	if sub.MarksBreakdown != "" {
+		_ = json.Unmarshal([]byte(sub.MarksBreakdown), &breakdownMap)
+	}
+	if breakdownMap == nil {
+		breakdownMap = make(map[string]interface{})
+	}
+	if _, exists := breakdownMap["program"]; (!exists || breakdownMap["program"] == nil || breakdownMap["program"] == "") && sub.TotalTestCases > 0 {
+		progMax := 45
+		if course.EvaluationRubric != "" {
+			var rubricItems []struct {
+				Key      string `json:"key"`
+				MaxMarks int    `json:"max_marks"`
+			}
+			if err := json.Unmarshal([]byte(course.EvaluationRubric), &rubricItems); err == nil {
+				for _, item := range rubricItems {
+					if item.Key == "program" && item.MaxMarks > 0 {
+						progMax = item.MaxMarks
+						break
+					}
+				}
+			}
+		}
+		autoScore := int(math.Round(float64(sub.PassCount) / float64(sub.TotalTestCases) * float64(progMax)))
+		breakdownMap["program"] = autoScore
+		breakdownJSON, _ := json.Marshal(breakdownMap)
+		sub.MarksBreakdown = string(breakdownJSON)
+		if sub.CodeMarks == 0 {
+			sub.CodeMarks = autoScore
+		}
+		database.DB.Model(&sub).Updates(map[string]interface{}{
+			"marks_breakdown": sub.MarksBreakdown,
+			"code_marks":      sub.CodeMarks,
+		})
 	}
 
 	// Parse Viva questions asked
