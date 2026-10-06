@@ -41,10 +41,235 @@ const preloadAndInlineImages = async (container) => {
   }
 };
 
+// Pure standard CSS for the academic document with zero oklch variables
+const ACADEMIC_DOCUMENT_CSS = `
+  * {
+    box-sizing: border-box;
+  }
+  body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: "Times New Roman", Times, "Liberation Serif", serif;
+  }
+  .academic-page {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: "Times New Roman", Times, "Liberation Serif", serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    box-sizing: border-box !important;
+    padding: 16mm 18mm 18mm 18mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    position: relative !important;
+    overflow: hidden !important;
+    transform: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+  }
+  .academic-page.page-odd {
+    padding-left: 24mm !important;
+    padding-right: 14mm !important;
+  }
+  .academic-page.page-even {
+    padding-left: 14mm !important;
+    padding-right: 24mm !important;
+  }
+  .top-row-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: none;
+    margin-bottom: 12px;
+  }
+  .top-row-table td {
+    border: none;
+    padding: 0;
+    vertical-align: middle;
+    font-weight: bold;
+    font-size: 10pt;
+    color: #000000;
+  }
+  .register-boxes {
+    border-collapse: collapse;
+    margin-left: auto;
+  }
+  .register-boxes td {
+    width: 16px;
+    height: 21px;
+    border: 1px solid #000000;
+    padding: 0;
+    text-align: center;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 10pt;
+    font-weight: bold;
+    vertical-align: middle;
+    color: #000000;
+  }
+  .header-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #000000;
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  .header-table td, .header-table th {
+    border: 1px solid #000000;
+    padding: 6px 10px;
+    vertical-align: middle;
+    color: #000000;
+  }
+  .section-bar-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    margin-bottom: 0;
+  }
+  .section-bar-table td {
+    border: 1px solid #000000;
+    text-align: center;
+    padding: 6px 10px;
+    font-size: 10.5pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    background: #f4f4f5;
+    letter-spacing: 0.5px;
+    color: #000000;
+  }
+  .grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: -1px;
+    margin-bottom: 14px;
+  }
+  .grid-table th, .grid-table td {
+    border: 1px solid #000000;
+    padding: 7px 10px;
+    vertical-align: middle;
+    font-size: 10pt;
+    color: #000000;
+  }
+  .grid-table th {
+    text-align: center;
+    font-weight: bold;
+    background: #fafafa;
+  }
+  .content-box {
+    border: 1px solid #000000;
+    border-top: none;
+    padding: 10px 14px;
+    font-size: 10pt;
+    line-height: 1.55;
+    margin-bottom: 14px;
+    text-align: justify;
+    color: #000000;
+  }
+  .code-container {
+    border: 1px solid #000000;
+    border-top: none;
+    background: #fafafa;
+    padding: 12px 14px;
+    font-family: "Times New Roman", Times, "Liberation Serif", serif;
+    font-size: 10pt;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: -1px;
+    margin-bottom: 14px;
+    color: #000000;
+  }
+  .output-container {
+    border: 1px solid #000000;
+    border-top: none;
+    background: #fafafa;
+    padding: 10px 14px;
+    font-family: "Times New Roman", Times, "Liberation Serif", serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: -1px;
+    margin-bottom: 14px;
+    color: #000000;
+  }
+  .doc-footer {
+    margin-top: 24px;
+    padding-top: 8px;
+    border-top: 1px dashed #777777;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    font-weight: bold;
+    color: #444444;
+  }
+  /* Common Flex / Layout utilities in pure RGB/Hex without oklch */
+  .flex { display: flex !important; }
+  .flex-col { flex-direction: column !important; }
+  .flex-row { flex-direction: row !important; }
+  .items-center { align-items: center !important; }
+  .items-start { align-items: flex-start !important; }
+  .items-baseline { align-items: baseline !important; }
+  .justify-between { justify-content: space-between !important; }
+  .justify-center { justify-content: center !important; }
+  .justify-end { justify-content: flex-end !important; }
+  .flex-1 { flex: 1 1 0% !important; }
+  .gap-1 { gap: 4px !important; }
+  .gap-2 { gap: 8px !important; }
+  .gap-3 { gap: 12px !important; }
+  .gap-4 { gap: 16px !important; }
+  .w-full { width: 100% !important; }
+  .h-full { height: 100% !important; }
+  .max-w-full { max-width: 100% !important; }
+  .text-center { text-align: center !important; }
+  .text-left { text-align: left !important; }
+  .text-right { text-align: right !important; }
+  .text-justify { text-align: justify !important; }
+  .font-bold { font-weight: bold !important; }
+  .font-normal { font-weight: normal !important; }
+  .font-serif { font-family: "Times New Roman", Times, "Liberation Serif", serif !important; }
+  .italic { font-style: italic !important; }
+  .uppercase { text-transform: uppercase !important; }
+  .tracking-widest { letter-spacing: 0.1em !important; }
+  .tracking-wider { letter-spacing: 0.05em !important; }
+  .whitespace-nowrap { white-space: nowrap !important; }
+  .text-black { color: #000000 !important; }
+  .text-neutral-400 { color: #a3a3a3 !important; }
+  .text-neutral-500 { color: #737373 !important; }
+  .text-neutral-600 { color: #525252 !important; }
+  .text-neutral-700 { color: #404040 !important; }
+  .text-neutral-300 { color: #d4d4d4 !important; }
+  .bg-white { background-color: #ffffff !important; }
+  .opacity-15 { opacity: 0.15 !important; }
+  .space-y-3 > * + * { margin-top: 12px !important; }
+  .leading-relaxed { line-height: 1.625 !important; }
+  .object-contain { object-fit: contain !important; }
+`;
+
+// Helper to remove any oklch color references that might cause html2canvas parsing errors
+const sanitizeOklchColors = (element) => {
+  const allElements = [element, ...element.querySelectorAll('*')];
+  for (const el of allElements) {
+    if (el.style) {
+      for (let i = 0; i < el.style.length; i++) {
+        const prop = el.style[i];
+        const val = el.style.getPropertyValue(prop);
+        if (val && val.includes('oklch')) {
+          el.style.removeProperty(prop);
+        }
+      }
+    }
+  }
+};
+
 /**
  * Exports rendered .academic-page elements directly to an exact A4 PDF
- * using an isolated single-page sandbox to guarantee 100% fidelity,
- * instant rendering speed, and zero memory leaks.
+ * using an isolated single-page sandbox with pure CSS (zero oklch)
+ * guaranteeing 100% visual fidelity and zero crashes.
  */
 export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf', onProgress) => {
   const root = containerElement || document.querySelector('.lab-record-wrapper') || document.body;
@@ -63,11 +288,6 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
   } catch (e) {
     console.warn('Image preloading warning:', e);
   }
-
-  // Gather all style elements and stylesheets from the main document
-  const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map((el) => el.outerHTML)
-    .join('\n');
 
   // Create an offscreen sandbox container with exact unscaled A4 dimensions (210mm x 297mm)
   const sandbox = document.createElement('div');
@@ -101,33 +321,15 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
         onProgress(i + 1, total);
       }
 
-      // Populate sandbox with isolated cloned page and full styles
+      // Populate sandbox with isolated pure CSS and cloned page
       sandbox.innerHTML = `
-        ${styleTags}
         <style>
-          body, html { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
-          .academic-page {
-            box-shadow: none !important;
-            margin: 0 !important;
-            width: 210mm !important;
-            min-height: 297mm !important;
-            height: 297mm !important;
-            box-sizing: border-box !important;
-            overflow: hidden !important;
-            transform: none !important;
-          }
+          ${ACADEMIC_DOCUMENT_CSS}
         </style>
       `;
 
       const clonedPage = page.cloneNode(true);
-      clonedPage.style.margin = '0';
-      clonedPage.style.boxShadow = 'none';
-      clonedPage.style.width = '210mm';
-      clonedPage.style.minHeight = '297mm';
-      clonedPage.style.height = '297mm';
-      clonedPage.style.boxSizing = 'border-box';
-      clonedPage.style.overflow = 'hidden';
-      clonedPage.style.transform = 'none';
+      sanitizeOklchColors(clonedPage);
       sandbox.appendChild(clonedPage);
 
       // Render isolated single page to canvas
@@ -139,6 +341,9 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
         backgroundColor: '#ffffff',
         scrollX: 0,
         scrollY: 0,
+        ignoreElements: (element) => {
+          return element.classList && element.classList.contains('no-print');
+        }
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -159,6 +364,7 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
     }
   }
 };
+
 
 
 
