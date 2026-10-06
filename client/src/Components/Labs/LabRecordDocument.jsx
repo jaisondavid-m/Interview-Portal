@@ -179,8 +179,8 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
   const codeLines = (code || '').trim() ? (code || '').trim().split(/\r?\n/) : [];
   const outLines = (cleanOut || '').trim() ? (cleanOut || '').trim().split(/\r?\n/) : [];
 
-  const MAX_LINES_SINGLE_SECTION = 36; // Full page dedicated to code OR output
-  const MAX_LINES_COMBINED = 30;       // Page sharing both code and output
+  const MAX_LINES_SINGLE_SECTION = 26; // Guarantees 0 lines ever cut off or hidden by page bounds
+  const MAX_LINES_COMBINED = 22;       // Page sharing both code and output
 
   const leftPages = [];
 
@@ -670,14 +670,15 @@ export default function LabRecordDocument({
           border: 1px solid #000000;
           border-top: none;
           background: #fafafa;
-          padding: 12px 14px;
-          font-family: "Times New Roman", Times, "Liberation Serif", serif;
-          font-size: 10pt;
-          line-height: 1.6;
+          padding: 10px 14px;
+          font-family: "Courier New", Courier, monospace, "Liberation Mono", monospace;
+          font-size: 9.5pt;
+          line-height: 1.44;
           white-space: pre-wrap;
           word-break: break-word;
           margin-top: -1px;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
+          box-sizing: border-box;
         }
 
         .output-container {
@@ -685,13 +686,14 @@ export default function LabRecordDocument({
           border-top: none;
           background: #fafafa;
           padding: 10px 14px;
-          font-family: "Times New Roman", Times, "Liberation Serif", serif;
-          font-size: 10pt;
-          line-height: 1.5;
+          font-family: "Courier New", Courier, monospace, "Liberation Mono", monospace;
+          font-size: 9.5pt;
+          line-height: 1.44;
           white-space: pre-wrap;
           word-break: break-word;
           margin-top: -1px;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
+          box-sizing: border-box;
         }
 
         .doc-footer {
@@ -1316,7 +1318,7 @@ export default function LabRecordDocument({
                                   </tr>
                                 </tbody>
                               </table>
-                              <pre className="code-container" style={{ minHeight: '120px', maxHeight: '240px', overflow: 'hidden' }}>
+                              <pre className="code-container" style={{ minHeight: '120px' }}>
                                 {leftPageContent.code}
                               </pre>
 
@@ -1330,7 +1332,7 @@ export default function LabRecordDocument({
                                   </tr>
                                 </tbody>
                               </table>
-                              <div className="output-container" style={{ minHeight: '180px', maxHeight: '300px', overflow: 'hidden', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.5' }}>
+                              <div className="output-container" style={{ minHeight: '160px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
                                 {renderFormattedOutput(leftPageContent.output)}
                               </div>
                             </>
@@ -1348,7 +1350,7 @@ export default function LabRecordDocument({
                                   </tr>
                                 </tbody>
                               </table>
-                              <pre className="code-container" style={{ minHeight: '380px', maxHeight: '580px', overflow: 'hidden' }}>
+                              <pre className="code-container" style={{ minHeight: '340px' }}>
                                 {leftPageContent.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                               </pre>
                               {pairIdx < pairCount - 1 && leftPages[pairIdx + 1]?.type === 'code' && (
@@ -1368,7 +1370,7 @@ export default function LabRecordDocument({
                                   </tr>
                                 </tbody>
                               </table>
-                              <div className="output-container" style={{ minHeight: '380px', maxHeight: '580px', overflow: 'hidden', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '10pt', lineHeight: '1.6' }}>
+                              <div className="output-container" style={{ minHeight: '340px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
                                 {renderFormattedOutput(leftPageContent.output)}
                               </div>
                               {pairIdx < pairCount - 1 && leftPages[pairIdx + 1]?.type === 'output' && (
