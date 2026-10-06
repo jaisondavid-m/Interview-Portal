@@ -671,14 +671,17 @@ export default function LabRecordDocument({
           border-top: none;
           background: #fafafa;
           padding: 10px 14px;
-          font-family: "Courier New", Courier, monospace, "Liberation Mono", monospace;
+          font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
-          line-height: 1.44;
+          line-height: 1.45;
+          letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
           margin-top: -1px;
           margin-bottom: 12px;
+          color: #111827;
           box-sizing: border-box;
+          -webkit-font-smoothing: antialiased;
         }
 
         .output-container {
@@ -686,14 +689,17 @@ export default function LabRecordDocument({
           border-top: none;
           background: #fafafa;
           padding: 10px 14px;
-          font-family: "Courier New", Courier, monospace, "Liberation Mono", monospace;
+          font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
-          line-height: 1.44;
+          line-height: 1.45;
+          letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
           margin-top: -1px;
           margin-bottom: 12px;
+          color: #111827;
           box-sizing: border-box;
+          -webkit-font-smoothing: antialiased;
         }
 
         .doc-footer {

@@ -173,29 +173,35 @@ const ACADEMIC_DOCUMENT_CSS = `
     border: 1px solid #000000;
     border-top: none;
     background: #fafafa;
-    padding: 12px 14px;
-    font-family: "Times New Roman", Times, "Liberation Serif", serif;
-    font-size: 10pt;
-    line-height: 1.6;
+    padding: 10px 14px;
+    font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    letter-spacing: 0.1px;
     white-space: pre-wrap;
     word-break: break-word;
     margin-top: -1px;
-    margin-bottom: 14px;
-    color: #000000;
+    margin-bottom: 12px;
+    color: #111827;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
   }
   .output-container {
     border: 1px solid #000000;
     border-top: none;
     background: #fafafa;
     padding: 10px 14px;
-    font-family: "Times New Roman", Times, "Liberation Serif", serif;
-    font-size: 10pt;
-    line-height: 1.5;
+    font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    letter-spacing: 0.1px;
     white-space: pre-wrap;
     word-break: break-word;
     margin-top: -1px;
-    margin-bottom: 14px;
-    color: #000000;
+    margin-bottom: 12px;
+    color: #111827;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
   }
   .doc-footer {
     margin-top: 24px;
