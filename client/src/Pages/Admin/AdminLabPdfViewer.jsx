@@ -130,13 +130,13 @@ export default function AdminLabPdfViewer() {
       const prevMode = viewMode;
       if (prevMode !== 'all') {
         setViewMode('all');
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 300));
       }
 
       showToast('Generating official PDF identical to preview...', 'info');
 
       const fileName = `${template.course_code || 'LabRecord'}_Audit_Document.pdf`;
-      const targetEl = documentCanvasRef.current || containerRef.current;
+      const targetEl = documentCanvasRef.current || containerRef.current || document.querySelector('.lab-record-wrapper');
 
       await exportDomToPdf(targetEl, fileName, (current, total) => {
         showToast(`Rendering page ${current} of ${total}...`, 'info');
@@ -147,23 +147,8 @@ export default function AdminLabPdfViewer() {
         setViewMode(prevMode);
       }
     } catch (err) {
-      console.error('DOM export error, falling back to server binary generator:', err);
-      try {
-        const payload = { ...template, is_duplex: isDuplex };
-        const res = await api.post('/admin/labs/record-pdf/custom', payload, { responseType: 'blob' });
-        const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${template.course_code || 'LabRecord'}_Audit_Document.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-        showToast('PDF downloaded successfully!', 'success');
-      } catch (fallbackErr) {
-        showToast('Failed to download PDF. Please try again.', 'error');
-      }
+      console.error('DOM export error:', err);
+      showToast('Failed to generate PDF. Please try again.', 'error');
     } finally {
       setDownloading(false);
     }

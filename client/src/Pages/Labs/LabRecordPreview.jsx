@@ -100,11 +100,11 @@ export default function LabRecordPreview() {
       const prevMode = viewMode;
       if (prevMode !== 'all') {
         setViewMode('all');
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 300));
       }
 
       const fileName = `${templateData.roll_no || 'StudentRecord'}_${templateData.course_code || 'Lab'}.pdf`;
-      const targetEl = documentRef.current || containerRef.current;
+      const targetEl = documentRef.current || containerRef.current || document.querySelector('.lab-record-wrapper');
 
       await exportDomToPdf(targetEl, fileName);
 
@@ -112,22 +112,7 @@ export default function LabRecordPreview() {
         setViewMode(prevMode);
       }
     } catch (err) {
-      console.error('DOM PDF export error, falling back to server binary generator:', err);
-      try {
-        const payload = { ...templateData, is_duplex: isDuplex };
-        const res = await api.post('/labs/record-pdf/custom', payload, { responseType: 'blob' });
-        const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${templateData.roll_no || 'StudentRecord'}_${templateData.course_code || 'Lab'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (fallbackErr) {
-        console.error('Fallback failed:', fallbackErr);
-      }
+      console.error('DOM PDF export error:', err);
     } finally {
       setDownloading(false);
     }
