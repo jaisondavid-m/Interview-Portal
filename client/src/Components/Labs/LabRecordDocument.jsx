@@ -86,14 +86,27 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map((tc, idx) => {
           const prefix = parsed.length > 1 ? `[SAMPLE TEST CASE ${idx + 1}]\n` : '';
-          const inp = (tc.input || '').trim();
-          const out = (tc.expected_output || tc.expected || tc.output || '').trim();
+          const inp = (tc.input || tc.sample_input || tc.test_input || '').trim();
+          const out = (tc.expected_output || tc.expected || tc.output || tc.expectedOutput || tc.sample_output || tc.console_output || '').trim();
           let block = prefix;
           if (inp) {
             block += `Sample Input:\n${inp}\n\n`;
           }
-          return block;
-        }).join('\n\n' + '—'.repeat(38) + '\n\n');
+          if (out) {
+            block += `Sample Console Output:\n${out}`;
+          } else if (output && typeof output === 'string') {
+            const cleanedRaw = output
+              .replace(/\[EXECUTION STATUS:.*?\]/gi, '')
+              .replace(/>>\s*Assertion Check\s*\d+:\s*PASSED/gi, '')
+              .replace(/All assertions passed successfully for.*?\./gi, '')
+              .replace(/All test cases passed\./gi, '')
+              .trim();
+            if (cleanedRaw) {
+              block += `Sample Console Output:\n${cleanedRaw}`;
+            }
+          }
+          return block.trim();
+        }).filter(Boolean).join('\n\n' + '—'.repeat(38) + '\n\n');
       }
     } catch {}
   }
