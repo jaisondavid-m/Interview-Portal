@@ -18,6 +18,8 @@ import {
 import api from '../../api/axios';
 import LabRecordDocument from '../../Components/Labs/LabRecordDocument';
 
+import { exportDomToPdf } from '../../utils/pdfExport';
+
 export default function AdminLabPdfViewer() {
   const { courseId: paramCourseId } = useParams();
   const navigate = useNavigate();
@@ -37,6 +39,7 @@ export default function AdminLabPdfViewer() {
   const [showSettings, setShowSettings] = useState(false);
 
   const containerRef = useRef(null);
+  const documentCanvasRef = useRef(null);
   const [autoScale, setAutoScale] = useState(1);
 
   const showToast = (msg, type = 'success') => {
@@ -123,32 +126,44 @@ export default function AdminLabPdfViewer() {
     if (!template) return;
     try {
       setDownloading(true);
-      showToast('Compiling official Lab Record PDF...', 'info');
 
-      const payload = {
-        ...template,
-        is_duplex: isDuplex
-      };
+      const prevMode = viewMode;
+      if (prevMode !== 'all') {
+        setViewMode('all');
+        await new Promise((r) => setTimeout(r, 250));
+      }
 
-      const res = await api.post('/admin/labs/record-pdf/custom', payload, {
-        responseType: 'blob'
+      showToast('Generating official PDF identical to preview...', 'info');
+
+      const fileName = `${template.course_code || 'LabRecord'}_Audit_Document.pdf`;
+      const targetEl = documentCanvasRef.current || containerRef.current;
+
+      await exportDomToPdf(targetEl, fileName, (current, total) => {
+        showToast(`Rendering page ${current} of ${total}...`, 'info');
       });
 
-      const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const fileName = `${template.course_code || 'LabRecord'}_Audit_Document.pdf`;
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
       showToast('PDF downloaded successfully!', 'success');
+      if (prevMode !== 'all') {
+        setViewMode(prevMode);
+      }
     } catch (err) {
-      console.error('Download error:', err);
-      showToast('Failed to download PDF. Please try again.', 'error');
+      console.error('DOM export error, falling back to server binary generator:', err);
+      try {
+        const payload = { ...template, is_duplex: isDuplex };
+        const res = await api.post('/admin/labs/record-pdf/custom', payload, { responseType: 'blob' });
+        const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${template.course_code || 'LabRecord'}_Audit_Document.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        showToast('PDF downloaded successfully!', 'success');
+      } catch (fallbackErr) {
+        showToast('Failed to download PDF. Please try again.', 'error');
+      }
     } finally {
       setDownloading(false);
     }
@@ -399,7 +414,7 @@ export default function AdminLabPdfViewer() {
         </div>
       ) : template ? (
         <div ref={containerRef} className="w-full bg-[#383b40] rounded-[var(--radius-lg)] py-8 px-2 sm:px-6 border border-[var(--border)] shadow-2xl overflow-x-auto min-h-[80vh] flex flex-col items-center">
-          <div className="w-full max-w-full flex justify-center">
+          <div ref={documentCanvasRef} className="w-full max-w-full flex justify-center">
             <LabRecordDocument
               data={template}
               isDuplex={isDuplex}

@@ -20,6 +20,7 @@ import {
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import LabRecordDocument from '../../Components/Labs/LabRecordDocument';
+import { exportDomToPdf } from '../../utils/pdfExport';
 
 export default function LabRecordPreview() {
   const { courseId = 1 } = useParams();
@@ -96,27 +97,37 @@ export default function LabRecordPreview() {
     try {
       setDownloading(true);
 
-      const payload = {
-        ...templateData,
-        is_duplex: isDuplex
-      };
+      const prevMode = viewMode;
+      if (prevMode !== 'all') {
+        setViewMode('all');
+        await new Promise((r) => setTimeout(r, 250));
+      }
 
-      const res = await api.post('/labs/record-pdf/custom', payload, {
-        responseType: 'blob'
-      });
-
-      const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
       const fileName = `${templateData.roll_no || 'StudentRecord'}_${templateData.course_code || 'Lab'}.pdf`;
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const targetEl = documentRef.current || containerRef.current;
+
+      await exportDomToPdf(targetEl, fileName);
+
+      if (prevMode !== 'all') {
+        setViewMode(prevMode);
+      }
     } catch (err) {
-      console.error('Download error:', err);
+      console.error('DOM PDF export error, falling back to server binary generator:', err);
+      try {
+        const payload = { ...templateData, is_duplex: isDuplex };
+        const res = await api.post('/labs/record-pdf/custom', payload, { responseType: 'blob' });
+        const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${templateData.roll_no || 'StudentRecord'}_${templateData.course_code || 'Lab'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (fallbackErr) {
+        console.error('Fallback failed:', fallbackErr);
+      }
     } finally {
       setDownloading(false);
     }
