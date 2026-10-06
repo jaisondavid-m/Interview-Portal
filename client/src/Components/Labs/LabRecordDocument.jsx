@@ -104,20 +104,18 @@ export const getExperimentRubrics = (exp, defaultMax = 100) => {
 
   const ratio = totalScore / maxMarks;
   const aimAwarded = Math.round(aimMax * ratio);
-  const codeAwarded = Math.round(codeMax * ratio);
-  const outputAwarded = Math.round(outputMax * ratio);
+  const progAwarded = Math.round(progMax * ratio);
   const vivaAwarded = Math.round(vivaMax * ratio);
-  const resultAwarded = totalScore - (aimAwarded + codeAwarded + outputAwarded + vivaAwarded);
+  const resultAwarded = totalScore - (aimAwarded + progAwarded + vivaAwarded);
 
   return {
     maxMarks,
     totalScore,
     items: [
-      { label: 'Aim, Logic Formulation & Algorithm', max: aimMax, awarded: aimAwarded },
-      { label: 'Program Implementation & Syntax', max: codeMax, awarded: codeAwarded },
-      { label: 'Execution & Output Verification', max: outputMax, awarded: outputAwarded },
-      { label: 'Viva-Voce Assessment', max: vivaMax, awarded: vivaAwarded },
-      { label: 'Result, Discussion & Record Regularity', max: resultMax, awarded: Math.max(0, resultAwarded) },
+      { label: 'Aim & Algorithm Formulation', max: aimMax, awarded: aimAwarded },
+      { label: 'Program & Output Verification', max: progMax, awarded: progAwarded },
+      { label: 'Result & Technical Discussion', max: resultMax, awarded: Math.max(0, resultAwarded) },
+      { label: 'Viva-Voce Oral Assessment', max: vivaMax, awarded: vivaAwarded },
     ]
   };
 };
