@@ -154,6 +154,12 @@ export default function LabEvaluationPage() {
         resolvedRubric.forEach((crit) => {
           initial[crit.key] = Math.round((Number(crit.max_marks) || 10) * ratio);
         });
+      } else if (!hasPreFill && sub.total_test_cases > 0) {
+        // Auto calculate program & output marks based on student test pass rate (e.g. 45/45 if all pass)
+        const progCrit = resolvedRubric.find((c) => c.key === 'program');
+        const progMax = Number(progCrit?.max_marks) || 45;
+        const autoScore = Math.round(((sub.pass_count || 0) / sub.total_test_cases) * progMax);
+        initial['program'] = autoScore;
       }
 
       setMarksState(initial);
@@ -428,8 +434,23 @@ export default function LabEvaluationPage() {
         hidden_total: res?.hidden_total || 0,
         executed_at: new Date(),
       });
+
+      // Auto-calculate the mark for "Program & Output" section
+      let autoScore = null;
+      if (res?.total_test_cases > 0) {
+        const progCrit = rubricList.find((c) => c.key === 'program');
+        const progMax = Number(progCrit?.max_marks) || 45;
+        autoScore = Math.round(((res.pass_count || 0) / res.total_test_cases) * progMax);
+        setMarksState((prev) => ({
+          ...prev,
+          program: autoScore,
+        }));
+      }
+
       showToast(
-        `Execution Complete: ${res?.pass_count || 0}/${res?.total_test_cases || 0} Test Cases Passed!`,
+        autoScore !== null
+          ? `Verified ${res?.pass_count}/${res?.total_test_cases} test cases. Program & Output auto-calculated to ${autoScore}/45 (you can modify as needed).`
+          : `Execution Complete: ${res?.pass_count || 0}/${res?.total_test_cases || 0} Test Cases Passed!`,
         res?.pass_count === res?.total_test_cases ? 'success' : 'info'
       );
     } catch (err) {
@@ -438,6 +459,20 @@ export default function LabEvaluationPage() {
     } finally {
       setIsRunningTests(false);
     }
+  };
+
+  const handleAutoCalculateProgramMarks = () => {
+    const totalTests = testExecutionSummary?.total_test_cases ?? sub?.total_test_cases ?? 0;
+    const passedTests = testExecutionSummary?.pass_count ?? sub?.pass_count ?? 0;
+    if (totalTests <= 0) {
+      showToast('No test execution data available to calculate marks.', 'info');
+      return;
+    }
+    const progCrit = rubricList.find((c) => c.key === 'program');
+    const progMax = Number(progCrit?.max_marks) || 45;
+    const score = Math.round((passedTests / totalTests) * progMax);
+    setMarksState((prev) => ({ ...prev, program: score }));
+    showToast(`Program & Output set to ${score}/${progMax} based on ${passedTests}/${totalTests} test cases.`, 'success');
   };
 
   // Grade badge helper
@@ -1309,10 +1344,22 @@ export default function LabEvaluationPage() {
                     className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] hover:border-[var(--accent)]/40 transition-all space-y-1.5"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <label className="text-xs font-bold text-[var(--text-primary)] block">
-                          {crit.label}
-                        </label>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <label className="text-xs font-bold text-[var(--text-primary)] block">
+                            {crit.label}
+                          </label>
+                          {crit.key === 'program' && ((testExecutionSummary?.total_test_cases || sub?.total_test_cases) > 0) && (
+                            <button
+                              type="button"
+                              onClick={handleAutoCalculateProgramMarks}
+                              className="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-[var(--bg-input)] text-[var(--accent)] hover:underline border border-[var(--border)] cursor-pointer"
+                              title="Click to re-sync score from test cases pass rate"
+                            >
+                              Auto: {Math.round(((testExecutionSummary?.pass_count ?? sub?.pass_count ?? 0) / (testExecutionSummary?.total_test_cases ?? sub?.total_test_cases ?? 1)) * maxM)}/{maxM}
+                            </button>
+                          )}
+                        </div>
                         <span className="text-[10px] text-[var(--text-muted)] leading-tight block">
                           {crit.description}
                         </span>
