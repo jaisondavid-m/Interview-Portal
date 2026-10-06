@@ -3,9 +3,22 @@ import React from 'react';
 // Helper to format procedure/algorithm steps cleanly
 export const parseProcedureSteps = (procedure) => {
   if (!procedure) return [];
-  if (Array.isArray(procedure)) return procedure;
+
+  const cleanStepText = (str) => {
+    return String(str || '')
+      .replace(/^Step\s*\d+[:.]\s*/i, '')
+      .replace(/^\d+[\.)\]]\s*/, '')
+      .replace(/^[-*•]\s*/, '')
+      .trim();
+  };
+
+  if (Array.isArray(procedure)) {
+    return procedure
+      .map((s) => cleanStepText(s))
+      .filter(Boolean);
+  }
   
-  const trimmed = String(procedure).trim();
+  let trimmed = String(procedure).trim();
   if (!trimmed) return [];
 
   // If JSON array string
@@ -13,16 +26,55 @@ export const parseProcedureSteps = (procedure) => {
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((s) => String(s).trim()).filter(Boolean);
+        return parsed
+          .map((s) => cleanStepText(s))
+          .filter(Boolean);
       }
     } catch {
-      // fallback to newline split
+      // fallback to text split
     }
   }
 
-  // Split by newlines or numbered lines
-  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  return lines;
+  // Remove common heading prefixes like "Algorithm:" or "Procedure:"
+  trimmed = trimmed
+    .replace(/^(?:ALGORITHM|PROCEDURE|STEP-BY-STEP PROCEDURE)\s*[:\-]?\s*/i, '')
+    .trim();
+
+  // If text contains newlines, split by line
+  if (trimmed.includes('\n')) {
+    const rawLines = trimmed
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !/^algorithm\s*[:\-]?$/i.test(l) && !/^procedure\s*[:\-]?$/i.test(l));
+    
+    if (rawLines.length > 0) {
+      return rawLines.map(cleanStepText).filter(Boolean);
+    }
+  }
+
+  // Check if text has explicit step markers like "Step 1:", "1.", "1)", etc.
+  const stepPattern = /(?:^|\s*)(?:Step\s*\d+[:.]|\d+[\.)\]])\s+/i;
+  if (stepPattern.test(trimmed)) {
+    const parts = trimmed
+      .split(/(?:^|\s+)(?=Step\s*\d+[:.]|\d+[\.)\]])/i)
+      .map((s) => cleanStepText(s))
+      .filter(Boolean);
+    if (parts.length > 0) {
+      return parts;
+    }
+  }
+
+  // Otherwise split by sentence boundaries (. followed by space and capital letter/number)
+  const sentences = trimmed
+    .split(/\.\s+(?=[A-Z0-9])/)
+    .map((s) => cleanStepText(s.replace(/\.$/, '') + '.'))
+    .filter(Boolean);
+
+  if (sentences.length > 1) {
+    return sentences;
+  }
+
+  return [cleanStepText(trimmed)].filter(Boolean);
 };
 
 // Clean and format execution output with uploaded Sample Input & Console Output
@@ -1173,43 +1225,79 @@ export default function LabRecordDocument({
                       <table className="section-bar-table" style={{ marginTop: '12px' }}>
                         <tbody>
                           <tr>
-                            <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                            <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
                               AIM
                             </td>
                           </tr>
                         </tbody>
                       </table>
-                      <div className="content-box" style={{ marginBottom: '10px' }}>
+                      <div className="content-box" style={{ marginBottom: '14px', padding: '12px 16px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                         {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
                       </div>
 
                       {/* ALGORITHM / PROCEDURE */}
-                      <table className="section-bar-table" style={{ marginTop: '10px' }}>
+                      <table className="section-bar-table" style={{ marginTop: '12px' }}>
                         <tbody>
                           <tr>
-                            <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                            <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
                               ALGORITHM / PROCEDURE
                             </td>
                           </tr>
                         </tbody>
                       </table>
-                      <div className="content-box" style={{ minHeight: '130px', marginBottom: '14px' }}>
+                      <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '14px 16px' }}>
                         {procedureSteps.length > 0 ? (
-                          <ol style={{ margin: 0, paddingLeft: '22px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {procedureSteps.map((step, sIdx) => (
-                              <li key={sIdx} style={{ marginBottom: '4px' }}>
-                                {step.replace(/^Step\s*\d+:\s*/i, '').replace(/^\d+[\.)\]]\s*/, '')}
-                              </li>
+                              <div
+                                key={sIdx}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'baseline',
+                                  gap: '8px',
+                                  lineHeight: '1.75',
+                                  fontSize: '10.5pt',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontWeight: 'bold',
+                                    color: '#000000',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: '58px',
+                                  }}
+                                >
+                                  Step {sIdx + 1}:
+                                </span>
+                                <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>
+                                  {step}
+                                </span>
+                              </div>
                             ))}
-                          </ol>
+                          </div>
                         ) : (
-                          <p style={{ margin: 0, lineHeight: '1.6' }}>
-                            1. Start the program.<br />
-                            2. Read the required input parameters and initialize data structures.<br />
-                            3. Implement the logic and algorithm operations for {exp.title}.<br />
-                            4. Compute and display the verified output.<br />
-                            5. Stop the program execution.
-                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 1:</span>
+                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Start the program execution.</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 2:</span>
+                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Read the required input parameters and initialize the appropriate data structures.</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 3:</span>
+                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Implement the core algorithmic logic and computational operations for {exp.title}.</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 4:</span>
+                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Compute, format and display the verified output results.</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                              <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 5:</span>
+                              <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Stop the program execution and verify test case assertions.</span>
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
