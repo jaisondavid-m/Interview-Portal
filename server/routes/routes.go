@@ -323,6 +323,7 @@ func SetupRouter() *gin.Engine {
 		{
 			facultyLabs.GET("/queue", controllers.GetFacultyQueue)
 			facultyLabs.GET("/submission/:subId", controllers.GetFacultySubmissionDetail)
+			facultyLabs.POST("/submission/:subId/run-test-cases", controllers.FacultyRunSubmissionTestCases)
 			facultyLabs.POST("/verify-single", controllers.VerifySingleExperiment)
 			facultyLabs.POST("/verify-semester", controllers.VerifySemesterRecord)
 			facultyLabs.GET("/unlocks", controllers.FacultyGetCourseReleases)

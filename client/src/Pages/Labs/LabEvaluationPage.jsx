@@ -24,7 +24,14 @@ import {
   Terminal,
   Layers,
   Percent,
-  GraduationCap
+  GraduationCap,
+  Play,
+  Loader2,
+  Lock,
+  Eye,
+  XCircle,
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -72,6 +79,12 @@ export default function LabEvaluationPage() {
   const [activeTab, setActiveTab] = useState('problem');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedRefCode, setCopiedRefCode] = useState(false);
+
+  // Test Case Runner & Verification State
+  const [isRunningTests, setIsRunningTests] = useState(false);
+  const [testExecutionResults, setTestExecutionResults] = useState(null);
+  const [testExecutionSummary, setTestExecutionSummary] = useState(null);
+  const [testFilter, setTestFilter] = useState('all'); // 'all' | 'sample' | 'hidden'
 
   // Rubric Marks State
   const [marksState, setMarksState] = useState({});
@@ -314,6 +327,119 @@ export default function LabEvaluationPage() {
     }
   }, [subDetail?.reference_algo, question?.reference_algorithm]);
 
+  // Parse sample test cases
+  const parsedSampleCases = useMemo(() => {
+    const raw = question?.sample_test_cases || exp?.sample_test_cases;
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [question?.sample_test_cases, exp?.sample_test_cases]);
+
+  // Parse hidden test cases
+  const parsedHiddenCases = useMemo(() => {
+    const raw = question?.hidden_test_cases || exp?.hidden_test_cases;
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [question?.hidden_test_cases, exp?.hidden_test_cases]);
+
+  // Combined test cases for display
+  const displayTestCases = useMemo(() => {
+    if (testExecutionResults && testExecutionResults.length > 0) {
+      return testExecutionResults.filter((tc) => {
+        if (testFilter === 'sample') return !tc.is_hidden;
+        if (testFilter === 'hidden') return tc.is_hidden;
+        return true;
+      });
+    }
+
+    // Default static list before manual run
+    let combined = [];
+    let idx = 1;
+    parsedSampleCases.forEach((sc) => {
+      combined.push({
+        index: idx++,
+        is_hidden: false,
+        name: `Sample Case ${idx - 1}`,
+        input: sc.input || '',
+        expected: sc.expected_output || sc.expected || '',
+        actual: null,
+        passed: null,
+        execution_ms: null,
+      });
+    });
+    parsedHiddenCases.forEach((hc) => {
+      combined.push({
+        index: idx++,
+        is_hidden: true,
+        name: `Hidden Case ${idx - 1}`,
+        input: hc.input || '',
+        expected: hc.expected_output || hc.expected || '',
+        actual: null,
+        passed: null,
+        execution_ms: null,
+      });
+    });
+
+    if (combined.length === 0) {
+      combined.push({
+        index: 1,
+        is_hidden: false,
+        name: 'Sample Case 1',
+        input: question?.sample_input || exp?.sample_input || '',
+        expected: question?.sample_output || exp?.sample_output || '',
+        actual: null,
+        passed: null,
+        execution_ms: null,
+      });
+    }
+
+    return combined.filter((tc) => {
+      if (testFilter === 'sample') return !tc.is_hidden;
+      if (testFilter === 'hidden') return tc.is_hidden;
+      return true;
+    });
+  }, [testExecutionResults, testFilter, parsedSampleCases, parsedHiddenCases, question, exp]);
+
+  const totalCasesCount = (parsedSampleCases.length || 1) + parsedHiddenCases.length;
+
+  const handleRunVerification = async () => {
+    try {
+      setIsRunningTests(true);
+      const res = await api.post(`/lab-incharge/submission/${subId}/run-test-cases`, {
+        code: sub?.submitted_code,
+        language: sub?.language || 'python',
+      });
+      setTestExecutionResults(res?.results || []);
+      setTestExecutionSummary({
+        pass_count: res?.pass_count || 0,
+        total_test_cases: res?.total_test_cases || 0,
+        sample_pass_count: res?.sample_pass_count || 0,
+        sample_total: res?.sample_total || 0,
+        hidden_pass_count: res?.hidden_pass_count || 0,
+        hidden_total: res?.hidden_total || 0,
+        executed_at: new Date(),
+      });
+      showToast(
+        `Execution Complete: ${res?.pass_count || 0}/${res?.total_test_cases || 0} Test Cases Passed!`,
+        res?.pass_count === res?.total_test_cases ? 'success' : 'info'
+      );
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to execute test cases. ' + (err?.response?.data?.error || err.message), 'error');
+    } finally {
+      setIsRunningTests(false);
+    }
+  };
+
   // Grade badge helper
   const getGradeInfo = (pct) => {
     if (pct >= 90) return { label: 'Outstanding (O)', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' };
@@ -474,12 +600,12 @@ export default function LabEvaluationPage() {
                 Test Cases
               </span>
               <span className={`font-mono text-xs font-bold flex items-center gap-1 ${
-                sub.pass_count === sub.total_test_cases && sub.total_test_cases > 0
+                (testExecutionSummary ? testExecutionSummary.pass_count === testExecutionSummary.total_test_cases : sub?.pass_count === sub?.total_test_cases) && ((testExecutionSummary ? testExecutionSummary.total_test_cases : sub?.total_test_cases) > 0)
                   ? 'text-emerald-500'
                   : 'text-amber-500'
               }`}>
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {sub?.pass_count || 0} / {sub?.total_test_cases || 0} Passed
+                {testExecutionSummary ? testExecutionSummary.pass_count : (sub?.pass_count || 0)} / {testExecutionSummary ? testExecutionSummary.total_test_cases : (sub?.total_test_cases || 0)} Passed
               </span>
             </div>
 
@@ -729,36 +855,309 @@ export default function LabEvaluationPage() {
                 </div>
               </div>
 
-              {/* Automated Test Execution Summary Card */}
-              <div className="panel-card p-5 space-y-3 rounded-2xl">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-[var(--accent)]" />
-                    Automated Test Execution Summary
-                  </h3>
-                  <span className="font-mono text-xs font-bold text-[var(--text-secondary)]">
-                    Pass Rate: {sub?.total_test_cases > 0 ? Math.round(((sub.pass_count || 0) / sub.total_test_cases) * 100) : 0}%
-                  </span>
+              {/* Faculty Test Case Inspector & Real-time Live Runner */}
+              <div className="panel-card p-5 sm:p-6 space-y-5 rounded-2xl border border-[var(--border)] shadow-sm">
+                {/* Header & Controls Bar */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <Terminal className="w-4 h-4 text-[var(--accent)]" />
+                        Test Case Verification & Benchmark Inspector
+                      </h3>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                        <Lock className="w-3 h-3" />
+                        Faculty Eyes Only (Hidden Cases Revealed)
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Execute student code against both public sample tests and faculty-confidential hidden test cases in real time.
+                    </p>
+                  </div>
+
+                  {/* Run Test Cases Action Button */}
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleRunVerification}
+                      disabled={isRunningTests}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+                      title="Execute student submitted code against all sample and hidden test cases"
+                    >
+                      {isRunningTests ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          <span>Running Verification...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 fill-current group-hover:scale-110 transition-transform" />
+                          <span>Run & Verify Test Cases</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] flex items-center justify-between gap-4 text-xs font-mono">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[var(--text-secondary)]">
-                      Passed: <strong className="text-emerald-500">{sub?.pass_count || 0}</strong> / {sub?.total_test_cases || 0} Tests
-                    </span>
-                    {sub?.execution_time_ms !== undefined && (
-                      <span className="text-[var(--text-muted)]">• Exec Time: {sub.execution_time_ms}ms</span>
+                {/* Filter Pills & Summary Metrics Strip */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[var(--bg-raised)] p-3 rounded-xl border border-[var(--border)]">
+                  {/* Category Filter Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <button
+                      type="button"
+                      onClick={() => setTestFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        testFilter === 'all'
+                          ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm border border-[var(--border)]'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <span>All Cases</span>
+                      <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)]">
+                        {totalCasesCount}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTestFilter('sample')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        testFilter === 'sample'
+                          ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm border border-[var(--border)]'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <span>Sample Cases</span>
+                      <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                        {parsedSampleCases.length || 1}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTestFilter('hidden')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        testFilter === 'hidden'
+                          ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm border border-[var(--border)]'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <Lock className="w-3 h-3 text-amber-500" />
+                      <span>Hidden Cases</span>
+                      <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        {parsedHiddenCases.length}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Summary Metric Counters */}
+                  <div className="flex items-center gap-3 text-xs font-mono self-start sm:self-auto flex-wrap">
+                    {testExecutionSummary ? (
+                      <>
+                        <span className="text-[var(--text-secondary)]">
+                          Sample: <strong className="text-emerald-500">{testExecutionSummary.sample_pass_count}</strong>/{testExecutionSummary.sample_total}
+                        </span>
+                        <span className="text-[var(--text-secondary)]">
+                          Hidden: <strong className="text-emerald-500">{testExecutionSummary.hidden_pass_count}</strong>/{testExecutionSummary.hidden_total}
+                        </span>
+                        <span className="text-[var(--text-secondary)]">
+                          Total: <strong className="text-[var(--accent)]">{testExecutionSummary.pass_count}</strong>/{testExecutionSummary.total_test_cases}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] border ${
+                          testExecutionSummary.pass_count === testExecutionSummary.total_test_cases && testExecutionSummary.total_test_cases > 0
+                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                        }`}>
+                          {testExecutionSummary.pass_count === testExecutionSummary.total_test_cases && testExecutionSummary.total_test_cases > 0
+                            ? '100% Passed'
+                            : `${Math.round((testExecutionSummary.pass_count / testExecutionSummary.total_test_cases) * 100)}% Pass`}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[var(--text-muted)] flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          Student Submission Result: <strong className="text-emerald-500">{sub?.pass_count || 0}</strong> / {sub?.total_test_cases || 0} Passed
+                        </span>
+                      </>
                     )}
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                    sub.pass_count === sub.total_test_cases && sub.total_test_cases > 0
-                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
-                      : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-                  }`}>
-                    {sub.pass_count === sub.total_test_cases && sub.total_test_cases > 0
-                      ? 'All Test Cases Passed'
-                      : 'Partial / Failing Tests'}
-                  </span>
+                </div>
+
+                {/* Test Cases List */}
+                <div className="space-y-4">
+                  {displayTestCases.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-[var(--text-muted)] italic border border-dashed border-[var(--border)] rounded-xl">
+                      No test cases found for the selected filter.
+                    </div>
+                  ) : (
+                    displayTestCases.map((tc, idx) => {
+                      const isHidden = tc.is_hidden;
+                      const hasResult = tc.passed !== null && tc.passed !== undefined;
+                      const isPassed = tc.passed === true;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`rounded-2xl border transition-all overflow-hidden ${
+                            hasResult
+                              ? isPassed
+                                ? 'bg-[var(--bg-card)] border-emerald-500/30 shadow-sm'
+                                : 'bg-[var(--bg-card)] border-rose-500/30 shadow-sm'
+                              : 'bg-[var(--bg-card)] border-[var(--border)]'
+                          }`}
+                        >
+                          {/* Test Case Header */}
+                          <div className="px-4 py-3 bg-[var(--bg-raised)] border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                              <span className="font-mono text-xs font-bold text-[var(--text-primary)]">
+                                #{tc.index || idx + 1} {tc.name || (isHidden ? `Hidden Case ${idx + 1}` : `Sample Case ${idx + 1}`)}
+                              </span>
+
+                              {isHidden ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  Hidden Benchmark Case
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/30">
+                                  <Eye className="w-2.5 h-2.5" />
+                                  Sample Case
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Status & Latency Badge */}
+                            <div className="flex items-center gap-2">
+                              {tc.execution_ms !== null && tc.execution_ms !== undefined && (
+                                <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                  {tc.execution_ms}ms
+                                </span>
+                              )}
+
+                              {hasResult ? (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    isPassed
+                                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                                      : 'bg-rose-500/10 text-rose-600 border-rose-500/30'
+                                  }`}
+                                >
+                                  {isPassed ? (
+                                    <>
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                      Passed
+                                    </>
+                                  ) : (
+                                    <>
+                                      <XCircle className="w-3 h-3 text-rose-500" />
+                                      Failed / Output Mismatch
+                                    </>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)]">
+                                  <Zap className="w-3 h-3 text-[var(--text-muted)]" />
+                                  Ready to Verify
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Test Case Inputs / Outputs Grid */}
+                          <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
+                            {/* Standard Input */}
+                            <div className="space-y-1.5 flex flex-col">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                  Standard Input (stdin)
+                                </span>
+                                {tc.input && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(tc.input, false)}
+                                    className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                    Copy
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex-1 p-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[11px] overflow-x-auto min-h-[60px]">
+                                <pre className="text-[var(--text-primary)] whitespace-pre-wrap">
+                                  {tc.input !== '' && tc.input !== undefined && tc.input !== null
+                                    ? tc.input
+                                    : '(Empty Input / No stdin)'}
+                                </pre>
+                              </div>
+                            </div>
+
+                            {/* Expected Output */}
+                            <div className="space-y-1.5 flex flex-col">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                  Expected Output (stdout)
+                                </span>
+                                {tc.expected && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(tc.expected, false)}
+                                    className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                    Copy
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex-1 p-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[11px] overflow-x-auto min-h-[60px]">
+                                <pre className="text-[var(--text-primary)] whitespace-pre-wrap">
+                                  {tc.expected !== '' && tc.expected !== undefined && tc.expected !== null
+                                    ? tc.expected
+                                    : '(Empty Expected Output)'}
+                                </pre>
+                              </div>
+                            </div>
+
+                            {/* Student Actual Output */}
+                            <div className="space-y-1.5 flex flex-col">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                  Student Actual Output
+                                </span>
+                                {tc.actual && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(tc.actual, false)}
+                                    className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                    Copy
+                                  </button>
+                                )}
+                              </div>
+                              <div
+                                className={`flex-1 p-3 rounded-xl border font-mono text-[11px] overflow-x-auto min-h-[60px] ${
+                                  hasResult
+                                    ? isPassed
+                                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400'
+                                      : 'bg-rose-950/20 border-rose-500/30 text-rose-400'
+                                    : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-muted)] italic'
+                                }`}
+                              >
+                                {hasResult ? (
+                                  <pre className="whitespace-pre-wrap">{tc.actual || '(No output returned)'}</pre>
+                                ) : (
+                                  <span className="text-[10px] leading-relaxed block py-1">
+                                    Click <strong>Run & Verify Test Cases</strong> above to execute student code and capture real-time stdout / stderr.
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>

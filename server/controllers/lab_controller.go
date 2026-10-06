@@ -1217,6 +1217,151 @@ func GetFacultySubmissionDetail(c *gin.Context) {
 	})
 }
 
+type FacultyRunSubmissionTestCasesReq struct {
+	Code     string `json:"code"`
+	Language string `json:"language"`
+}
+
+// FacultyRunSubmissionTestCases executes student code against all sample and hidden test cases for faculty verification
+func FacultyRunSubmissionTestCases(c *gin.Context) {
+	subIDStr := c.Param("subId")
+	subID, err := strconv.ParseUint(subIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+
+	var sub models.LabSubmission
+	if err := database.DB.Preload("Experiment").Preload("Question").First(&sub, subID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+		return
+	}
+
+	var req FacultyRunSubmissionTestCasesReq
+	_ = c.ShouldBindJSON(&req)
+
+	code := req.Code
+	if strings.TrimSpace(code) == "" {
+		code = sub.SubmittedCode
+	}
+	lang := req.Language
+	if strings.TrimSpace(lang) == "" {
+		lang = sub.Language
+	}
+	if strings.TrimSpace(lang) == "" {
+		lang = "python"
+	}
+
+	// Fetch Question or Experiment test cases
+	var question models.LabExperimentQuestion
+	if sub.QuestionID > 0 {
+		database.DB.First(&question, sub.QuestionID)
+	}
+	if question.ID == 0 {
+		database.DB.Where("experiment_id = ?", sub.ExperimentID).Order("id asc").First(&question)
+	}
+
+	sampleSrc := question.SampleTestCases
+	if sampleSrc == "" {
+		sampleSrc = sub.Experiment.SampleTestCases
+	}
+	hiddenSrc := question.HiddenTestCases
+	if hiddenSrc == "" {
+		hiddenSrc = sub.Experiment.HiddenTestCases
+	}
+
+	var allCases []EvalTestCase
+	idx := 1
+
+	var sampleCases []RawTestCase
+	if sampleSrc != "" {
+		_ = json.Unmarshal([]byte(sampleSrc), &sampleCases)
+		for _, sc := range sampleCases {
+			expOut := sc.ExpectedOutput
+			if expOut == "" {
+				expOut = sc.Expected
+			}
+			allCases = append(allCases, EvalTestCase{
+				Index:          idx,
+				IsHidden:       false,
+				Name:           fmt.Sprintf("Sample Case %d", idx),
+				Input:          sc.Input,
+				ExpectedOutput: expOut,
+			})
+			idx++
+		}
+	}
+
+	var hiddenCases []RawTestCase
+	if hiddenSrc != "" {
+		_ = json.Unmarshal([]byte(hiddenSrc), &hiddenCases)
+		for _, hc := range hiddenCases {
+			expOut := hc.ExpectedOutput
+			if expOut == "" {
+				expOut = hc.Expected
+			}
+			allCases = append(allCases, EvalTestCase{
+				Index:          idx,
+				IsHidden:       true,
+				Name:           fmt.Sprintf("Hidden Case %d", idx),
+				Input:          hc.Input,
+				ExpectedOutput: expOut,
+			})
+			idx++
+		}
+	}
+
+	if len(allCases) == 0 {
+		allCases = append(allCases, EvalTestCase{
+			Index:          1,
+			IsHidden:       false,
+			Name:           "Default Execution Test",
+			Input:          "",
+			ExpectedOutput: "",
+		})
+	}
+
+	results, execErr := ExecuteTestCases(code, lang, allCases)
+	if execErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Execution error: " + execErr.Error()})
+		return
+	}
+
+	passCount := 0
+	samplePassCount := 0
+	sampleTotal := 0
+	hiddenPassCount := 0
+	hiddenTotal := 0
+
+	for _, r := range results {
+		if r.Passed {
+			passCount++
+		}
+		if r.IsHidden {
+			hiddenTotal++
+			if r.Passed {
+				hiddenPassCount++
+			}
+		} else {
+			sampleTotal++
+			if r.Passed {
+				samplePassCount++
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":           true,
+		"results":           results,
+		"pass_count":        passCount,
+		"total_test_cases":  len(results),
+		"sample_pass_count": samplePassCount,
+		"sample_total":      sampleTotal,
+		"hidden_pass_count": hiddenPassCount,
+		"hidden_total":      hiddenTotal,
+	})
+}
+
 type VerifySingleReq struct {
 	SubmissionID   uint                   `json:"submission_id" binding:"required"`
 	Status         string                 `json:"status" binding:"required"` // APPROVED, REVISION_REQUIRED
