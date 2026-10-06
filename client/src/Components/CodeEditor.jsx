@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { Copy, Check, Lock } from 'lucide-react';
+import { Copy, Check, Lock, ShieldAlert } from 'lucide-react';
 
 const LANGUAGE_CONFIGS = [
   { id: 'c', label: 'C (GCC / Clang)', extension: () => cpp() },
@@ -23,8 +23,11 @@ export default function CodeEditor({
   onLanguageChange,
   isEditable = true,
   isLanguageLocked = false,
+  allowCopyPaste = true,
+  onCopyPasteBlocked,
 }) {
   const [copied, setCopied] = React.useState(false);
+  const editorWrapperRef = useRef(null);
 
   // Student interview editor starts empty with no starter template
   const displayCode = typeof code === 'string' ? code : '';
@@ -34,7 +37,52 @@ export default function CodeEditor({
     return langObj ? [langObj.extension()] : [javascript()];
   }, [language]);
 
+  // Restrict copy, paste, cut, drop, and right-click in exam mode
+  useEffect(() => {
+    if (allowCopyPaste) return;
+    const el = editorWrapperRef.current;
+    if (!el) return;
+
+    const blockEvent = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (onCopyPasteBlocked) onCopyPasteBlocked();
+    };
+
+    const handleKeyDown = (e) => {
+      const key = e.key.toLowerCase();
+      // Block Ctrl/Cmd + C, V, X, Insert, Shift+Insert
+      if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'insert'].includes(key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onCopyPasteBlocked) onCopyPasteBlocked();
+      } else if (e.shiftKey && key === 'insert') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onCopyPasteBlocked) onCopyPasteBlocked();
+      }
+    };
+
+    // Attach in capture phase to intercept before CodeMirror internal keymap
+    el.addEventListener('paste', blockEvent, true);
+    el.addEventListener('copy', blockEvent, true);
+    el.addEventListener('cut', blockEvent, true);
+    el.addEventListener('drop', blockEvent, true);
+    el.addEventListener('contextmenu', blockEvent, true);
+    el.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      el.removeEventListener('paste', blockEvent, true);
+      el.removeEventListener('copy', blockEvent, true);
+      el.removeEventListener('cut', blockEvent, true);
+      el.removeEventListener('drop', blockEvent, true);
+      el.removeEventListener('contextmenu', blockEvent, true);
+      el.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [allowCopyPaste, onCopyPasteBlocked]);
+
   const handleCopy = () => {
+    if (!allowCopyPaste) return;
     navigator.clipboard.writeText(displayCode || '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -77,19 +125,28 @@ export default function CodeEditor({
 
         {/* Actions Toolbar */}
         <div className="flex items-center gap-2">
-          {/* Copy Code */}
-          <button
-            onClick={handleCopy}
-            title="Copy code to clipboard"
-            className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-[#3e4451] transition flex items-center gap-1 text-[10px] font-mono cursor-pointer"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
+          {!allowCopyPaste ? (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              title="Exam Environment: Clipboard copy & paste are strictly disabled"
+            >
+              <ShieldAlert className="w-3 h-3" />
+              <span>Exam Mode (Copy-Paste Disabled)</span>
+            </span>
+          ) : (
+            <button
+              onClick={handleCopy}
+              title="Copy code to clipboard"
+              className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-[#3e4451] transition flex items-center gap-1 text-[10px] font-mono cursor-pointer"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          )}
         </div>
       </div>
 
       {/* CodeMirror Workspace */}
-      <div className="flex-1 overflow-auto relative">
+      <div ref={editorWrapperRef} className="flex-1 overflow-auto relative">
         <CodeMirror
           value={displayCode}
           height="100%"

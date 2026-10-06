@@ -581,6 +581,18 @@ export default function LabWorkspace() {
                           rows={2}
                           value={step}
                           onChange={(e) => handleEditProcedureStep(idx, e.target.value)}
+                          onPaste={(e) => {
+                            e.preventDefault();
+                            showToast('Pasting is disabled in exam mode.', 'error');
+                          }}
+                          onCopy={(e) => {
+                            e.preventDefault();
+                            showToast('Copying is disabled in exam mode.', 'error');
+                          }}
+                          onCut={(e) => {
+                            e.preventDefault();
+                          }}
+                          onContextMenu={(e) => e.preventDefault()}
                           disabled={isSubmittedOrApproved}
                           placeholder={`Describe operation in step ${idx + 1}...`}
                           className="flex-1 bg-[var(--bg-input)] border border-[var(--border)] rounded px-2.5 py-1 text-xs text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--border-accent)] disabled:bg-transparent disabled:border-transparent"
@@ -653,6 +665,8 @@ export default function LabWorkspace() {
               onLanguageChange={setLanguage}
               isEditable={isUnlocked && !isSubmittedOrApproved}
               isLanguageLocked={Boolean(assignedQuestion?.language || experiment?.language)}
+              allowCopyPaste={false}
+              onCopyPasteBlocked={() => showToast('Copy-paste is disabled in the examination environment.', 'error')}
             />
           </div>
 
