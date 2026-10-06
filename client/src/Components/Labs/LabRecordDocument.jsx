@@ -77,7 +77,7 @@ export const parseProcedureSteps = (procedure) => {
   return [cleanStepText(trimmed)].filter(Boolean);
 };
 
-// Clean and format execution output with uploaded Sample Input & Console Output
+// Clean and format execution output with uploaded Sample Input & Sample Output
 export const cleanExecutionOutput = (output, title, sampleTestCases) => {
   // If structured sample test cases are passed, format them directly
   if (sampleTestCases) {
@@ -93,7 +93,7 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
             block += `Sample Input:\n${inp}\n\n`;
           }
           if (out) {
-            block += `Sample Console Output:\n${out}`;
+            block += `Sample Output:\n${out}`;
           } else if (output && typeof output === 'string') {
             const cleanedRaw = output
               .replace(/\[EXECUTION STATUS:.*?\]/gi, '')
@@ -102,7 +102,7 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
               .replace(/All test cases passed\./gi, '')
               .trim();
             if (cleanedRaw) {
-              block += `Sample Console Output:\n${cleanedRaw}`;
+              block += `Sample Output:\n${cleanedRaw}`;
             }
           }
           return block.trim();
@@ -112,7 +112,7 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
   }
 
   if (!output || typeof output !== 'string') {
-    return `Sample Input:\n>> Standard test input processed.\n\nSample Console Output:\n>> Result computed for ${title || 'experiment'}.\n>> Execution completed successfully.`;
+    return `Sample Input:\n>> Standard test input processed.\n\nSample Output:\n>> Result computed for ${title || 'experiment'}.\n>> Execution completed successfully.`;
   }
 
   let cleaned = output
@@ -123,14 +123,54 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
     .trim();
 
   if (!cleaned) {
-    return `Sample Input:\n>> Standard input verified.\n\nSample Console Output:\n>> Execution completed successfully for ${title || 'experiment'}.`;
+    return `Sample Input:\n>> Standard input verified.\n\nSample Output:\n>> Execution completed successfully for ${title || 'experiment'}.`;
   }
 
-  if (!cleaned.includes('Sample Console Output:') && !cleaned.includes('Sample Input:')) {
-    cleaned = `Sample Console Output:\n${cleaned}`;
+  if (!cleaned.includes('Sample Output:') && !cleaned.includes('Sample Console Output:') && !cleaned.includes('Sample Input:')) {
+    cleaned = `Sample Output:\n${cleaned}`;
+  } else if (cleaned.includes('Sample Console Output:')) {
+    cleaned = cleaned.replace(/Sample Console Output:/g, 'Sample Output:');
   }
 
   return cleaned;
+};
+
+// Render formatted output with lightly bold section labels
+export const renderFormattedOutput = (text) => {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return lines.map((line, idx) => {
+    const trimmed = line.trim();
+    if (/^\[SAMPLE TEST CASE \d+\]/i.test(trimmed)) {
+      return (
+        <div key={idx} style={{ fontWeight: 600, color: '#111827', margin: idx > 0 ? '10px 0 4px 0' : '0 0 4px 0', letterSpacing: '0.3px' }}>
+          {line}
+        </div>
+      );
+    }
+    if (/^Sample Input:/i.test(trimmed)) {
+      return (
+        <div key={idx} style={{ fontWeight: 600, color: '#111827', marginTop: idx > 0 ? '8px' : '0', marginBottom: '2px' }}>
+          Sample Input:
+        </div>
+      );
+    }
+    if (/^Sample (Console )?Output:/i.test(trimmed)) {
+      return (
+        <div key={idx} style={{ fontWeight: 600, color: '#111827', marginTop: idx > 0 ? '8px' : '0', marginBottom: '2px' }}>
+          Sample Output:
+        </div>
+      );
+    }
+    if (/^—{10,}/.test(trimmed)) {
+      return <div key={idx} style={{ borderBottom: '1px dashed #d1d5db', margin: '8px 0' }} />;
+    }
+    return (
+      <div key={idx} style={{ minHeight: line === '' ? '0.7em' : 'auto', color: '#1f2937' }}>
+        {line}
+      </div>
+    );
+  });
 };
 
 // Smart paginator for experiment code & output guaranteeing every page is strictly A4 height
@@ -182,7 +222,7 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
         type: 'output',
         code: '',
         output: chunk.join('\n'),
-        titleSuffix: totalOutChunks > 1 ? `CONSOLE OUTPUT (PART ${outPart})` : 'CONSOLE OUTPUT',
+        titleSuffix: totalOutChunks > 1 ? `(PART ${outPart})` : '',
       });
       oIdx += MAX_OUT_PER_PAGE;
       outPart++;
@@ -191,8 +231,8 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
     leftPages.push({
       type: 'output',
       code: '',
-      output: 'Sample Console Output:\n>> Execution completed successfully.',
-      titleSuffix: 'CONSOLE OUTPUT',
+      output: 'Sample Output:\n>> Execution completed successfully.',
+      titleSuffix: '',
     });
   }
 
@@ -201,8 +241,8 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
     leftPages.push({
       type: 'output',
       code: '',
-      output: cleanOut || 'Sample Console Output:\n>> Execution completed successfully.',
-      titleSuffix: 'CONSOLE OUTPUT',
+      output: cleanOut || 'Sample Output:\n>> Execution completed successfully.',
+      titleSuffix: '',
     });
   }
 
@@ -1179,7 +1219,7 @@ export default function LabRecordDocument({
                 return (
                   <div key={pairIdx} className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
                     {/* -------------------------------------------------------------
-                        LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE OR CONSOLE OUTPUT
+                        LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE OR SAMPLE INPUT & OUTPUT
                         ------------------------------------------------------------- */}
                     {showLeft && (
                       <div className="academic-page page-even flex flex-col justify-between">
@@ -1189,7 +1229,7 @@ export default function LabRecordDocument({
                             <tbody>
                               <tr>
                                 <td style={{ textAlign: 'left' }}>
-                                  EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [{leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'CONSOLE OUTPUT'}]
+                                  EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [{leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & OUTPUT'}]
                                 </td>
                                 <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
                                 <td style={{ width: '195px' }}>
@@ -1212,7 +1252,7 @@ export default function LabRecordDocument({
                             <tbody>
                               <tr>
                                 <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                                  EXPERIMENT {expNo} : {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & CONSOLE OUTPUT'} {leftPageContent.titleSuffix || ''}
+                                  EXPERIMENT {expNo} : {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & OUTPUT'} {leftPageContent.titleSuffix || ''}
                                 </td>
                               </tr>
                             </tbody>
@@ -1247,17 +1287,17 @@ export default function LabRecordDocument({
                                 <tbody>
                                   <tr>
                                     <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      SAMPLE INPUT & CONSOLE OUTPUT {leftPageContent.titleSuffix && leftPageContent.titleSuffix !== 'CONSOLE OUTPUT' ? leftPageContent.titleSuffix.replace('CONSOLE OUTPUT', '').trim() : ''}
+                                      SAMPLE INPUT & OUTPUT {leftPageContent.titleSuffix || ''}
                                     </td>
                                   </tr>
                                 </tbody>
                               </table>
-                              <div className="output-container" style={{ minHeight: '380px', maxHeight: '580px', overflow: 'hidden', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
-                                {leftPageContent.output}
+                              <div className="output-container" style={{ minHeight: '380px', maxHeight: '580px', overflow: 'hidden', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '10pt', lineHeight: '1.6' }}>
+                                {renderFormattedOutput(leftPageContent.output)}
                               </div>
                               {pairIdx < pairCount - 1 && leftPages[pairIdx + 1]?.type === 'output' && (
                                 <div className="text-right text-[8.5pt] text-neutral-500 italic mt-2 select-none">
-                                  [Console output continues on Page {leftPageNum + 2}...]
+                                  [Sample input & output continues on Page {leftPageNum + 2}...]
                                 </div>
                               )}
                             </>
@@ -1266,7 +1306,7 @@ export default function LabRecordDocument({
 
                         {/* Footer */}
                         <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                          <span>{course_code} — Experiment {expNo} ({leftPageContent.type === 'code' ? 'Program' : 'Output'}{leftPageContent.titleSuffix ? ' ' + leftPageContent.titleSuffix : ''})</span>
+                          <span>{course_code} — Experiment {expNo} ({leftPageContent.type === 'code' ? 'Program' : 'Sample Input & Output'}{leftPageContent.titleSuffix ? ' ' + leftPageContent.titleSuffix : ''})</span>
                           <span>Page {leftPageNum} of {totalDocPages}</span>
                         </div>
                       </div>
