@@ -1384,16 +1384,6 @@ export default function LabEvaluationPage() {
           {/* TAB 4: ORAL VIVA VOCE QUESTIONS */}
           {activeTab === 'viva' && (
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1.5 shadow-sm">
-                <div className="font-bold flex items-center gap-2 text-indigo-700 dark:text-indigo-400 text-sm">
-                  <MessageSquareCheck className="w-4 h-4" />
-                  Oral Viva Voce Instructions for Faculty
-                </div>
-                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-                  Ask the student the questions below verbally to verify conceptual understanding, logic formulation, algorithmic complexity, and problem-solving depth against the verified model answers. Award oral viva marks in the grading cockpit on the right.
-                </p>
-              </div>
-
               {vivaQuestions.length === 0 ? (
                 <div className="panel-card p-12 text-center text-xs text-[var(--text-muted)] italic space-y-2">
                   <MessageSquareCheck className="w-8 h-8 mx-auto opacity-40" />
