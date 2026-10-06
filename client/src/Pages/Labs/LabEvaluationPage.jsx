@@ -31,7 +31,8 @@ import {
   Eye,
   XCircle,
   Zap,
-  RefreshCw
+  RefreshCw,
+  Pencil
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -79,6 +80,10 @@ export default function LabEvaluationPage() {
   const [activeTab, setActiveTab] = useState('problem');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedRefCode, setCopiedRefCode] = useState(false);
+
+  // Faculty Code Editing State
+  const [isEditingCode, setIsEditingCode] = useState(false);
+  const [customCode, setCustomCode] = useState('');
 
   // Test Case Runner & Verification State
   const [isRunningTests, setIsRunningTests] = useState(false);
@@ -162,6 +167,7 @@ export default function LabEvaluationPage() {
         initial['program'] = autoScore;
       }
 
+      setCustomCode(sub.submitted_code || '');
       setMarksState(initial);
       setFacultyNotes(sub.faculty_notes || 'Verified by Lab Incharge');
     } catch (err) {
@@ -421,7 +427,7 @@ export default function LabEvaluationPage() {
     try {
       setIsRunningTests(true);
       const res = await api.post(`/lab-incharge/submission/${subId}/run-test-cases`, {
-        code: sub?.submitted_code,
+        code: customCode || sub?.submitted_code,
         language: sub?.language || 'python',
       });
       setTestExecutionResults(res?.results || []);
@@ -837,14 +843,56 @@ export default function LabEvaluationPage() {
                     <div className="flex items-center gap-2">
                       <Code2 className="w-4 h-4 text-[var(--accent)]" />
                       <span>Student Submitted Code</span>
+                      {customCode !== sub?.submitted_code && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-500 border border-amber-500/30">
+                          Modified
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)]">
                         {sub?.language || 'python'}
                       </span>
+
+                      {!isEditingCode ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingCode(true)}
+                          className="px-2 py-1 rounded-md bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                          title="Edit student code to test fixes or modifications"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit Code</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingCode(false)}
+                            className="px-2 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                            title="Done editing (view mode)"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Done</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomCode(sub?.submitted_code || '');
+                              setIsEditingCode(false);
+                            }}
+                            className="px-2 py-1 rounded-md bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-rose-500 border border-[var(--border)] text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                            title="Reset code to original student submission"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>Reset</span>
+                          </button>
+                        </div>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(sub?.submitted_code, false)}
+                        onClick={() => copyToClipboard(customCode || sub?.submitted_code, false)}
                         className="p-1.5 rounded-md hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
                         title="Copy student code"
                       >
@@ -853,11 +901,39 @@ export default function LabEvaluationPage() {
                     </div>
                   </div>
 
-                  <div className="flex-1 bg-[var(--bg-input)] p-4 overflow-x-auto max-h-[500px]">
-                    <pre className="text-xs font-mono text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap">
-                      {sub?.submitted_code || '# No code submitted by student.'}
-                    </pre>
-                  </div>
+                  {isEditingCode ? (
+                    <div className="flex-1 bg-[var(--bg-input)] p-3 flex flex-col min-h-[350px]">
+                      <div className="text-[10px] font-mono text-[var(--text-muted)] pb-1.5 mb-2 border-b border-[var(--border)] flex items-center justify-between">
+                        <span>Faculty Code Editor (Run Test Cases will execute this code)</span>
+                      </div>
+                      <textarea
+                        value={customCode}
+                        onChange={(e) => setCustomCode(e.target.value)}
+                        rows={16}
+                        spellCheck={false}
+                        className="w-full flex-1 p-2 font-mono text-xs text-[var(--text-primary)] bg-transparent border-0 focus:outline-none resize-y leading-relaxed"
+                        placeholder="Edit code here..."
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex-1 bg-[var(--bg-input)] p-4 overflow-x-auto max-h-[500px]">
+                      {customCode !== sub?.submitted_code && (
+                        <div className="text-[10px] font-mono text-amber-500 pb-2 border-b border-[var(--border)] mb-2 flex items-center justify-between">
+                          <span>Showing Faculty-Edited Code</span>
+                          <button
+                            type="button"
+                            onClick={() => setCustomCode(sub?.submitted_code || '')}
+                            className="text-[var(--text-muted)] hover:text-rose-500 underline cursor-pointer"
+                          >
+                            Revert to original
+                          </button>
+                        </div>
+                      )}
+                      <pre className="text-xs font-mono text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap">
+                        {customCode || sub?.submitted_code || '# No code submitted by student.'}
+                      </pre>
+                    </div>
+                  )}
                 </div>
 
                 {/* Faculty Master Reference Solution */}
