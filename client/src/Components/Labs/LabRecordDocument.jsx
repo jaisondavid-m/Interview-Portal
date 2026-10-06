@@ -1247,12 +1247,12 @@ export default function LabRecordDocument({
                             </tbody>
                           </table>
 
-                          {/* Left Page Title Bar */}
-                          <table className="section-bar-table">
+                          {/* Left Page Title Bar (Minimal) */}
+                          <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
                             <tbody>
                               <tr>
-                                <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                                  EXPERIMENT {expNo} : {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & OUTPUT'} {leftPageContent.titleSuffix || ''}
+                                <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
+                                  EXPERIMENT {expNo} &nbsp;|&nbsp; {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & OUTPUT'} {leftPageContent.titleSuffix || ''}
                                 </td>
                               </tr>
                             </tbody>
@@ -1314,7 +1314,7 @@ export default function LabRecordDocument({
 
                     {/* -------------------------------------------------------------
                         RIGHT-HAND PAGE (ODD):
-                        - Pair 1: AIM & ALGORITHM
+                        - Pair 1: AIM & ALGORITHM (Big & Bold Title above Aim)
                         - Intermediate Pairs: OBSERVATIONS & DIAGRAM NOTES
                         - Final Pair: EVALUATION RUBRIC MATRIX & RESULT
                         ------------------------------------------------------------- */}
@@ -1345,11 +1345,11 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            {/* Right Page Title Bar */}
-                            <table className="section-bar-table">
+                            {/* Main Experiment Title Bar: Prominent Bold & Big */}
+                            <table className="section-bar-table" style={{ marginTop: '10px', marginBottom: '4px' }}>
                               <tbody>
                                 <tr>
-                                  <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
+                                  <td style={{ fontSize: '12pt', padding: '10px 14px', fontWeight: 'bold', letterSpacing: '0.8px', lineHeight: '1.4' }}>
                                     EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
                                   </td>
                                 </tr>
@@ -1462,12 +1462,12 @@ export default function LabRecordDocument({
                                 </tbody>
                               </table>
 
-                              {/* Evaluation Page Title Bar */}
-                              <table className="section-bar-table">
+                              {/* Evaluation Page Title Bar (Minimal) */}
+                              <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
                                 <tbody>
                                   <tr>
-                                    <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                                      EXPERIMENT {expNo} : EVALUATION & RESULT
+                                    <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
+                                      EXPERIMENT {expNo} &nbsp;|&nbsp; EVALUATION & RESULT
                                     </td>
                                   </tr>
                                 </tbody>
@@ -1583,12 +1583,12 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            {/* Left Page Title Bar */}
-                            <table className="section-bar-table">
+                            {/* Observations Page Title Bar (Minimal) */}
+                            <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
                               <tbody>
                                 <tr>
-                                  <td style={{ fontSize: '11.5pt', padding: '8px 10px' }}>
-                                    EXPERIMENT {expNo} : LABORATORY OBSERVATIONS & NOTES
+                                  <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
+                                    EXPERIMENT {expNo} &nbsp;|&nbsp; LABORATORY OBSERVATIONS & NOTES
                                   </td>
                                 </tr>
                               </tbody>
