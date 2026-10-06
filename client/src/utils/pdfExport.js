@@ -1,6 +1,46 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+// Helper to convert an image URL to a base64 Data URL to eliminate CORS/canvas tainting
+const imgToDataUrl = async (imgUrl) => {
+  try {
+    const res = await fetch(imgUrl, { mode: 'cors' });
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn('Could not convert image to Data URL:', imgUrl, e);
+    return null;
+  }
+};
+
+/**
+ * Pre-inlines all images in the container as base64 data URLs to guarantee zero canvas tainting.
+ */
+const preloadAndInlineImages = async (container) => {
+  const images = Array.from(container.querySelectorAll('img'));
+  const cache = new Map();
+
+  for (const img of images) {
+    const src = img.getAttribute('src');
+    if (!src || src.startsWith('data:')) continue;
+
+    if (!cache.has(src)) {
+      const dataUrl = await imgToDataUrl(src);
+      cache.set(src, dataUrl);
+    }
+
+    const cachedData = cache.get(src);
+    if (cachedData) {
+      img.src = cachedData;
+    }
+  }
+};
+
 /**
  * Exports rendered .academic-page elements directly to an exact A4 PDF
  * using the live DOM preview as the single source of truth.
@@ -17,6 +57,13 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
   const pages = Array.from(root.querySelectorAll('.academic-page'));
   if (!pages || pages.length === 0) {
     throw new Error('No pages found in document to export');
+  }
+
+  // Pre-inline images to ensure zero CORS/taint errors during canvas export
+  try {
+    await preloadAndInlineImages(root);
+  } catch (e) {
+    console.warn('Image preloading warning:', e);
   }
 
   // Create jsPDF document: A4 portrait (210mm x 297mm)
@@ -40,11 +87,11 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
     const canvas = await html2canvas(page, {
       scale: 2.0,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false, // Must be false to allow canvas.toDataURL() without SecurityError
       logging: false,
       backgroundColor: '#ffffff',
-      windowWidth: 794, // Exact 210mm at 96 DPI
-      windowHeight: 1123, // Exact 297mm at 96 DPI
+      scrollX: 0,
+      scrollY: 0,
       onclone: (clonedDoc) => {
         // Reset zoom and scale on all parents in the cloned tree so dimensions are 1:1 unzoomed
         const wrappers = clonedDoc.querySelectorAll('.document-canvas, .lab-record-wrapper, body, html');
@@ -92,4 +139,5 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
 
   pdf.save(fileName);
 };
+
 
