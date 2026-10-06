@@ -18,25 +18,27 @@ var bitLogoBytes []byte
 
 // CustomLabExperimentItem holds per-experiment data for customized multi-page PDF generation
 type CustomLabExperimentItem struct {
-	ExperimentNo    int      `json:"experiment_no"`
-	PageType        string   `json:"page_type"` // "experiment", "observation", "viva", "notes"
-	Title           string   `json:"title"`
-	Aim             string   `json:"aim"`
-	Procedure       string   `json:"procedure"`
-	Language        string   `json:"language"`
-	SubmittedCode   string   `json:"submitted_code"`
-	ExecutionOutput string   `json:"execution_output"`
-	PassCount       int      `json:"pass_count"`
-	TotalTestCases  int      `json:"total_test_cases"`
-	CodeMarks       int      `json:"code_marks"`
-	VivaMarks       int      `json:"viva_marks"`
-	AlgorithmMarks  int      `json:"algorithm_marks"`
-	Marks           int      `json:"marks"`
-	Status          string   `json:"status"`
-	Date            string   `json:"date"`
-	ResultText      string   `json:"result_text"`
-	Notes           string   `json:"notes"`
-	SectionOrder    []string `json:"section_order"`
+	ExperimentNo     int      `json:"experiment_no"`
+	PageType         string   `json:"page_type"` // "experiment", "observation", "viva", "notes"
+	Title            string   `json:"title"`
+	Aim              string   `json:"aim"`
+	Procedure        string   `json:"procedure"`
+	StudentProcedure string   `json:"student_procedure"`
+	Language         string   `json:"language"`
+	SubmittedCode    string   `json:"submitted_code"`
+	ExecutionOutput  string   `json:"execution_output"`
+	PassCount        int      `json:"pass_count"`
+	TotalTestCases   int      `json:"total_test_cases"`
+	CodeMarks        int      `json:"code_marks"`
+	VivaMarks        int      `json:"viva_marks"`
+	AlgorithmMarks   int      `json:"algorithm_marks"`
+	Marks            int      `json:"marks"`
+	MarksBreakdown   string   `json:"marks_breakdown"`
+	Status           string   `json:"status"`
+	Date             string   `json:"date"`
+	ResultText       string   `json:"result_text"`
+	Notes            string   `json:"notes"`
+	SectionOrder     []string `json:"section_order"`
 }
 
 // CustomLabRecordData holds the complete multi-page document payload
@@ -700,6 +702,25 @@ func GenerateLabRecordPDF(course models.LabCourse, student models.User, submissi
 			dateStr = time.Now().Format("02-01-2006")
 		}
 
+		title := exp.Title
+		aim := exp.Aim
+		procedure := exp.Procedure
+		if strings.TrimSpace(sub.StudentProcedure) != "" {
+			procedure = sub.StudentProcedure
+		}
+
+		if sub.Question != nil && sub.Question.ID > 0 {
+			if strings.TrimSpace(sub.Question.Title) != "" {
+				title = sub.Question.Title
+			}
+			if strings.TrimSpace(sub.Question.Aim) != "" {
+				aim = sub.Question.Aim
+			}
+			if strings.TrimSpace(procedure) == "" && strings.TrimSpace(sub.Question.ReferenceAlgorithm) != "" {
+				procedure = sub.Question.ReferenceAlgorithm
+			}
+		}
+
 		code := sub.FacultyEditedCode
 		if strings.TrimSpace(code) == "" {
 			code = sub.SubmittedCode
@@ -729,21 +750,23 @@ func GenerateLabRecordPDF(course models.LabCourse, student models.User, submissi
 		}
 
 		expItems = append(expItems, CustomLabExperimentItem{
-			ExperimentNo:    exp.ExperimentNo,
-			Title:           exp.Title,
-			Aim:             exp.Aim,
-			Procedure:       sub.StudentProcedure,
-			Language:        exp.Language,
-			SubmittedCode:   code,
-			ExecutionOutput: sub.ExecutionOutput,
-			PassCount:       passCount,
-			TotalTestCases:  totalTestCases,
-			CodeMarks:       sub.CodeMarks,
-			VivaMarks:       sub.VivaMarks,
-			Marks:           marksVal,
-			Status:          sub.Status,
-			Date:            dateStr,
-			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification benchmark cases, and evaluated.", exp.Title),
+			ExperimentNo:     exp.ExperimentNo,
+			Title:            title,
+			Aim:              aim,
+			Procedure:        procedure,
+			StudentProcedure: sub.StudentProcedure,
+			Language:         exp.Language,
+			SubmittedCode:    code,
+			ExecutionOutput:  sub.ExecutionOutput,
+			PassCount:        passCount,
+			TotalTestCases:   totalTestCases,
+			CodeMarks:        sub.CodeMarks,
+			VivaMarks:        sub.VivaMarks,
+			Marks:            marksVal,
+			MarksBreakdown:   sub.MarksBreakdown,
+			Status:           sub.Status,
+			Date:             dateStr,
+			ResultText:       fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification benchmark cases, and evaluated.", title),
 		})
 	}
 

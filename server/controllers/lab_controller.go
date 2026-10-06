@@ -1731,7 +1731,7 @@ func DownloadStudentRecordPDF(c *gin.Context) {
 	}
 
 	var submissions []models.LabSubmission
-	database.DB.Preload("Experiment").Where("student_id = ?", studentID).Order("experiment_id asc").Find(&submissions)
+	database.DB.Preload("Experiment").Preload("Question").Where("student_id = ?", studentID).Order("experiment_id asc").Find(&submissions)
 
 	var record models.LabRecord
 	database.DB.Where("student_id = ? AND course_id = ?", studentID, course.ID).First(&record)
@@ -2494,40 +2494,89 @@ func GetStudentCoursePdfTemplate(c *gin.Context) {
 	database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments)
 
 	var submissions []models.LabSubmission
-	database.DB.Where("student_id = ?", studentID).Find(&submissions)
+	database.DB.Preload("Question").Where("student_id = ?", studentID).Find(&submissions)
 
 	subMap := make(map[uint]models.LabSubmission)
 	for _, sub := range submissions {
 		subMap[sub.ExperimentID] = sub
 	}
 
+	var allocations []models.LabQuestionAllocation
+	database.DB.Preload("Question").Where("student_id = ? AND course_id = ?", studentID, courseID).Find(&allocations)
+	allocMap := make(map[uint]models.LabQuestionAllocation)
+	for _, a := range allocations {
+		allocMap[a.ExperimentID] = a
+	}
+
 	var expItems []services.CustomLabExperimentItem
 	for _, exp := range experiments {
 		sub, hasSub := subMap[exp.ID]
+		alloc, hasAlloc := allocMap[exp.ID]
 
+		title := exp.Title
+		aim := exp.Aim
+		procedure := exp.Procedure
 		code := exp.StarterCode
 		outText := fmt.Sprintf("All assertions passed successfully for '%s'.", exp.Title)
 		marks := exp.MaxMarks
 		if marks <= 0 {
-			marks = 10
+			marks = 100
 		}
 		passCount := 3
 		totalTests := 3
 		status := "APPROVED"
 		dateStr := time.Now().Format("02-01-2006")
+		marksBreakdown := ""
+		codeMarks := 0
+		vivaMarks := 0
+
+		var assignedQ *models.LabExperimentQuestion
+		if hasSub && sub.Question != nil && sub.Question.ID > 0 {
+			assignedQ = sub.Question
+		} else if hasSub && sub.QuestionID > 0 {
+			var q models.LabExperimentQuestion
+			if err := database.DB.First(&q, sub.QuestionID).Error; err == nil {
+				assignedQ = &q
+			}
+		} else if hasAlloc && alloc.Question.ID > 0 {
+			assignedQ = &alloc.Question
+		} else if hasAlloc && alloc.QuestionID > 0 {
+			var q models.LabExperimentQuestion
+			if err := database.DB.First(&q, alloc.QuestionID).Error; err == nil {
+				assignedQ = &q
+			}
+		}
+
+		if assignedQ != nil {
+			if strings.TrimSpace(assignedQ.Title) != "" {
+				title = assignedQ.Title
+			}
+			if strings.TrimSpace(assignedQ.Aim) != "" {
+				aim = assignedQ.Aim
+			}
+			if strings.TrimSpace(assignedQ.ReferenceAlgorithm) != "" {
+				procedure = assignedQ.ReferenceAlgorithm
+			}
+		}
 
 		if hasSub {
+			if strings.TrimSpace(sub.StudentProcedure) != "" {
+				procedure = sub.StudentProcedure
+			}
 			if strings.TrimSpace(sub.FacultyEditedCode) != "" {
 				code = sub.FacultyEditedCode
 			} else if strings.TrimSpace(sub.SubmittedCode) != "" {
 				code = sub.SubmittedCode
 			}
-			if sub.ExecutionOutput != "" {
+			if strings.TrimSpace(sub.ExecutionOutput) != "" {
 				outText = sub.ExecutionOutput
 			}
 			if sub.Marks > 0 {
 				marks = sub.Marks
 			}
+			codeMarks = sub.CodeMarks
+			vivaMarks = sub.VivaMarks
+			marksBreakdown = sub.MarksBreakdown
 			if sub.PassCount > 0 {
 				passCount = sub.PassCount
 			}
@@ -2543,23 +2592,27 @@ func GetStudentCoursePdfTemplate(c *gin.Context) {
 		}
 
 		if strings.TrimSpace(code) == "" {
-			code = fmt.Sprintf("# Solution for Ex %d: %s\nprint('Output verified')", exp.ExperimentNo, exp.Title)
+			code = fmt.Sprintf("# Solution for Ex %d: %s\nprint('Output verified')", exp.ExperimentNo, title)
 		}
 
 		expItems = append(expItems, services.CustomLabExperimentItem{
-			ExperimentNo:    exp.ExperimentNo,
-			Title:           exp.Title,
-			Aim:             exp.Aim,
-			Procedure:       exp.Procedure,
-			Language:        exp.Language,
-			SubmittedCode:   code,
-			ExecutionOutput: outText,
-			PassCount:       passCount,
-			TotalTestCases:  totalTests,
-			Marks:           marks,
-			Status:          status,
-			Date:            dateStr,
-			ResultText:      fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", exp.Title),
+			ExperimentNo:     exp.ExperimentNo,
+			Title:            title,
+			Aim:              aim,
+			Procedure:        procedure,
+			StudentProcedure: sub.StudentProcedure,
+			Language:         exp.Language,
+			SubmittedCode:    code,
+			ExecutionOutput:  outText,
+			PassCount:        passCount,
+			TotalTestCases:   totalTests,
+			CodeMarks:        codeMarks,
+			VivaMarks:        vivaMarks,
+			Marks:            marks,
+			MarksBreakdown:   marksBreakdown,
+			Status:           status,
+			Date:             dateStr,
+			ResultText:       fmt.Sprintf("Thus the program for '%s' was successfully developed, executed, tested against all verification test cases, and evaluated.", title),
 		})
 	}
 
