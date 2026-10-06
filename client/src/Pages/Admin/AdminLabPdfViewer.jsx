@@ -118,7 +118,16 @@ export default function AdminLabPdfViewer() {
   };
 
   const handlePrint = () => {
-    window.print();
+    const prevMode = viewMode;
+    if (prevMode !== 'all') {
+      setViewMode('all');
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => setViewMode(prevMode), 600);
+      }, 150);
+    } else {
+      window.print();
+    }
   };
 
   const handleZoom = (delta) => {

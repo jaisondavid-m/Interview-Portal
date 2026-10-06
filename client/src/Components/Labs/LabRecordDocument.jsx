@@ -235,7 +235,7 @@ export default function LabRecordDocument({
       <style>{`
         @page {
           size: A4 portrait;
-          margin: 14mm 16mm 16mm 16mm;
+          margin: 0;
         }
 
         @media print {
@@ -244,13 +244,27 @@ export default function LabRecordDocument({
             color: #000000 !important;
             margin: 0 !important;
             padding: 0 !important;
+            height: auto !important;
+            min-height: 100% !important;
+            overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
 
-          body > *:not(#root),
-          #root > *:not(.lab-record-print-root) {
-            display: none !important;
+          /* Ensure parent containers allow full multi-page document flow */
+          #root, #root > *, main, .admin-layout, .app-layout, .space-y-4, .document-canvas, .lab-record-wrapper {
+            height: auto !important;
+            min-height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            position: static !important;
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            transform: none !important;
+            zoom: 1 !important;
           }
 
           .no-print {
@@ -267,12 +281,20 @@ export default function LabRecordDocument({
           .academic-page {
             box-shadow: none !important;
             border: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-            min-height: auto !important;
+            margin: 0 auto !important;
+            padding: 14mm 16mm 16mm 16mm !important;
+            width: 210mm !important;
+            min-height: 297mm !important;
+            height: 297mm !important;
+            box-sizing: border-box !important;
             page-break-after: always !important;
             break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            display: flex !important;
+            flex-direction: column !important;
+            position: relative !important;
+            overflow: hidden !important;
           }
 
           .academic-page:last-child {
@@ -284,6 +306,8 @@ export default function LabRecordDocument({
             display: block !important;
             width: 100% !important;
             gap: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
           table {
