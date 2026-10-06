@@ -66,6 +66,7 @@ export default function AdminUsers() {
   const [bulkRawText, setBulkRawText] = useState('');
   const [bulkDefaultDept, setBulkDefaultDept] = useState('CSE');
   const [bulkDefaultRole, setBulkDefaultRole] = useState('student');
+  const [bulkDefaultAuthMethod, setBulkDefaultAuthMethod] = useState('any'); // 'any' | 'google_only'
   const [bulkDefaultPassword, setBulkDefaultPassword] = useState('apiportal-bitsathy-4321');
   const [bulkPreview, setBulkPreview] = useState([]);
   const [bulkParseError, setBulkParseError] = useState('');
@@ -461,7 +462,7 @@ export default function AdminUsers() {
       return;
     }
 
-    const headers = ['ID', 'Name', 'Email', 'Roll / Reg No', 'Department', 'Role', 'Created At'];
+    const headers = ['ID', 'Name', 'Email', 'Roll / Reg No', 'Department', 'Role', 'Allowed Auth', 'Created At'];
     const csvRows = usersToExport.map((u) => [
       `"${u.id || ''}"`,
       `"${(u.name || '').replace(/"/g, '""')}"`,
@@ -469,6 +470,7 @@ export default function AdminUsers() {
       `"${(u.roll_no || '').replace(/"/g, '""')}"`,
       `"${(u.department || '').replace(/"/g, '""')}"`,
       `"${(u.role || 'student').replace(/"/g, '""')}"`,
+      `"${u.auth_method === 'google_only' || u.auth_method === 'google' ? 'google_only' : 'any'}"`,
       `"${u.created_at ? new Date(u.created_at).toLocaleString() : ''}"`,
     ]);
 
@@ -486,12 +488,12 @@ export default function AdminUsers() {
 
   // Sample CSV Template Download
   const handleDownloadTemplate = () => {
-    const sampleHeaders = 'name,email,roll_no,department,role,password\n';
+    const sampleHeaders = 'name,email,roll_no,department,role,auth_method,password\n';
     const sampleRows = [
-      'Mani M R S,manimozhichelvanmrs.ad25@bitsathy.ac.in,7376252AD230,AI&DS,student,apiportal-bitsathy-4321',
-      'Jagaprasanth P,jagaprasanthp.cs25@bitsathy.ac.in,7376251CS219,CSE,student,apiportal-bitsathy-4321',
-      'Jaison David M,jaisondavidm.cs25@bitsathy.ac.in,7376251CS221,CSE,student,apiportal-bitsathy-4321',
-      'Campus Admin,admin.placement@bitsathy.ac.in,ADMIN02,Administration,admin,Admin@123'
+      'Mani M R S,manimozhichelvanmrs.ad25@bitsathy.ac.in,7376252AD230,AI&DS,student,any,apiportal-bitsathy-4321',
+      'Jagaprasanth P,jagaprasanthp.cs25@bitsathy.ac.in,7376251CS219,CSE,student,google,apiportal-bitsathy-4321',
+      'Jaison David M,jaisondavidm.cs25@bitsathy.ac.in,7376251CS221,CSE,student,any,apiportal-bitsathy-4321',
+      'Campus Admin,admin.placement@bitsathy.ac.in,ADMIN02,Administration,admin,any,Admin@123'
     ].join('\n');
 
     const blob = new Blob([sampleHeaders + sampleRows], { type: 'text/csv;charset=utf-8;' });
@@ -508,7 +510,7 @@ export default function AdminUsers() {
   // ============================================================
   // CSV PARSER & PREVIEW
   // ============================================================
-  const parseCSVText = (csvText, importMode = bulkImportMode) => {
+  const parseCSVText = (csvText, importMode = bulkImportMode, defaultAuth = bulkDefaultAuthMethod) => {
     setBulkParseError('');
     if (!csvText || !csvText.trim()) {
       setBulkPreview([]);
@@ -553,6 +555,7 @@ export default function AdminUsers() {
     const rollIdx = headerRow.findIndex(h => h.includes('roll') || h.includes('reg') || h.includes('id') || h.includes('rollno'));
     const deptIdx = headerRow.findIndex(h => h.includes('dept') || h.includes('department') || h.includes('branch'));
     const roleIdx = headerRow.findIndex(h => h.includes('role') || h.includes('type'));
+    const authIdx = headerRow.findIndex(h => h.includes('auth') || h.includes('login') || h.includes('provider') || h.includes('method'));
     const passIdx = headerRow.findIndex(h => h.includes('pass') || h.includes('password'));
 
     const hasHeader = (nameIdx !== -1 || emailIdx !== -1);
@@ -572,8 +575,12 @@ export default function AdminUsers() {
       const department = deptIdx !== -1 ? (cols[deptIdx] || '') : bulkDefaultDept;
       const rawRole = (cols[roleIdx] || '').toLowerCase().trim();
       const role = roleIdx !== -1
-        ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : 'student')
+        ? (rawRole.includes('admin') ? 'admin' : rawRole.includes('dev') ? 'developer' : rawRole.includes('faculty') ? 'faculty' : 'student')
         : bulkDefaultRole;
+      const rawAuth = authIdx !== -1 ? (cols[authIdx] || '').toLowerCase().trim() : '';
+      const auth_method = rawAuth
+        ? (rawAuth.includes('google') ? 'google_only' : 'any')
+        : (defaultAuth || bulkDefaultAuthMethod || 'any');
       const password = passIdx !== -1 ? (cols[passIdx] || '') : (bulkDefaultPassword || 'apiportal-bitsathy-4321');
 
       let status = 'valid';
@@ -617,6 +624,7 @@ export default function AdminUsers() {
         roll_no: roll_no.trim(),
         department: department.trim() || bulkDefaultDept,
         role: role || bulkDefaultRole,
+        auth_method: auth_method,
         password: password || bulkDefaultPassword || 'apiportal-bitsathy-4321',
         status,
         message,
@@ -634,20 +642,20 @@ export default function AdminUsers() {
     reader.onload = (evt) => {
       const text = evt.target.result;
       setBulkRawText(text);
-      parseCSVText(text, bulkImportMode);
+      parseCSVText(text, bulkImportMode, bulkDefaultAuthMethod);
     };
     reader.readAsText(file);
   };
 
   const handleTextChange = (text) => {
     setBulkRawText(text);
-    parseCSVText(text, bulkImportMode);
+    parseCSVText(text, bulkImportMode, bulkDefaultAuthMethod);
   };
 
   const handleModeChange = (mode) => {
     setBulkImportMode(mode);
     if (bulkRawText) {
-      parseCSVText(bulkRawText, mode);
+      parseCSVText(bulkRawText, mode, bulkDefaultAuthMethod);
     }
   };
 
@@ -658,6 +666,7 @@ export default function AdminUsers() {
     setBulkResult(null);
     setBulkParseError('');
     setBulkImportMode('upsert');
+    setBulkDefaultAuthMethod('any');
     setShowBulkModal(true);
   };
 
@@ -676,6 +685,7 @@ export default function AdminUsers() {
         roll_no: r.roll_no,
         department: r.department,
         role: r.role,
+        auth_method: r.auth_method || bulkDefaultAuthMethod,
         password: r.password,
       }));
 
@@ -691,6 +701,9 @@ export default function AdminUsers() {
         const payload = {
           users: batch,
           default_password: bulkDefaultPassword || 'apiportal-bitsathy-4321',
+          default_department: bulkDefaultDept,
+          default_role: bulkDefaultRole,
+          default_auth_method: bulkDefaultAuthMethod,
           mode: bulkImportMode,
         };
 
@@ -1301,7 +1314,7 @@ export default function AdminUsers() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)]">
                     <div className="flex items-center gap-2.5 text-[12px] text-[var(--text-secondary)]">
                       <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>Supported headers: <code className="font-mono text-[11px] text-[var(--accent)] font-bold">name, email, roll_no, department, role, password</code></span>
+                      <span>Supported headers: <code className="font-mono text-[11px] text-[var(--accent)] font-bold">name, email, roll_no, department, role, auth_method, password</code></span>
                     </div>
                     <button
                       type="button"
@@ -1373,7 +1386,7 @@ export default function AdminUsers() {
                         rows={5}
                         value={bulkRawText}
                         onChange={(e) => handleTextChange(e.target.value)}
-                        placeholder={`name,email,roll_no,department,role,password\nRahul Sharma,rahul.cs25@bitsathy.ac.in,7376251CS104,CSE,student,apiportal-bitsathy-4321\nSneha Patel,sneha.it25@bitsathy.ac.in,7376251IT201,IT,student,`}
+                        placeholder={`name,email,roll_no,department,role,auth_method,password\nRahul Sharma,rahul.cs25@bitsathy.ac.in,7376251CS104,CSE,student,any,apiportal-bitsathy-4321\nSneha Patel,sneha.it25@bitsathy.ac.in,7376251IT201,IT,student,google,apiportal-bitsathy-4321`}
                         className="custom-input font-mono text-[11px] w-full p-3 resize-y"
                       />
                     </div>
@@ -1442,7 +1455,7 @@ export default function AdminUsers() {
                   </div>
 
                   {/* Fallback Defaults Configuration */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 bg-[var(--bg-raised)] rounded-[var(--radius-md)] border border-[var(--border)] text-xs">
                     <div>
                       <span className="text-[11px] font-medium text-[var(--text-secondary)] block mb-1">
                         Default Password (if blank):
@@ -1453,7 +1466,7 @@ export default function AdminUsers() {
                         onChange={(e) => {
                           setBulkDefaultPassword(e.target.value);
                           if (bulkFile || bulkRawText) {
-                            parseCSVText(bulkRawText || '');
+                            parseCSVText(bulkRawText || '', bulkImportMode, bulkDefaultAuthMethod);
                           }
                         }}
                         className="custom-input py-1.5 text-xs font-mono"
@@ -1470,7 +1483,7 @@ export default function AdminUsers() {
                         onChange={(e) => {
                           setBulkDefaultDept(e.target.value);
                           if (bulkFile || bulkRawText) {
-                            parseCSVText(bulkRawText || '');
+                            parseCSVText(bulkRawText || '', bulkImportMode, bulkDefaultAuthMethod);
                           }
                         }}
                         className="custom-input py-1.5 text-xs font-mono"
@@ -1483,12 +1496,35 @@ export default function AdminUsers() {
                       </span>
                       <select
                         value={bulkDefaultRole}
-                        onChange={(e) => setBulkDefaultRole(e.target.value)}
+                        onChange={(e) => {
+                          setBulkDefaultRole(e.target.value);
+                          if (bulkFile || bulkRawText) {
+                            parseCSVText(bulkRawText || '', bulkImportMode, bulkDefaultAuthMethod);
+                          }
+                        }}
                         className="custom-input py-1.5 text-xs bg-[var(--bg-input)]"
                       >
                         {roleOptions.filter(r => r.value !== 'ALL').map(r => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
+                      </select>
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-medium text-[var(--text-secondary)] block mb-1">
+                        Allowed Auth (if blank):
+                      </span>
+                      <select
+                        value={bulkDefaultAuthMethod}
+                        onChange={(e) => {
+                          setBulkDefaultAuthMethod(e.target.value);
+                          if (bulkFile || bulkRawText) {
+                            parseCSVText(bulkRawText || '', bulkImportMode, e.target.value);
+                          }
+                        }}
+                        className="custom-input py-1.5 text-xs bg-[var(--bg-input)]"
+                      >
+                        <option value="any">Any (Password or Google)</option>
+                        <option value="google_only">Google Only</option>
                       </select>
                     </div>
                   </div>
@@ -1537,6 +1573,7 @@ export default function AdminUsers() {
                               <th className="py-2 px-3">Roll No</th>
                               <th className="py-2 px-3">Dept</th>
                               <th className="py-2 px-3">Role</th>
+                              <th className="py-2 px-3">Allowed Auth</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[var(--border)]">
@@ -1584,6 +1621,17 @@ export default function AdminUsers() {
                                     }`}>
                                     {r.role}
                                   </span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  {r.auth_method === 'google_only' ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                                      Google Only
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border)]">
+                                      Any
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             ))}

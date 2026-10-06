@@ -389,14 +389,18 @@ type BulkUserItem struct {
 	Section    string `json:"section"`
 	Password   string `json:"password"`
 	Role       string `json:"role"`
+	AuthMethod string `json:"auth_method"` // "any" or "google_only"
 }
 
 // BulkCreateUsersInput represents the JSON body for bulk creation/update
 type BulkCreateUsersInput struct {
-	Users           []BulkUserItem `json:"users" binding:"required"`
-	DefaultPassword string         `json:"default_password"`
-	Mode            string         `json:"mode"`            // "upsert" (default), "create_only", "update_only"
-	UpdateExisting  *bool          `json:"update_existing"` // Legacy boolean compatibility
+	Users             []BulkUserItem `json:"users" binding:"required"`
+	DefaultPassword   string         `json:"default_password"`
+	DefaultDepartment string         `json:"default_department"`
+	DefaultRole       string         `json:"default_role"`
+	DefaultAuthMethod string         `json:"default_auth_method"` // "any" or "google_only"
+	Mode              string         `json:"mode"`                // "upsert" (default), "create_only", "update_only"
+	UpdateExisting    *bool          `json:"update_existing"`     // Legacy boolean compatibility
 }
 
 // AdminBulkCreateUsers creates or updates multiple users in a single operation
@@ -440,6 +444,17 @@ func AdminBulkCreateUsers(c *gin.Context) {
 			"message": "Failed to hash default password",
 		})
 		return
+	}
+
+	normalizeAuthMethod := func(val, defaultVal string) string {
+		v := strings.ToLower(strings.TrimSpace(val))
+		if v == "" {
+			v = strings.ToLower(strings.TrimSpace(defaultVal))
+		}
+		if v == "google" || v == "google_only" || v == "google-only" || v == "google_sso" || v == "google only" {
+			return "google_only"
+		}
+		return "any"
 	}
 
 	// Fetch existing users mapped by lowercase email (select only required columns for speed & low memory)
@@ -491,6 +506,7 @@ func AdminBulkCreateUsers(c *gin.Context) {
 		department := strings.TrimSpace(item.Department)
 		section := strings.TrimSpace(item.Section)
 		role := strings.ToLower(strings.TrimSpace(item.Role))
+		authMethod := normalizeAuthMethod(item.AuthMethod, input.DefaultAuthMethod)
 
 		if email == "" {
 			skippedDetails = append(skippedDetails, fmt.Sprintf("Row %d: Missing required email", idx+1))
@@ -534,6 +550,9 @@ func AdminBulkCreateUsers(c *gin.Context) {
 			if role != "" {
 				updates["role"] = role
 			}
+			if item.AuthMethod != "" || input.DefaultAuthMethod != "" {
+				updates["auth_method"] = authMethod
+			}
 			if customPW := strings.TrimSpace(item.Password); len(customPW) >= 4 {
 				updates["password"] = getHashedPassword(customPW)
 			}
@@ -575,7 +594,7 @@ func AdminBulkCreateUsers(c *gin.Context) {
 				Section:    section,
 				Password:   hashedPW,
 				Role:       role,
-				AuthMethod: "local",
+				AuthMethod: authMethod,
 			})
 		}
 	}
@@ -735,9 +754,13 @@ func AdminExportUsersCSV(c *gin.Context) {
 	defer writer.Flush()
 
 	// Header row
-	_ = writer.Write([]string{"ID", "Name", "Email", "Roll No", "Department", "Role", "Created At"})
+	_ = writer.Write([]string{"ID", "Name", "Email", "Roll No", "Department", "Role", "Allowed Auth", "Created At"})
 
 	for _, u := range users {
+		authMethod := u.AuthMethod
+		if authMethod == "" || authMethod == "local" {
+			authMethod = "any"
+		}
 		_ = writer.Write([]string{
 			fmt.Sprintf("%d", u.ID),
 			u.Name,
@@ -745,6 +768,7 @@ func AdminExportUsersCSV(c *gin.Context) {
 			u.RollNo,
 			u.Department,
 			u.Role,
+			authMethod,
 			u.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
