@@ -43,7 +43,6 @@ export default function LabScheduleModal({
   const [bulkIsUnlocked, setBulkIsUnlocked] = useState(true);
   const [bulkStartsAt, setBulkStartsAt] = useState('');
   const [bulkEndsAt, setBulkEndsAt] = useState('');
-  const [bulkMaxAttempts, setBulkMaxAttempts] = useState(0);
   const [bulkNotes, setBulkNotes] = useState('');
 
   // Individual Student Override State
@@ -53,7 +52,6 @@ export default function LabScheduleModal({
   const [indivIsUnlocked, setIndivIsUnlocked] = useState(true);
   const [indivStartsAt, setIndivStartsAt] = useState('');
   const [indivEndsAt, setIndivEndsAt] = useState('');
-  const [indivMaxAttempts, setIndivMaxAttempts] = useState(0);
   const [indivNotes, setIndivNotes] = useState('Individual faculty extension');
 
   const [submitting, setSubmitting] = useState(false);
@@ -131,7 +129,6 @@ export default function LabScheduleModal({
         is_unlocked: bulkIsUnlocked,
         starts_at: bulkStartsAt ? new Date(bulkStartsAt).toISOString() : null,
         ends_at: bulkEndsAt ? new Date(bulkEndsAt).toISOString() : null,
-        max_attempts: Number(bulkMaxAttempts) || 0,
         notes: bulkNotes,
       });
 
@@ -166,7 +163,6 @@ export default function LabScheduleModal({
         is_unlocked: indivIsUnlocked,
         starts_at: indivStartsAt ? new Date(indivStartsAt).toISOString() : null,
         ends_at: indivEndsAt ? new Date(indivEndsAt).toISOString() : null,
-        max_attempts: Number(indivMaxAttempts) || 0,
         notes: indivNotes,
       });
 
@@ -426,22 +422,6 @@ export default function LabScheduleModal({
                     </label>
                   </div>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[var(--text-primary)]">
-                    Max Submissions Attempt Limit
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="50"
-                    placeholder="0 = Unlimited attempts"
-                    value={bulkMaxAttempts}
-                    onChange={(e) => setBulkMaxAttempts(parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
-                  <span className="text-[10px] text-[var(--text-muted)]">Set 0 for unlimited code runs</span>
-                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -625,21 +605,6 @@ export default function LabScheduleModal({
                     </label>
                   </div>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[var(--text-primary)]">
-                    Max Attempts Allowed
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="50"
-                    placeholder="0 = Unlimited"
-                    value={indivMaxAttempts}
-                    onChange={(e) => setIndivMaxAttempts(parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
-                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -715,7 +680,6 @@ export default function LabScheduleModal({
 
                           <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] flex-wrap">
                             <span>Window: <strong className="text-[var(--text-primary)]">{starts} → {ends}</strong></span>
-                            {ov.max_attempts > 0 && <span>Max Attempts: <strong className="text-[var(--text-primary)]">{ov.max_attempts}</strong></span>}
                             {ov.notes && <span className="italic text-[var(--text-secondary)]">"{ov.notes}"</span>}
                           </div>
                         </div>

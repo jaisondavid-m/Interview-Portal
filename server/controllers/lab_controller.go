@@ -1123,12 +1123,22 @@ func FinishAndSendForVerification(c *gin.Context) {
 	vivaJSON, _ := json.Marshal(selectedVivas)
 	sub.VivaQuestionsAsked = string(vivaJSON)
 
-	// Increment attempts only when Finish & Send is clicked (1 on initial submit, +1 on resubmission/revision)
-	if sub.AttemptCount == 0 {
-		sub.AttemptCount = 1
+	// Attempt & Revision Lifecycle Handling:
+	// - If student was in revision mode (faculty requested revision), do NOT increase AttemptCount.
+	// - If fresh submission / new assessment round, increase AttemptCount by +1.
+	isRevision := sub.Status == "REVISION_REQUESTED" || sub.IsUnderRevision
+	if isRevision {
+		sub.RevisionCount += 1
+		sub.IsUnderRevision = false
 	} else {
-		sub.AttemptCount += 1
+		if sub.AttemptCount == 0 {
+			sub.AttemptCount = 1
+		} else {
+			sub.AttemptCount += 1
+		}
 	}
+	now := time.Now()
+	sub.LastSubmittedAt = &now
 
 	// Ensure auto-calculated Program & Output marks are saved into MarksBreakdown
 	if sub.TotalTestCases > 0 {
@@ -1650,6 +1660,11 @@ func VerifySingleExperiment(c *gin.Context) {
 
 	now := time.Now()
 	sub.Status = req.Status
+	if req.Status == "REVISION_REQUESTED" {
+		sub.IsUnderRevision = true
+	} else if req.Status == "APPROVED" {
+		sub.IsUnderRevision = false
+	}
 	sub.CodeMarks = req.CodeMarks
 	sub.VivaMarks = req.VivaMarks
 	totalMarks := req.Marks
@@ -1835,6 +1850,31 @@ func FacultyGetCourseReleases(c *gin.Context) {
 	facultyID, _ := facultyIDVal.(uint)
 	userRole, _ := userRoleVal.(string)
 
+	courseIDQuery := strings.TrimSpace(c.Query("course_id"))
+	sectionQuery := strings.TrimSpace(c.Query("section"))
+	searchQuery := strings.TrimSpace(c.Query("search"))
+
+	// Pagination for student overrides
+	overridePage, _ := strconv.Atoi(c.DefaultQuery("override_page", "1"))
+	if overridePage < 1 {
+		overridePage = 1
+	}
+	overrideLimit, _ := strconv.Atoi(c.DefaultQuery("override_limit", "25"))
+	if overrideLimit < 1 {
+		overrideLimit = 25
+	} else if overrideLimit > 200 {
+		overrideLimit = 200
+	}
+	overrideOffset := (overridePage - 1) * overrideLimit
+
+	// Filter for student roster search
+	studentQuery := strings.TrimSpace(c.Query("student_search"))
+	studentSection := strings.TrimSpace(c.Query("student_section"))
+	studentLimit, _ := strconv.Atoi(c.DefaultQuery("student_limit", "100"))
+	if studentLimit < 1 || studentLimit > 500 {
+		studentLimit = 100
+	}
+
 	var mappings []models.LabMapping
 	var courses []models.LabCourse
 
@@ -1853,21 +1893,74 @@ func FacultyGetCourseReleases(c *gin.Context) {
 	}
 
 	// Fetch section-level unlocks
+	unlockQuery := database.DB.Preload("Course").Preload("Experiment").
+		Where("student_id IS NULL OR student_id = 0")
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		unlockQuery = unlockQuery.Where("course_id = ?", courseIDQuery)
+	}
+	if sectionQuery != "" && sectionQuery != "ALL" {
+		unlockQuery = unlockQuery.Where("section = ? OR section = 'ALL'", sectionQuery)
+	}
 	var sectionUnlocks []models.LabExperimentUnlock
-	database.DB.Preload("Course").Preload("Experiment").
-		Where("student_id IS NULL OR student_id = 0").
-		Order("experiment_id asc").
-		Find(&sectionUnlocks)
+	unlockQuery.Order("experiment_id asc").Find(&sectionUnlocks)
 
-	// Fetch student-specific overrides
+	// Fetch student-specific overrides with pagination & search
 	var studentOverrides []models.LabExperimentUnlock
-	database.DB.Preload("Course").Preload("Experiment").Preload("Student").
-		Where("student_id IS NOT NULL AND student_id > 0").
-		Order("created_at desc").
+	var overrideTotal int64
+
+	overrideCountDB := database.DB.Model(&models.LabExperimentUnlock{}).
+		Where("lab_experiment_unlocks.student_id IS NOT NULL AND lab_experiment_unlocks.student_id > 0")
+
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		overrideCountDB = overrideCountDB.Where("lab_experiment_unlocks.course_id = ?", courseIDQuery)
+	}
+	if sectionQuery != "" && sectionQuery != "ALL" {
+		overrideCountDB = overrideCountDB.Where("lab_experiment_unlocks.section = ?", sectionQuery)
+	}
+	if searchQuery != "" {
+		searchPattern := "%" + searchQuery + "%"
+		overrideCountDB = overrideCountDB.Joins("LEFT JOIN users ON users.id = lab_experiment_unlocks.student_id").
+			Joins("LEFT JOIN lab_experiments ON lab_experiments.id = lab_experiment_unlocks.experiment_id").
+			Where("users.name LIKE ? OR users.roll_no LIKE ? OR users.email LIKE ? OR lab_experiments.title LIKE ?",
+				searchPattern, searchPattern, searchPattern, searchPattern)
+	}
+
+	overrideCountDB.Count(&overrideTotal)
+
+	overrideDataDB := database.DB.Model(&models.LabExperimentUnlock{}).
+		Where("lab_experiment_unlocks.student_id IS NOT NULL AND lab_experiment_unlocks.student_id > 0")
+
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		overrideDataDB = overrideDataDB.Where("lab_experiment_unlocks.course_id = ?", courseIDQuery)
+	}
+	if sectionQuery != "" && sectionQuery != "ALL" {
+		overrideDataDB = overrideDataDB.Where("lab_experiment_unlocks.section = ?", sectionQuery)
+	}
+	if searchQuery != "" {
+		searchPattern := "%" + searchQuery + "%"
+		overrideDataDB = overrideDataDB.Joins("LEFT JOIN users ON users.id = lab_experiment_unlocks.student_id").
+			Joins("LEFT JOIN lab_experiments ON lab_experiments.id = lab_experiment_unlocks.experiment_id").
+			Where("users.name LIKE ? OR users.roll_no LIKE ? OR users.email LIKE ? OR lab_experiments.title LIKE ?",
+				searchPattern, searchPattern, searchPattern, searchPattern)
+	}
+
+	overrideDataDB.Preload("Course").Preload("Experiment").Preload("Student").
+		Order("lab_experiment_unlocks.created_at desc").
+		Offset(overrideOffset).
+		Limit(overrideLimit).
 		Find(&studentOverrides)
 
+	overrideTotalPages := int((overrideTotal + int64(overrideLimit) - 1) / int64(overrideLimit))
+	if overrideTotalPages < 1 {
+		overrideTotalPages = 1
+	}
+
 	var allExperiments []models.LabExperiment
-	database.DB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
+	expDB := database.DB
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		expDB = expDB.Where("course_id = ?", courseIDQuery)
+	}
+	expDB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
 
 	// Fetch distinct sections from users
 	var sectionList []string
@@ -1876,21 +1969,38 @@ func FacultyGetCourseReleases(c *gin.Context) {
 		Distinct().
 		Pluck("section", &sectionList)
 
-	// Fetch student roster for individual overrides
+	// Fetch student roster for individual overrides with optional search/section filter & limit
 	var studentList []models.User
-	database.DB.Where("LOWER(role) IN ?", []string{"student", "user"}).
-		Select("id, name, roll_no, email, section, department").
+	var studentTotal int64
+	studentDB := database.DB.Model(&models.User{}).
+		Where("LOWER(role) IN ?", []string{"student", "user"})
+
+	if studentSection != "" && studentSection != "ALL" {
+		studentDB = studentDB.Where("section = ?", studentSection)
+	}
+	if studentQuery != "" {
+		sqPattern := "%" + studentQuery + "%"
+		studentDB = studentDB.Where("name LIKE ? OR roll_no LIKE ? OR email LIKE ?", sqPattern, sqPattern, sqPattern)
+	}
+	studentDB.Count(&studentTotal)
+	studentDB.Select("id, name, roll_no, email, section, department").
 		Order("name asc").
+		Limit(studentLimit).
 		Find(&studentList)
 
 	c.JSON(http.StatusOK, gin.H{
-		"courses":           courses,
-		"mappings":          mappings,
-		"unlocks":           sectionUnlocks,
-		"student_overrides": studentOverrides,
-		"experiments":       allExperiments,
-		"sections":          sectionList,
-		"students":          studentList,
+		"courses":              courses,
+		"mappings":             mappings,
+		"unlocks":              sectionUnlocks,
+		"student_overrides":    studentOverrides,
+		"override_total":       overrideTotal,
+		"override_page":        overridePage,
+		"override_limit":       overrideLimit,
+		"override_total_pages": overrideTotalPages,
+		"experiments":          allExperiments,
+		"sections":             sectionList,
+		"students":             studentList,
+		"student_total":        studentTotal,
 	})
 }
 
@@ -2191,6 +2301,127 @@ func FacultyDeleteStudentOverride(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Student window override removed successfully",
+	})
+}
+
+type BulkDeleteStudentOverridesReq struct {
+	IDs []uint `json:"ids" binding:"required"`
+}
+
+// FacultyBulkDeleteStudentOverrides removes multiple student overrides in one call
+func FacultyBulkDeleteStudentOverrides(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	var req BulkDeleteStudentOverridesReq
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please provide override IDs to delete"})
+		return
+	}
+
+	res := database.DB.Where("id IN ?", req.IDs).Delete(&models.LabExperimentUnlock{})
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully removed %d student window override(s)!", res.RowsAffected),
+		"count":   res.RowsAffected,
+	})
+}
+
+type BulkUpdateStudentOverridesReq struct {
+	IDs                 []uint     `json:"ids" binding:"required"`
+	BypassPrerequisite  *bool      `json:"bypass_prerequisite"`
+	StartsAt            *time.Time `json:"starts_at"`
+	UpdateStartsAt      bool       `json:"update_starts_at"`
+	EndsAt              *time.Time `json:"ends_at"`
+	UpdateEndsAt        bool       `json:"update_ends_at"`
+	AllowLateSubmission *bool      `json:"allow_late_submission"`
+	Notes               *string    `json:"notes"`
+}
+
+// FacultyBulkUpdateStudentOverrides updates multiple student overrides in one call
+func FacultyBulkUpdateStudentOverrides(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	var req BulkUpdateStudentOverridesReq
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please provide override IDs to update"})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.BypassPrerequisite != nil {
+		updates["bypass_prerequisite"] = *req.BypassPrerequisite
+	}
+	if req.UpdateStartsAt {
+		updates["starts_at"] = req.StartsAt
+	}
+	if req.UpdateEndsAt {
+		updates["ends_at"] = req.EndsAt
+	}
+	if req.AllowLateSubmission != nil {
+		updates["allow_late_submission"] = *req.AllowLateSubmission
+	}
+	if req.Notes != nil {
+		updates["notes"] = strings.TrimSpace(*req.Notes)
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No update fields provided"})
+		return
+	}
+
+	res := database.DB.Model(&models.LabExperimentUnlock{}).Where("id IN ?", req.IDs).Updates(updates)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk update overrides: " + res.Error.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully updated %d student override(s)!", res.RowsAffected),
+		"count":   res.RowsAffected,
+	})
+}
+
+type UpdateSingleOverrideReq struct {
+	BypassPrerequisite  bool       `json:"bypass_prerequisite"`
+	StartsAt            *time.Time `json:"starts_at"`
+	EndsAt              *time.Time `json:"ends_at"`
+	AllowLateSubmission bool       `json:"allow_late_submission"`
+	Notes               string     `json:"notes"`
+}
+
+// FacultyUpdateStudentOverride updates an individual student override
+func FacultyUpdateStudentOverride(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid override ID"})
+		return
+	}
+
+	var req UpdateSingleOverrideReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload: " + err.Error()})
+		return
+	}
+
+	var override models.LabExperimentUnlock
+	if err := database.DB.First(&override, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Override not found"})
+		return
+	}
+
+	override.BypassPrerequisite = req.BypassPrerequisite
+	override.StartsAt = req.StartsAt
+	override.EndsAt = req.EndsAt
+	override.AllowLateSubmission = req.AllowLateSubmission
+	override.Notes = strings.TrimSpace(req.Notes)
+
+	if err := database.DB.Save(&override).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update override"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Student window override updated successfully!",
+		"override": override,
 	})
 }
 

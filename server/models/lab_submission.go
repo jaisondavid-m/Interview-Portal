@@ -23,7 +23,9 @@ type LabSubmission struct {
 	PassCount          int                    `gorm:"default:0" json:"pass_count"`
 	TotalTestCases     int                    `gorm:"default:0" json:"total_test_cases"`
 	AttemptCount       int                    `gorm:"default:0" json:"attempt_count"`
-	Status             string                 `gorm:"size:50;default:'DRAFT'" json:"status"` // DRAFT, TEST_PASSED, SUBMITTED_FOR_VERIFICATION, APPROVED, REVISION_REQUIRED
+	IsUnderRevision    bool                   `gorm:"default:false" json:"is_under_revision"`
+	RevisionCount      int                    `gorm:"default:0" json:"revision_count"`
+	Status             string                 `gorm:"size:50;default:'DRAFT'" json:"status"` // DRAFT, TEST_PASSED, SUBMITTED_FOR_VERIFICATION, APPROVED, REVISION_REQUESTED
 	CodeMarks          int                    `gorm:"default:0" json:"code_marks"`
 	VivaMarks          int                    `gorm:"default:0" json:"viva_marks"`
 	Marks              int                    `gorm:"default:0" json:"marks"` // Total Marks (out of 100 or course scale)
@@ -32,6 +34,7 @@ type LabSubmission struct {
 	FacultyNotes       string                 `gorm:"type:text" json:"faculty_notes"`
 	VerifiedBy         *uint                  `json:"verified_by,omitempty"`
 	VerifiedAt         *time.Time             `json:"verified_at,omitempty"`
+	LastSubmittedAt    *time.Time             `json:"last_submitted_at,omitempty"`
 	CreatedAt          time.Time              `json:"created_at"`
 	UpdatedAt          time.Time              `json:"updated_at"`
 	DeletedAt          gorm.DeletedAt         `gorm:"index" json:"-"`

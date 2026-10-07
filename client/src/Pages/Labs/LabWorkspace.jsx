@@ -160,12 +160,12 @@ export default function LabWorkspace() {
   const isSubmittedOrApproved =
     submission?.status === 'SUBMITTED_FOR_VERIFICATION' || submission?.status === 'APPROVED';
 
-  // ── Auto-save code & progress and Exit when window time ends (No verification send) ──────
+  // ── Auto-save code & progress and Submit when assessment window time ends ──────
   const triggerAutoSubmitAndExit = async () => {
     if (autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
     setIsAutoSubmitting(true);
-    setAutoSubmitStep('Scheduled timing closed. Saving your algorithm steps...');
+    setAutoSubmitStep('Scheduled assessment time ended. Saving your algorithm steps...');
 
     try {
       // 1. Auto-save procedure steps to DB
@@ -177,7 +177,7 @@ export default function LabWorkspace() {
         console.warn('Auto-save procedure step failed:', err);
       }
 
-      // 2. Auto-evaluate and save Code to DB (Maintains DRAFT/TEST_PASSED state without locking for verification)
+      // 2. Auto-evaluate and save Code to DB
       setAutoSubmitStep('Evaluating and saving code progress to database...');
       try {
         await api.post(`/labs/experiment/${expId}/submit`, {
@@ -188,10 +188,18 @@ export default function LabWorkspace() {
         console.warn('Auto-submit code execution failed:', err);
       }
 
-      setAutoSubmitStep('Progress saved safely! Redirecting to Practical Labs...');
+      // 3. Auto-submit for faculty verification (Registers attempt)
+      setAutoSubmitStep('Submitting assessment for faculty verification (Attempt recorded)...');
+      try {
+        await api.post(`/labs/experiment/${expId}/finish`, {});
+      } catch (err) {
+        console.warn('Auto-finish verification failed:', err);
+      }
+
+      setAutoSubmitStep('Assessment submitted successfully! Redirecting to Practical Labs...');
       setTimeout(() => {
         navigate('/labs', { replace: true });
-      }, 1200);
+      }, 1400);
     } catch (e) {
       setAutoSubmitStep('Timing expired. Redirecting to Practical Labs...');
       setTimeout(() => {
@@ -522,6 +530,8 @@ export default function LabWorkspace() {
                   ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
                   : submission.status === 'SUBMITTED_FOR_VERIFICATION'
                   ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30'
+                  : submission.status === 'REVISION_REQUESTED'
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
                   : submission.status === 'TEST_PASSED'
                   ? 'bg-teal-500/10 text-teal-600 border-teal-500/30'
                   : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
@@ -536,6 +546,11 @@ export default function LabWorkspace() {
                 <>
                   <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
                   Verification Pending
+                </>
+              ) : submission.status === 'REVISION_REQUESTED' ? (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
+                  Revision Requested
                 </>
               ) : submission.status === 'TEST_PASSED' ? (
                 <>
@@ -636,6 +651,24 @@ export default function LabWorkspace() {
               View Mark Verticals
             </button>
             <span className="text-[11px] font-mono text-[var(--accent)] font-bold">Officially Signed</span>
+          </div>
+        </div>
+      )}
+
+      {/* Revision Requested Notice Banner */}
+      {submission?.status === 'REVISION_REQUESTED' && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200 text-xs shrink-0 flex-wrap">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              <strong>Faculty Requested Revision:</strong>{' '}
+              {submission.faculty_notes || 'Please correct your code/procedure and send for re-verification.'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono bg-amber-500/20 px-2.5 py-0.5 rounded border border-amber-500/30 text-amber-900 dark:text-amber-100 font-bold">
+              Revision Round (Attempts Protected: #{submission.attempt_count || 1})
+            </span>
           </div>
         </div>
       )}
