@@ -157,9 +157,9 @@ const ACADEMIC_DOCUMENT_CSS = `
   #pdf-export-sandbox .content-box {
     border: none !important;
     padding: 4px 0 10px 0 !important;
-    font-size: 10.5pt !important;
-    line-height: 1.6 !important;
-    margin-bottom: 12px !important;
+    font-size: 12pt !important;
+    line-height: 1.8 !important;
+    margin-bottom: 16px !important;
     text-align: justify !important;
     color: #000000 !important;
     background: transparent !important;

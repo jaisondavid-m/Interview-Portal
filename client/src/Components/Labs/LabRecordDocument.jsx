@@ -713,9 +713,9 @@ export default function LabRecordDocument({
         .content-box {
           border: none;
           padding: 4px 0 10px 0;
-          font-size: 10.5pt;
-          line-height: 1.6;
-          margin-bottom: 12px;
+          font-size: 12pt;
+          line-height: 1.8;
+          margin-bottom: 16px;
           text-align: justify;
           background: transparent;
         }
@@ -1441,34 +1441,34 @@ export default function LabRecordDocument({
                             </table>
 
                             {/* Main Experiment Title Bar - ONLY SHOWN ONCE HERE */}
-                            <div style={{ marginTop: '12px', marginBottom: '10px', textAlign: 'center', fontSize: '12pt', fontWeight: 'bold', letterSpacing: '0.8px', lineHeight: '1.4' }}>
+                            <div style={{ marginTop: '0', marginBottom: '20px', textAlign: 'center', fontSize: '13pt', fontWeight: 'bold', letterSpacing: '0.8px', lineHeight: '1.4' }}>
                               EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
                             </div>
 
                             {/* AIM */}
-                            <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '14px', marginBottom: '4px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                            <div style={{ fontSize: '12pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '28px', marginBottom: '8px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
                               AIM
                             </div>
-                            <div className="content-box" style={{ marginBottom: '14px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                            <div className="content-box" style={{ marginBottom: '24px', lineHeight: '1.8', fontSize: '12pt' }}>
                               {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
                             </div>
 
                             {/* ALGORITHM / PROCEDURE */}
-                            <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '14px', marginBottom: '4px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                            <div style={{ fontSize: '12pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '28px', marginBottom: '8px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
                               ALGORITHM / PROCEDURE
                             </div>
-                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px' }}>
+                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '16px' }}>
                               {procedureSteps.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                                   {procedureSteps.map((step, sIdx) => (
                                     <div
                                       key={sIdx}
                                       style={{
                                         display: 'flex',
                                         alignItems: 'baseline',
-                                        gap: '8px',
-                                        lineHeight: '1.75',
-                                        fontSize: '10.5pt',
+                                        gap: '10px',
+                                        lineHeight: '1.8',
+                                        fontSize: '12pt',
                                       }}
                                     >
                                       <span
@@ -1476,38 +1476,39 @@ export default function LabRecordDocument({
                                           fontWeight: 'bold',
                                           color: '#000000',
                                           whiteSpace: 'nowrap',
-                                          minWidth: '58px',
+                                          minWidth: '65px',
+                                          fontSize: '12pt',
                                         }}
                                       >
                                         Step {sIdx + 1}:
                                       </span>
-                                      <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>
+                                      <span style={{ flex: 1, textAlign: 'justify', color: '#000000', fontSize: '12pt' }}>
                                         {step}
                                       </span>
                                     </div>
                                   ))}
                                 </div>
                               ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 1:</span>
-                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Start the program execution.</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', lineHeight: '1.8', fontSize: '12pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '65px', fontSize: '12pt' }}>Step 1:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000', fontSize: '12pt' }}>Start the program execution.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 2:</span>
-                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Read the required input parameters and initialize the appropriate data structures.</span>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', lineHeight: '1.8', fontSize: '12pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '65px', fontSize: '12pt' }}>Step 2:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000', fontSize: '12pt' }}>Read the required input parameters and initialize the appropriate data structures.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 3:</span>
-                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Implement the core algorithmic logic and computational operations for {exp.title}.</span>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', lineHeight: '1.8', fontSize: '12pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '65px', fontSize: '12pt' }}>Step 3:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000', fontSize: '12pt' }}>Implement the core algorithmic logic and computational operations for {exp.title}.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 4:</span>
-                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Compute, format and display the verified output results.</span>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', lineHeight: '1.8', fontSize: '12pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '65px', fontSize: '12pt' }}>Step 4:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000', fontSize: '12pt' }}>Compute, format and display the verified output results.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 5:</span>
-                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Stop the program execution and verify test case assertions.</span>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', lineHeight: '1.8', fontSize: '12pt' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '65px', fontSize: '12pt' }}>Step 5:</span>
+                                    <span style={{ flex: 1, textAlign: 'justify', color: '#000000', fontSize: '12pt' }}>Stop the program execution and verify test case assertions.</span>
                                   </div>
                                 </div>
                               )}
