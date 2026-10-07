@@ -41,24 +41,17 @@ const preloadAndInlineImages = async (container) => {
   }
 };
 
-// Pure standard CSS for the academic document with zero oklch variables
+// Standard CSS strictly scoped to #pdf-export-sandbox with zero oklch variables and zero global leaks
 const ACADEMIC_DOCUMENT_CSS = `
-  * {
-    box-sizing: border-box;
+  #pdf-export-sandbox * {
+    box-sizing: border-box !important;
   }
-  body, html {
-    margin: 0 !important;
-    padding: 0 !important;
+  #pdf-export-sandbox .academic-page {
     background: #ffffff !important;
     color: #000000 !important;
-    font-family: "Times New Roman", Times, "Liberation Serif", serif;
-  }
-  .academic-page {
-    background: #ffffff !important;
-    color: #000000 !important;
-    font-family: "Times New Roman", Times, "Liberation Serif", serif;
-    font-size: 10.5pt;
-    line-height: 1.5;
+    font-family: "Times New Roman", Times, "Liberation Serif", serif !important;
+    font-size: 10.5pt !important;
+    line-height: 1.5 !important;
     width: 210mm !important;
     min-height: 297mm !important;
     height: 297mm !important;
@@ -73,187 +66,186 @@ const ACADEMIC_DOCUMENT_CSS = `
     flex-direction: column !important;
     justify-content: space-between !important;
   }
-  .academic-page.page-odd {
+  #pdf-export-sandbox .academic-page.page-odd {
     padding-left: 24mm !important;
     padding-right: 14mm !important;
   }
-  .academic-page.page-even {
+  #pdf-export-sandbox .academic-page.page-even {
     padding-left: 14mm !important;
     padding-right: 24mm !important;
   }
-  .top-row-table {
-    width: 100%;
-    border-collapse: collapse;
-    border: none;
-    margin-bottom: 12px;
+  #pdf-export-sandbox .top-row-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    border: none !important;
+    margin-bottom: 12px !important;
   }
-  .top-row-table td {
-    border: none;
-    padding: 0;
-    vertical-align: middle;
-    font-weight: bold;
-    font-size: 10pt;
-    color: #000000;
+  #pdf-export-sandbox .top-row-table td {
+    border: none !important;
+    padding: 0 !important;
+    vertical-align: middle !important;
+    font-weight: bold !important;
+    font-size: 10pt !important;
+    color: #000000 !important;
   }
-  .register-boxes {
-    border-collapse: collapse;
-    margin-left: auto;
+  #pdf-export-sandbox .register-boxes {
+    border-collapse: collapse !important;
+    margin-left: auto !important;
   }
-  .register-boxes td {
-    width: 16px;
-    height: 21px;
-    border: 1px solid #000000;
-    padding: 0;
-    text-align: center;
-    font-family: "Courier New", Courier, monospace;
-    font-size: 10pt;
-    font-weight: bold;
-    vertical-align: middle;
-    color: #000000;
+  #pdf-export-sandbox .register-boxes td {
+    width: 16px !important;
+    height: 21px !important;
+    border: 1px solid #000000 !important;
+    padding: 0 !important;
+    text-align: center !important;
+    font-family: "Courier New", Courier, monospace !important;
+    font-size: 10pt !important;
+    font-weight: bold !important;
+    vertical-align: middle !important;
+    color: #000000 !important;
   }
-  .header-table {
-    width: 100%;
-    border-collapse: collapse;
-    border: 1px solid #000000;
-    text-align: center;
-    margin-bottom: 14px;
+  #pdf-export-sandbox .header-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    border: 1px solid #000000 !important;
+    text-align: center !important;
+    margin-bottom: 14px !important;
   }
-  .header-table td, .header-table th {
-    border: 1px solid #000000;
-    padding: 6px 10px;
-    vertical-align: middle;
-    color: #000000;
+  #pdf-export-sandbox .header-table td, #pdf-export-sandbox .header-table th {
+    border: 1px solid #000000 !important;
+    padding: 6px 10px !important;
+    vertical-align: middle !important;
+    color: #000000 !important;
   }
-  .section-bar-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 14px;
-    margin-bottom: 0;
+  #pdf-export-sandbox .section-bar-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 14px !important;
+    margin-bottom: 0 !important;
   }
-  .section-bar-table td {
-    border: 1px solid #000000;
-    text-align: center;
-    padding: 6px 10px;
-    font-size: 10.5pt;
-    font-weight: bold;
-    text-transform: uppercase;
-    background: #f4f4f5;
-    letter-spacing: 0.5px;
-    color: #000000;
+  #pdf-export-sandbox .section-bar-table td {
+    border: 1px solid #000000 !important;
+    text-align: center !important;
+    padding: 6px 10px !important;
+    font-size: 10.5pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    background: #f4f4f5 !important;
+    letter-spacing: 0.5px !important;
+    color: #000000 !important;
   }
-  .grid-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: -1px;
-    margin-bottom: 14px;
+  #pdf-export-sandbox .grid-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: -1px !important;
+    margin-bottom: 14px !important;
   }
-  .grid-table th, .grid-table td {
-    border: 1px solid #000000;
-    padding: 7px 10px;
-    vertical-align: middle;
-    font-size: 10pt;
-    color: #000000;
+  #pdf-export-sandbox .grid-table th, #pdf-export-sandbox .grid-table td {
+    border: 1px solid #000000 !important;
+    padding: 7px 10px !important;
+    vertical-align: middle !important;
+    font-size: 10pt !important;
+    color: #000000 !important;
   }
-  .grid-table th {
-    text-align: center;
-    font-weight: bold;
-    background: #fafafa;
+  #pdf-export-sandbox .grid-table th {
+    text-align: center !important;
+    font-weight: bold !important;
+    background: #fafafa !important;
   }
-  .content-box {
-    border: 1px solid #000000;
-    border-top: none;
-    padding: 10px 14px;
-    font-size: 10pt;
-    line-height: 1.55;
-    margin-bottom: 14px;
-    text-align: justify;
-    color: #000000;
+  #pdf-export-sandbox .content-box {
+    border: 1px solid #000000 !important;
+    border-top: none !important;
+    padding: 10px 14px !important;
+    font-size: 10pt !important;
+    line-height: 1.55 !important;
+    margin-bottom: 14px !important;
+    text-align: justify !important;
+    color: #000000 !important;
   }
-  .code-container {
-    border: 1px solid #000000;
-    border-top: none;
-    background: #fafafa;
-    padding: 10px 14px;
-    font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
-    font-size: 9.5pt;
-    line-height: 1.45;
-    letter-spacing: 0.1px;
-    white-space: pre-wrap;
-    word-break: break-word;
-    margin-top: -1px;
-    margin-bottom: 12px;
-    color: #111827;
-    box-sizing: border-box;
-    -webkit-font-smoothing: antialiased;
+  #pdf-export-sandbox .code-container {
+    border: 1px solid #000000 !important;
+    border-top: none !important;
+    background: #fafafa !important;
+    padding: 10px 14px !important;
+    font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif !important;
+    font-size: 9.5pt !important;
+    line-height: 1.45 !important;
+    letter-spacing: 0.1px !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    margin-top: -1px !important;
+    margin-bottom: 12px !important;
+    color: #111827 !important;
+    box-sizing: border-box !important;
+    -webkit-font-smoothing: antialiased !important;
   }
-  .output-container {
-    border: 1px solid #000000;
-    border-top: none;
-    background: #fafafa;
-    padding: 10px 14px;
-    font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
-    font-size: 9.5pt;
-    line-height: 1.45;
-    letter-spacing: 0.1px;
-    white-space: pre-wrap;
-    word-break: break-word;
-    margin-top: -1px;
-    margin-bottom: 12px;
-    color: #111827;
-    box-sizing: border-box;
-    -webkit-font-smoothing: antialiased;
+  #pdf-export-sandbox .output-container {
+    border: 1px solid #000000 !important;
+    border-top: none !important;
+    background: #fafafa !important;
+    padding: 10px 14px !important;
+    font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif !important;
+    font-size: 9.5pt !important;
+    line-height: 1.45 !important;
+    letter-spacing: 0.1px !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    margin-top: -1px !important;
+    margin-bottom: 12px !important;
+    color: #111827 !important;
+    box-sizing: border-box !important;
+    -webkit-font-smoothing: antialiased !important;
   }
-  .doc-footer {
-    margin-top: 24px;
-    padding-top: 8px;
-    border-top: 1px dashed #777777;
-    display: flex;
-    justify-content: space-between;
-    font-size: 8.5pt;
-    font-weight: bold;
-    color: #444444;
+  #pdf-export-sandbox .doc-footer {
+    margin-top: 24px !important;
+    padding-top: 8px !important;
+    border-top: 1px dashed #777777 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    font-size: 8.5pt !important;
+    font-weight: bold !important;
+    color: #444444 !important;
   }
-  /* Common Flex / Layout utilities in pure RGB/Hex without oklch */
-  .flex { display: flex !important; }
-  .flex-col { flex-direction: column !important; }
-  .flex-row { flex-direction: row !important; }
-  .items-center { align-items: center !important; }
-  .items-start { align-items: flex-start !important; }
-  .items-baseline { align-items: baseline !important; }
-  .justify-between { justify-content: space-between !important; }
-  .justify-center { justify-content: center !important; }
-  .justify-end { justify-content: flex-end !important; }
-  .flex-1 { flex: 1 1 0% !important; }
-  .gap-1 { gap: 4px !important; }
-  .gap-2 { gap: 8px !important; }
-  .gap-3 { gap: 12px !important; }
-  .gap-4 { gap: 16px !important; }
-  .w-full { width: 100% !important; }
-  .h-full { height: 100% !important; }
-  .max-w-full { max-width: 100% !important; }
-  .text-center { text-align: center !important; }
-  .text-left { text-align: left !important; }
-  .text-right { text-align: right !important; }
-  .text-justify { text-align: justify !important; }
-  .font-bold { font-weight: bold !important; }
-  .font-normal { font-weight: normal !important; }
-  .font-serif { font-family: "Times New Roman", Times, "Liberation Serif", serif !important; }
-  .italic { font-style: italic !important; }
-  .uppercase { text-transform: uppercase !important; }
-  .tracking-widest { letter-spacing: 0.1em !important; }
-  .tracking-wider { letter-spacing: 0.05em !important; }
-  .whitespace-nowrap { white-space: nowrap !important; }
-  .text-black { color: #000000 !important; }
-  .text-neutral-400 { color: #a3a3a3 !important; }
-  .text-neutral-500 { color: #737373 !important; }
-  .text-neutral-600 { color: #525252 !important; }
-  .text-neutral-700 { color: #404040 !important; }
-  .text-neutral-300 { color: #d4d4d4 !important; }
-  .bg-white { background-color: #ffffff !important; }
-  .opacity-15 { opacity: 0.15 !important; }
-  .space-y-3 > * + * { margin-top: 12px !important; }
-  .leading-relaxed { line-height: 1.625 !important; }
-  .object-contain { object-fit: contain !important; }
+  #pdf-export-sandbox .flex { display: flex !important; }
+  #pdf-export-sandbox .flex-col { flex-direction: column !important; }
+  #pdf-export-sandbox .flex-row { flex-direction: row !important; }
+  #pdf-export-sandbox .items-center { align-items: center !important; }
+  #pdf-export-sandbox .items-start { align-items: flex-start !important; }
+  #pdf-export-sandbox .items-baseline { align-items: baseline !important; }
+  #pdf-export-sandbox .justify-between { justify-content: space-between !important; }
+  #pdf-export-sandbox .justify-center { justify-content: center !important; }
+  #pdf-export-sandbox .justify-end { justify-content: flex-end !important; }
+  #pdf-export-sandbox .flex-1 { flex: 1 1 0% !important; }
+  #pdf-export-sandbox .gap-1 { gap: 4px !important; }
+  #pdf-export-sandbox .gap-2 { gap: 8px !important; }
+  #pdf-export-sandbox .gap-3 { gap: 12px !important; }
+  #pdf-export-sandbox .gap-4 { gap: 16px !important; }
+  #pdf-export-sandbox .w-full { width: 100% !important; }
+  #pdf-export-sandbox .h-full { height: 100% !important; }
+  #pdf-export-sandbox .max-w-full { max-width: 100% !important; }
+  #pdf-export-sandbox .text-center { text-align: center !important; }
+  #pdf-export-sandbox .text-left { text-align: left !important; }
+  #pdf-export-sandbox .text-right { text-align: right !important; }
+  #pdf-export-sandbox .text-justify { text-align: justify !important; }
+  #pdf-export-sandbox .font-bold { font-weight: bold !important; }
+  #pdf-export-sandbox .font-normal { font-weight: normal !important; }
+  #pdf-export-sandbox .font-serif { font-family: "Times New Roman", Times, "Liberation Serif", serif !important; }
+  #pdf-export-sandbox .italic { font-style: italic !important; }
+  #pdf-export-sandbox .uppercase { text-transform: uppercase !important; }
+  #pdf-export-sandbox .tracking-widest { letter-spacing: 0.1em !important; }
+  #pdf-export-sandbox .tracking-wider { letter-spacing: 0.05em !important; }
+  #pdf-export-sandbox .whitespace-nowrap { white-space: nowrap !important; }
+  #pdf-export-sandbox .text-black { color: #000000 !important; }
+  #pdf-export-sandbox .text-neutral-400 { color: #a3a3a3 !important; }
+  #pdf-export-sandbox .text-neutral-500 { color: #737373 !important; }
+  #pdf-export-sandbox .text-neutral-600 { color: #525252 !important; }
+  #pdf-export-sandbox .text-neutral-700 { color: #404040 !important; }
+  #pdf-export-sandbox .text-neutral-300 { color: #d4d4d4 !important; }
+  #pdf-export-sandbox .bg-white { background-color: #ffffff !important; }
+  #pdf-export-sandbox .opacity-15 { opacity: 0.15 !important; }
+  #pdf-export-sandbox .space-y-3 > * + * { margin-top: 12px !important; }
+  #pdf-export-sandbox .leading-relaxed { line-height: 1.625 !important; }
+  #pdf-export-sandbox .object-contain { object-fit: contain !important; }
 `;
 
 // Helper to remove any oklch color references that might cause html2canvas parsing errors
@@ -305,6 +297,7 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
   sandbox.style.minHeight = '297mm';
   sandbox.style.background = '#ffffff';
   sandbox.style.zIndex = '-99999';
+  sandbox.style.pointerEvents = 'none';
   sandbox.style.overflow = 'hidden';
   sandbox.style.boxSizing = 'border-box';
   document.body.appendChild(sandbox);
@@ -326,6 +319,9 @@ export const exportDomToPdf = async (containerElement, fileName = 'LabRecord.pdf
       if (onProgress) {
         onProgress(i + 1, total);
       }
+
+      // Small async tick to let browser UI and React state render smoothly
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
       // Populate sandbox with isolated pure CSS and cloned page
       sandbox.innerHTML = `
