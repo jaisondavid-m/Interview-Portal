@@ -18,7 +18,7 @@ type LabExperiment struct {
 	StarterCode     string         `gorm:"type:text" json:"starter_code"`
 	SampleTestCases string         `gorm:"type:text" json:"sample_test_cases"` // JSON array of [{input, expected_output}]
 	HiddenTestCases string         `gorm:"type:text" json:"hidden_test_cases"` // JSON array of [{input, expected_output}]
-	MaxMarks        int            `gorm:"default:10" json:"max_marks"`
+	MaxMarks        int            `gorm:"default:100" json:"max_marks"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`

@@ -300,7 +300,7 @@ export default function LabDashboard() {
                             ) : isSubmitted ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
                                 <Clock className="w-3.5 h-3.5" />
-                                In Viva Queue
+                                Verification Pending
                               </span>
                             ) : isResubmit ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded bg-rose-500/10 text-rose-600 border border-rose-500/20">

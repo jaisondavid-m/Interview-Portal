@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -42,6 +42,10 @@ export default function LabWorkspace() {
   const [procedureSteps, setProcedureSteps] = useState([]);
   const [submission, setSubmission] = useState(null);
   const [isUnlocked, setIsUnlocked] = useState(true);
+  const [accessStatus, setAccessStatus] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [isAutoSubmitting, setIsAutoSubmitting] = useState(false);
+  const [autoSubmitStep, setAutoSubmitStep] = useState('');
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +54,24 @@ export default function LabWorkspace() {
   const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
+
+  // Synchronized refs for background timer callbacks
+  const codeRef = useRef(code);
+  const languageRef = useRef(language);
+  const procedureStepsRef = useRef(procedureSteps);
+  const autoSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
+
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
+
+  useEffect(() => {
+    procedureStepsRef.current = procedureSteps;
+  }, [procedureSteps]);
 
   // Left Pane Tabs: 'aim' | 'procedure' | 'testcases'
   const [leftTab, setLeftTab] = useState('aim');
@@ -92,6 +114,7 @@ export default function LabWorkspace() {
       setExperiment(data);
       setAssignedQuestion(assignedQ);
       setIsUnlocked(res?.is_unlocked !== false);
+      setAccessStatus(res?.access_status || null);
 
       if (sub) {
         setSubmission(sub);
@@ -124,6 +147,105 @@ export default function LabWorkspace() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const isSubmittedOrApproved =
+    submission?.status === 'SUBMITTED_FOR_VERIFICATION' || submission?.status === 'APPROVED';
+
+  // ── Auto-submit and Exit when window time ends ──────────────────────────────
+  const triggerAutoSubmitAndExit = async () => {
+    if (autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
+    setIsAutoSubmitting(true);
+    setAutoSubmitStep('Scheduled timing closed. Saving your algorithm steps...');
+
+    try {
+      // 1. Auto-save procedure steps
+      try {
+        await api.post(`/labs/experiment/${expId}/procedure`, {
+          procedure: JSON.stringify(procedureStepsRef.current || [], null, 2),
+        });
+      } catch (err) {
+        console.warn('Auto-save procedure step failed:', err);
+      }
+
+      // 2. Auto-submit Code for hidden benchmark evaluation
+      setAutoSubmitStep('Evaluating code against hidden benchmark test cases...');
+      try {
+        await api.post(`/labs/experiment/${expId}/submit`, {
+          code: codeRef.current || '# Auto-submitted upon window expiry',
+          language: languageRef.current || 'python',
+        });
+      } catch (err) {
+        console.warn('Auto-submit code execution failed:', err);
+      }
+
+      // 3. Finalize and submit into Faculty Viva Queue
+      setAutoSubmitStep('Finalizing experiment & queuing for faculty viva...');
+      try {
+        await api.post(`/labs/experiment/${expId}/finish`, {});
+      } catch (err) {
+        console.warn('Auto-finish failed:', err);
+      }
+
+      setAutoSubmitStep('Auto-submission completed successfully! Redirecting to Dashboard...');
+      setTimeout(() => {
+        navigate(`/labs/${courseId}`);
+      }, 1800);
+    } catch (e) {
+      setAutoSubmitStep('Timing expired. Redirecting to Dashboard...');
+      setTimeout(() => {
+        navigate(`/labs/${courseId}`);
+      }, 1500);
+    }
+  };
+
+  // ── Real-time Countdown Timer Effect ────────────────────────────────────────
+  useEffect(() => {
+    if (!accessStatus?.ends_at || isSubmittedOrApproved || isAutoSubmitting) {
+      setTimeLeft(null);
+      return;
+    }
+
+    const endsAtMs = new Date(accessStatus.ends_at).getTime();
+    if (isNaN(endsAtMs)) return;
+
+    const checkTimeRemaining = () => {
+      const now = Date.now();
+      const diffSec = Math.floor((endsAtMs - now) / 1000);
+      if (diffSec <= 0) {
+        setTimeLeft(0);
+        triggerAutoSubmitAndExit();
+        return 0;
+      }
+      setTimeLeft(diffSec);
+      return diffSec;
+    };
+
+    const initialDiff = checkTimeRemaining();
+    if (initialDiff <= 0) return;
+
+    const interval = setInterval(() => {
+      const remaining = checkTimeRemaining();
+      if (remaining <= 0) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [accessStatus?.ends_at, isSubmittedOrApproved, isAutoSubmitting]);
+
+  const formatTimeRemaining = (seconds) => {
+    if (seconds === null || seconds === undefined) return null;
+    if (seconds <= 0) return '00:00';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    if (hrs > 0) {
+      return `${hrs}h ${pad(mins)}m ${pad(secs)}s`;
+    }
+    return `${pad(mins)}:${pad(secs)}`;
   };
 
   // ── Step-by-Step Procedure Helpers ──────────────────────────────────────────
@@ -224,9 +346,6 @@ export default function LabWorkspace() {
     }
   };
 
-  const isSubmittedOrApproved =
-    submission?.status === 'SUBMITTED_FOR_VERIFICATION' || submission?.status === 'APPROVED';
-
   // Parse sample test cases for left pane
   let sampleTestCases = [];
   try {
@@ -312,8 +431,32 @@ export default function LabWorkspace() {
           </div>
         </div>
 
-        {/* Right: Status and Action Buttons */}
+        {/* Right: Status, Live Countdown Timer, and Action Buttons */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Live Countdown Timer Badge */}
+          {timeLeft !== null && !isSubmittedOrApproved && (
+            <div
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold border transition-all ${
+                timeLeft <= 60
+                  ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 animate-pulse'
+                  : timeLeft <= 300
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                  : 'bg-[var(--bg-input)] text-[var(--text-primary)] border-[var(--border)]'
+              }`}
+              title="Window Time Remaining (Auto-submits and exits upon completion)"
+            >
+              <Clock
+                className={`w-3.5 h-3.5 ${
+                  timeLeft <= 60 ? 'text-rose-600 animate-spin' : timeLeft <= 300 ? 'text-amber-600' : 'text-[var(--accent)]'
+                }`}
+              />
+              <span>{formatTimeRemaining(timeLeft)}</span>
+              {timeLeft <= 60 && (
+                <span className="text-[10px] uppercase font-bold text-rose-600 ml-0.5">• Ending</span>
+              )}
+            </div>
+          )}
+
           {/* Submission Status Pill */}
           {submission?.status && (
             <span
@@ -335,7 +478,7 @@ export default function LabWorkspace() {
               ) : submission.status === 'SUBMITTED_FOR_VERIFICATION' ? (
                 <>
                   <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                  In Faculty Viva Queue
+                  Verification Pending
                 </>
               ) : submission.status === 'TEST_PASSED' ? (
                 <>
@@ -386,7 +529,7 @@ export default function LabWorkspace() {
             onClick={() => setShowFinishModal(true)}
             disabled={running || submitting || !isUnlocked || isSubmittedOrApproved}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-sm)]"
-            title="Finish experiment and submit for faculty oral viva evaluation"
+            title="Finish experiment and submit for faculty verification"
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             Finish & Send for Verification
@@ -400,7 +543,7 @@ export default function LabWorkspace() {
           <div className="flex items-center gap-2 font-medium">
             <MessageSquareCheck className="w-4 h-4 text-[var(--accent)] shrink-0" />
             <span>
-              <strong>Experiment Locked & Sent for Verification:</strong> Please approach your faculty incharge for in-person oral viva evaluation.
+              <strong>Experiment Submitted for Verification:</strong> Your solution has been submitted and is awaiting faculty verification.
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -412,7 +555,7 @@ export default function LabWorkspace() {
               <SlidersHorizontal className="w-3.5 h-3.5" />
               View Mark Verticals
             </button>
-            <span className="text-[11px] font-mono text-[var(--accent)] font-bold">Oral Viva Pending</span>
+            <span className="text-[11px] font-mono text-[var(--accent)] font-bold">Verification Pending</span>
           </div>
         </div>
       )}
@@ -512,7 +655,7 @@ export default function LabWorkspace() {
                     <li>Write your step-by-step algorithmic steps under the <strong>"My Algorithm Steps"</strong> tab.</li>
                     <li>Develop and verify your solution code in the editor.</li>
                     <li>Click <strong>"Run Code"</strong> to test sample cases and <strong>"Submit Code"</strong> for hidden case grading.</li>
-                    <li>Click <strong>"Finish & Send for Verification"</strong> to lock your submission and enter the faculty oral viva queue.</li>
+                    <li>Click <strong>"Finish & Send for Verification"</strong> to lock your submission and send for faculty verification.</li>
                   </ul>
                 </div>
               </div>
@@ -769,6 +912,31 @@ export default function LabWorkspace() {
         course={{ id: courseId }}
         submission={submission}
       />
+
+      {/* Auto-Submitting Fullscreen Overlay when Window Timing Expires */}
+      {isAutoSubmitting && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-5 animate-scaleUp">
+            <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 flex items-center justify-center mx-auto">
+              <Clock className="w-8 h-8 animate-pulse text-rose-600" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">
+                Timing Expired — Auto-Submitting
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                The scheduled experiment window has closed. Your current code and algorithm steps are being automatically evaluated, locked, and submitted.
+              </p>
+            </div>
+            <div className="p-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] flex items-center justify-center gap-3">
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)] shrink-0" />
+              <span className="text-xs font-semibold text-[var(--text-primary)]">
+                {autoSubmitStep}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

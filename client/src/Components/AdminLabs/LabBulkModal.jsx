@@ -29,21 +29,21 @@ export const getExperimentSampleJSON = (courseCode = 'CS301') => [
     language: 'python',
     title: 'Implementation of Linear and Binary Search',
     aim: 'To write and execute a program to implement linear and binary search algorithms on a given sequence of integers.',
-    max_marks: 10
+    max_marks: 100
   },
   {
     experiment_no: 2,
     language: 'python',
     title: 'Stack ADT Implementation using Arrays',
     aim: 'To design and implement Stack Abstract Data Type supporting push, pop, peek, and display operations.',
-    max_marks: 10
+    max_marks: 100
   }
 ];
 
 export const getExperimentSampleCSV = () => {
   return `experiment_no,language,title,aim,max_marks
-1,"python","Implementation of Linear and Binary Search","To write and execute a program to implement linear and binary search algorithms on a given sequence of integers.",10
-2,"python","Stack ADT Implementation using Arrays","To design and implement Stack Abstract Data Type supporting push, pop, peek, and display operations.",10`;
+1,"python","Implementation of Linear and Binary Search","To write and execute a program to implement linear and binary search algorithms on a given sequence of integers.",100
+2,"python","Stack ADT Implementation using Arrays","To design and implement Stack Abstract Data Type supporting push, pop, peek, and display operations.",100`;
 };
 
 export const getVariantSampleJSON = (expNo = 1) => [
@@ -52,7 +52,7 @@ export const getVariantSampleJSON = (expNo = 1) => [
     title: 'Binary Search on Sorted Floating Point Array',
     aim: 'Implement binary search with precision threshold epsilon = 1e-6 on a strictly ascending floating point list.',
     language: 'python',
-    max_marks: 10,
+    max_marks: 100,
     viva_questions_count: 5,
     reference_algorithm: JSON.stringify([
       'Initialize low = 0 and high = N - 1.',
@@ -89,7 +89,7 @@ export const getVariantSampleJSON = (expNo = 1) => [
     title: 'First and Last Occurrence Search in Sorted Array',
     aim: 'Given a sorted array of integers with duplicates, find the first and last position of a given target value using two binary searches.',
     language: 'python',
-    max_marks: 10,
+    max_marks: 100,
     viva_questions_count: 5,
     reference_algorithm: JSON.stringify([
       'Run first binary search: when target is matched, record index and continue searching left (high = mid - 1).',
@@ -119,8 +119,8 @@ export const getVariantSampleJSON = (expNo = 1) => [
 
 export const getVariantSampleCSV = (expNo = 1) => {
   return `question_code,title,aim,language,max_marks,reference_algorithm,solution_code
-EX${expNo}_VAR_A,"Binary Search on Float Array","Binary search with epsilon threshold on float list.","python",10,"1. Init low and high.\\n2. Compare with precision 1e-6.\\n3. Return index.","def solution():\\n    pass"
-EX${expNo}_VAR_B,"First and Last Occurrence Search","Find first and last indices of target in sorted array.","python",10,"1. First search for leftmost.\\n2. Second search for rightmost.\\n3. Output pair.","def solution():\\n    pass"`;
+EX${expNo}_VAR_A,"Binary Search on Float Array","Binary search with epsilon threshold on float list.","python",100,"1. Init low and high.\\n2. Compare with precision 1e-6.\\n3. Return index.","def solution():\\n    pass"
+EX${expNo}_VAR_B,"First and Last Occurrence Search","Find first and last indices of target in sorted array.","python",100,"1. First search for leftmost.\\n2. Second search for rightmost.\\n3. Output pair.","def solution():\\n    pass"`;
 };
 
 // ============================================================
@@ -262,7 +262,7 @@ export default function LabBulkModal({
 
       if (isExp) {
         const expNo = Number(item.experiment_no) || (idx + 1);
-        const marks = Number(item.max_marks) || 10;
+        const marks = Number(item.max_marks) || 100;
         return {
           experiment_no: expNo,
           language: item.language?.trim() || 'python',
@@ -274,7 +274,7 @@ export default function LabBulkModal({
         };
       } else {
         const qCode = item.question_code?.trim() || `EX${targetMetadata?.expNo || 1}_VAR_${String.fromCharCode(65 + idx)}`;
-        const marks = Number(item.max_marks) || 10;
+        const marks = Number(item.max_marks) || 100;
         const vivaCount = Number(item.viva_questions_count) || 5;
         
         let vivaList = [];
@@ -652,7 +652,7 @@ export default function LabBulkModal({
                           {item.language || 'python'}
                         </td>
                         <td className="p-2.5 font-mono text-[var(--text-secondary)]">
-                          {item.max_marks || 10}
+                          {item.max_marks || 100}
                         </td>
                         {!isExp && (
                           <td className="p-2.5 font-mono text-[11px] text-[var(--accent)]">

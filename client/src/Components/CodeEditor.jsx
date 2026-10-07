@@ -1,10 +1,11 @@
 import React, { useMemo, useRef, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
+import { oneDark } from '@codemirror/theme-one-dark';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Lock } from 'lucide-react';
 
 const LANGUAGE_CONFIGS = [
   { id: 'c', label: 'C (GCC / Clang)', extension: () => cpp() },
