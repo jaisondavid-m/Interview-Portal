@@ -439,7 +439,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// Right: AIM & STEP-BY-STEP PROCEDURE
 		// =========================================================================
 		addLeftPage()
-		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  OBSERVATION / ROUGH WORK", exp.ExperimentNo))
+		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d", exp.ExperimentNo))
 
 		addRightPage()
 		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d", data.CourseCode, exp.ExperimentNo))
@@ -489,7 +489,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// Right: VERIFIED SOURCE CODE (Program on right side)
 		// =========================================================================
 		addLeftPage()
-		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  EXECUTION OUTPUT & TEST VERIFICATION", exp.ExperimentNo))
+		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d", exp.ExperimentNo))
 
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(25, 45, 80)
@@ -527,7 +527,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 
 		// RIGHT PAGE (ODD) — VERIFIED SOURCE CODE
 		addRightPage()
-		renderHeaderWithLogo(false, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE", exp.ExperimentNo))
+		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d", data.CourseCode, exp.ExperimentNo))
 
 		langStr := strings.ToUpper(exp.Language)
 		if langStr == "" {
@@ -553,7 +553,7 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		for idx, line := range codeLines {
 			if pdf.GetY() > 255 {
 				addRightPage()
-				renderHeaderWithLogo(false, fmt.Sprintf("EX NO: %02d  —  VERIFIED SOURCE CODE (CONT.)", exp.ExperimentNo))
+				renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d", data.CourseCode, exp.ExperimentNo))
 
 				pdf.SetFont("Courier", "", 7.8)
 				pdf.SetTextColor(20, 30, 45)
@@ -572,10 +572,10 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// Right: FIRST: MARKS TABLE (4 Columns), AFTER THAT: RESULT SECTION & SIGN-OFF
 		// =========================================================================
 		addLeftPage()
-		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  EVALUATION NOTES", exp.ExperimentNo))
+		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d", exp.ExperimentNo))
 
 		addRightPage()
-		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d EVALUATION", data.CourseCode, exp.ExperimentNo))
+		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d", data.CourseCode, exp.ExperimentNo))
 
 		// Experiment Summary Banner
 		pdf.SetFont("Arial", "B", 10)

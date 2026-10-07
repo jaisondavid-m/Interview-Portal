@@ -1241,7 +1241,7 @@ export default function LabRecordDocument({
                             <tbody>
                               <tr>
                                 <td style={{ textAlign: 'left' }}>
-                                  EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [{left.type === 'output' ? 'PROGRAM EXECUTION OUTPUT' : 'OBSERVATION / ROUGH WORK'}]
+                                  EXP NO: <span className="font-bold">{expNo}</span>
                                 </td>
                                 <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
                                 <td style={{ width: '195px' }}>
@@ -1431,7 +1431,7 @@ export default function LabRecordDocument({
                               <tbody>
                                 <tr>
                                   <td style={{ textAlign: 'left' }}>
-                                    EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [PROGRAM SOURCE CODE]
+                                    EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
                                   </td>
                                   <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
                                   <td style={{ width: '195px' }}>
@@ -1485,7 +1485,7 @@ export default function LabRecordDocument({
                                 <tbody>
                                   <tr>
                                     <td style={{ textAlign: 'left' }}>
-                                      EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [EVALUATION & RESULT]
+                                      EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; DATE: <span className="font-bold">{exp.date || '05-10-2026'}</span>
                                     </td>
                                     <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
                                     <td style={{ width: '195px' }}>
