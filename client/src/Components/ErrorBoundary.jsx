@@ -8,8 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  Check,
-  LifeBuoy
+  Check
 } from 'lucide-react';
 
 export function RouteErrorBoundary() {
@@ -72,15 +71,6 @@ export function RouteErrorBoundary() {
           >
             <Home className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Go to Dashboard</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/interviews')}
-            className="btn btn-secondary text-xs py-2 px-4 flex items-center gap-1.5 font-bold cursor-pointer"
-          >
-            <LifeBuoy className="w-3.5 h-3.5 text-purple-500" />
-            <span>Interviews Hub</span>
           </button>
         </div>
 

@@ -79,7 +79,7 @@ export default function AdminLabCourseExperiments() {
     language: 'python',
     title: '',
     aim: '',
-    max_marks: 10,
+    max_marks: 100,
   };
   const [expForm, setExpForm] = useState(emptyExp);
   const [expSubmitting, setExpSubmitting] = useState(false);
@@ -108,7 +108,7 @@ export default function AdminLabCourseExperiments() {
     language: 'python',
     sample_test_cases: JSON.stringify([{ input: 'sample_input_1', expected_output: 'sample_output_1' }], null, 2),
     hidden_test_cases: JSON.stringify([{ input: 'hidden_input_1', expected_output: 'hidden_output_1' }], null, 2),
-    max_marks: 10,
+    max_marks: 100,
     viva_questions_count: 5,
     is_active: true,
     viva_questions: [
@@ -173,7 +173,7 @@ export default function AdminLabCourseExperiments() {
           language: exp.language || 'python',
           sample_test_cases: exp.sample_test_cases || emptyVariant.sample_test_cases,
           hidden_test_cases: exp.hidden_test_cases || emptyVariant.hidden_test_cases,
-          max_marks: exp.max_marks || 10,
+          max_marks: exp.max_marks || 100,
         };
         setVariants([defaultVar]);
       }
@@ -211,7 +211,7 @@ export default function AdminLabCourseExperiments() {
       language: v.language || parentExp?.language || 'python',
       sample_test_cases: v.sample_test_cases || emptyVariant.sample_test_cases,
       hidden_test_cases: v.hidden_test_cases || emptyVariant.hidden_test_cases,
-      max_marks: v.max_marks || parentExp?.max_marks || 10,
+      max_marks: v.max_marks || parentExp?.max_marks || 100,
       viva_questions_count: v.viva_questions_count || 5,
       is_active: v.is_active !== false,
       viva_questions: v.viva_questions || emptyVariant.viva_questions,
@@ -234,7 +234,7 @@ export default function AdminLabCourseExperiments() {
       language: exp.language || 'python',
       title: exp.title,
       aim: exp.aim,
-      max_marks: exp.max_marks || 10,
+      max_marks: exp.max_marks || 100,
     });
     setEditingExp(exp);
     setExpModal('edit');
@@ -285,7 +285,7 @@ export default function AdminLabCourseExperiments() {
       question_code: `EX${selectedExp?.experiment_no || 1}_VAR_${nextChar}`,
       title: `${selectedExp?.title || 'Experiment'} - Variant ${nextChar}`,
       aim: selectedExp?.aim || '',
-      max_marks: selectedExp?.max_marks || 10,
+      max_marks: selectedExp?.max_marks || 100,
     };
     const updated = [...variants, newVar];
     setVariants(updated);
@@ -796,7 +796,7 @@ export default function AdminLabCourseExperiments() {
                     <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                       <div className="flex items-center gap-2">
                         <span className="text-[var(--text-primary)] font-semibold">
-                          {exp.max_marks || 10} Marks
+                          {exp.max_marks || 100} Marks
                         </span>
                       </div>
                       <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
@@ -827,7 +827,7 @@ export default function AdminLabCourseExperiments() {
                   {selectedExp.language || 'python'}
                 </span>
                 <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)]">
-                  {selectedExp.max_marks || 10} Max Marks
+                  {selectedExp.max_marks || 100} Max Marks
                 </span>
               </div>
               <h1 className="text-[18px] sm:text-[22px] font-bold text-[var(--text-primary)]">
@@ -993,7 +993,7 @@ export default function AdminLabCourseExperiments() {
                     {/* Footer */}
                     <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                       <span className="text-[var(--text-secondary)] font-semibold">
-                        {v.max_marks || 10} Marks
+                        {v.max_marks || 100} Marks
                       </span>
                     </div>
                   </div>
@@ -1111,7 +1111,7 @@ export default function AdminLabCourseExperiments() {
                     min="1"
                     max="100"
                     value={formData.max_marks}
-                    onChange={(e) => setFormData((p) => ({ ...p, max_marks: parseInt(e.target.value) || 10 }))}
+                    onChange={(e) => setFormData((p) => ({ ...p, max_marks: parseInt(e.target.value) || 100 }))}
                     className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
                   />
                 </div>
@@ -1611,7 +1611,7 @@ export default function AdminLabCourseExperiments() {
                   max="100"
                   value={expForm.max_marks}
                   onChange={(e) =>
-                    setExpForm((p) => ({ ...p, max_marks: parseInt(e.target.value) || 10 }))
+                    setExpForm((p) => ({ ...p, max_marks: parseInt(e.target.value) || 100 }))
                   }
                   className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
                 />

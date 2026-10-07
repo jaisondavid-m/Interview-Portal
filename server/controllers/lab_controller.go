@@ -189,6 +189,59 @@ func isExperimentUnlockedForStudent(courseID uint, expID uint, userID uint, user
 	return status.IsUnlocked, status.Section
 }
 
+// isExperimentUnlockedForSubmission checks unlock status with a 120-second grace period to safely process auto-submissions when timer expires
+func isExperimentUnlockedForSubmission(courseID uint, expID uint, userID uint, userRole string) (bool, string) {
+	role := strings.ToLower(userRole)
+	if role == "admin" || role == "faculty" || role == "faculty_incharge" {
+		return true, "FACULTY/ADMIN"
+	}
+
+	var user models.User
+	if err := database.DB.Select("id, section, role").First(&user, userID).Error; err != nil {
+		return false, "UNKNOWN"
+	}
+
+	section := strings.TrimSpace(user.Section)
+	now := time.Now()
+	graceBuffer := 120 * time.Second
+
+	// 1. Check if an individual student override exists
+	var studentUnlock models.LabExperimentUnlock
+	if err := database.DB.Where("course_id = ? AND experiment_id = ? AND student_id = ?", courseID, expID, userID).First(&studentUnlock).Error; err == nil {
+		if !studentUnlock.IsUnlocked {
+			return false, section
+		}
+		if studentUnlock.StartsAt != nil && now.Before(*studentUnlock.StartsAt) {
+			return false, section
+		}
+		if studentUnlock.EndsAt != nil && now.After(studentUnlock.EndsAt.Add(graceBuffer)) {
+			return false, section
+		}
+		return true, section
+	}
+
+	// 2. Check Section or ALL rule (where student_id is null or 0)
+	var sectionUnlock models.LabExperimentUnlock
+	query := database.DB.Where("course_id = ? AND experiment_id = ? AND (student_id IS NULL OR student_id = 0) AND is_unlocked = ?", courseID, expID, true)
+	if section != "" {
+		query = query.Where("section IN (?, 'ALL')", section)
+	} else {
+		query = query.Where("section = 'ALL'")
+	}
+
+	if err := query.Order("CASE WHEN section = 'ALL' THEN 1 ELSE 0 END ASC").First(&sectionUnlock).Error; err == nil {
+		if sectionUnlock.StartsAt != nil && now.Before(*sectionUnlock.StartsAt) {
+			return false, section
+		}
+		if sectionUnlock.EndsAt != nil && now.After(sectionUnlock.EndsAt.Add(graceBuffer)) {
+			return false, section
+		}
+		return true, section
+	}
+
+	return false, section
+}
+
 // isSectionMatch checks whether a mapped section (e.g. "ALL", "CSE-A", "A", "Section A") matches a student's assigned section
 func isSectionMatch(mappedSec, studentSec string) bool {
 	m := strings.TrimSpace(strings.ToLower(mappedSec))
@@ -737,7 +790,7 @@ func SubmitExperimentCode(c *gin.Context) {
 		return
 	}
 
-	unlocked, _ := isExperimentUnlockedForStudent(exp.CourseID, exp.ID, studentID, userRole)
+	unlocked, _ := isExperimentUnlockedForSubmission(exp.CourseID, exp.ID, studentID, userRole)
 	if !unlocked {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This experiment is currently locked by your faculty incharge."})
 		return
