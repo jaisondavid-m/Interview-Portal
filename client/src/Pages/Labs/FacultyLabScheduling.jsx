@@ -37,7 +37,8 @@ import {
   Timer,
   Eye,
   SlidersHorizontal,
-  GraduationCap
+  GraduationCap,
+  ChevronDown
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -86,6 +87,11 @@ export default function FacultyLabScheduling() {
   const [bulkReleaseEndsAt, setBulkReleaseEndsAt] = useState('');
   const [bulkReleaseMaxAttempts, setBulkReleaseMaxAttempts] = useState(0);
   const [bulkReleaseApplying, setBulkReleaseApplying] = useState(false);
+
+  // Searchable Select State for Release Up To Exp #
+  const [expSearchQuery, setExpSearchQuery] = useState('');
+  const [isExpDropdownOpen, setIsExpDropdownOpen] = useState(false);
+  const expDropdownRef = useRef(null);
 
   // Multi-Select Student & Experiment Override Inline Form State
   const [selectedOverrideStudentIds, setSelectedOverrideStudentIds] = useState([]);
@@ -183,16 +189,34 @@ export default function FacultyLabScheduling() {
     }
   }, [selectedUnlockCourseId, selectedUnlockSection, unlockData.unlocks, activeCourseExperiments.length]);
 
-  // Close student dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (studentSearchRef.current && !studentSearchRef.current.contains(e.target)) {
         setIsStudentDropdownOpen(false);
       }
+      if (expDropdownRef.current && !expDropdownRef.current.contains(e.target)) {
+        setIsExpDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const selectedReleaseExp = activeCourseExperiments.find(
+    (e) => (e.experiment_no || 0) === Number(bulkReleaseUpToExpNo)
+  );
+
+  const filteredReleaseExps = activeCourseExperiments.filter((e) => {
+    if (!expSearchQuery.trim()) return true;
+    const q = expSearchQuery.toLowerCase();
+    return (
+      String(e.experiment_no).includes(q) ||
+      `exp #${e.experiment_no}`.toLowerCase().includes(q) ||
+      `exp ${e.experiment_no}`.toLowerCase().includes(q) ||
+      e.title?.toLowerCase().includes(q)
+    );
+  });
 
   // Multi-select helpers for Override Form
   const availableMatchingStudents = (unlockData.students || []).filter((s) => {
@@ -761,20 +785,94 @@ export default function FacultyLabScheduling() {
                 </select>
               </div>
 
-              {/* Release Up To Exp No */}
-              <div className="space-y-1">
+              {/* Release Up To Exp No (Searchable Select) */}
+              <div className="space-y-1 relative" ref={expDropdownRef}>
                 <label className={labelCls}>Release Up To Exp #</label>
-                <select
-                  value={bulkReleaseUpToExpNo}
-                  onChange={(e) => setBulkReleaseUpToExpNo(Number(e.target.value))}
-                  className={inputCls}
+
+                {/* Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsExpDropdownOpen((prev) => !prev)}
+                  className={`${inputCls} flex items-center justify-between text-left cursor-pointer hover:border-[var(--border-strong)]`}
                 >
-                  {activeCourseExperiments.map((e) => (
-                    <option key={e.id} value={e.experiment_no}>
-                      Exp #{e.experiment_no} — {e.title}
-                    </option>
-                  ))}
-                </select>
+                  <div className="truncate flex-1 pr-2">
+                    {selectedReleaseExp ? (
+                      <span className="font-semibold text-[var(--text-primary)] text-[12px]">
+                        Exp #{selectedReleaseExp.experiment_no} — {selectedReleaseExp.title}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--text-muted)] text-[12px]">Select target experiment...</span>
+                    )}
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 transition-transform ${
+                      isExpDropdownOpen ? 'rotate-180 text-[var(--accent)]' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Searchable Dropdown Popup */}
+                {isExpDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 min-w-[280px]">
+                    {/* Search Input Box */}
+                    <div className="p-2 border-b border-[var(--border)] bg-[var(--bg-raised)] relative">
+                      <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={expSearchQuery}
+                        onChange={(e) => setExpSearchQuery(e.target.value)}
+                        placeholder="Search exp # or title..."
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-2.5 py-1.5 pl-8 pr-7 text-[11px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+                      />
+                      {expSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setExpSearchQuery('')}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filtered Experiments List */}
+                    <div className="max-h-56 overflow-y-auto divide-y divide-[var(--border)]/50 p-1">
+                      {filteredReleaseExps.length === 0 ? (
+                        <div className="py-4 text-center text-xs text-[var(--text-muted)] italic">
+                          No matching experiments found
+                        </div>
+                      ) : (
+                        filteredReleaseExps.map((e) => {
+                          const isSelected = Number(bulkReleaseUpToExpNo) === Number(e.experiment_no);
+                          return (
+                            <div
+                              key={e.id}
+                              onClick={() => {
+                                setBulkReleaseUpToExpNo(Number(e.experiment_no));
+                                setIsExpDropdownOpen(false);
+                                setExpSearchQuery('');
+                              }}
+                              className={`p-2 rounded-[var(--radius-sm)] cursor-pointer transition-colors flex items-center justify-between gap-2 text-xs ${
+                                isSelected
+                                  ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-bold'
+                                  : 'hover:bg-[var(--bg-raised)] text-[var(--text-primary)]'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1 flex items-center gap-2">
+                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] shrink-0 font-bold">
+                                  #{e.experiment_no}
+                                </span>
+                                <span className="truncate text-[11px]">{e.title}</span>
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-[var(--accent)] shrink-0 stroke-[3]" />}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Starts At */}
