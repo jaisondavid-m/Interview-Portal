@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Clock,
@@ -43,6 +43,8 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import Pagination from '../../Components/Pagination';
+import SearchableSelect from '../../Components/SearchableSelect';
+import { useAuth } from '../../context/AuthContext';
 
 const inputCls =
   'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
@@ -63,6 +65,8 @@ const formatDateForInput = (dateStringOrDate) => {
 
 export default function FacultyLabScheduling() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userRole = (user?.role || '').toLowerCase();
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
@@ -187,6 +191,59 @@ export default function FacultyLabScheduling() {
     .filter((e) => String(e.course_id) === String(selectedUnlockCourseId))
     .sort((a, b) => (a.experiment_no || 0) - (b.experiment_no || 0));
 
+  // Determine sections mapped specifically for this course and user
+  const mappedSections = useMemo(() => {
+    if (!selectedUnlockCourseId) return unlockData.sections || [];
+
+    const courseMappings = (unlockData.mappings || []).filter(
+      (m) => String(m.course_id) === String(selectedUnlockCourseId) && m.section && m.section !== 'ALL'
+    );
+    if (courseMappings.length > 0) {
+      const distinctMapped = [...new Set(courseMappings.map((m) => m.section))].filter(Boolean);
+      return distinctMapped;
+    }
+    return unlockData.sections || [];
+  }, [selectedUnlockCourseId, unlockData.mappings, unlockData.sections]);
+
+  // Options for SearchableSelect: Course Dropdown
+  const courseOptions = useMemo(() => {
+    return (unlockData.courses || []).map((c) => ({
+      value: String(c.id),
+      label: `${c.course_code} — ${c.title}`,
+      badge: c.course_code,
+      sublabel: c.department ? `${c.department} • Year ${c.year || 1} Sem ${c.semester || 1}` : undefined,
+    }));
+  }, [unlockData.courses]);
+
+  // Options for SearchableSelect: Section Dropdown
+  const sectionOptions = useMemo(() => {
+    const opts = [];
+    if (mappedSections.length > 1 || userRole === 'admin') {
+      opts.push({
+        value: 'ALL',
+        label: mappedSections.length > 1 ? `ALL Mapped Sections (${mappedSections.length})` : 'ALL Sections (Classwide)',
+        badge: mappedSections.length > 1 ? `${mappedSections.length} Sections` : 'All',
+      });
+    }
+    mappedSections.forEach((sec) => {
+      opts.push({
+        value: sec,
+        label: `Section ${sec}`,
+        badge: 'Mapped',
+      });
+    });
+    return opts;
+  }, [mappedSections, userRole]);
+
+  // Automatically adjust selectedUnlockSection if out of mapped range
+  useEffect(() => {
+    if (mappedSections.length > 0) {
+      if (selectedUnlockSection !== 'ALL' && !mappedSections.includes(selectedUnlockSection)) {
+        setSelectedUnlockSection(mappedSections[0]);
+      }
+    }
+  }, [mappedSections, selectedUnlockSection]);
+
   // Determine highest unlocked experiment when course/section changes
   useEffect(() => {
     if (!selectedUnlockCourseId) return;
@@ -241,29 +298,36 @@ export default function FacultyLabScheduling() {
   }, []);
 
   // Batch / Scope Options for Searchable Select
-  const batchOptions = [
-    {
-      id: 'selected',
-      label: `Selected Section (${selectedUnlockSection})`,
-      subtitle: 'Currently filtered section view',
-      value: 'selected',
-    },
-    {
-      id: 'all',
-      label: 'All Assigned Sections',
-      subtitle:
-        unlockData.sections?.length > 0
-          ? `${unlockData.sections.length} sections (${unlockData.sections.join(', ')})`
-          : 'All enrolled batches',
-      value: 'all',
-    },
-    ...(unlockData.sections || []).map((sec) => ({
-      id: `sec-${sec}`,
-      label: `Section ${sec}`,
-      subtitle: `Apply specifically to Section ${sec}`,
-      value: sec,
-    })),
-  ];
+  const batchOptions = useMemo(() => {
+    const opts = [
+      {
+        id: 'selected',
+        label: `Selected Section (${selectedUnlockSection})`,
+        subtitle: 'Currently filtered section view',
+        value: 'selected',
+      },
+    ];
+    if (mappedSections.length > 1 || userRole === 'admin') {
+      opts.push({
+        id: 'all',
+        label: 'All Assigned Sections',
+        subtitle:
+          mappedSections.length > 0
+            ? `${mappedSections.length} sections (${mappedSections.join(', ')})`
+            : 'All enrolled batches',
+        value: 'all',
+      });
+    }
+    mappedSections.forEach((sec) => {
+      opts.push({
+        id: `sec-${sec}`,
+        label: `Section ${sec}`,
+        subtitle: `Apply specifically to Section ${sec}`,
+        value: sec,
+      });
+    });
+    return opts;
+  }, [mappedSections, selectedUnlockSection, userRole]);
 
   const filteredBatchOptions = batchOptions.filter((b) => {
     if (!batchSearchQuery.trim()) return true;
@@ -888,35 +952,28 @@ export default function FacultyLabScheduling() {
           {/* Target Selector Bar */}
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 shadow-[var(--shadow-xs)] flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-wrap flex-1">
-              <div className="space-y-1 min-w-[260px]">
+              <div className="space-y-1 min-w-[280px] flex-1 max-w-[440px]">
                 <label className={labelCls}>Active Lab Course</label>
-                <select
+                <SearchableSelect
+                  options={courseOptions}
                   value={selectedUnlockCourseId}
-                  onChange={(e) => setSelectedUnlockCourseId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)] cursor-pointer"
-                >
-                  {unlockData.courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.course_code} — {c.title}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedUnlockCourseId(String(val))}
+                  placeholder="Select Lab Course..."
+                  searchPlaceholder="Search course code, title..."
+                  fullWidth
+                />
               </div>
 
-              <div className="space-y-1 min-w-[180px]">
+              <div className="space-y-1 min-w-[220px]">
                 <label className={labelCls}>Target Section / Batch</label>
-                <select
+                <SearchableSelect
+                  options={sectionOptions}
                   value={selectedUnlockSection}
-                  onChange={(e) => setSelectedUnlockSection(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)] cursor-pointer"
-                >
-                  <option value="ALL">ALL Sections (Classwide)</option>
-                  {unlockData.sections.map((sec) => (
-                    <option key={sec} value={sec}>
-                      Section {sec}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedUnlockSection(String(val))}
+                  placeholder="Select Section..."
+                  searchPlaceholder="Search section..."
+                  fullWidth
+                />
               </div>
             </div>
 
@@ -1422,18 +1479,27 @@ export default function FacultyLabScheduling() {
               <div ref={studentSearchRef} className="relative">
                 <div className="flex items-center gap-2">
                   {/* Section filter */}
-                  <select
-                    value={overrideStudentSection}
-                    onChange={(e) => setOverrideStudentSection(e.target.value)}
-                    className="px-3 py-2 text-xs rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] font-semibold cursor-pointer shrink-0"
-                  >
-                    <option value="ALL">All Sections ({unlockData.students.length})</option>
-                    {unlockData.sections.map((sec) => (
-                      <option key={sec} value={sec}>
-                        Section {sec}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-[200px] shrink-0">
+                    <SearchableSelect
+                      options={[
+                        {
+                          value: 'ALL',
+                          label: `All Sections (${unlockData.students.length})`,
+                          badge: 'All',
+                        },
+                        ...mappedSections.map((sec) => ({
+                          value: sec,
+                          label: `Section ${sec}`,
+                          badge: 'Mapped',
+                        })),
+                      ]}
+                      value={overrideStudentSection}
+                      onChange={(val) => setOverrideStudentSection(String(val))}
+                      placeholder="Filter Section..."
+                      searchPlaceholder="Search section..."
+                      fullWidth
+                    />
+                  </div>
 
                   {/* Search input */}
                   <div className="relative flex-1">

@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2089,18 +2090,40 @@ func FacultyGetCourseReleases(c *gin.Context) {
 	}
 	expDB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
 
-	// Fetch distinct sections from users
+	// Fetch distinct sections based on faculty mapping or all if admin
 	var sectionList []string
-	database.DB.Model(&models.User{}).
-		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
-		Distinct().
-		Pluck("section", &sectionList)
+	if strings.ToLower(userRole) == "admin" {
+		database.DB.Model(&models.User{}).
+			Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
+			Distinct().
+			Pluck("section", &sectionList)
+	} else {
+		secMap := make(map[string]bool)
+		for _, m := range mappings {
+			sec := strings.TrimSpace(m.Section)
+			if sec != "" && !strings.EqualFold(sec, "ALL") {
+				secMap[sec] = true
+			}
+		}
+		for s := range secMap {
+			sectionList = append(sectionList, s)
+		}
+		sort.Strings(sectionList)
+	}
 
 	// Fetch student roster for individual overrides with optional search/section filter & limit
 	var studentList []models.User
 	var studentTotal int64
 	studentDB := database.DB.Model(&models.User{}).
 		Where("LOWER(role) IN ?", []string{"student", "user"})
+
+	if strings.ToLower(userRole) != "admin" {
+		if len(sectionList) > 0 {
+			studentDB = studentDB.Where("section IN ?", sectionList)
+		} else {
+			studentDB = studentDB.Where("1 = 0")
+		}
+	}
 
 	if studentSection != "" && studentSection != "ALL" {
 		studentDB = studentDB.Where("section = ?", studentSection)
@@ -2142,12 +2165,23 @@ type ToggleUnlockReq struct {
 func FacultyToggleExperimentUnlock(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
 	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
 	var req ToggleUnlockReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unlock toggle payload"})
 		return
+	}
+
+	if strings.ToLower(userRole) != "admin" {
+		var mappingCount int64
+		database.DB.Model(&models.LabMapping{}).Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Count(&mappingCount)
+		if mappingCount == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not assigned to teach this lab course"})
+			return
+		}
 	}
 
 	var unlock models.LabExperimentUnlock
@@ -2184,25 +2218,27 @@ func FacultyToggleExperimentUnlock(c *gin.Context) {
 }
 
 type ScheduleWindowBulkReq struct {
-	CourseID            uint       `json:"course_id" binding:"required"`
-	ExperimentIDs       []uint     `json:"experiment_ids"`
-	LockExperimentIDs   []uint     `json:"lock_experiment_ids"`
-	Section             string     `json:"section"` // 'ALL' or specific section
-	Sections            []string   `json:"sections"`
-	IsUnlocked          bool       `json:"is_unlocked"`
-	RequiresPrerequisite bool      `json:"requires_prerequisite"`
-	StartsAt            *time.Time `json:"starts_at"`
-	EndsAt              *time.Time `json:"ends_at"`
-	MaxAttempts         int        `json:"max_attempts"`
-	AllowLateSubmission bool       `json:"allow_late_submission"`
-	Notes               string     `json:"notes"`
+	CourseID             uint       `json:"course_id" binding:"required"`
+	ExperimentIDs        []uint     `json:"experiment_ids"`
+	LockExperimentIDs    []uint     `json:"lock_experiment_ids"`
+	Section              string     `json:"section"` // 'ALL' or specific section
+	Sections             []string   `json:"sections"`
+	IsUnlocked           bool       `json:"is_unlocked"`
+	RequiresPrerequisite bool       `json:"requires_prerequisite"`
+	StartsAt             *time.Time `json:"starts_at"`
+	EndsAt               *time.Time `json:"ends_at"`
+	MaxAttempts          int        `json:"max_attempts"`
+	AllowLateSubmission  bool       `json:"allow_late_submission"`
+	Notes                string     `json:"notes"`
 }
 
 // FacultyScheduleWindowBulk configures open window timings for multiple experiments across a section in bulk
 func FacultyScheduleWindowBulk(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
 	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
 	var req ScheduleWindowBulkReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2225,6 +2261,48 @@ func FacultyScheduleWindowBulk(c *gin.Context) {
 			sec = "ALL"
 		}
 		targetSections = []string{sec}
+	}
+
+	if strings.ToLower(userRole) != "admin" {
+		var facultyMappings []models.LabMapping
+		database.DB.Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Find(&facultyMappings)
+		if len(facultyMappings) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not assigned to teach this lab course"})
+			return
+		}
+		var allowedSections []string
+		for _, m := range facultyMappings {
+			sec := strings.TrimSpace(m.Section)
+			if sec != "" && !strings.EqualFold(sec, "ALL") {
+				allowedSections = append(allowedSections, sec)
+			}
+		}
+		if len(allowedSections) > 0 {
+			var filtered []string
+			for _, ts := range targetSections {
+				if strings.EqualFold(ts, "ALL") {
+					filtered = append(filtered, allowedSections...)
+				} else {
+					for _, as := range allowedSections {
+						if strings.EqualFold(as, ts) {
+							filtered = append(filtered, ts)
+							break
+						}
+					}
+				}
+			}
+			secMap := make(map[string]bool)
+			var deduped []string
+			for _, f := range filtered {
+				if !secMap[f] {
+					secMap[f] = true
+					deduped = append(deduped, f)
+				}
+			}
+			if len(deduped) > 0 {
+				targetSections = deduped
+			}
+		}
 	}
 
 	now := time.Now()
@@ -2299,7 +2377,9 @@ type SetStudentOverrideReq struct {
 func FacultySetStudentOverride(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
 	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
 	var req SetStudentOverrideReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2327,10 +2407,44 @@ func FacultySetStudentOverride(c *gin.Context) {
 		return
 	}
 
+	if strings.ToLower(userRole) != "admin" {
+		var facultyMappings []models.LabMapping
+		database.DB.Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Find(&facultyMappings)
+		if len(facultyMappings) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not assigned to teach this lab course"})
+			return
+		}
+	}
+
 	var students []models.User
 	if err := database.DB.Where("id IN ?", sIDs).Find(&students).Error; err != nil || len(students) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Selected students not found"})
 		return
+	}
+
+	if strings.ToLower(userRole) != "admin" {
+		var facultyMappings []models.LabMapping
+		database.DB.Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Find(&facultyMappings)
+		allowedSecMap := make(map[string]bool)
+		for _, m := range facultyMappings {
+			sec := strings.TrimSpace(m.Section)
+			if sec != "" && !strings.EqualFold(sec, "ALL") {
+				allowedSecMap[strings.ToUpper(sec)] = true
+			}
+		}
+		if len(allowedSecMap) > 0 {
+			var allowedStudents []models.User
+			for _, s := range students {
+				if allowedSecMap[strings.ToUpper(strings.TrimSpace(s.Section))] {
+					allowedStudents = append(allowedStudents, s)
+				}
+			}
+			students = allowedStudents
+			if len(students) == 0 {
+				c.JSON(http.StatusForbidden, gin.H{"error": "None of the selected students belong to your assigned sections"})
+				return
+			}
+		}
 	}
 
 	now := time.Now()
