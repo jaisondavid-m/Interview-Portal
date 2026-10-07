@@ -56,7 +56,8 @@ const ACADEMIC_DOCUMENT_CSS = `
     min-height: 297mm !important;
     height: 297mm !important;
     box-sizing: border-box !important;
-    padding: 16mm 18mm 18mm 18mm !important;
+    border: none !important;
+    padding: 14mm 16mm 16mm 16mm !important;
     margin: 0 !important;
     box-shadow: none !important;
     position: relative !important;
@@ -64,15 +65,14 @@ const ACADEMIC_DOCUMENT_CSS = `
     transform: none !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: space-between !important;
   }
   #pdf-export-sandbox .academic-page.page-odd {
-    padding-left: 24mm !important;
+    padding-left: 20mm !important;
     padding-right: 14mm !important;
   }
   #pdf-export-sandbox .academic-page.page-even {
     padding-left: 14mm !important;
-    padding-right: 24mm !important;
+    padding-right: 20mm !important;
   }
   #pdf-export-sandbox .top-row-table {
     width: 100% !important;
@@ -197,14 +197,25 @@ const ACADEMIC_DOCUMENT_CSS = `
     -webkit-font-smoothing: antialiased !important;
   }
   #pdf-export-sandbox .doc-footer {
-    margin-top: 24px !important;
-    padding-top: 8px !important;
+    position: absolute !important;
+    bottom: 11mm !important;
+    left: 16mm !important;
+    right: 16mm !important;
+    padding-top: 6px !important;
     border-top: 1px dashed #777777 !important;
     display: flex !important;
     justify-content: space-between !important;
     font-size: 8.5pt !important;
     font-weight: bold !important;
     color: #444444 !important;
+  }
+  #pdf-export-sandbox .academic-page.page-odd .doc-footer {
+    left: 20mm !important;
+    right: 14mm !important;
+  }
+  #pdf-export-sandbox .academic-page.page-even .doc-footer {
+    left: 14mm !important;
+    right: 20mm !important;
   }
   #pdf-export-sandbox .flex { display: flex !important; }
   #pdf-export-sandbox .flex-col { flex-direction: column !important; }

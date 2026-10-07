@@ -1,5 +1,91 @@
 import React from 'react';
 
+// Academic Double Border with Corner Squares matching manual specification
+export const PageBorderFrame = ({ isOdd = true, isDuplex = true }) => {
+  const gap = 2.2;
+  const x1 = isDuplex ? (isOdd ? 14 : 10) : 10;
+  const y1 = 8;
+  const w = isDuplex ? 186 : 190;
+  const h = 281;
+  const x2 = x1 + w;
+  const y2 = y1 + h;
+
+  return (
+    <svg
+      className="page-border-svg pointer-events-none select-none"
+      viewBox="0 0 210 297"
+      preserveAspectRatio="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 0
+      }}
+    >
+      {/* Outer Rectangle - Clean thin crisp black line */}
+      <rect
+        x={x1}
+        y={y1}
+        width={w}
+        height={h}
+        fill="none"
+        stroke="#000000"
+        strokeWidth="0.38"
+      />
+      {/* Inner Rectangle */}
+      <rect
+        x={x1 + gap}
+        y={y1 + gap}
+        width={w - 2 * gap}
+        height={h - 2 * gap}
+        fill="none"
+        stroke="#000000"
+        strokeWidth="0.32"
+      />
+      {/* 4 Corner Squares */}
+      <rect
+        x={x1}
+        y={y1}
+        width={gap}
+        height={gap}
+        fill="#ffffff"
+        stroke="#000000"
+        strokeWidth="0.32"
+      />
+      <rect
+        x={x2 - gap}
+        y={y1}
+        width={gap}
+        height={gap}
+        fill="#ffffff"
+        stroke="#000000"
+        strokeWidth="0.32"
+      />
+      <rect
+        x={x1}
+        y={y2 - gap}
+        width={gap}
+        height={gap}
+        fill="#ffffff"
+        stroke="#000000"
+        strokeWidth="0.32"
+      />
+      <rect
+        x={x2 - gap}
+        y={y2 - gap}
+        width={gap}
+        height={gap}
+        fill="#ffffff"
+        stroke="#000000"
+        strokeWidth="0.32"
+      />
+    </svg>
+  );
+};
+
 // Helper to format procedure/algorithm steps cleanly
 export const parseProcedureSteps = (procedure) => {
   if (!procedure) return [];
@@ -17,7 +103,7 @@ export const parseProcedureSteps = (procedure) => {
       .map((s) => cleanStepText(s))
       .filter(Boolean);
   }
-  
+
   let trimmed = String(procedure).trim();
   if (!trimmed) return [];
 
@@ -46,7 +132,7 @@ export const parseProcedureSteps = (procedure) => {
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l.length > 0 && !/^algorithm\s*[:\-]?$/i.test(l) && !/^procedure\s*[:\-]?$/i.test(l));
-    
+
     if (rawLines.length > 0) {
       return rawLines.map(cleanStepText).filter(Boolean);
     }
@@ -108,7 +194,7 @@ export const cleanExecutionOutput = (output, title, sampleTestCases) => {
           return block.trim();
         }).filter(Boolean).join('\n\n' + '—'.repeat(38) + '\n\n');
       }
-    } catch {}
+    } catch { }
   }
 
   if (!output || typeof output !== 'string') {
@@ -267,7 +353,7 @@ export const getExperimentRubrics = (exp, defaultMax = 100) => {
     } else {
       try {
         breakdown = JSON.parse(exp.marks_breakdown);
-      } catch {}
+      } catch { }
     }
   }
 
@@ -464,6 +550,16 @@ export default function LabRecordDocument({
             overflow: hidden !important;
           }
 
+          .academic-page.page-odd {
+            padding-left: 20mm !important;
+            padding-right: 14mm !important;
+          }
+
+          .academic-page.page-even {
+            padding-left: 14mm !important;
+            padding-right: 20mm !important;
+          }
+
           .academic-page:last-child {
             page-break-after: auto !important;
             break-after: auto !important;
@@ -475,6 +571,28 @@ export default function LabRecordDocument({
             gap: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
+          }
+
+          .doc-footer {
+            position: absolute !important;
+            bottom: 11mm !important;
+            padding-top: 6px !important;
+            border-top: 1px dashed #777777 !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            font-size: 8.5pt !important;
+            font-weight: bold !important;
+            color: #444444 !important;
+          }
+
+          .academic-page.page-odd .doc-footer {
+            left: 20mm !important;
+            right: 14mm !important;
+          }
+
+          .academic-page.page-even .doc-footer {
+            left: 14mm !important;
+            right: 20mm !important;
           }
 
           table {
@@ -504,32 +622,55 @@ export default function LabRecordDocument({
           max-height: 297mm;
           overflow: hidden;
           box-sizing: border-box;
-          border: 1.5px solid #000000;
-          padding: 10mm 12mm 10mm 12mm;
+          border: none;
+          padding: 14mm 16mm 16mm 16mm;
           margin: 0 auto 28px auto;
           box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
           position: relative;
           display: flex;
           flex-direction: column;
-          justify-content: space-between;
         }
 
         /* Duplex binding gutter margins */
         .academic-page.page-odd {
-          padding-left: ${isDuplex ? '16mm' : '12mm'};
-          padding-right: 10mm;
+          padding-left: ${isDuplex ? '20mm' : '16mm'};
+          padding-right: 14mm;
         }
 
         .academic-page.page-even {
-          padding-left: 10mm;
-          padding-right: ${isDuplex ? '16mm' : '12mm'};
+          padding-left: 14mm;
+          padding-right: ${isDuplex ? '20mm' : '16mm'};
+        }
+
+        .doc-footer {
+          position: absolute;
+          bottom: 11mm;
+          left: 16mm;
+          right: 16mm;
+          padding-top: 6px;
+          border-top: 1px dashed #777777;
+          display: flex;
+          justify-content: space-between;
+          font-size: 8.5pt;
+          font-weight: bold;
+          color: #444444;
+        }
+
+        .academic-page.page-odd .doc-footer {
+          left: ${isDuplex ? '20mm' : '16mm'};
+          right: 14mm;
+        }
+
+        .academic-page.page-even .doc-footer {
+          left: 14mm;
+          right: ${isDuplex ? '20mm' : '16mm'};
         }
 
         .top-row-table {
           width: 100%;
           border-collapse: collapse;
           border: none;
-          margin-bottom: 8px;
+          margin-bottom: 12px;
         }
 
         .top-row-table td {
@@ -571,64 +712,28 @@ export default function LabRecordDocument({
           vertical-align: middle;
         }
 
-        .main-experiment-title {
-          text-align: center;
-          font-size: 11.5pt;
-          font-weight: bold;
-          letter-spacing: 0.6px;
-          padding: 6px 0;
-          margin-top: 8px;
-          margin-bottom: 8px;
-          border-top: 1.5px solid #000000;
-          border-bottom: 1.5px solid #000000;
-          line-height: 1.4;
-          text-transform: uppercase;
-        }
-
-        .section-heading-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: baseline;
-          border-bottom: 1.5px solid #000000;
-          padding-bottom: 4px;
-          margin-top: 12px;
-          margin-bottom: 6px;
-          font-weight: bold;
-          font-size: 10.5pt;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .section-heading-meta {
-          font-size: 8.5pt;
-          font-weight: normal;
-          text-transform: none;
-          font-family: inherit;
-        }
-
         .section-bar-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 12px;
-          margin-bottom: 6px;
+          margin-top: 14px;
+          margin-bottom: 0;
         }
 
         .section-bar-table td {
-          border: none;
-          border-bottom: 1.5px solid #000000;
-          text-align: left;
-          padding: 4px 0;
+          border: 1px solid #000000;
+          text-align: center;
+          padding: 6px 10px;
           font-size: 10.5pt;
           font-weight: bold;
           text-transform: uppercase;
-          background: transparent;
+          background: #f4f4f5;
           letter-spacing: 0.5px;
         }
 
         .grid-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 8px;
+          margin-top: -1px;
           margin-bottom: 14px;
         }
 
@@ -647,50 +752,56 @@ export default function LabRecordDocument({
         }
 
         .content-box {
-          border: none;
-          padding: 4px 0;
+          border: 1px solid #000000;
+          border-top: none;
+          padding: 10px 14px;
           font-size: 10pt;
-          line-height: 1.6;
-          margin-bottom: 10px;
+          line-height: 1.55;
+          margin-bottom: 14px;
           text-align: justify;
         }
 
         .code-container {
-          border: none;
-          background: transparent;
-          padding: 4px 0;
+          border: 1px solid #000000;
+          border-top: none;
+          background: #fafafa;
+          padding: 10px 14px;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
           line-height: 1.45;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: 4px;
-          margin-bottom: 10px;
-          color: #000000;
+          margin-top: -1px;
+          margin-bottom: 12px;
+          color: #111827;
           box-sizing: border-box;
           -webkit-font-smoothing: antialiased;
         }
 
         .output-container {
-          border: none;
-          background: transparent;
-          padding: 4px 0;
+          border: 1px solid #000000;
+          border-top: none;
+          background: #fafafa;
+          padding: 10px 14px;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
           line-height: 1.45;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: 4px;
-          margin-bottom: 10px;
-          color: #000000;
+          margin-top: -1px;
+          margin-bottom: 12px;
+          color: #111827;
           box-sizing: border-box;
           -webkit-font-smoothing: antialiased;
         }
 
         .doc-footer {
-          margin-top: auto;
+          position: absolute;
+          bottom: 10mm;
+          left: 14mm;
+          right: 14mm;
           padding-top: 6px;
           border-top: 1px dashed #777777;
           display: flex;
@@ -698,6 +809,16 @@ export default function LabRecordDocument({
           font-size: 8.5pt;
           font-weight: bold;
           color: #444444;
+        }
+
+        .academic-page.page-odd .doc-footer {
+          left: ${isDuplex ? '18mm' : '14mm'};
+          right: 12mm;
+        }
+
+        .academic-page.page-even .doc-footer {
+          left: 12mm;
+          right: ${isDuplex ? '18mm' : '14mm'};
         }
 
         .booklet-spread-container {
@@ -720,6 +841,7 @@ export default function LabRecordDocument({
           {/* PAGE 1: EMPTY / BLANK FRONT FLYLEAF PAGE (LEFT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'flyleaf') && (
             <div className="academic-page page-even flex flex-col justify-between">
+              <PageBorderFrame isOdd={false} isDuplex={isDuplex} />
               <div className="text-right text-[8pt] text-neutral-300 select-none">
                 [Front Flyleaf Page]
               </div>
@@ -748,6 +870,7 @@ export default function LabRecordDocument({
           {/* PAGE 2: TITLE & OFFICIAL COVER PAGE (RIGHT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'cover') && (
             <div className="academic-page page-odd">
+              <PageBorderFrame isOdd={true} isDuplex={isDuplex} />
               {/* Top Row: Course Code & Register Boxes */}
               <table className="top-row-table">
                 <tbody>
@@ -903,6 +1026,7 @@ export default function LabRecordDocument({
           {/* PAGE 3: BLANK LEFT PAGE */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'cert_blank') && (
             <div className="academic-page page-even flex flex-col justify-between">
+              <PageBorderFrame isOdd={false} isDuplex={isDuplex} />
               <div className="flex-1" />
 
               <div className="doc-footer">
@@ -915,6 +1039,7 @@ export default function LabRecordDocument({
           {/* PAGE 4: BONAFIDE CERTIFICATE (RIGHT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'certificate') && (
             <div className="academic-page page-odd">
+              <PageBorderFrame isOdd={true} isDuplex={isDuplex} />
               {/* Top Row */}
               <table className="top-row-table">
                 <tbody>
@@ -1064,6 +1189,7 @@ export default function LabRecordDocument({
           {/* PAGE 5: BLANK LEFT PAGE */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'index_blank') && (
             <div className="academic-page page-even flex flex-col justify-between">
+              <PageBorderFrame isOdd={false} isDuplex={isDuplex} />
               <div className="flex-1" />
 
               <div className="doc-footer">
@@ -1076,6 +1202,7 @@ export default function LabRecordDocument({
           {/* PAGE 6: INDEX OF LABORATORY EXPERIMENTS & EVALUATION CRITERIA (RIGHT SIDE) */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'index') && (
             <div className="academic-page page-odd">
+              <PageBorderFrame isOdd={true} isDuplex={isDuplex} />
               {/* Top Row */}
               <table className="top-row-table">
                 <tbody>
@@ -1272,6 +1399,7 @@ export default function LabRecordDocument({
                         ------------------------------------------------------------- */}
                     {showLeft && (
                       <div className="academic-page page-even flex flex-col justify-between">
+                        <PageBorderFrame isOdd={false} isDuplex={isDuplex} />
                         <div>
                           {/* Top Row: Left Page Header */}
                           <table className="top-row-table">
@@ -1298,9 +1426,15 @@ export default function LabRecordDocument({
 
                           {left.type === 'output' ? (
                             <>
-                              <div className="section-heading-row">
-                                <span>SAMPLE INPUT & OUTPUT {left.titleSuffix || ''}</span>
-                              </div>
+                              <table className="section-bar-table" style={{ marginTop: '14px' }}>
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                                      SAMPLE INPUT & OUTPUT {left.titleSuffix || ''}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
                               <div className="output-container" style={{ minHeight: '340px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
                                 {renderFormattedOutput(left.output)}
                               </div>
@@ -1327,6 +1461,7 @@ export default function LabRecordDocument({
                         ------------------------------------------------------------- */}
                     {showRight && (
                       <div className="academic-page page-odd flex flex-col justify-between">
+                        <PageBorderFrame isOdd={true} isDuplex={isDuplex} />
                         {spreadType === 'aim_algo' ? (
                           <div>
                             {/* Top Row: Right Page Header */}
@@ -1353,25 +1488,43 @@ export default function LabRecordDocument({
                             </table>
 
                             {/* Main Experiment Title Bar - ONLY SHOWN ONCE HERE */}
-                            <div className="main-experiment-title">
-                              EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
-                            </div>
+                            <table className="section-bar-table" style={{ marginTop: '10px', marginBottom: '4px' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ fontSize: '12pt', padding: '10px 14px', fontWeight: 'bold', letterSpacing: '0.8px', lineHeight: '1.4' }}>
+                                    EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
 
                             {/* AIM */}
-                            <div className="section-heading-row">
-                              <span>AIM</span>
-                            </div>
-                            <div className="content-box">
+                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                                    AIM
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div className="content-box" style={{ marginBottom: '14px', padding: '12px 16px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                               {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
                             </div>
 
                             {/* ALGORITHM / PROCEDURE */}
-                            <div className="section-heading-row">
-                              <span>ALGORITHM / PROCEDURE</span>
-                            </div>
-                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '10px 0' }}>
+                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                                    ALGORITHM / PROCEDURE
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '14px 16px' }}>
                               {procedureSteps.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                   {procedureSteps.map((step, sIdx) => (
                                     <div
                                       key={sIdx}
@@ -1379,7 +1532,7 @@ export default function LabRecordDocument({
                                         display: 'flex',
                                         alignItems: 'baseline',
                                         gap: '8px',
-                                        lineHeight: '1.7',
+                                        lineHeight: '1.75',
                                         fontSize: '10.5pt',
                                       }}
                                     >
@@ -1400,24 +1553,24 @@ export default function LabRecordDocument({
                                   ))}
                                 </div>
                               ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 1:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Start the program execution.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 2:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Read the required input parameters and initialize the appropriate data structures.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 3:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Implement the core algorithmic logic and computational operations for {exp.title}.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 4:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Compute, format and display the verified output results.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 5:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Stop the program execution and verify test case assertions.</span>
                                   </div>
@@ -1451,10 +1604,18 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            <div className="section-heading-row">
-                              <span>PROGRAM SOURCE CODE {right.titleSuffix || ''}</span>
-                              <span className="section-heading-meta">Language: {exp.language || 'Python'}</span>
-                            </div>
+                            <table className="section-bar-table" style={{ marginTop: '14px' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>PROGRAM SOURCE CODE {right.titleSuffix || ''}</span>
+                                    <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
+                                      Language: {exp.language || 'Python'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
                             <pre className="code-container" style={{ minHeight: '340px' }}>
                               {right.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                             </pre>
@@ -1493,9 +1654,15 @@ export default function LabRecordDocument({
                             {/* CENTRE: EVALUATION RUBRIC & MARKS BREAKDOWN */}
                             {showRubrics && (
                               <div className="prevent-break">
-                                <div className="section-heading-row" style={{ marginTop: '10px' }}>
-                                  <span>EVALUATION RUBRIC & MARKS MATRIX</span>
-                                </div>
+                                <table className="section-bar-table" style={{ marginTop: '10px' }}>
+                                  <tbody>
+                                    <tr>
+                                      <td style={{ fontSize: '10pt', padding: '5px 10px' }}>
+                                        EVALUATION RUBRIC & MARKS MATRIX
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
                                 <table className="grid-table" style={{ marginBottom: '10px' }}>
                                   <thead>
                                     <tr>
@@ -1530,9 +1697,15 @@ export default function LabRecordDocument({
                             {/* BOTTOM: RESULT & STAFF SIGNATURE */}
                             <div className="prevent-break" style={{ marginBottom: '12mm' }}>
                               {/* RESULT */}
-                              <div className="section-heading-row">
-                                <span>RESULT</span>
-                              </div>
+                              <table className="section-bar-table">
+                                <tbody>
+                                  <tr>
+                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
+                                      RESULT
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
                               <div className="content-box" style={{ marginBottom: '12px' }}>
                                 {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
                               </div>

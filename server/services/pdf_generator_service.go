@@ -100,32 +100,47 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 
 	pageCount := 0
 
-	// Helper for drawing duplex/single-sided page borders with academic double border
+	// Helper for drawing duplex/single-sided page borders with academic double border & corner squares
 	drawPageBorder := func() {
 		pageCount++
 		isOdd := pageCount%2 != 0
 
+		gap := 2.2
+		y1 := 8.0
+		h := 281.0
+		var x1, w float64
+
 		if isOdd {
-			// Right page (Odd / Recto): Gutter on Left (20mm)
-			pdf.SetMargins(20, 15, 14)
-			pdf.SetLineWidth(0.6)
-			pdf.SetDrawColor(30, 55, 95)
-			pdf.Rect(18, 10, 180, 277, "D")
-
-			pdf.SetLineWidth(0.2)
-			pdf.SetDrawColor(120, 145, 175)
-			pdf.Rect(19.5, 11.5, 177, 274, "D")
+			// Right page (Odd / Recto): Gutter on Left (14mm)
+			x1 = 14.0
+			w = 186.0
+			pdf.SetMargins(20, 14, 14)
 		} else {
-			// Left page (Even / Verso): Gutter on Right (20mm)
-			pdf.SetMargins(14, 15, 20)
-			pdf.SetLineWidth(0.6)
-			pdf.SetDrawColor(30, 55, 95)
-			pdf.Rect(12, 10, 180, 277, "D")
-
-			pdf.SetLineWidth(0.2)
-			pdf.SetDrawColor(120, 145, 175)
-			pdf.Rect(13.5, 11.5, 177, 274, "D")
+			// Left page (Even / Verso): Gutter on Right (14mm)
+			x1 = 10.0
+			w = 186.0
+			pdf.SetMargins(14, 14, 20)
 		}
+
+		x2 := x1 + w
+		y2 := y1 + h
+
+		pdf.SetDrawColor(0, 0, 0)
+		pdf.SetLineWidth(0.35)
+
+		// Outer rectangle
+		pdf.Rect(x1, y1, w, h, "D")
+
+		// Inner rectangle
+		pdf.SetLineWidth(0.3)
+		pdf.Rect(x1+gap, y1+gap, w-(2*gap), h-(2*gap), "D")
+
+		// 4 Corner squares with white fill and crisp black border
+		pdf.SetFillColor(255, 255, 255)
+		pdf.Rect(x1, y1, gap, gap, "FD")
+		pdf.Rect(x2-gap, y1, gap, gap, "FD")
+		pdf.Rect(x1, y2-gap, gap, gap, "FD")
+		pdf.Rect(x2-gap, y2-gap, gap, gap, "FD")
 	}
 
 	// Helper to render institutional header with BIT logo on any page
