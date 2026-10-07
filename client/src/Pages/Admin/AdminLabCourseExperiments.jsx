@@ -32,6 +32,7 @@ import {
   Eye,
   Sliders,
   Upload,
+  Lock,
 } from 'lucide-react';
 import api from '../../api/axios';
 import CodeEditor from '../../Components/CodeEditor';
@@ -529,8 +530,9 @@ export default function AdminLabCourseExperiments() {
   };
 
   // ── Test Run Solution Code ──────────────────────────────────────────────────
-  const handleTestRunSolution = async () => {
-    if (!formData.solution_code?.trim()) {
+  const handleTestRunSolution = async (dataOverride = null) => {
+    const data = dataOverride || formData;
+    if (!data.solution_code?.trim()) {
       showToast('Please enter solution code to test.', 'error');
       return;
     }
@@ -538,10 +540,10 @@ export default function AdminLabCourseExperiments() {
       setTestingSolution(true);
       setSolutionTestResult(null);
       const res = await api.post('/admin/labs/solution-test', {
-        code: formData.solution_code,
-        language: formData.language || 'python',
-        sample_test_cases: formData.sample_test_cases,
-        hidden_test_cases: formData.hidden_test_cases,
+        code: data.solution_code,
+        language: data.language || 'c',
+        sample_test_cases: data.sample_test_cases,
+        hidden_test_cases: data.hidden_test_cases,
       });
       setSolutionTestResult(res);
       showToast(
@@ -1103,7 +1105,12 @@ export default function AdminLabCourseExperiments() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setActiveStudioTab(key)}
+                onClick={() => {
+                  setActiveStudioTab(key);
+                  if (key === 'solution' && formData.solution_code?.trim()) {
+                    handleTestRunSolution();
+                  }
+                }}
                 className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-[13px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   activeStudioTab === key
                     ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-dim)]/30'
@@ -1271,43 +1278,258 @@ export default function AdminLabCourseExperiments() {
 
               <div className="border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden h-[340px]">
                 <CodeEditor
-                  value={formData.solution_code}
+                  code={formData.solution_code || ''}
+                  value={formData.solution_code || ''}
                   onChange={(val) => setFormData((p) => ({ ...p, solution_code: val }))}
-                  language={formData.language || 'python'}
+                  language={formData.language || 'c'}
+                  onLanguageChange={(lang) => setFormData((p) => ({ ...p, language: lang }))}
                   height="340px"
                 />
               </div>
 
-              {/* Test Run Output */}
-              {solutionTestResult && (
-                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-2 animate-in fade-in">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="flex items-center gap-1.5 text-[var(--text-primary)]">
-                      <Terminal className="w-4 h-4 text-[var(--accent)]" />
-                      Execution Output
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded font-mono ${
+              {/* Test Suite Verification Results & Test Cases */}
+              <div className="space-y-4 pt-2">
+                {testingSolution ? (
+                  <div className="p-8 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] flex flex-col items-center justify-center gap-3 text-center animate-in fade-in">
+                    <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)]" />
+                    <div>
+                      <p className="text-xs font-bold text-[var(--text-primary)]">
+                        Executing reference solution against sandbox test cases...
+                      </p>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                        Evaluating sample and hidden test cases with standard I/O streams
+                      </p>
+                    </div>
+                  </div>
+                ) : solutionTestResult ? (
+                  <div className="space-y-4 animate-in fade-in">
+                    {/* Overview Banner */}
+                    <div
+                      className={`p-4 rounded-[var(--radius-md)] border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                         solutionTestResult.pass_count === solutionTestResult.total_test_cases
-                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30'
-                          : 'bg-rose-500/10 text-rose-600 border border-rose-500/30'
+                          ? 'bg-emerald-500/10 border-emerald-500/30'
+                          : 'bg-rose-500/10 border-rose-500/30'
                       }`}
                     >
-                      {solutionTestResult.pass_count} / {solutionTestResult.total_test_cases} Passed
-                    </span>
+                      <div className="flex items-center gap-3">
+                        {solutionTestResult.pass_count === solutionTestResult.total_test_cases ? (
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0">
+                            <AlertCircle className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="text-xs sm:text-[13px] font-bold text-[var(--text-primary)]">
+                            {solutionTestResult.pass_count === solutionTestResult.total_test_cases
+                              ? 'All Test Cases Verified & Passed!'
+                              : `Test Verification Issues (${solutionTestResult.total_test_cases - solutionTestResult.pass_count} Failed)`}
+                          </h4>
+                          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                            {solutionTestResult.pass_count} of {solutionTestResult.total_test_cases} test cases passed (
+                            {solutionTestResult.results?.filter((r) => !r.is_hidden && r.passed).length || 0}/
+                            {solutionTestResult.results?.filter((r) => !r.is_hidden).length || 0} Sample,{' '}
+                            {solutionTestResult.results?.filter((r) => r.is_hidden && r.passed).length || 0}/
+                            {solutionTestResult.results?.filter((r) => r.is_hidden).length || 0} Hidden)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <span
+                          className={`font-mono text-xs font-bold px-3 py-1 rounded-full border ${
+                            solutionTestResult.pass_count === solutionTestResult.total_test_cases
+                              ? 'bg-emerald-500 text-white border-emerald-400'
+                              : 'bg-rose-500 text-white border-rose-400'
+                          }`}
+                        >
+                          {solutionTestResult.pass_count} / {solutionTestResult.total_test_cases} Passed
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleTestRunSolution()}
+                          className="px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-semibold hover:bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer transition flex items-center gap-1.5"
+                        >
+                          <Play className="w-3 h-3 fill-current text-[var(--accent)]" />
+                          Re-run
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Individual Test Cases List */}
+                    <div className="space-y-3">
+                      <h4 className="text-[12px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        Test Cases Breakdown ({solutionTestResult.results?.length || 0})
+                      </h4>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {(solutionTestResult.results || []).map((r, idx) => (
+                          <div
+                            key={idx}
+                            className={`p-4 rounded-[var(--radius-md)] border transition-all ${
+                              r.passed
+                                ? 'bg-[var(--bg-raised)]/60 border-emerald-500/30'
+                                : 'bg-rose-500/5 border-rose-500/30'
+                            }`}
+                          >
+                            {/* Header */}
+                            <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border)]">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded font-mono border ${
+                                    r.is_hidden
+                                      ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                      : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                  }`}
+                                >
+                                  {r.is_hidden ? <Lock className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                  {r.is_hidden ? `Hidden Case #${r.index || idx + 1}` : `Sample Case #${r.index || idx + 1}`}
+                                </span>
+                                <span className="text-[12px] font-bold text-[var(--text-primary)]">
+                                  {r.name || `Case ${idx + 1}`}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {r.execution_ms !== undefined && (
+                                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                    {r.execution_ms} ms
+                                  </span>
+                                )}
+                                <span
+                                  className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
+                                    r.passed
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                  }`}
+                                >
+                                  {r.passed ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                                  {r.passed ? 'PASSED' : 'FAILED'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* 3-Column Input / Expected / Actual breakdown */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3">
+                              {/* Input */}
+                              <div>
+                                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                  Input (stdin)
+                                </span>
+                                <pre className="mt-1 p-2.5 rounded bg-black/70 border border-white/5 font-mono text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-32">
+                                  {r.input?.trim() ? r.input : <span className="text-gray-500 italic">No input</span>}
+                                </pre>
+                              </div>
+
+                              {/* Expected Output */}
+                              <div>
+                                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                  Expected Output
+                                </span>
+                                <pre className="mt-1 p-2.5 rounded bg-black/70 border border-white/5 font-mono text-[11px] text-gray-200 overflow-x-auto whitespace-pre-wrap max-h-32">
+                                  {r.expected?.trim() ? r.expected : <span className="text-gray-500 italic">Empty output</span>}
+                                </pre>
+                              </div>
+
+                              {/* Actual Output */}
+                              <div>
+                                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                  Actual Output
+                                </span>
+                                <pre
+                                  className={`mt-1 p-2.5 rounded font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-32 border ${
+                                    r.passed
+                                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400'
+                                      : 'bg-rose-950/20 border-rose-500/30 text-rose-400'
+                                  }`}
+                                >
+                                  {r.actual?.trim() ? r.actual : <span className="text-gray-500 italic">No output</span>}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  {solutionTestResult.stdout && (
-                    <pre className="p-3 rounded bg-black/80 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-36">
-                      {solutionTestResult.stdout}
-                    </pre>
-                  )}
-                  {solutionTestResult.stderr && (
-                    <pre className="p-3 rounded bg-black/80 text-rose-400 font-mono text-[11px] overflow-x-auto max-h-36">
-                      {solutionTestResult.stderr}
-                    </pre>
-                  )}
-                </div>
-              )}
+                ) : (
+                  /* Configured Test Cases (Pre-Execution View) */
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[12px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        Configured Test Cases ({parsedSampleCount + parsedHiddenCount})
+                      </h4>
+                      <span className="text-[11px] text-[var(--text-muted)]">
+                        {parsedSampleCount} Sample, {parsedHiddenCount} Hidden
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Sample cases */}
+                      {getParsedCases(formData.sample_test_cases).map((tc, idx) => (
+                        <div
+                          key={`sample-${idx}`}
+                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/60 border border-[var(--border)] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                              <Eye className="w-3 h-3" />
+                              Sample Case #{idx + 1}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Input:</span>
+                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.input || <span className="text-gray-500 italic">None</span>}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Expected Output:</span>
+                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.expected_output || tc.expected || <span className="text-gray-500 italic">None</span>}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Hidden cases */}
+                      {getParsedCases(formData.hidden_test_cases).map((tc, idx) => (
+                        <div
+                          key={`hidden-${idx}`}
+                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/60 border border-[var(--border)] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/30">
+                              <Lock className="w-3 h-3" />
+                              Hidden Case #{idx + 1}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Input:</span>
+                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.input || <span className="text-gray-500 italic">None</span>}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Expected Output:</span>
+                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.expected_output || tc.expected || <span className="text-gray-500 italic">None</span>}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
