@@ -80,6 +80,7 @@ export default function AdminLabCourseExperiments() {
     title: '',
     aim: '',
     max_marks: 100,
+    is_active: true,
   };
   const [expForm, setExpForm] = useState(emptyExp);
   const [expSubmitting, setExpSubmitting] = useState(false);
@@ -223,6 +224,7 @@ export default function AdminLabCourseExperiments() {
     setExpForm({
       ...emptyExp,
       experiment_no: (experiments?.length || 0) + 1,
+      is_active: true,
     });
     setEditingExp(null);
     setExpModal('create');
@@ -235,9 +237,29 @@ export default function AdminLabCourseExperiments() {
       title: exp.title,
       aim: exp.aim,
       max_marks: exp.max_marks || 100,
+      is_active: exp.is_active !== false,
     });
     setEditingExp(exp);
     setExpModal('edit');
+  };
+
+  const handleToggleExperimentActive = async (expId, currentActive, e) => {
+    if (e) e.stopPropagation();
+    const nextActive = !currentActive;
+    // Optimistic UI update
+    setExperiments((prev) =>
+      prev.map((exp) => (exp.id === expId ? { ...exp, is_active: nextActive } : exp))
+    );
+    try {
+      await api.patch(`/admin/labs/experiments/${expId}/status`, { is_active: nextActive });
+      showToast(`Experiment #${expId} ${nextActive ? 'activated' : 'deactivated'} successfully!`, 'success');
+    } catch (err) {
+      // Revert on error
+      setExperiments((prev) =>
+        prev.map((exp) => (exp.id === expId ? { ...exp, is_active: currentActive } : exp))
+      );
+      showToast(err?.response?.data?.error || 'Failed to update experiment status.', 'error');
+    }
   };
 
   const handleSaveExpModal = async (e) => {
@@ -737,16 +759,19 @@ export default function AdminLabCourseExperiments() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredExperiments.map((exp) => {
+                const isActive = exp.is_active !== false;
                 return (
                   <div
                     key={exp.id}
-                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all"
+                    className={`data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all ${
+                      !isActive ? 'border-dashed border-[var(--border)] opacity-85 hover:opacity-100 bg-[var(--bg-card)]/60' : ''
+                    }`}
                     onClick={() => openExperimentVariants(exp)}
                   >
                     <div className="space-y-3.5">
-                      {/* Top Row: Exp Badge + Actions */}
+                      {/* Top Row: Exp Badge + Status Toggle + Actions */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-mono font-bold text-[12px] px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
                             Exp {exp.experiment_no}
                           </span>
@@ -755,7 +780,26 @@ export default function AdminLabCourseExperiments() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {/* Active / Inactive Toggle Switch Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleExperimentActive(exp.id, isActive, e)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer border shadow-xs ${
+                              isActive
+                                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20'
+                            }`}
+                            title={isActive ? 'Click to deactivate experiment' : 'Click to activate experiment'}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'
+                              }`}
+                            />
+                            {isActive ? 'ACTIVE' : 'INACTIVE'}
+                          </button>
+
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1615,6 +1659,42 @@ export default function AdminLabCourseExperiments() {
                   }
                   className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
                 />
+              </div>
+
+              {/* Active / Inactive Status Switch */}
+              <div className="flex items-center justify-between p-3.5 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)]">
+                <div>
+                  <p className="text-[12px] font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                    Experiment Status
+                    <span
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                        expForm.is_active !== false
+                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
+                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                      }`}
+                    >
+                      {expForm.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                    {expForm.is_active !== false
+                      ? 'Experiment is accessible to students and faculty.'
+                      : 'Deactivated: Skipped in student prerequisite chains & hidden from execution.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExpForm((p) => ({ ...p, is_active: p.is_active === false }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer shrink-0 ${
+                    expForm.is_active !== false ? 'bg-[var(--accent)]' : 'bg-[var(--bg-input)] border border-[var(--border)]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      expForm.is_active !== false ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="flex gap-2 pt-2">

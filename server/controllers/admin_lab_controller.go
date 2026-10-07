@@ -393,6 +393,7 @@ type ExperimentInput struct {
 	SampleTestCases string `json:"sample_test_cases"`
 	HiddenTestCases string `json:"hidden_test_cases"`
 	MaxMarks        int    `json:"max_marks"`
+	IsActive        *bool  `json:"is_active"`
 }
 
 // AdminCreateExperiment adds a new experiment to a lab course
@@ -416,7 +417,12 @@ func AdminCreateExperiment(c *gin.Context) {
 	}
 	maxMarks := input.MaxMarks
 	if maxMarks <= 0 {
-		maxMarks = 10
+		maxMarks = 100
+	}
+
+	isActive := true
+	if input.IsActive != nil {
+		isActive = *input.IsActive
 	}
 
 	exp := models.LabExperiment{
@@ -430,6 +436,7 @@ func AdminCreateExperiment(c *gin.Context) {
 		SampleTestCases: input.SampleTestCases,
 		HiddenTestCases: input.HiddenTestCases,
 		MaxMarks:        maxMarks,
+		IsActive:        isActive,
 	}
 
 	if err := database.DB.Create(&exp).Error; err != nil {
@@ -489,6 +496,9 @@ func AdminUpdateExperiment(c *gin.Context) {
 	if input.MaxMarks > 0 {
 		updates["max_marks"] = input.MaxMarks
 	}
+	if input.IsActive != nil {
+		updates["is_active"] = *input.IsActive
+	}
 
 	if err := database.DB.Model(&exp).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update experiment: " + err.Error()})
@@ -499,6 +509,42 @@ func AdminUpdateExperiment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Experiment updated successfully",
 		"experiment": exp,
+	})
+}
+
+// AdminToggleExperimentStatus toggles or sets active state of an experiment
+func AdminToggleExperimentStatus(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	var req struct {
+		IsActive *bool `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err == nil && req.IsActive != nil {
+		exp.IsActive = *req.IsActive
+	} else {
+		exp.IsActive = !exp.IsActive
+	}
+
+	if err := database.DB.Model(&exp).Update("is_active", exp.IsActive).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update experiment status: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Experiment status updated successfully",
+		"experiment": exp,
+		"is_active":  exp.IsActive,
 	})
 }
 

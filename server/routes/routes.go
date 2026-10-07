@@ -357,6 +357,7 @@ func SetupRouter() *gin.Engine {
 			adminLabs.POST("/courses/:courseId/pdf-template", controllers.AdminSaveCoursePdfTemplate)
 			adminLabs.POST("/record-pdf/custom", controllers.DownloadCustomLabRecordPDF)
 			adminLabs.PUT("/experiments/:id", controllers.AdminUpdateExperiment)
+			adminLabs.PATCH("/experiments/:id/status", controllers.AdminToggleExperimentStatus)
 			adminLabs.DELETE("/experiments/:id", controllers.AdminDeleteExperiment)
 			adminLabs.GET("/experiments/:expId/variants", controllers.AdminGetExperimentQuestionVariants)
 			adminLabs.POST("/experiments/:expId/variants", controllers.AdminSaveExperimentQuestionVariant)

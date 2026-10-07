@@ -144,6 +144,7 @@ func EnsureLabTables(db *gorm.DB) error {
 			log.Printf("[WARN] AutoMigrate for lab model %T: %v\n", m, err)
 		}
 	}
+	db.Exec("UPDATE lab_experiments SET is_active = true WHERE is_active IS NULL")
 	return nil
 }
 

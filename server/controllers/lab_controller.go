@@ -56,9 +56,18 @@ func getStudentExperimentAccess(courseID uint, expID uint, userID uint, userRole
 
 	// 0. Sequential Milestone Prerequisite Check (Always Enforced by Default)
 	var currentExp models.LabExperiment
-	if err := database.DB.Select("id, course_id, experiment_no, title").First(&currentExp, expID).Error; err == nil {
+	if err := database.DB.Select("id, course_id, experiment_no, title, is_active").First(&currentExp, expID).Error; err == nil {
+		if !currentExp.IsActive {
+			return StudentUnlockStatus{
+				IsUnlocked: false,
+				Section:    section,
+				Status:     "INACTIVE",
+				Notes:      "This experiment is currently inactive.",
+			}
+		}
+
 		var prevExp models.LabExperiment
-		if err := database.DB.Where("course_id = ? AND experiment_no < ?", courseID, currentExp.ExperimentNo).
+		if err := database.DB.Where("course_id = ? AND experiment_no < ? AND (is_active IS NULL OR is_active = true)", courseID, currentExp.ExperimentNo).
 			Order("experiment_no desc").First(&prevExp).Error; err == nil && prevExp.ID > 0 {
 
 			// Check if current student has an explicit override with BypassPrerequisite
@@ -194,6 +203,11 @@ func isExperimentUnlockedForSubmission(courseID uint, expID uint, userID uint, u
 	role := strings.ToLower(userRole)
 	if role == "admin" || role == "faculty" || role == "faculty_incharge" {
 		return true, "FACULTY/ADMIN"
+	}
+
+	var exp models.LabExperiment
+	if err := database.DB.Select("id, is_active").First(&exp, expID).Error; err == nil && !exp.IsActive {
+		return false, "INACTIVE"
 	}
 
 	var user models.User
@@ -621,6 +635,7 @@ func GetExperimentDetails(c *gin.Context) {
 		"starter_code":      exp.StarterCode,
 		"sample_test_cases": exp.SampleTestCases,
 		"max_marks":         exp.MaxMarks,
+		"is_active":         exp.IsActive,
 		"created_at":        exp.CreatedAt,
 		"updated_at":        exp.UpdatedAt,
 	}
