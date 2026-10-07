@@ -2214,6 +2214,60 @@ func FacultyBulkDeleteStudentOverrides(c *gin.Context) {
 	})
 }
 
+type BulkUpdateStudentOverridesReq struct {
+	IDs                 []uint     `json:"ids" binding:"required"`
+	BypassPrerequisite  *bool      `json:"bypass_prerequisite"`
+	StartsAt            *time.Time `json:"starts_at"`
+	UpdateStartsAt      bool       `json:"update_starts_at"`
+	EndsAt              *time.Time `json:"ends_at"`
+	UpdateEndsAt        bool       `json:"update_ends_at"`
+	AllowLateSubmission *bool      `json:"allow_late_submission"`
+	Notes               *string    `json:"notes"`
+}
+
+// FacultyBulkUpdateStudentOverrides updates multiple student overrides in one call
+func FacultyBulkUpdateStudentOverrides(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	var req BulkUpdateStudentOverridesReq
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please provide override IDs to update"})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.BypassPrerequisite != nil {
+		updates["bypass_prerequisite"] = *req.BypassPrerequisite
+	}
+	if req.UpdateStartsAt {
+		updates["starts_at"] = req.StartsAt
+	}
+	if req.UpdateEndsAt {
+		updates["ends_at"] = req.EndsAt
+	}
+	if req.AllowLateSubmission != nil {
+		updates["allow_late_submission"] = *req.AllowLateSubmission
+	}
+	if req.Notes != nil {
+		updates["notes"] = strings.TrimSpace(*req.Notes)
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No update fields provided"})
+		return
+	}
+
+	res := database.DB.Model(&models.LabExperimentUnlock{}).Where("id IN ?", req.IDs).Updates(updates)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk update overrides: " + res.Error.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully updated %d student override(s)!", res.RowsAffected),
+		"count":   res.RowsAffected,
+	})
+}
+
 type UpdateSingleOverrideReq struct {
 	BypassPrerequisite  bool       `json:"bypass_prerequisite"`
 	StartsAt            *time.Time `json:"starts_at"`

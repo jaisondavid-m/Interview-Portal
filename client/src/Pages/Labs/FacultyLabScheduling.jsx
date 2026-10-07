@@ -129,6 +129,19 @@ export default function FacultyLabScheduling() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Bulk Edit Overrides State
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [bulkEditForm, setBulkEditForm] = useState({
+    update_window: false,
+    starts_at: '',
+    ends_at: '',
+    bypass_prerequisite: 'keep', // 'keep' | 'enable' | 'disable'
+    allow_late_submission: 'keep', // 'keep' | 'enable' | 'disable'
+    notes: '',
+    update_notes: false,
+  });
+  const [bulkSavingOverrides, setBulkSavingOverrides] = useState(false);
+
   // Quick Action loader state for sessions
   const [sessionActionKey, setSessionActionKey] = useState(null);
 
@@ -539,6 +552,65 @@ export default function FacultyLabScheduling() {
       showToast('Failed to update student override.', 'error');
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleOpenBulkEdit = () => {
+    if (selectedTableOverrideIds.length === 0) return;
+    setBulkEditForm({
+      update_window: false,
+      starts_at: '',
+      ends_at: '',
+      bypass_prerequisite: 'keep',
+      allow_late_submission: 'keep',
+      notes: '',
+      update_notes: false,
+    });
+    setIsBulkEditModalOpen(true);
+  };
+
+  const handleSaveBulkEdit = async (e) => {
+    e.preventDefault();
+    if (selectedTableOverrideIds.length === 0) return;
+
+    const payload = {
+      ids: selectedTableOverrideIds,
+    };
+
+    if (bulkEditForm.update_window) {
+      payload.update_starts_at = true;
+      payload.starts_at = bulkEditForm.starts_at ? new Date(bulkEditForm.starts_at).toISOString() : null;
+      payload.update_ends_at = true;
+      payload.ends_at = bulkEditForm.ends_at ? new Date(bulkEditForm.ends_at).toISOString() : null;
+    }
+
+    if (bulkEditForm.bypass_prerequisite === 'enable') {
+      payload.bypass_prerequisite = true;
+    } else if (bulkEditForm.bypass_prerequisite === 'disable') {
+      payload.bypass_prerequisite = false;
+    }
+
+    if (bulkEditForm.allow_late_submission === 'enable') {
+      payload.allow_late_submission = true;
+    } else if (bulkEditForm.allow_late_submission === 'disable') {
+      payload.allow_late_submission = false;
+    }
+
+    if (bulkEditForm.update_notes) {
+      payload.notes = bulkEditForm.notes;
+    }
+
+    try {
+      setBulkSavingOverrides(true);
+      await api.post('/lab-incharge/unlocks/student-overrides/bulk-update', payload);
+      showToast(`Successfully updated ${selectedTableOverrideIds.length} student override(s)!`);
+      setIsBulkEditModalOpen(false);
+      setSelectedTableOverrideIds([]);
+      fetchUnlockMatrix();
+    } catch {
+      showToast('Failed to bulk update student overrides.', 'error');
+    } finally {
+      setBulkSavingOverrides(false);
     }
   };
 
@@ -1593,9 +1665,9 @@ export default function FacultyLabScheduling() {
 
             {/* Bulk Selection Bar */}
             {selectedTableOverrideIds.length > 0 && (
-              <div className="flex items-center justify-between p-3 bg-rose-500/10 border border-rose-500/20 rounded-[var(--radius-md)] animate-in fade-in duration-150">
-                <div className="flex items-center gap-2 text-xs font-semibold text-rose-600">
-                  <CheckSquare className="w-4 h-4 text-rose-500" />
+              <div className="flex items-center justify-between p-3 bg-[var(--accent-dim)]/20 border border-[var(--border-accent)] rounded-[var(--radius-md)] animate-in fade-in duration-150 flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
+                  <CheckSquare className="w-4 h-4 text-[var(--accent)]" />
                   <span>
                     {selectedTableOverrideIds.length} override
                     {selectedTableOverrideIds.length > 1 ? 's' : ''} selected
@@ -1608,6 +1680,14 @@ export default function FacultyLabScheduling() {
                     className="px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] rounded transition-colors cursor-pointer"
                   >
                     Deselect All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenBulkEdit}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-white bg-[var(--accent)] hover:brightness-110 rounded-lg shadow-xs transition-all cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    Bulk Edit ({selectedTableOverrideIds.length})
                   </button>
                   <button
                     type="button"
@@ -1853,6 +1933,238 @@ export default function FacultyLabScheduling() {
                         <Save className="w-3.5 h-3.5" />
                       )}
                       Save Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Bulk Edit Student Overrides Modal */}
+          {isBulkEditModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-lg w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-[var(--accent)]" />
+                      Bulk Edit Student Overrides
+                    </h3>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                      Batch updating{' '}
+                      <span className="font-bold text-[var(--accent)] font-mono">
+                        {selectedTableOverrideIds.length}
+                      </span>{' '}
+                      selected student override record{selectedTableOverrideIds.length > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsBulkEditModalOpen(false)}
+                    className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-md cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveBulkEdit} className="space-y-4">
+                  {/* Schedule Window Section */}
+                  <div className="p-3 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={bulkEditForm.update_window}
+                        onChange={(e) =>
+                          setBulkEditForm((p) => ({ ...p, update_window: e.target.checked }))
+                        }
+                        className="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-[var(--text-primary)]">
+                        Update Attendance / Release Window for All Selected
+                      </span>
+                    </label>
+
+                    {bulkEditForm.update_window && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 animate-in fade-in duration-150">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                              Starts At
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setBulkEditForm((p) => ({
+                                  ...p,
+                                  starts_at: formatDateForInput(new Date()),
+                                }))
+                              }
+                              className="text-[10px] font-bold text-[var(--accent)] hover:underline cursor-pointer"
+                            >
+                              Now
+                            </button>
+                          </div>
+                          <input
+                            type="datetime-local"
+                            value={bulkEditForm.starts_at}
+                            onChange={(e) =>
+                              setBulkEditForm((p) => ({ ...p, starts_at: e.target.value }))
+                            }
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                              Ends At (Deadline)
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const now = new Date();
+                                  setBulkEditForm((p) => ({
+                                    ...p,
+                                    ends_at: formatDateForInput(
+                                      new Date(now.getTime() + 24 * 60 * 60 * 1000)
+                                    ),
+                                  }));
+                                }}
+                                className="text-[10px] font-bold px-1 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                              >
+                                +24h
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const now = new Date();
+                                  setBulkEditForm((p) => ({
+                                    ...p,
+                                    ends_at: formatDateForInput(
+                                      new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+                                    ),
+                                  }));
+                                }}
+                                className="text-[10px] font-bold px-1 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                              >
+                                +7d
+                              </button>
+                            </div>
+                          </div>
+                          <input
+                            type="datetime-local"
+                            value={bulkEditForm.ends_at}
+                            onChange={(e) =>
+                              setBulkEditForm((p) => ({ ...p, ends_at: e.target.value }))
+                            }
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sequential Prerequisite Rule */}
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Sequential Prerequisite Requirement</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { val: 'keep', label: 'Keep Current' },
+                        { val: 'enable', label: 'Bypass (Enable)' },
+                        { val: 'disable', label: 'Require (Disable)' },
+                      ].map((item) => (
+                        <button
+                          key={item.val}
+                          type="button"
+                          onClick={() =>
+                            setBulkEditForm((p) => ({ ...p, bypass_prerequisite: item.val }))
+                          }
+                          className={`px-2.5 py-2 text-xs rounded-[var(--radius-sm)] border text-center transition-all cursor-pointer font-medium ${
+                            bulkEditForm.bypass_prerequisite === item.val
+                              ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-xs font-bold'
+                              : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-raised)]'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Late Submission Policy */}
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Late Submission Policy</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { val: 'keep', label: 'Keep Current' },
+                        { val: 'enable', label: 'Allow Late' },
+                        { val: 'disable', label: 'Strict Deadline' },
+                      ].map((item) => (
+                        <button
+                          key={item.val}
+                          type="button"
+                          onClick={() =>
+                            setBulkEditForm((p) => ({ ...p, allow_late_submission: item.val }))
+                          }
+                          className={`px-2.5 py-2 text-xs rounded-[var(--radius-sm)] border text-center transition-all cursor-pointer font-medium ${
+                            bulkEditForm.allow_late_submission === item.val
+                              ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-xs font-bold'
+                              : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-raised)]'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Reason / Notes Update */}
+                  <div className="p-3 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={bulkEditForm.update_notes}
+                        onChange={(e) =>
+                          setBulkEditForm((p) => ({ ...p, update_notes: e.target.checked }))
+                        }
+                        className="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-[var(--text-primary)]">
+                        Update Waiver Reason / Notes for All Selected
+                      </span>
+                    </label>
+
+                    {bulkEditForm.update_notes && (
+                      <input
+                        type="text"
+                        placeholder="e.g. Bulk re-exam waiver approved"
+                        value={bulkEditForm.notes}
+                        onChange={(e) =>
+                          setBulkEditForm((p) => ({ ...p, notes: e.target.value }))
+                        }
+                        className={`${inputCls} animate-in fade-in duration-150`}
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkEditModalOpen(false)}
+                      className="px-3.5 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-raised)] text-[var(--text-secondary)] transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={bulkSavingOverrides}
+                      className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--accent)] hover:opacity-90 text-[var(--accent-text,#fff)] transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                    >
+                      {bulkSavingOverrides ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      Apply Bulk Updates ({selectedTableOverrideIds.length})
                     </button>
                   </div>
                 </form>
