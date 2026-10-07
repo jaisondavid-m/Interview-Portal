@@ -1123,12 +1123,22 @@ func FinishAndSendForVerification(c *gin.Context) {
 	vivaJSON, _ := json.Marshal(selectedVivas)
 	sub.VivaQuestionsAsked = string(vivaJSON)
 
-	// Increment attempts only when Finish & Send is clicked (1 on initial submit, +1 on resubmission/revision)
-	if sub.AttemptCount == 0 {
-		sub.AttemptCount = 1
+	// Attempt & Revision Lifecycle Handling:
+	// - If student was in revision mode (faculty requested revision), do NOT increase AttemptCount.
+	// - If fresh submission / new assessment round, increase AttemptCount by +1.
+	isRevision := sub.Status == "REVISION_REQUESTED" || sub.IsUnderRevision
+	if isRevision {
+		sub.RevisionCount += 1
+		sub.IsUnderRevision = false
 	} else {
-		sub.AttemptCount += 1
+		if sub.AttemptCount == 0 {
+			sub.AttemptCount = 1
+		} else {
+			sub.AttemptCount += 1
+		}
 	}
+	now := time.Now()
+	sub.LastSubmittedAt = &now
 
 	// Ensure auto-calculated Program & Output marks are saved into MarksBreakdown
 	if sub.TotalTestCases > 0 {
@@ -1650,6 +1660,11 @@ func VerifySingleExperiment(c *gin.Context) {
 
 	now := time.Now()
 	sub.Status = req.Status
+	if req.Status == "REVISION_REQUESTED" {
+		sub.IsUnderRevision = true
+	} else if req.Status == "APPROVED" {
+		sub.IsUnderRevision = false
+	}
 	sub.CodeMarks = req.CodeMarks
 	sub.VivaMarks = req.VivaMarks
 	totalMarks := req.Marks
