@@ -866,10 +866,6 @@ export default function LabRecordDocument({
           {/* PAGE 3: BLANK LEFT PAGE */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'cert_blank') && (
             <div className="academic-page page-even flex flex-col justify-between">
-              <div className="text-right text-[8pt] text-neutral-300 select-none">
-                [This page is intentionally left blank]
-              </div>
-
               <div className="flex-1" />
 
               <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
@@ -1031,10 +1027,6 @@ export default function LabRecordDocument({
           {/* PAGE 5: BLANK LEFT PAGE */}
           {(viewMode === 'all' || viewMode === 'spread' || viewMode === 'index_blank') && (
             <div className="academic-page page-even flex flex-col justify-between">
-              <div className="text-right text-[8pt] text-neutral-300 select-none">
-                [This page is intentionally left blank]
-              </div>
-
               <div className="flex-1" />
 
               <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
@@ -1295,11 +1287,7 @@ export default function LabRecordDocument({
                             </>
                           ) : (
                             /* Empty Blank Page on Left Side */
-                            <div className="flex flex-col items-center justify-center text-center" style={{ minHeight: '520px', paddingTop: '160px' }}>
-                              <div className="text-sm font-serif italic text-neutral-400 select-none">
-                                — THIS PAGE IS INTENTIONALLY LEFT BLANK FOR OBSERVATION / ROUGH WORK —
-                              </div>
-                            </div>
+                            <div style={{ minHeight: '520px' }} />
                           )}
                         </div>
 

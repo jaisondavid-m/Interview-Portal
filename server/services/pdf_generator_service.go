@@ -168,10 +168,6 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 			pdf.AddPage()
 			drawPageBorder()
 			renderHeaderWithLogo(false, "PRACTICAL LAB RECORD — OBSERVATION")
-			pdf.SetY(135)
-			pdf.SetFont("Arial", "I", 8.5)
-			pdf.SetTextColor(160, 170, 185)
-			pdf.CellFormat(0, 6, "— THIS PAGE IS INTENTIONALLY LEFT BLANK FOR OBSERVATION —", "", 1, "C", false, 0, "")
 		}
 		pdf.AddPage()
 		drawPageBorder()
@@ -184,10 +180,6 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 			pdf.AddPage()
 			drawPageBorder()
 			renderHeaderWithLogo(true, "PRACTICAL LAB RECORD — WORKBOOK NOTES")
-			pdf.SetY(135)
-			pdf.SetFont("Arial", "I", 8.5)
-			pdf.SetTextColor(160, 170, 185)
-			pdf.CellFormat(0, 6, "— THIS PAGE IS INTENTIONALLY LEFT BLANK FOR WORKBOOK NOTES —", "", 1, "C", false, 0, "")
 		}
 		pdf.AddPage()
 		drawPageBorder()
@@ -448,10 +440,6 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// =========================================================================
 		addLeftPage()
 		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  OBSERVATION / ROUGH WORK", exp.ExperimentNo))
-		pdf.SetY(135)
-		pdf.SetFont("Arial", "I", 8.5)
-		pdf.SetTextColor(160, 170, 185)
-		pdf.CellFormat(0, 6, "— THIS PAGE IS INTENTIONALLY LEFT BLANK FOR OBSERVATION / ROUGH WORK —", "", 1, "C", false, 0, "")
 
 		addRightPage()
 		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d", data.CourseCode, exp.ExperimentNo))
@@ -585,10 +573,6 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		// =========================================================================
 		addLeftPage()
 		renderHeaderWithLogo(true, fmt.Sprintf("EX NO: %02d  —  EVALUATION NOTES", exp.ExperimentNo))
-		pdf.SetY(135)
-		pdf.SetFont("Arial", "I", 8.5)
-		pdf.SetTextColor(160, 170, 185)
-		pdf.CellFormat(0, 6, "— THIS PAGE IS INTENTIONALLY LEFT BLANK FOR EVALUATION NOTES —", "", 1, "C", false, 0, "")
 
 		addRightPage()
 		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d EVALUATION", data.CourseCode, exp.ExperimentNo))
