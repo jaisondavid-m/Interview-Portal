@@ -577,14 +577,6 @@ func GenerateCustomLabRecordPDF(data CustomLabRecordData) ([]byte, error) {
 		addRightPage()
 		renderHeaderWithLogo(false, fmt.Sprintf("BIT — %s | EX NO: %02d", data.CourseCode, exp.ExperimentNo))
 
-		// Experiment Summary Banner
-		pdf.SetFont("Arial", "B", 10)
-		pdf.SetFillColor(240, 245, 252)
-		pdf.SetDrawColor(190, 210, 235)
-		pdf.SetTextColor(20, 45, 95)
-		pdf.CellFormat(0, 7.5, fmt.Sprintf("  EX NO: %02d EVALUATION REPORT  —  %s", exp.ExperimentNo, strings.ToUpper(exp.Title)), "1", 1, "L", true, 0, "")
-		pdf.Ln(5)
-
 		// 1. FIRST: TABULAR MARKS RUBRIC COLUMN (4-Column Rubric without Status)
 		pdf.SetFont("Arial", "B", 9.5)
 		pdf.SetTextColor(25, 45, 80)

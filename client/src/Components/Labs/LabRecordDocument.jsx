@@ -1261,17 +1261,6 @@ export default function LabRecordDocument({
 
                           {left.type === 'output' ? (
                             <>
-                              {/* Left Page Title Bar */}
-                              <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
-                                      EXPERIMENT {expNo} &nbsp;|&nbsp; PROGRAM EXECUTION OUTPUT {left.titleSuffix || ''}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-
                               <table className="section-bar-table" style={{ marginTop: '14px' }}>
                                 <tbody>
                                   <tr>
@@ -1332,7 +1321,7 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            {/* Main Experiment Title Bar */}
+                            {/* Main Experiment Title Bar - ONLY SHOWN ONCE HERE */}
                             <table className="section-bar-table" style={{ marginTop: '10px', marginBottom: '4px' }}>
                               <tbody>
                                 <tr>
@@ -1449,17 +1438,6 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            {/* Program Source Code Bar */}
-                            <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
-                                    EXPERIMENT {expNo} &nbsp;|&nbsp; VERIFIED SOURCE CODE {right.titleSuffix || ''}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-
                             <table className="section-bar-table" style={{ marginTop: '14px' }}>
                               <tbody>
                                 <tr>
@@ -1498,17 +1476,6 @@ export default function LabRecordDocument({
                                           </tr>
                                         </tbody>
                                       </table>
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-
-                              {/* Evaluation Page Title Bar */}
-                              <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
-                                      EXPERIMENT {expNo} &nbsp;|&nbsp; EVALUATION & RESULT
                                     </td>
                                   </tr>
                                 </tbody>
