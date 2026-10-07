@@ -169,29 +169,54 @@ export default function LabMarkVerticalsModal({
                 <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">
                   Faculty Evaluation Mark Verticals
                 </span>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-[var(--text-primary)]">
-                    {totalMarks}
-                  </span>
-                  <span className="text-xs font-mono text-[var(--text-muted)]">
-                    / {maxPossibleMarks} Total Marks
-                  </span>
-                </div>
+                {isApproved ? (
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold text-[var(--text-primary)]">
+                      {totalMarks}
+                    </span>
+                    <span className="text-xs font-mono text-[var(--text-muted)]">
+                      / {maxPossibleMarks} Total Marks
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg sm:text-xl font-bold text-[var(--accent)]">
+                      Verification Pending
+                    </span>
+                    <span className="text-xs font-mono text-[var(--text-muted)]">
+                      (Max {maxPossibleMarks} Marks)
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="flex flex-col items-end gap-1 shrink-0 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-[var(--border)]">
-              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${gradeInfo.color}`}>
-                {gradeInfo.label}
-              </span>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                Grade Score: {percentage}%
-              </span>
+              {isApproved ? (
+                <>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold border ${gradeInfo.color}`}>
+                    {gradeInfo.label}
+                  </span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                    Grade Score: {percentage}%
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold border bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)] flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    Pending Evaluation
+                  </span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                    Awaiting faculty review
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
           {/* Sub-breakdown details (Code Marks vs Viva Marks) */}
-          {(sub.code_marks !== undefined || sub.viva_marks !== undefined) && (
+          {isApproved && (sub.code_marks !== undefined || sub.viva_marks !== undefined) && (
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between">
                 <span className="text-[var(--text-secondary)] font-medium">Code Implementation</span>
@@ -226,9 +251,7 @@ export default function LabMarkVerticalsModal({
 
             {!isApproved && !Object.keys(breakdown).length ? (
               <div className="p-4 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)] text-center text-xs text-[var(--text-muted)] italic">
-                {isSubmitted
-                  ? 'Your experiment is currently in the faculty viva queue. Specific vertical scores will appear here once faculty completes evaluation.'
-                  : 'Faculty evaluation pending.'}
+                Your experiment has been submitted for faculty verification. Specific vertical scores will appear here once faculty completes evaluation.
               </div>
             ) : (
               <div className="space-y-2.5">

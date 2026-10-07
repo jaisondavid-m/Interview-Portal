@@ -478,7 +478,7 @@ export default function LabWorkspace() {
               ) : submission.status === 'SUBMITTED_FOR_VERIFICATION' ? (
                 <>
                   <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                  In Faculty Viva Queue
+                  Verification Pending
                 </>
               ) : submission.status === 'TEST_PASSED' ? (
                 <>
@@ -529,7 +529,7 @@ export default function LabWorkspace() {
             onClick={() => setShowFinishModal(true)}
             disabled={running || submitting || !isUnlocked || isSubmittedOrApproved}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 shadow-[var(--shadow-sm)]"
-            title="Finish experiment and submit for faculty oral viva evaluation"
+            title="Finish experiment and submit for faculty verification"
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             Finish & Send for Verification
@@ -543,7 +543,7 @@ export default function LabWorkspace() {
           <div className="flex items-center gap-2 font-medium">
             <MessageSquareCheck className="w-4 h-4 text-[var(--accent)] shrink-0" />
             <span>
-              <strong>Experiment Locked & Sent for Verification:</strong> Please approach your faculty incharge for in-person oral viva evaluation.
+              <strong>Experiment Submitted for Verification:</strong> Your solution has been submitted and is awaiting faculty verification.
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -555,7 +555,7 @@ export default function LabWorkspace() {
               <SlidersHorizontal className="w-3.5 h-3.5" />
               View Mark Verticals
             </button>
-            <span className="text-[11px] font-mono text-[var(--accent)] font-bold">Oral Viva Pending</span>
+            <span className="text-[11px] font-mono text-[var(--accent)] font-bold">Verification Pending</span>
           </div>
         </div>
       )}
@@ -655,7 +655,7 @@ export default function LabWorkspace() {
                     <li>Write your step-by-step algorithmic steps under the <strong>"My Algorithm Steps"</strong> tab.</li>
                     <li>Develop and verify your solution code in the editor.</li>
                     <li>Click <strong>"Run Code"</strong> to test sample cases and <strong>"Submit Code"</strong> for hidden case grading.</li>
-                    <li>Click <strong>"Finish & Send for Verification"</strong> to lock your submission and enter the faculty oral viva queue.</li>
+                    <li>Click <strong>"Finish & Send for Verification"</strong> to lock your submission and send for faculty verification.</li>
                   </ul>
                 </div>
               </div>
