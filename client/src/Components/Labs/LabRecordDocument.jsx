@@ -504,28 +504,32 @@ export default function LabRecordDocument({
           max-height: 297mm;
           overflow: hidden;
           box-sizing: border-box;
-          padding: 16mm 18mm 18mm 18mm;
+          border: 1.5px solid #000000;
+          padding: 10mm 12mm 10mm 12mm;
           margin: 0 auto 28px auto;
           box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
           position: relative;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
         }
 
         /* Duplex binding gutter margins */
         .academic-page.page-odd {
-          padding-left: ${isDuplex ? '24mm' : '18mm'};
-          padding-right: 14mm;
+          padding-left: ${isDuplex ? '16mm' : '12mm'};
+          padding-right: 10mm;
         }
 
         .academic-page.page-even {
-          padding-left: 14mm;
-          padding-right: ${isDuplex ? '24mm' : '18mm'};
+          padding-left: 10mm;
+          padding-right: ${isDuplex ? '16mm' : '12mm'};
         }
 
         .top-row-table {
           width: 100%;
           border-collapse: collapse;
           border: none;
-          margin-bottom: 12px;
+          margin-bottom: 8px;
         }
 
         .top-row-table td {
@@ -567,28 +571,64 @@ export default function LabRecordDocument({
           vertical-align: middle;
         }
 
+        .main-experiment-title {
+          text-align: center;
+          font-size: 11.5pt;
+          font-weight: bold;
+          letter-spacing: 0.6px;
+          padding: 6px 0;
+          margin-top: 8px;
+          margin-bottom: 8px;
+          border-top: 1.5px solid #000000;
+          border-bottom: 1.5px solid #000000;
+          line-height: 1.4;
+          text-transform: uppercase;
+        }
+
+        .section-heading-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          border-bottom: 1.5px solid #000000;
+          padding-bottom: 4px;
+          margin-top: 12px;
+          margin-bottom: 6px;
+          font-weight: bold;
+          font-size: 10.5pt;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .section-heading-meta {
+          font-size: 8.5pt;
+          font-weight: normal;
+          text-transform: none;
+          font-family: inherit;
+        }
+
         .section-bar-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 14px;
-          margin-bottom: 0;
+          margin-top: 12px;
+          margin-bottom: 6px;
         }
 
         .section-bar-table td {
-          border: 1px solid #000000;
-          text-align: center;
-          padding: 6px 10px;
+          border: none;
+          border-bottom: 1.5px solid #000000;
+          text-align: left;
+          padding: 4px 0;
           font-size: 10.5pt;
           font-weight: bold;
           text-transform: uppercase;
-          background: #f4f4f5;
+          background: transparent;
           letter-spacing: 0.5px;
         }
 
         .grid-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: -1px;
+          margin-top: 8px;
           margin-bottom: 14px;
         }
 
@@ -607,54 +647,51 @@ export default function LabRecordDocument({
         }
 
         .content-box {
-          border: 1px solid #000000;
-          border-top: none;
-          padding: 10px 14px;
+          border: none;
+          padding: 4px 0;
           font-size: 10pt;
-          line-height: 1.55;
-          margin-bottom: 14px;
+          line-height: 1.6;
+          margin-bottom: 10px;
           text-align: justify;
         }
 
         .code-container {
-          border: 1px solid #000000;
-          border-top: none;
-          background: #fafafa;
-          padding: 10px 14px;
+          border: none;
+          background: transparent;
+          padding: 4px 0;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
           line-height: 1.45;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: -1px;
-          margin-bottom: 12px;
-          color: #111827;
+          margin-top: 4px;
+          margin-bottom: 10px;
+          color: #000000;
           box-sizing: border-box;
           -webkit-font-smoothing: antialiased;
         }
 
         .output-container {
-          border: 1px solid #000000;
-          border-top: none;
-          background: #fafafa;
-          padding: 10px 14px;
+          border: none;
+          background: transparent;
+          padding: 4px 0;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
           line-height: 1.45;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: -1px;
-          margin-bottom: 12px;
-          color: #111827;
+          margin-top: 4px;
+          margin-bottom: 10px;
+          color: #000000;
           box-sizing: border-box;
           -webkit-font-smoothing: antialiased;
         }
 
         .doc-footer {
-          margin-top: 24px;
-          padding-top: 8px;
+          margin-top: auto;
+          padding-top: 6px;
           border-top: 1px dashed #777777;
           display: flex;
           justify-content: space-between;
@@ -701,7 +738,7 @@ export default function LabRecordDocument({
                 </p>
               </div>
 
-              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+              <div className="doc-footer">
                 <span className="text-neutral-400 font-normal italic">Blank Flyleaf</span>
                 <span>Page 1 of {totalDocPages}</span>
               </div>
@@ -851,7 +888,7 @@ export default function LabRecordDocument({
               </div>
 
               {/* Footer */}
-              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+              <div className="doc-footer">
                 <span>{course_code} — Title & Cover Sheet</span>
                 <span>Page 2 of {totalDocPages}</span>
               </div>
@@ -868,7 +905,7 @@ export default function LabRecordDocument({
             <div className="academic-page page-even flex flex-col justify-between">
               <div className="flex-1" />
 
-              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+              <div className="doc-footer">
                 <span className="text-neutral-400 font-normal italic">Blank Page</span>
                 <span>Page 3 of {totalDocPages}</span>
               </div>
@@ -1012,7 +1049,7 @@ export default function LabRecordDocument({
               )}
 
               {/* Footer */}
-              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+              <div className="doc-footer">
                 <span>{course_code} — Bonafide Certificate</span>
                 <span>Page 4 of {totalDocPages}</span>
               </div>
@@ -1029,7 +1066,7 @@ export default function LabRecordDocument({
             <div className="academic-page page-even flex flex-col justify-between">
               <div className="flex-1" />
 
-              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+              <div className="doc-footer">
                 <span className="text-neutral-400 font-normal italic">Blank Page</span>
                 <span>Page 5 of {totalDocPages}</span>
               </div>
@@ -1175,7 +1212,7 @@ export default function LabRecordDocument({
               </table>
 
               {/* Footer */}
-              <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+              <div className="doc-footer">
                 <span>{course_code} — Index Sheet</span>
                 <span>Page 6 of {totalDocPages}</span>
               </div>
@@ -1261,15 +1298,9 @@ export default function LabRecordDocument({
 
                           {left.type === 'output' ? (
                             <>
-                              <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      SAMPLE INPUT & OUTPUT {left.titleSuffix || ''}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
+                              <div className="section-heading-row">
+                                <span>SAMPLE INPUT & OUTPUT {left.titleSuffix || ''}</span>
+                              </div>
                               <div className="output-container" style={{ minHeight: '340px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
                                 {renderFormattedOutput(left.output)}
                               </div>
@@ -1281,7 +1312,7 @@ export default function LabRecordDocument({
                         </div>
 
                         {/* Footer */}
-                        <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                        <div className="doc-footer">
                           <span>{course_code} — Experiment {expNo} ({left.type === 'output' ? 'Program Output' : 'Blank Page'})</span>
                           <span>Page {leftPageNum} of {totalDocPages}</span>
                         </div>
@@ -1322,43 +1353,25 @@ export default function LabRecordDocument({
                             </table>
 
                             {/* Main Experiment Title Bar - ONLY SHOWN ONCE HERE */}
-                            <table className="section-bar-table" style={{ marginTop: '10px', marginBottom: '4px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ fontSize: '12pt', padding: '10px 14px', fontWeight: 'bold', letterSpacing: '0.8px', lineHeight: '1.4' }}>
-                                    EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
+                            <div className="main-experiment-title">
+                              EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
+                            </div>
 
                             {/* AIM */}
-                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                                    AIM
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                            <div className="content-box" style={{ marginBottom: '14px', padding: '12px 16px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                            <div className="section-heading-row">
+                              <span>AIM</span>
+                            </div>
+                            <div className="content-box">
                               {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
                             </div>
 
                             {/* ALGORITHM / PROCEDURE */}
-                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                                    ALGORITHM / PROCEDURE
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '14px 16px' }}>
+                            <div className="section-heading-row">
+                              <span>ALGORITHM / PROCEDURE</span>
+                            </div>
+                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '10px 0' }}>
                               {procedureSteps.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                   {procedureSteps.map((step, sIdx) => (
                                     <div
                                       key={sIdx}
@@ -1366,7 +1379,7 @@ export default function LabRecordDocument({
                                         display: 'flex',
                                         alignItems: 'baseline',
                                         gap: '8px',
-                                        lineHeight: '1.75',
+                                        lineHeight: '1.7',
                                         fontSize: '10.5pt',
                                       }}
                                     >
@@ -1387,24 +1400,24 @@ export default function LabRecordDocument({
                                   ))}
                                 </div>
                               ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 1:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Start the program execution.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 2:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Read the required input parameters and initialize the appropriate data structures.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 3:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Implement the core algorithmic logic and computational operations for {exp.title}.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 4:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Compute, format and display the verified output results.</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.75', fontSize: '10.5pt' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                                     <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap', minWidth: '58px' }}>Step 5:</span>
                                     <span style={{ flex: 1, textAlign: 'justify', color: '#000000' }}>Stop the program execution and verify test case assertions.</span>
                                   </div>
@@ -1438,18 +1451,10 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>PROGRAM SOURCE CODE {right.titleSuffix || ''}</span>
-                                    <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
-                                      Language: {exp.language || 'Python'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
+                            <div className="section-heading-row">
+                              <span>PROGRAM SOURCE CODE {right.titleSuffix || ''}</span>
+                              <span className="section-heading-meta">Language: {exp.language || 'Python'}</span>
+                            </div>
                             <pre className="code-container" style={{ minHeight: '340px' }}>
                               {right.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                             </pre>
@@ -1488,15 +1493,9 @@ export default function LabRecordDocument({
                             {/* CENTRE: EVALUATION RUBRIC & MARKS BREAKDOWN */}
                             {showRubrics && (
                               <div className="prevent-break">
-                                <table className="section-bar-table" style={{ marginTop: '10px' }}>
-                                  <tbody>
-                                    <tr>
-                                      <td style={{ fontSize: '10pt', padding: '5px 10px' }}>
-                                        EVALUATION RUBRIC & MARKS MATRIX
-                                      </td>
-                                    </tr>
-                                  </tbody>
-                                </table>
+                                <div className="section-heading-row" style={{ marginTop: '10px' }}>
+                                  <span>EVALUATION RUBRIC & MARKS MATRIX</span>
+                                </div>
                                 <table className="grid-table" style={{ marginBottom: '10px' }}>
                                   <thead>
                                     <tr>
@@ -1531,15 +1530,9 @@ export default function LabRecordDocument({
                             {/* BOTTOM: RESULT & STAFF SIGNATURE */}
                             <div className="prevent-break" style={{ marginBottom: '12mm' }}>
                               {/* RESULT */}
-                              <table className="section-bar-table">
-                                <tbody>
-                                  <tr>
-                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      RESULT
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
+                              <div className="section-heading-row">
+                                <span>RESULT</span>
+                              </div>
                               <div className="content-box" style={{ marginBottom: '12px' }}>
                                 {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
                               </div>
@@ -1590,7 +1583,7 @@ export default function LabRecordDocument({
                         )}
 
                         {/* Footer */}
-                        <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
+                        <div className="doc-footer">
                           <span>{course_code} — Experiment {expNo} ({spreadType === 'aim_algo' ? 'Aim & Algorithm' : spreadType === 'code_output' ? 'Program Source Code' : spreadType === 'eval_result' ? 'Evaluation & Result' : 'Continuation'})</span>
                           <span>Page {rightPageNum} of {totalDocPages}</span>
                         </div>
