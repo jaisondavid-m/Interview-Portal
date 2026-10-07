@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Loader2,
   ChevronRight,
+  ChevronDown,
   Lock,
   Unlock,
   Terminal,
@@ -54,6 +55,13 @@ export default function LabWorkspace() {
   const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
+
+  // Execution Console State: 'testcases' | 'custom'
+  const [consoleTab, setConsoleTab] = useState('testcases');
+  const [customInput, setCustomInput] = useState('');
+  const [customResult, setCustomResult] = useState(null);
+  const [runningCustom, setRunningCustom] = useState(false);
+  const [expandedCases, setExpandedCases] = useState({});
 
   // Synchronized refs for background timer callbacks
   const codeRef = useRef(code);
@@ -287,8 +295,15 @@ export default function LabWorkspace() {
     try {
       setRunning(true);
       setError('');
+      setConsoleTab('testcases');
       const res = await api.post(`/labs/experiment/${expId}/run`, { code, language });
       setRunResult(res);
+      // Auto-expand all cases so student sees inputs, expected output, and actual output
+      const newExpanded = {};
+      (res?.results || []).forEach((_, idx) => {
+        newExpanded[idx] = true;
+      });
+      setExpandedCases(newExpanded);
       showToast(`Sample test executed: ${res.pass_count}/${res.total_test_cases} passed.`, 'success');
     } catch (err) {
       setError(err.response?.data?.error || 'Execution failed. Please check syntax.');
@@ -297,11 +312,39 @@ export default function LabWorkspace() {
     }
   };
 
-  // 2. Submit against hidden test cases (grading evaluation)
+  // 2. Run with Custom Standard Input (stdin)
+  const handleRunCustom = async () => {
+    try {
+      setRunningCustom(true);
+      setError('');
+      setConsoleTab('custom');
+      const res = await api.post(`/labs/experiment/${expId}/run`, {
+        code,
+        language,
+        use_custom: true,
+        custom_input: customInput,
+      });
+      setCustomResult(
+        res?.custom_result ||
+          res?.results?.[0] || {
+            actual: res?.custom_output || '(No output produced)',
+            execution_ms: 0,
+          }
+      );
+      showToast('Custom input executed!', 'success');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Custom execution failed. Please check syntax.');
+    } finally {
+      setRunningCustom(false);
+    }
+  };
+
+  // 3. Submit against hidden test cases (grading evaluation)
   const handleSubmit = async () => {
     try {
       setSubmitting(true);
       setError('');
+      setConsoleTab('testcases');
       // Autosave procedure before submit
       await api.post(`/labs/experiment/${expId}/procedure`, {
         procedure: JSON.stringify(procedureSteps, null, 2),
@@ -317,6 +360,11 @@ export default function LabWorkspace() {
         results: res.results,
       });
       if (res.submission) setSubmission(res.submission);
+      const newExpanded = {};
+      (res?.results || []).forEach((_, idx) => {
+        newExpanded[idx] = true;
+      });
+      setExpandedCases(newExpanded);
       showToast(`Hidden test cases evaluated: ${res.pass_count}/${res.total_test_cases} passed!`, 'success');
     } catch (err) {
       setError(err.response?.data?.error || 'Submission failed. Please try again.');
@@ -325,7 +373,7 @@ export default function LabWorkspace() {
     }
   };
 
-  // 3. Finish and send for Faculty Verification & Oral Viva
+  // 4. Finish and send for Faculty Verification & Oral Viva
   const handleFinishAndSend = async () => {
     try {
       setFinishing(true);
@@ -357,16 +405,26 @@ export default function LabWorkspace() {
   // Unified list of executed test cases in order (Sample cases followed by Hidden cases)
   const allExecutedCases = [
     ...(runResult?.results?.map((res, i) => ({
+      index: i,
       name: res.name || `Sample Case ${i + 1}`,
       passed: Boolean(res.passed),
       execution_ms: res.execution_ms,
+      input: res.input,
+      expected: res.expected,
+      actual: res.actual,
       isSample: true,
+      isHidden: false,
     })) || []),
     ...(testResult?.results?.map((res, i) => ({
+      index: (runResult?.results?.length || 0) + i,
       name: res.name || `Hidden Case ${i + 1}`,
       passed: Boolean(res.passed),
       execution_ms: res.execution_ms,
+      input: res.input,
+      expected: res.expected,
+      actual: res.actual,
       isSample: false,
+      isHidden: true,
     })) || []),
   ];
   const totalCasesCount = allExecutedCases.length;
@@ -813,34 +871,74 @@ export default function LabWorkspace() {
           </div>
 
           {/* Interactive Execution Console Drawer */}
-          <div className="h-56 bg-[var(--bg-card)] border-t border-[var(--border)] flex flex-col overflow-hidden">
-            {/* Drawer Header */}
-            <div className="px-4 py-2.5 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center">
+          <div className="h-64 sm:h-72 bg-[var(--bg-card)] border-t border-[var(--border)] flex flex-col overflow-hidden shadow-lg">
+            {/* Drawer Header & Tabs */}
+            <div className="px-3 py-2 border-b border-[var(--border)] bg-[var(--bg-raised)] flex items-center justify-between shrink-0 gap-3">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setConsoleTab('testcases')}
+                  className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    consoleTab === 'testcases'
+                      ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                  }`}
+                >
                   <Terminal className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-bold text-[var(--text-primary)]">Test Cases</span>
-                {totalCasesCount > 0 && (
-                  <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded border font-semibold ${
-                      totalPassedCount === totalCasesCount
-                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                    }`}
-                  >
-                    {totalPassedCount}/{totalCasesCount} passed
-                  </span>
-                )}
+                  <span>Test Cases</span>
+                  {totalCasesCount > 0 && (
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+                        totalPassedCount === totalCasesCount
+                          ? 'bg-emerald-500/20 text-emerald-600'
+                          : 'bg-rose-500/20 text-rose-600'
+                      }`}
+                    >
+                      {totalPassedCount}/{totalCasesCount} passed
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setConsoleTab('custom')}
+                  className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    consoleTab === 'custom'
+                      ? 'bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Custom Input</span>
+                  {customResult && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  )}
+                </button>
               </div>
 
-              <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
+              <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-2">
+                {consoleTab === 'testcases' && totalCasesCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allOpen = Object.values(expandedCases).every(Boolean);
+                      const updated = {};
+                      allExecutedCases.forEach((_, idx) => {
+                        updated[idx] = !allOpen;
+                      });
+                      setExpandedCases(updated);
+                    }}
+                    className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer"
+                  >
+                    {Object.values(expandedCases).every(Boolean) ? 'Collapse All' : 'Expand All'}
+                  </button>
+                )}
                 <span>Execution Output</span>
               </div>
             </div>
 
             {/* Console Drawer Body */}
-            <div className="p-3 overflow-y-auto flex-1 font-mono text-[11px] space-y-2 custom-scrollbar">
+            <div className="p-3 overflow-y-auto flex-1 font-mono text-[11px] space-y-2.5 custom-scrollbar">
               {error && (
                 <div className="flex items-center gap-2 p-2.5 rounded-[var(--radius-sm)] bg-[var(--red-bg)] border border-[var(--red)]/20 text-[var(--red)]">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -848,43 +946,186 @@ export default function LabWorkspace() {
                 </div>
               )}
 
-              {allExecutedCases.length === 0 && !error ? (
-                <div className="text-[var(--text-muted)] italic p-2 flex items-center gap-2">
-                  <Play className="w-3.5 h-3.5 text-[var(--accent)] opacity-60" />
-                  Run or submit your code to view test case execution results.
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {allExecutedCases.map((res, i) => (
-                    <div
-                      key={i}
-                      className={`px-3 py-2 rounded-[var(--radius-md)] border flex items-center justify-between transition-colors ${
-                        res.passed
-                          ? 'bg-emerald-500/10 border-emerald-500/20'
-                          : 'bg-rose-500/10 border-rose-500/20'
-                      }`}
-                    >
-                      <span
-                        className={`font-semibold flex items-center gap-2 ${
-                          res.passed ? 'text-emerald-600' : 'text-rose-600'
-                        }`}
-                      >
-                        {res.passed ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                        ) : (
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        )}
-                        <span>
-                          {res.name} - {res.passed ? 'PASSED' : 'FAILED'}
-                        </span>
-                      </span>
+              {consoleTab === 'testcases' ? (
+                allExecutedCases.length === 0 && !error ? (
+                  <div className="text-[var(--text-muted)] italic p-3 flex items-center gap-2">
+                    <Play className="w-3.5 h-3.5 text-[var(--accent)] opacity-60" />
+                    Click &quot;Run Code&quot; or &quot;Submit Code&quot; to view detailed inputs, expected outputs, and your actual program outputs.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {allExecutedCases.map((res, i) => {
+                      const isExpanded = expandedCases[i] !== false; // expanded by default
+                      const hasOutput = res.actual !== undefined && res.actual !== null;
 
-                      <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1 shrink-0 font-medium">
-                        <Clock className="w-3 h-3" />
-                        {res.execution_ms || 0} ms
-                      </span>
+                      return (
+                        <div
+                          key={i}
+                          className={`rounded-[var(--radius-md)] border overflow-hidden transition-all shadow-sm ${
+                            res.passed
+                              ? 'bg-emerald-500/5 border-emerald-500/30'
+                              : 'bg-rose-500/5 border-rose-500/30'
+                          }`}
+                        >
+                          {/* Test Case Header Bar */}
+                          <div
+                            onClick={() =>
+                              setExpandedCases((prev) => ({
+                                ...prev,
+                                [i]: !isExpanded,
+                              }))
+                            }
+                            className="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition select-none"
+                          >
+                            <div className="flex items-center gap-2">
+                              {res.passed ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              ) : (
+                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                              )}
+                              <span
+                                className={`font-bold text-xs ${
+                                  res.passed ? 'text-emerald-600' : 'text-rose-600'
+                                }`}
+                              >
+                                {res.name} — {res.passed ? 'PASSED' : 'FAILED'}
+                              </span>
+                              {res.isSample && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)]">
+                                  Sample
+                                </span>
+                              )}
+                              {res.isHidden && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)]">
+                                  Hidden
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1 font-mono">
+                                <Clock className="w-3 h-3" />
+                                {res.execution_ms || 0} ms
+                              </span>
+                              {isExpanded ? (
+                                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Expanded Input / Expected Output / Actual Output Details */}
+                          {isExpanded && (
+                            <div className="p-3 pt-1 border-t border-[var(--border)]/40 space-y-2 bg-[var(--bg-card)]/60">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
+                                {/* Input Box */}
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                                    Input (stdin):
+                                  </span>
+                                  <pre className="p-2 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] whitespace-pre-wrap max-h-28 overflow-y-auto leading-relaxed custom-scrollbar">
+                                    {res.input ? res.input : <span className="italic text-[var(--text-muted)]">(No input required)</span>}
+                                  </pre>
+                                </div>
+
+                                {/* Expected Output Box */}
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                                    Expected Output:
+                                  </span>
+                                  <pre className="p-2 rounded bg-[var(--bg-input)] border border-emerald-500/30 text-emerald-600 font-bold whitespace-pre-wrap max-h-28 overflow-y-auto leading-relaxed custom-scrollbar">
+                                    {res.expected ? res.expected : <span className="italic text-[var(--text-muted)]">(None specified)</span>}
+                                  </pre>
+                                </div>
+
+                                {/* Your Program Output Box */}
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                                    Your Program Output (stdout):
+                                  </span>
+                                  <pre
+                                    className={`p-2 rounded bg-[var(--bg-input)] border whitespace-pre-wrap max-h-28 overflow-y-auto leading-relaxed custom-scrollbar ${
+                                      res.passed
+                                        ? 'border-emerald-500/30 text-emerald-600 font-semibold'
+                                        : 'border-rose-500/30 text-rose-500 font-semibold'
+                                    }`}
+                                  >
+                                    {hasOutput && res.actual !== '' ? (
+                                      res.actual
+                                    ) : (
+                                      <span className="italic text-rose-400">(No output produced / empty stdout)</span>
+                                    )}
+                                  </pre>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                /* TAB 2: Custom Input & Output Runner */
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      Enter any custom input values below and click &quot;Run with Custom Input&quot; to test your code execution and see the exact program output.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleRunCustom}
+                      disabled={runningCustom || !isUnlocked || isSubmittedOrApproved}
+                      className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 self-start sm:self-auto shrink-0"
+                    >
+                      {runningCustom ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5 fill-white text-white" />
+                      )}
+                      Run with Custom Input
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Custom Stdin Box */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                        Custom Input (stdin)
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={customInput}
+                        onChange={(e) => setCustomInput(e.target.value)}
+                        placeholder="Enter custom input values (e.g. 25.0 3 \n 20.5 26.3 25.0)..."
+                        className="w-full font-mono text-[11px] bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] p-2.5 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] resize-none"
+                      />
                     </div>
-                  ))}
+
+                    {/* Custom Output Box */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                          Program Output (stdout / stderr)
+                        </label>
+                        {customResult?.execution_ms !== undefined && (
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                            {customResult.execution_ms} ms
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full h-[88px] font-mono text-[11px] bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] p-2.5 text-[var(--text-primary)] overflow-y-auto whitespace-pre-wrap custom-scrollbar">
+                        {customResult ? (
+                          customResult.actual || <span className="text-[var(--text-muted)] italic">(No output produced)</span>
+                        ) : (
+                          <span className="text-[var(--text-muted)] italic">
+                            Enter custom input and click &quot;Run with Custom Input&quot; to view program stdout output here.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

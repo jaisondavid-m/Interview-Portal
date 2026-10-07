@@ -657,8 +657,10 @@ func GetExperimentDetails(c *gin.Context) {
 }
 
 type CodeExecutionRequest struct {
-	Code     string `json:"code" binding:"required"`
-	Language string `json:"language" binding:"required"`
+	Code        string `json:"code" binding:"required"`
+	Language    string `json:"language" binding:"required"`
+	CustomInput string `json:"custom_input"`
+	UseCustom   bool   `json:"use_custom"`
 }
 
 type RawTestCase struct {
@@ -712,6 +714,25 @@ func RunExperimentCode(c *gin.Context) {
 	}
 	if requiredLang != "" && strings.ToLower(requiredLang) != "all" {
 		req.Language = strings.ToLower(requiredLang)
+	}
+
+	// If custom input was provided, run directly with custom stdin
+	if req.UseCustom {
+		res, execErr := ExecuteCustomInput(req.Code, req.Language, req.CustomInput)
+		if execErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Execution error: " + execErr.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success":          true,
+			"is_custom":        true,
+			"custom_input":     req.CustomInput,
+			"custom_output":    res.Actual,
+			"results":          []EvalResult{res},
+			"pass_count":       1,
+			"total_test_cases": 1,
+		})
+		return
 	}
 
 	// Parse Sample Test Cases from assigned question
@@ -876,6 +897,9 @@ func SubmitExperimentCode(c *gin.Context) {
 		Passed      bool   `json:"passed"`
 		ExecutionMs int    `json:"execution_ms"`
 		IsHidden    bool   `json:"is_hidden"`
+		Input       string `json:"input,omitempty"`
+		Expected    string `json:"expected,omitempty"`
+		Actual      string `json:"actual"`
 	}
 	var sanitizedResults []SafeResultItem
 
@@ -893,6 +917,9 @@ func SubmitExperimentCode(c *gin.Context) {
 			Passed:      r.Passed,
 			ExecutionMs: r.ExecutionMs,
 			IsHidden:    true,
+			Input:       r.Input,
+			Expected:    r.Expected,
+			Actual:      r.Actual,
 		})
 	}
 
@@ -1921,8 +1948,10 @@ func FacultyToggleExperimentUnlock(c *gin.Context) {
 
 type ScheduleWindowBulkReq struct {
 	CourseID            uint       `json:"course_id" binding:"required"`
-	ExperimentIDs       []uint     `json:"experiment_ids" binding:"required"`
+	ExperimentIDs       []uint     `json:"experiment_ids"`
+	LockExperimentIDs   []uint     `json:"lock_experiment_ids"`
 	Section             string     `json:"section"` // 'ALL' or specific section
+	Sections            []string   `json:"sections"`
 	IsUnlocked          bool       `json:"is_unlocked"`
 	RequiresPrerequisite bool      `json:"requires_prerequisite"`
 	StartsAt            *time.Time `json:"starts_at"`
@@ -1944,40 +1973,73 @@ func FacultyScheduleWindowBulk(c *gin.Context) {
 		return
 	}
 
-	sec := strings.TrimSpace(req.Section)
-	if sec == "" {
-		sec = "ALL"
+	var targetSections []string
+	if len(req.Sections) > 0 {
+		for _, s := range req.Sections {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				targetSections = append(targetSections, s)
+			}
+		}
+	}
+	if len(targetSections) == 0 {
+		sec := strings.TrimSpace(req.Section)
+		if sec == "" {
+			sec = "ALL"
+		}
+		targetSections = []string{sec}
 	}
 
 	now := time.Now()
-	for _, expID := range req.ExperimentIDs {
-		var unlock models.LabExperimentUnlock
-		err := database.DB.Where("course_id = ? AND experiment_id = ? AND section = ? AND (student_id IS NULL OR student_id = 0)", req.CourseID, expID, sec).First(&unlock).Error
+	for _, sec := range targetSections {
+		// 1. Process experiments to unlock / schedule
+		for _, expID := range req.ExperimentIDs {
+			var unlock models.LabExperimentUnlock
+			err := database.DB.Where("course_id = ? AND experiment_id = ? AND section = ? AND (student_id IS NULL OR student_id = 0)", req.CourseID, expID, sec).First(&unlock).Error
 
-		unlock.CourseID = req.CourseID
-		unlock.ExperimentID = expID
-		unlock.Section = sec
-		unlock.FacultyID = facultyID
-		unlock.IsUnlocked = req.IsUnlocked
-		unlock.RequiresPrerequisite = req.RequiresPrerequisite
-		unlock.StartsAt = req.StartsAt
-		unlock.EndsAt = req.EndsAt
-		unlock.MaxAttempts = req.MaxAttempts
-		unlock.AllowLateSubmission = req.AllowLateSubmission
-		unlock.Notes = strings.TrimSpace(req.Notes)
-		if req.IsUnlocked {
-			unlock.UnlockedAt = &now
+			unlock.CourseID = req.CourseID
+			unlock.ExperimentID = expID
+			unlock.Section = sec
+			unlock.FacultyID = facultyID
+			unlock.IsUnlocked = req.IsUnlocked
+			unlock.RequiresPrerequisite = req.RequiresPrerequisite
+			unlock.StartsAt = req.StartsAt
+			unlock.EndsAt = req.EndsAt
+			unlock.MaxAttempts = req.MaxAttempts
+			unlock.AllowLateSubmission = req.AllowLateSubmission
+			unlock.Notes = strings.TrimSpace(req.Notes)
+			if req.IsUnlocked {
+				unlock.UnlockedAt = &now
+			}
+
+			if err != nil {
+				database.DB.Create(&unlock)
+			} else {
+				database.DB.Save(&unlock)
+			}
 		}
 
-		if err != nil {
-			database.DB.Create(&unlock)
-		} else {
-			database.DB.Save(&unlock)
+		// 2. Process experiments to lock
+		for _, expID := range req.LockExperimentIDs {
+			var unlock models.LabExperimentUnlock
+			err := database.DB.Where("course_id = ? AND experiment_id = ? AND section = ? AND (student_id IS NULL OR student_id = 0)", req.CourseID, expID, sec).First(&unlock).Error
+
+			unlock.CourseID = req.CourseID
+			unlock.ExperimentID = expID
+			unlock.Section = sec
+			unlock.FacultyID = facultyID
+			unlock.IsUnlocked = false
+
+			if err != nil {
+				database.DB.Create(&unlock)
+			} else {
+				database.DB.Save(&unlock)
+			}
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Successfully configured attendance window for %d experiments on %s!", len(req.ExperimentIDs), sec),
+		"message": fmt.Sprintf("Successfully configured attendance window for %d experiments across %d section(s)!", len(req.ExperimentIDs), len(targetSections)),
 	})
 }
 
