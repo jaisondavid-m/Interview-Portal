@@ -811,21 +811,18 @@ export default function FacultyLabScheduling() {
             </div>
           </div>
 
-          {/* Progressive Milestone Release & Batch Scheduler Panel */}
+          {/* Experiment Release & Schedule Panel */}
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 sm:p-6 space-y-5 shadow-[var(--shadow-xs)]">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <GitBranch className="w-4 h-4 text-[var(--accent)]" />
                   <h2 className="text-[15px] font-bold text-[var(--text-primary)]">
-                    Progressive Milestone Release & Batch Scheduler
+                    Experiment Release & Schedule
                   </h2>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                    Sequential Progression
-                  </span>
                 </div>
                 <p className="text-[12px] text-[var(--text-secondary)]">
-                  Choose up to which experiment number to release and schedule attendance windows for your batch. Students unlock each experiment one by one as they finish prerequisites.
+                  Choose up to which experiment to unlock and set schedule window.
                 </p>
               </div>
 
