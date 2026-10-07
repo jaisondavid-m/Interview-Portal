@@ -215,15 +215,23 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
   const codeLines = (code || '').trim() ? (code || '').trim().split(/\r?\n/) : [];
   const outLines = (cleanOut || '').trim() ? (cleanOut || '').trim().split(/\r?\n/) : [];
 
-  const MAX_LINES_PER_PAGE = 26; // Guarantees 0 lines ever cut off or hidden by page bounds
+  // Smart dynamic line thresholds per A4 page:
+  // - First page (with top register table & section header): ~38-40 lines
+  // - Continuation pages (with top register table only): ~45-48 lines
+  const FIRST_PAGE_MAX_CODE_LINES = 40;
+  const CONT_PAGE_MAX_CODE_LINES = 46;
+
+  const FIRST_PAGE_MAX_OUT_LINES = 38;
+  const CONT_PAGE_MAX_OUT_LINES = 45;
 
   // 1. Chunk code lines (for Right pages)
   const codeChunks = [];
   let cIdx = 0;
   while (cIdx < codeLines.length) {
-    const chunk = codeLines.slice(cIdx, cIdx + MAX_LINES_PER_PAGE);
+    const limit = codeChunks.length === 0 ? FIRST_PAGE_MAX_CODE_LINES : CONT_PAGE_MAX_CODE_LINES;
+    const chunk = codeLines.slice(cIdx, cIdx + limit);
     codeChunks.push(chunk.join('\n'));
-    cIdx += MAX_LINES_PER_PAGE;
+    cIdx += limit;
   }
   if (codeChunks.length === 0) {
     codeChunks.push(`# Program for: ${title || 'Lab Experiment'}\ndef main():\n    print("Execution completed successfully")\n\nif __name__ == '__main__':\n    main()`);
@@ -233,9 +241,10 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
   const outChunks = [];
   let oIdx = 0;
   while (oIdx < outLines.length) {
-    const chunk = outLines.slice(oIdx, oIdx + MAX_LINES_PER_PAGE);
+    const limit = outChunks.length === 0 ? FIRST_PAGE_MAX_OUT_LINES : CONT_PAGE_MAX_OUT_LINES;
+    const chunk = outLines.slice(oIdx, oIdx + limit);
     outChunks.push(chunk.join('\n'));
-    oIdx += MAX_LINES_PER_PAGE;
+    oIdx += limit;
   }
   if (outChunks.length === 0) {
     outChunks.push('Sample Output:\n>> Execution completed successfully.');
@@ -618,7 +627,7 @@ export default function LabRecordDocument({
           width: 100%;
           border-collapse: collapse;
           border: none;
-          margin-bottom: 12px;
+          margin-bottom: 22px;
         }
 
         .top-row-table td {
@@ -1375,11 +1384,11 @@ export default function LabRecordDocument({
                           {left.type === 'output' ? (
                             <>
                               {left.chunkIndex === 0 && (
-                                <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '14px', marginBottom: '4px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                                <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '0', marginBottom: '6px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
                                   SAMPLE INPUT & OUTPUT
                                 </div>
                               )}
-                              <div className="output-container" style={{ minHeight: left.chunkIndex === 0 ? '340px' : '450px', marginTop: left.chunkIndex === 0 ? '2px' : '14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
+                              <div className="output-container" style={{ marginTop: '0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
                                 {renderFormattedOutput(left.output)}
                               </div>
                             </>
@@ -1531,7 +1540,7 @@ export default function LabRecordDocument({
                             </table>
 
                             {right.chunkIndex === 0 && (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', marginBottom: '4px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0', marginBottom: '6px' }}>
                                 <span style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
                                   PROGRAM SOURCE CODE
                                 </span>
@@ -1540,7 +1549,7 @@ export default function LabRecordDocument({
                                 </span>
                               </div>
                             )}
-                            <pre className="code-container" style={{ minHeight: right.chunkIndex === 0 ? '340px' : '450px', marginTop: right.chunkIndex === 0 ? '2px' : '14px' }}>
+                            <pre className="code-container" style={{ margin: 0, marginTop: '0' }}>
                               {right.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                             </pre>
                           </div>

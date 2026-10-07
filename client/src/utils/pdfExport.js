@@ -78,7 +78,7 @@ const ACADEMIC_DOCUMENT_CSS = `
     width: 100% !important;
     border-collapse: collapse !important;
     border: none !important;
-    margin-bottom: 12px !important;
+    margin-bottom: 22px !important;
   }
   #pdf-export-sandbox .top-row-table td {
     border: none !important;
