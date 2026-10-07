@@ -152,7 +152,7 @@ export default function LabWorkspace() {
   const isSubmittedOrApproved =
     submission?.status === 'SUBMITTED_FOR_VERIFICATION' || submission?.status === 'APPROVED';
 
-  // ── Auto-submit and Exit when window time ends ──────────────────────────────
+  // ── Auto-save code & progress and Exit when window time ends (No verification send) ──────
   const triggerAutoSubmitAndExit = async () => {
     if (autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
@@ -160,7 +160,7 @@ export default function LabWorkspace() {
     setAutoSubmitStep('Scheduled timing closed. Saving your algorithm steps...');
 
     try {
-      // 1. Auto-save procedure steps
+      // 1. Auto-save procedure steps to DB
       try {
         await api.post(`/labs/experiment/${expId}/procedure`, {
           procedure: JSON.stringify(procedureStepsRef.current || [], null, 2),
@@ -169,34 +169,26 @@ export default function LabWorkspace() {
         console.warn('Auto-save procedure step failed:', err);
       }
 
-      // 2. Auto-submit Code for hidden benchmark evaluation
-      setAutoSubmitStep('Evaluating code against hidden benchmark test cases...');
+      // 2. Auto-evaluate and save Code to DB (Maintains DRAFT/TEST_PASSED state without locking for verification)
+      setAutoSubmitStep('Evaluating and saving code progress to database...');
       try {
         await api.post(`/labs/experiment/${expId}/submit`, {
-          code: codeRef.current || '# Auto-submitted upon window expiry',
+          code: codeRef.current || '# Saved upon window expiry',
           language: languageRef.current || 'python',
         });
       } catch (err) {
         console.warn('Auto-submit code execution failed:', err);
       }
 
-      // 3. Finalize and submit into Faculty Viva Queue
-      setAutoSubmitStep('Finalizing experiment & queuing for faculty viva...');
-      try {
-        await api.post(`/labs/experiment/${expId}/finish`, {});
-      } catch (err) {
-        console.warn('Auto-finish failed:', err);
-      }
-
-      setAutoSubmitStep('Auto-submission completed successfully! Redirecting to Dashboard...');
+      setAutoSubmitStep('Progress saved safely! Redirecting to Dashboard...');
       setTimeout(() => {
         navigate(`/labs/${courseId}`);
-      }, 1800);
+      }, 1600);
     } catch (e) {
       setAutoSubmitStep('Timing expired. Redirecting to Dashboard...');
       setTimeout(() => {
         navigate(`/labs/${courseId}`);
-      }, 1500);
+      }, 1400);
     }
   };
 
@@ -443,7 +435,7 @@ export default function LabWorkspace() {
                   ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
                   : 'bg-[var(--bg-input)] text-[var(--text-primary)] border-[var(--border)]'
               }`}
-              title="Window Time Remaining (Auto-submits and exits upon completion)"
+              title="Window Time Remaining (Saves progress and exits upon completion)"
             >
               <Clock
                 className={`w-3.5 h-3.5 ${
@@ -913,7 +905,7 @@ export default function LabWorkspace() {
         submission={submission}
       />
 
-      {/* Auto-Submitting Fullscreen Overlay when Window Timing Expires */}
+      {/* Auto-Save Progress & Exit Overlay when Window Timing Expires */}
       {isAutoSubmitting && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
           <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-5 animate-scaleUp">
@@ -922,10 +914,10 @@ export default function LabWorkspace() {
             </div>
             <div className="space-y-1.5">
               <h3 className="text-lg font-bold text-[var(--text-primary)]">
-                Timing Expired — Auto-Submitting
+                Timing Expired — Progress Saved
               </h3>
               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                The scheduled experiment window has closed. Your current code and algorithm steps are being automatically evaluated, locked, and submitted.
+                The scheduled experiment window has closed. All your written code and algorithm steps have been saved safely to your draft. When your faculty incharge unlocks or extends the window, you can resume right where you left off.
               </p>
             </div>
             <div className="p-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] flex items-center justify-center gap-3">
