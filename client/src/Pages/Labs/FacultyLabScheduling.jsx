@@ -88,6 +88,11 @@ export default function FacultyLabScheduling() {
   const [bulkReleaseEndsAt, setBulkReleaseEndsAt] = useState('');
   const [bulkReleaseApplying, setBulkReleaseApplying] = useState(false);
 
+  // Searchable Select State for Target Batch / Scope
+  const [batchSearchQuery, setBatchSearchQuery] = useState('');
+  const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
+  const batchDropdownRef = useRef(null);
+
   // Searchable Select State for Release Up To Exp #
   const [expSearchQuery, setExpSearchQuery] = useState('');
   const [isExpDropdownOpen, setIsExpDropdownOpen] = useState(false);
@@ -209,10 +214,47 @@ export default function FacultyLabScheduling() {
       if (expDropdownRef.current && !expDropdownRef.current.contains(e.target)) {
         setIsExpDropdownOpen(false);
       }
+      if (batchDropdownRef.current && !batchDropdownRef.current.contains(e.target)) {
+        setIsBatchDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Batch / Scope Options for Searchable Select
+  const batchOptions = [
+    {
+      id: 'selected',
+      label: `Selected Section (${selectedUnlockSection})`,
+      subtitle: 'Currently filtered section view',
+      value: 'selected',
+    },
+    {
+      id: 'all',
+      label: 'All Assigned Sections',
+      subtitle:
+        unlockData.sections?.length > 0
+          ? `${unlockData.sections.length} sections (${unlockData.sections.join(', ')})`
+          : 'All enrolled batches',
+      value: 'all',
+    },
+    ...(unlockData.sections || []).map((sec) => ({
+      id: `sec-${sec}`,
+      label: `Section ${sec}`,
+      subtitle: `Apply specifically to Section ${sec}`,
+      value: sec,
+    })),
+  ];
+
+  const filteredBatchOptions = batchOptions.filter((b) => {
+    if (!batchSearchQuery.trim()) return true;
+    const q = batchSearchQuery.toLowerCase();
+    return b.label.toLowerCase().includes(q) || (b.subtitle && b.subtitle.toLowerCase().includes(q));
+  });
+
+  const selectedBatchOption =
+    batchOptions.find((b) => b.value === bulkReleaseScope) || batchOptions[0];
 
   const selectedReleaseExp = activeCourseExperiments.find(
     (e) => (e.experiment_no || 0) === Number(bulkReleaseUpToExpNo)
@@ -335,7 +377,9 @@ export default function FacultyLabScheduling() {
         ? unlockData.sections.length > 0
           ? unlockData.sections
           : ['ALL']
-        : [selectedUnlockSection || 'ALL'];
+        : bulkReleaseScope === 'selected'
+        ? [selectedUnlockSection || 'ALL']
+        : [bulkReleaseScope];
 
     try {
       setBulkReleaseApplying(true);
@@ -354,7 +398,9 @@ export default function FacultyLabScheduling() {
       const scopeLabel =
         bulkReleaseScope === 'all'
           ? 'All Assigned Sections'
-          : `Section ${selectedUnlockSection}`;
+          : bulkReleaseScope === 'selected'
+          ? `Section ${selectedUnlockSection}`
+          : `Section ${bulkReleaseScope}`;
 
       showToast(
         `Configured schedule up to Exp #${targetUpTo} for ${scopeLabel}! (Students progress sequentially via prerequisites)`
@@ -845,32 +891,109 @@ export default function FacultyLabScheduling() {
 
             {/* Configuration Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
-              {/* Target Scope */}
-              <div className="space-y-1">
-                <label className={labelCls}>Target Batch / Scope</label>
-                <select
-                  value={bulkReleaseScope}
-                  onChange={(e) => setBulkReleaseScope(e.target.value)}
-                  className={inputCls}
+              {/* Target Batch / Scope (Searchable Select) */}
+              <div className="space-y-1 relative" ref={batchDropdownRef}>
+                <div className="flex items-center justify-between h-5">
+                  <label className={labelCls}>Target Batch / Scope</label>
+                </div>
+
+                {/* Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsBatchDropdownOpen((prev) => !prev)}
+                  className={`${inputCls} h-[38px] flex items-center justify-between text-left cursor-pointer hover:border-[var(--border-strong)]`}
                 >
-                  <option value="selected">
-                    Selected Section ({selectedUnlockSection})
-                  </option>
-                  <option value="all">
-                    All Assigned Sections ({unlockData.sections?.length > 0 ? unlockData.sections.join(', ') : 'ALL'})
-                  </option>
-                </select>
+                  <div className="truncate flex-1 pr-2">
+                    <span className="font-semibold text-[var(--text-primary)] text-[12px]">
+                      {selectedBatchOption.label}
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 transition-transform ${
+                      isBatchDropdownOpen ? 'rotate-180 text-[var(--accent)]' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Searchable Dropdown Popup */}
+                {isBatchDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 min-w-[260px]">
+                    {/* Search Input Box */}
+                    <div className="p-2 border-b border-[var(--border)] bg-[var(--bg-raised)] relative">
+                      <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={batchSearchQuery}
+                        onChange={(e) => setBatchSearchQuery(e.target.value)}
+                        placeholder="Search batch or section..."
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded px-2.5 py-1.5 pl-8 pr-7 text-[11px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+                      />
+                      {batchSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setBatchSearchQuery('')}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filtered Batches List */}
+                    <div className="max-h-56 overflow-y-auto divide-y divide-[var(--border)]/50 p-1">
+                      {filteredBatchOptions.length === 0 ? (
+                        <div className="py-4 text-center text-xs text-[var(--text-muted)] italic">
+                          No matching batches found
+                        </div>
+                      ) : (
+                        filteredBatchOptions.map((opt) => {
+                          const isSelected = bulkReleaseScope === opt.value;
+                          return (
+                            <div
+                              key={opt.id}
+                              onClick={() => {
+                                setBulkReleaseScope(opt.value);
+                                setIsBatchDropdownOpen(false);
+                                setBatchSearchQuery('');
+                              }}
+                              className={`p-2 rounded-[var(--radius-sm)] cursor-pointer transition-colors flex items-center justify-between gap-2 text-xs ${
+                                isSelected
+                                  ? 'bg-[var(--accent-dim)] text-[var(--accent)] font-bold'
+                                  : 'hover:bg-[var(--bg-raised)] text-[var(--text-primary)]'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold truncate text-[12px]">{opt.label}</div>
+                                {opt.subtitle && (
+                                  <div className="text-[10px] text-[var(--text-muted)] truncate font-mono">
+                                    {opt.subtitle}
+                                  </div>
+                                )}
+                              </div>
+                              {isSelected && (
+                                <Check className="w-3.5 h-3.5 text-[var(--accent)] shrink-0 stroke-[3]" />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Release Up To Exp No (Searchable Select) */}
               <div className="space-y-1 relative" ref={expDropdownRef}>
-                <label className={labelCls}>Release Up To Exp #</label>
+                <div className="flex items-center justify-between h-5">
+                  <label className={labelCls}>Release Up To Exp #</label>
+                </div>
 
                 {/* Trigger Button */}
                 <button
                   type="button"
                   onClick={() => setIsExpDropdownOpen((prev) => !prev)}
-                  className={`${inputCls} flex items-center justify-between text-left cursor-pointer hover:border-[var(--border-strong)]`}
+                  className={`${inputCls} h-[38px] flex items-center justify-between text-left cursor-pointer hover:border-[var(--border-strong)]`}
                 >
                   <div className="truncate flex-1 pr-2">
                     {selectedReleaseExp ? (
@@ -952,9 +1075,9 @@ export default function FacultyLabScheduling() {
                 )}
               </div>
 
-              {/* Starts At */}
+              {/* Window Starts At */}
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between h-5">
                   <label className={labelCls}>Window Starts At</label>
                   <button
                     type="button"
@@ -968,13 +1091,13 @@ export default function FacultyLabScheduling() {
                   type="datetime-local"
                   value={bulkReleaseStartsAt}
                   onChange={(e) => setBulkReleaseStartsAt(e.target.value)}
-                  className={inputCls}
+                  className={`${inputCls} h-[38px]`}
                 />
               </div>
 
-              {/* Ends At (Deadline) */}
+              {/* Window Ends At (Deadline) */}
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between h-5">
                   <label className={labelCls}>Window Ends At (Deadline)</label>
                   <div className="flex items-center gap-1">
                     <button
@@ -999,7 +1122,7 @@ export default function FacultyLabScheduling() {
                   type="datetime-local"
                   value={bulkReleaseEndsAt}
                   onChange={(e) => setBulkReleaseEndsAt(e.target.value)}
-                  className={inputCls}
+                  className={`${inputCls} h-[38px]`}
                 />
               </div>
             </div>
