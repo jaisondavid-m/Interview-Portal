@@ -17,7 +17,8 @@ const LANGUAGE_CONFIGS = [
 ];
 
 export default function CodeEditor({
-  code = '',
+  code,
+  value,
   onChange,
   language = 'javascript',
   onLanguageChange,
@@ -25,12 +26,14 @@ export default function CodeEditor({
   isLanguageLocked = false,
   allowCopyPaste = true,
   onCopyPasteBlocked,
+  height,
 }) {
   const [copied, setCopied] = React.useState(false);
   const editorWrapperRef = useRef(null);
 
-  // Student interview editor starts empty with no starter template
-  const displayCode = typeof code === 'string' ? code : '';
+  // Support both `code` and `value` prop formats for universal compatibility
+  const rawCode = code !== undefined ? code : (value !== undefined ? value : '');
+  const displayCode = typeof rawCode === 'string' ? rawCode : '';
 
   const selectedExtension = useMemo(() => {
     const langObj = LANGUAGE_CONFIGS.find((l) => l.id === language);

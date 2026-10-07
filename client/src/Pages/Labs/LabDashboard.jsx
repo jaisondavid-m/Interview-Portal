@@ -25,6 +25,7 @@ import {
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import LabMarkVerticalsModal from '../../Components/LabMarkVerticalsModal';
+import Pagination from '../../Components/Pagination';
 
 export default function LabDashboard() {
   const navigate = useNavigate();
@@ -37,18 +38,30 @@ export default function LabDashboard() {
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [courseError, setCourseError] = useState('');
 
+  // Course Pagination State
+  const [coursePage, setCoursePage] = useState(1);
+  const [courseLimit, setCourseLimit] = useState(12);
+  const [courseTotalPages, setCourseTotalPages] = useState(1);
+  const [courseTotalCount, setCourseTotalCount] = useState(0);
+
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [experiments, setExperiments] = useState([]);
   const [loadingExperiments, setLoadingExperiments] = useState(false);
   const [expError, setExpError] = useState('');
 
+  // Experiments Pagination State
+  const [expPage, setExpPage] = useState(1);
+  const [expLimit, setExpLimit] = useState(12);
+  const [expTotalPages, setExpTotalPages] = useState(1);
+  const [expTotalCount, setExpTotalCount] = useState(0);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [verticalsModalData, setVerticalsModalData] = useState(null);
 
-  // 1. Load enrolled courses on mount
+  // 1. Load enrolled courses on mount and filter changes
   useEffect(() => {
     fetchCourses();
-  }, []);
+  }, [coursePage, courseLimit, searchQuery, selectedSectionFilter]);
 
   // 2. Sync selected course from URL parameter if present
   useEffect(() => {
@@ -69,15 +82,21 @@ export default function LabDashboard() {
     if (selectedCourse?.id) {
       fetchExperiments(selectedCourse.id);
     }
-  }, [selectedCourse]);
+  }, [selectedCourse?.id, expPage, expLimit, searchQuery]);
 
   const fetchCourses = async () => {
     try {
       setLoadingCourses(true);
       setCourseError('');
-      const res = await api.get('/labs/courses');
+      const res = await api.get(
+        `/labs/courses?page=${coursePage}&limit=${courseLimit}&search=${encodeURIComponent(
+          searchQuery.trim()
+        )}`
+      );
       const courseList = res?.courses || [];
       setCourses(courseList);
+      setCourseTotalCount(res?.total ?? courseList.length);
+      setCourseTotalPages(res?.total_pages ?? 1);
       setAvailableSections(res?.sections || []);
 
       // Check if URL already has a courseId param
@@ -99,8 +118,15 @@ export default function LabDashboard() {
     try {
       setLoadingExperiments(true);
       setExpError('');
-      const res = await api.get(`/labs/courses/${courseId}/experiments`);
-      setExperiments(res?.experiments || []);
+      const res = await api.get(
+        `/labs/courses/${courseId}/experiments?page=${expPage}&limit=${expLimit}&search=${encodeURIComponent(
+          searchQuery.trim()
+        )}`
+      );
+      const expList = res?.experiments || [];
+      setExperiments(expList);
+      setExpTotalCount(res?.total ?? expList.length);
+      setExpTotalPages(res?.total_pages ?? 1);
     } catch {
       setExpError('Failed to load experiments for this course.');
     } finally {
@@ -264,7 +290,8 @@ export default function LabDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {filteredExperiments.map((exp) => {
                   const sub = exp.submission;
-                  const isUnlocked = Boolean(exp.is_unlocked);
+                  const isInactive = exp.is_active === false || exp.unlock_status?.status === 'INACTIVE';
+                  const isUnlocked = Boolean(exp.is_unlocked) && !isInactive;
                   const isApproved = sub?.status === 'APPROVED';
                   const isSubmitted = sub?.status === 'SUBMITTED_FOR_VERIFICATION';
                   const isFinished = isApproved || isSubmitted;
@@ -274,7 +301,9 @@ export default function LabDashboard() {
                   return (
                     <div
                       key={exp.id}
-                      className="data-card p-5 flex flex-col justify-between transition-all hover:border-[var(--border-accent)]"
+                      className={`data-card p-5 flex flex-col justify-between transition-all hover:border-[var(--border-accent)] ${
+                        isInactive ? 'opacity-70 bg-[var(--bg-card)]/60 border-dashed' : ''
+                      }`}
                     >
                       <div className="space-y-3.5">
                         {/* Header Row: Exp Number + Language + Status Badge */}
@@ -292,7 +321,12 @@ export default function LabDashboard() {
 
                           {/* Permission & Submission Status Badge */}
                           <div className="flex items-center gap-1.5 shrink-0">
-                            {isApproved ? (
+                            {isInactive ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
+                                <Lock className="w-3.5 h-3.5 text-zinc-400" />
+                                Inactive
+                              </span>
+                            ) : isApproved ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 Approved ({sub.marks || sub.total_marks || 0}/{exp.max_marks || 100})
@@ -341,7 +375,24 @@ export default function LabDashboard() {
 
                       {/* Card Footer Actions */}
                       <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
-                        {isFinished ? (
+                        {isInactive ? (
+                          <div className="w-full flex items-center justify-between gap-2">
+                            <div className="inline-flex items-center gap-2 text-[11px] font-medium text-[var(--text-muted)]">
+                              <Lock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                              <span>This experiment is currently inactive / disabled.</span>
+                            </div>
+                            {sub && (
+                              <button
+                                onClick={() =>
+                                  navigate(`/labs/${selectedCourse.id}/experiment/${exp.id}`)
+                                }
+                                className="text-xs font-semibold text-[var(--accent)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                View Record &rarr;
+                              </button>
+                            )}
+                          </div>
+                        ) : isFinished ? (
                           /* Experiment already finished -> DO NOT show Launch Assessment. Show View Record & View Mark Verticals */
                           <div className="w-full flex items-center gap-2 flex-wrap sm:flex-nowrap">
                             <button
@@ -401,6 +452,24 @@ export default function LabDashboard() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Experiments Pagination */}
+            {!loadingExperiments && expTotalCount > 0 && (
+              <div className="pt-2">
+                <Pagination
+                  page={expPage}
+                  totalPages={expTotalPages}
+                  totalItems={expTotalCount}
+                  limit={expLimit}
+                  onPageChange={(newPage) => setExpPage(newPage)}
+                  onLimitChange={(newLimit) => {
+                    setExpLimit(newLimit);
+                    setExpPage(1);
+                  }}
+                  pageSizeOptions={[6, 12, 24, 48]}
+                />
               </div>
             )}
           </div>
@@ -636,6 +705,24 @@ export default function LabDashboard() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Courses Pagination */}
+          {!loadingCourses && courseTotalCount > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={coursePage}
+                totalPages={courseTotalPages}
+                totalItems={courseTotalCount}
+                limit={courseLimit}
+                onPageChange={(newPage) => setCoursePage(newPage)}
+                onLimitChange={(newLimit) => {
+                  setCourseLimit(newLimit);
+                  setCoursePage(1);
+                }}
+                pageSizeOptions={[6, 12, 24, 48]}
+              />
             </div>
           )}
         </div>

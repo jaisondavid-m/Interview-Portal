@@ -43,6 +43,8 @@ import LabInchargeDashboard from '../Pages/Labs/LabInchargeDashboard';
 import LabEvaluationPage from '../Pages/Labs/LabEvaluationPage';
 import FacultyLabEvaluation from '../Pages/Labs/FacultyLabEvaluation';
 import FacultyLabScheduling from '../Pages/Labs/FacultyLabScheduling';
+import FacultyLabCourses from '../Pages/Labs/FacultyLabCourses';
+import FacultyLabCourseExperiments from '../Pages/Labs/FacultyLabCourseExperiments';
 import AdminLabPdfViewer from '../Pages/Admin/AdminLabPdfViewer';
 import AdminLabConfig from '../Pages/Admin/AdminLabConfig';
 import AdminLabCourses from '../Pages/Admin/AdminLabCourses';
@@ -50,6 +52,7 @@ import AdminLabBatches from '../Pages/Admin/AdminLabBatches';
 import AdminLabFacultyMapping from '../Pages/Admin/AdminLabFacultyMapping';
 import AdminLabCourseExperiments from '../Pages/Admin/AdminLabCourseExperiments';
 import AdminLabDashboard from '../Pages/Admin/AdminLabDashboard';
+import AdminDataManagement from '../Pages/Admin/AdminDataManagement';
 
 // Route Guards & Error Boundary
 import ProtectedRoute from '../Components/ProtectedRoute';
@@ -151,6 +154,14 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="admin_users">
                 <AdminUsers />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'admin/data-management',
+            element: (
+              <DynamicPageRoute pageKey={['admin_data_management', 'admin_users', 'admin_lab_config']}>
+                <AdminDataManagement />
               </DynamicPageRoute>
             ),
           },
@@ -424,6 +435,34 @@ export const router = createBrowserRouter([
             element: (
               <DynamicPageRoute pageKey="faculty_lab_scheduling">
                 <FacultyLabScheduling />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'faculty/labs/curriculum',
+            element: (
+              <DynamicPageRoute pageKey={['faculty_lab_curriculum', 'lab_incharge_verification', 'faculty_dashboard']}>
+                <FacultyLabCourses />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'faculty/labs/curriculum/:courseId/experiments',
+            element: (
+              <DynamicPageRoute pageKey={['faculty_lab_curriculum', 'lab_incharge_verification', 'faculty_dashboard']}>
+                <FacultyLabCourseExperiments />
+              </DynamicPageRoute>
+            ),
+          },
+          {
+            path: 'faculty/labs/courses',
+            element: <Navigate to="/faculty/labs/curriculum" replace />,
+          },
+          {
+            path: 'faculty/labs/courses/:courseId/experiments',
+            element: (
+              <DynamicPageRoute pageKey={['faculty_lab_curriculum', 'lab_incharge_verification', 'faculty_dashboard']}>
+                <FacultyLabCourseExperiments />
               </DynamicPageRoute>
             ),
           },

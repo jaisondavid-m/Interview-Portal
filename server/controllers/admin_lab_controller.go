@@ -143,7 +143,7 @@ func AdminPreviewStudentRecordPDF(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
-// AdminGetLabFacultyList queries users table for users where role = 'faculty' with optional search
+// AdminGetLabFacultyList queries users table for users where role = 'faculty' with optional search and pagination
 func AdminGetLabFacultyList(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))
 	query := database.DB.Model(&models.User{}).Where("LOWER(role) = ?", "faculty")
@@ -153,14 +153,43 @@ func AdminGetLabFacultyList(c *gin.Context) {
 		query = query.Where("LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(department) LIKE ? OR LOWER(roll_no) LIKE ?", s, s, s, s)
 	}
 
+	var totalCount int64
+	query.Count(&totalCount)
+
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "0"))
+
+	page := 1
+	limit := 0
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
+		limit = l
+	}
+
 	var facultyList []models.User
-	if err := query.Order("name asc").Find(&facultyList).Error; err != nil {
+	dbQuery := query.Order("name asc")
+	if limit > 0 {
+		offset := (page - 1) * limit
+		dbQuery = dbQuery.Limit(limit).Offset(offset)
+	}
+	if err := dbQuery.Find(&facultyList).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch faculty users"})
 		return
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"faculty": facultyList,
+		"faculty":     facultyList,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -211,15 +240,26 @@ func GetBatchStudentStats(c *gin.Context) {
 		Count   int64  `json:"count"`
 	}
 
+	dept := strings.TrimSpace(c.Query("department"))
+
+	query := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
+	if dept != "" && !strings.EqualFold(dept, "all") {
+		query = query.Where("LOWER(department) = ?", strings.ToLower(dept))
+	}
+
 	var results []SectionCount
-	database.DB.Model(&models.User{}).
-		Select("COALESCE(NULLIF(section, ''), 'Unassigned') as section, count(*) as count").
-		Where("LOWER(role) IN ?", []string{"student", "user"}).
+	query.Select("COALESCE(NULLIF(section, ''), 'Unassigned') as section, count(*) as count").
 		Group("COALESCE(NULLIF(section, ''), 'Unassigned')").
 		Scan(&results)
 
+	var totalStudents int64
+	for _, r := range results {
+		totalStudents += r.Count
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"stats": results,
+		"stats":          results,
+		"total_students": totalStudents,
 	})
 }
 
@@ -371,15 +411,49 @@ func AdminGetCourseExperiments(c *gin.Context) {
 		return
 	}
 
+	query := database.DB.Where("course_id = ?", courseID)
+	search := strings.TrimSpace(c.Query("search"))
+	if search != "" {
+		s := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(title) LIKE ? OR LOWER(aim) LIKE ? OR CAST(experiment_no AS CHAR) LIKE ?", s, s, s)
+	}
+
+	var totalCount int64
+	query.Model(&models.LabExperiment{}).Count(&totalCount)
+
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "12"))
+
+	page := 1
+	limit := 12
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+		limit = l
+	}
+
 	var experiments []models.LabExperiment
-	if err := database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch experiments"})
-		return
+	dbQuery := query.Order("experiment_no asc")
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		dbQuery.Find(&experiments)
+	} else {
+		offset := (page - 1) * limit
+		dbQuery.Limit(limit).Offset(offset).Find(&experiments)
+	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"course":      course,
 		"experiments": experiments,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -393,6 +467,7 @@ type ExperimentInput struct {
 	SampleTestCases string `json:"sample_test_cases"`
 	HiddenTestCases string `json:"hidden_test_cases"`
 	MaxMarks        int    `json:"max_marks"`
+	IsActive        *bool  `json:"is_active"`
 }
 
 // AdminCreateExperiment adds a new experiment to a lab course
@@ -416,7 +491,12 @@ func AdminCreateExperiment(c *gin.Context) {
 	}
 	maxMarks := input.MaxMarks
 	if maxMarks <= 0 {
-		maxMarks = 10
+		maxMarks = 100
+	}
+
+	isActive := true
+	if input.IsActive != nil {
+		isActive = *input.IsActive
 	}
 
 	exp := models.LabExperiment{
@@ -430,6 +510,7 @@ func AdminCreateExperiment(c *gin.Context) {
 		SampleTestCases: input.SampleTestCases,
 		HiddenTestCases: input.HiddenTestCases,
 		MaxMarks:        maxMarks,
+		IsActive:        isActive,
 	}
 
 	if err := database.DB.Create(&exp).Error; err != nil {
@@ -489,6 +570,9 @@ func AdminUpdateExperiment(c *gin.Context) {
 	if input.MaxMarks > 0 {
 		updates["max_marks"] = input.MaxMarks
 	}
+	if input.IsActive != nil {
+		updates["is_active"] = *input.IsActive
+	}
 
 	if err := database.DB.Model(&exp).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update experiment: " + err.Error()})
@@ -499,6 +583,42 @@ func AdminUpdateExperiment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Experiment updated successfully",
 		"experiment": exp,
+	})
+}
+
+// AdminToggleExperimentStatus toggles or sets active state of an experiment
+func AdminToggleExperimentStatus(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var exp models.LabExperiment
+	if err := database.DB.First(&exp, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+		return
+	}
+
+	var req struct {
+		IsActive *bool `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err == nil && req.IsActive != nil {
+		exp.IsActive = *req.IsActive
+	} else {
+		exp.IsActive = !exp.IsActive
+	}
+
+	if err := database.DB.Model(&exp).Update("is_active", exp.IsActive).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update experiment status: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Experiment status updated successfully",
+		"experiment": exp,
+		"is_active":  exp.IsActive,
 	})
 }
 
@@ -802,8 +922,36 @@ func AdminGetExperimentQuestionVariants(c *gin.Context) {
 		return
 	}
 
+	query := database.DB.Where("experiment_id = ?", expID)
+	search := strings.TrimSpace(c.Query("search"))
+	if search != "" {
+		s := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(title) LIKE ? OR LOWER(aim) LIKE ? OR LOWER(question_code) LIKE ?", s, s, s)
+	}
+
+	var totalCount int64
+	query.Model(&models.LabExperimentQuestion{}).Count(&totalCount)
+
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "10"))
+
+	page := 1
+	limit := 10
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+		limit = l
+	}
+
 	var questions []models.LabExperimentQuestion
-	database.DB.Where("experiment_id = ?", expID).Order("id asc").Find(&questions)
+	dbQuery := query.Order("id asc")
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		dbQuery.Find(&questions)
+	} else {
+		offset := (page - 1) * limit
+		dbQuery.Limit(limit).Offset(offset).Find(&questions)
+	}
 
 	// Fetch Viva questions for each variant
 	type VariantWithVivas struct {
@@ -821,8 +969,17 @@ func AdminGetExperimentQuestionVariants(c *gin.Context) {
 		})
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"variants": results,
+		"variants":    results,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -1571,23 +1728,55 @@ func GetAdminLabDashboardAnalytics(c *gin.Context) {
 		})
 	}
 
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "15"))
+	page := 1
+	limit := 15
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
+		limit = l
+	}
+
+	totalStudentsCount := len(studentMatrix)
+	totalPages := 1
+	paginatedStudentMatrix := studentMatrix
+
+	if limitStr != "all" && limitStr != "0" && limitStr != "-1" && limit > 0 && totalStudentsCount > 0 {
+		totalPages = int((int64(totalStudentsCount) + int64(limit) - 1) / int64(limit))
+		start := (page - 1) * limit
+		if start > totalStudentsCount {
+			start = totalStudentsCount
+		}
+		end := start + limit
+		if end > totalStudentsCount {
+			end = totalStudentsCount
+		}
+		paginatedStudentMatrix = studentMatrix[start:end]
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"summary": gin.H{
-			"total_courses":        len(courses),
-			"mapped_faculty_count": len(facultyList),
+			"total_courses":         len(courses),
+			"mapped_faculty_count":  len(facultyList),
 			"active_sections_count": len(sectionList),
-			"total_students":       len(students),
-			"total_submissions":    len(submissions),
-			"approved_submissions": approvedSubmissionsCount,
-			"pending_reviews":      pendingReviewsCount,
-			"avg_completion_pct":   avgCompPct,
+			"total_students":        len(students),
+			"total_submissions":     len(submissions),
+			"approved_submissions":  approvedSubmissionsCount,
+			"pending_reviews":       pendingReviewsCount,
+			"avg_completion_pct":    avgCompPct,
 		},
 		"courses":          courseOverviews,
 		"faculty_mappings": mappings,
 		"faculty":          facultyList,
 		"sections":         sectionList,
 		"experiments":      experiments,
-		"student_matrix":   studentMatrix,
+		"student_matrix":   paginatedStudentMatrix,
+		"total":            totalStudentsCount,
+		"page":             page,
+		"limit":            limit,
+		"total_pages":      totalPages,
 	})
 }
 

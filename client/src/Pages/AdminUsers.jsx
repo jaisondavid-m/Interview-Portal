@@ -763,7 +763,7 @@ export default function AdminUsers() {
             <span className="badge-kicker">User Management</span>
           </div>
           <h1 className="text-[22px] sm:text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
-            User Management Portal
+            User Management
           </h1>
           <p className="text-[12px] sm:text-[13px] text-[var(--text-secondary)] mt-0.5">
             Create, provision, batch import, and export student and administrator accounts for campus mock interviews.

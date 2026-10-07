@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
   Video, History, MessageSquareCheck, Trophy, Terminal, FileCode2, Database,
   Building2, CalendarCheck, ClipboardCheck, FlaskConical, Headphones, Zap, Settings,
-  BarChart3, Clock
+  BarChart3, Clock, BookOpen
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,9 +26,9 @@ const ICON_MAP = {
   Headphones,
   Zap,
   Settings,
-  Settings: SlidersHorizontal,
   BarChart3,
   Clock,
+  BookOpen,
 };
 
 export default function Sidebar() {
@@ -64,6 +64,7 @@ export default function Sidebar() {
     : isFaculty
     ? [
         { name: 'Faculty Dashboard', path: '/faculty/dashboard', icon: LayoutDashboard },
+        { name: 'Lab Curriculum', path: '/faculty/labs/curriculum', icon: BookOpen },
         { name: 'Lab Dashboard', path: '/faculty/labs', icon: BarChart3 },
         { name: 'Lab Evaluation', path: '/faculty/labs/evaluation', icon: MessageSquareCheck },
         { name: 'Lab Scheduling', path: '/faculty/labs/scheduling', icon: Clock },
@@ -77,6 +78,7 @@ export default function Sidebar() {
         { name: 'Lab Configuration', path: '/admin/labs/config', icon: FlaskConical },
         { name: 'Student Lab PDF Audit', path: '/admin/labs/pdf-preview', icon: FileCode2 },
         { name: 'User Management', path: '/admin/users', icon: Users },
+        { name: 'Data Management', path: '/admin/data-management', icon: Database },
         { name: 'Role Management', path: '/admin/roles', icon: ShieldCheck },
         { name: 'Venues & Slots', path: '/admin/venues', icon: Building2 },
         { name: 'Interview Configuration', path: '/admin/interviews', icon: SlidersHorizontal },

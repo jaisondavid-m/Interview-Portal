@@ -32,11 +32,13 @@ import {
   Eye,
   Sliders,
   Upload,
+  Lock,
 } from 'lucide-react';
 import api from '../../api/axios';
 import CodeEditor from '../../Components/CodeEditor';
 import LabBulkModal from '../../Components/AdminLabs/LabBulkModal';
 import ConfirmModal from '../../Components/ConfirmModal';
+import Pagination from '../../Components/Pagination';
 
 export default function AdminLabCourseExperiments() {
   const { courseId } = useParams();
@@ -67,9 +69,19 @@ export default function AdminLabCourseExperiments() {
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
 
-  // Searches
+  // Experiments Pagination & Search
   const [expSearch, setExpSearch] = useState('');
+  const [expPage, setExpPage] = useState(1);
+  const [expLimit, setExpLimit] = useState(12);
+  const [expTotalPages, setExpTotalPages] = useState(1);
+  const [expTotalCount, setExpTotalCount] = useState(0);
+
+  // Variants Pagination & Search
   const [variantSearch, setVariantSearch] = useState('');
+  const [varPage, setVarPage] = useState(1);
+  const [varLimit, setVarLimit] = useState(10);
+  const [varTotalPages, setVarTotalPages] = useState(1);
+  const [varTotalCount, setVarTotalCount] = useState(0);
 
   // Experiment Modal (Add / Edit Experiment)
   const [expModal, setExpModal] = useState(null); // null | 'create' | 'edit'
@@ -80,6 +92,7 @@ export default function AdminLabCourseExperiments() {
     title: '',
     aim: '',
     max_marks: 100,
+    is_active: true,
   };
   const [expForm, setExpForm] = useState(emptyExp);
   const [expSubmitting, setExpSubmitting] = useState(false);
@@ -134,15 +147,21 @@ export default function AdminLabCourseExperiments() {
 
   useEffect(() => {
     fetchCourseData();
-  }, [courseId]);
+  }, [courseId, expPage, expLimit, expSearch]);
 
   const fetchCourseData = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/admin/labs/courses/${courseId}/experiments`);
+      const res = await api.get(
+        `/admin/labs/courses/${courseId}/experiments?page=${expPage}&limit=${expLimit}&search=${encodeURIComponent(
+          expSearch.trim()
+        )}`
+      );
       setCourse(res?.course || null);
       const list = res?.experiments || [];
       setExperiments(list);
+      setExpTotalCount(res?.total ?? list.length);
+      setExpTotalPages(res?.total_pages ?? 1);
     } catch {
       showToast('Failed to load course experiments.', 'error');
     } finally {
@@ -150,13 +169,24 @@ export default function AdminLabCourseExperiments() {
     }
   };
 
-  const openExperimentVariants = async (exp) => {
-    setSelectedExp(exp);
-    setCurrentView('variants');
+  useEffect(() => {
+    if (selectedExp?.id && currentView === 'variants') {
+      fetchVariants(selectedExp);
+    }
+  }, [selectedExp?.id, varPage, varLimit, variantSearch, currentView]);
+
+  const fetchVariants = async (exp) => {
+    if (!exp?.id) return;
     setVariantsLoading(true);
     try {
-      const res = await api.get(`/admin/labs/experiments/${exp.id}/variants`);
+      const res = await api.get(
+        `/admin/labs/experiments/${exp.id}/variants?page=${varPage}&limit=${varLimit}&search=${encodeURIComponent(
+          variantSearch.trim()
+        )}`
+      );
       const varList = res?.variants || [];
+      setVarTotalCount(res?.total ?? varList.length);
+      setVarTotalPages(res?.total_pages ?? 1);
       if (varList.length > 0) {
         setVariants(varList);
       } else {
@@ -182,6 +212,13 @@ export default function AdminLabCourseExperiments() {
     } finally {
       setVariantsLoading(false);
     }
+  };
+
+  const openExperimentVariants = async (exp) => {
+    setSelectedExp(exp);
+    setVarPage(1);
+    setVariantSearch('');
+    setCurrentView('variants');
   };
 
   const openVariantStudio = (variant, index) => {
@@ -223,6 +260,7 @@ export default function AdminLabCourseExperiments() {
     setExpForm({
       ...emptyExp,
       experiment_no: (experiments?.length || 0) + 1,
+      is_active: true,
     });
     setEditingExp(null);
     setExpModal('create');
@@ -235,9 +273,29 @@ export default function AdminLabCourseExperiments() {
       title: exp.title,
       aim: exp.aim,
       max_marks: exp.max_marks || 100,
+      is_active: exp.is_active !== false,
     });
     setEditingExp(exp);
     setExpModal('edit');
+  };
+
+  const handleToggleExperimentActive = async (expId, currentActive, e) => {
+    if (e) e.stopPropagation();
+    const nextActive = !currentActive;
+    // Optimistic UI update
+    setExperiments((prev) =>
+      prev.map((exp) => (exp.id === expId ? { ...exp, is_active: nextActive } : exp))
+    );
+    try {
+      await api.patch(`/admin/labs/experiments/${expId}/status`, { is_active: nextActive });
+      showToast(`Experiment #${expId} ${nextActive ? 'activated' : 'deactivated'} successfully!`, 'success');
+    } catch (err) {
+      // Revert on error
+      setExperiments((prev) =>
+        prev.map((exp) => (exp.id === expId ? { ...exp, is_active: currentActive } : exp))
+      );
+      showToast(err?.response?.data?.error || 'Failed to update experiment status.', 'error');
+    }
   };
 
   const handleSaveExpModal = async (e) => {
@@ -507,8 +565,9 @@ export default function AdminLabCourseExperiments() {
   };
 
   // ── Test Run Solution Code ──────────────────────────────────────────────────
-  const handleTestRunSolution = async () => {
-    if (!formData.solution_code?.trim()) {
+  const handleTestRunSolution = async (dataOverride = null) => {
+    const data = dataOverride || formData;
+    if (!data.solution_code?.trim()) {
       showToast('Please enter solution code to test.', 'error');
       return;
     }
@@ -516,10 +575,10 @@ export default function AdminLabCourseExperiments() {
       setTestingSolution(true);
       setSolutionTestResult(null);
       const res = await api.post('/admin/labs/solution-test', {
-        code: formData.solution_code,
-        language: formData.language || 'python',
-        sample_test_cases: formData.sample_test_cases,
-        hidden_test_cases: formData.hidden_test_cases,
+        code: data.solution_code,
+        language: data.language || 'c',
+        sample_test_cases: data.sample_test_cases,
+        hidden_test_cases: data.hidden_test_cases,
       });
       setSolutionTestResult(res);
       showToast(
@@ -737,16 +796,19 @@ export default function AdminLabCourseExperiments() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredExperiments.map((exp) => {
+                const isActive = exp.is_active !== false;
                 return (
                   <div
                     key={exp.id}
-                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all"
+                    className={`data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all ${
+                      !isActive ? 'border-dashed border-[var(--border)] opacity-85 hover:opacity-100 bg-[var(--bg-card)]/60' : ''
+                    }`}
                     onClick={() => openExperimentVariants(exp)}
                   >
                     <div className="space-y-3.5">
-                      {/* Top Row: Exp Badge + Actions */}
+                      {/* Top Row: Exp Badge + Status Toggle + Actions */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-mono font-bold text-[12px] px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
                             Exp {exp.experiment_no}
                           </span>
@@ -755,7 +817,26 @@ export default function AdminLabCourseExperiments() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {/* Active / Inactive Toggle Switch Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleExperimentActive(exp.id, isActive, e)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer border shadow-xs ${
+                              isActive
+                                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20'
+                            }`}
+                            title={isActive ? 'Click to deactivate experiment' : 'Click to activate experiment'}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'
+                              }`}
+                            />
+                            {isActive ? 'ACTIVE' : 'INACTIVE'}
+                          </button>
+
                           <button
                             type="button"
                             onClick={(e) => {
@@ -807,6 +888,22 @@ export default function AdminLabCourseExperiments() {
                 );
               })}
             </div>
+          )}
+
+          {/* Experiments Pagination */}
+          {!loading && expTotalCount > 0 && (
+            <Pagination
+              page={expPage}
+              totalPages={expTotalPages}
+              totalItems={expTotalCount}
+              limit={expLimit}
+              onPageChange={(newPage) => setExpPage(newPage)}
+              onLimitChange={(newLimit) => {
+                setExpLimit(newLimit);
+                setExpPage(1);
+              }}
+              pageSizeOptions={[6, 12, 24, 48]}
+            />
           )}
         </div>
       )}
@@ -1001,6 +1098,22 @@ export default function AdminLabCourseExperiments() {
               })}
             </div>
           )}
+
+          {/* Variants Pagination */}
+          {!variantsLoading && varTotalCount > 0 && (
+            <Pagination
+              page={varPage}
+              totalPages={varTotalPages}
+              totalItems={varTotalCount}
+              limit={varLimit}
+              onPageChange={(newPage) => setVarPage(newPage)}
+              onLimitChange={(newLimit) => {
+                setVarLimit(newLimit);
+                setVarPage(1);
+              }}
+              pageSizeOptions={[5, 10, 20, 50]}
+            />
+          )}
         </div>
       )}
 
@@ -1059,7 +1172,12 @@ export default function AdminLabCourseExperiments() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setActiveStudioTab(key)}
+                onClick={() => {
+                  setActiveStudioTab(key);
+                  if (key === 'solution' && formData.solution_code?.trim()) {
+                    handleTestRunSolution();
+                  }
+                }}
                 className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-[13px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   activeStudioTab === key
                     ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-dim)]/30'
@@ -1204,66 +1322,252 @@ export default function AdminLabCourseExperiments() {
           {/* TAB 3: Reference Solution Code & Runner */}
           {activeStudioTab === 'solution' && (
             <div className="panel-card p-6 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
-                <div>
-                  <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Code2 className="w-4 h-4 text-[var(--accent)]" />
-                    Faculty Reference Solution Code
-                  </h3>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Write and test the standard solution against sample and hidden test cases.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleTestRunSolution}
-                  disabled={testingSolution}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)] bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-all cursor-pointer shadow-sm disabled:opacity-50"
-                >
-                  {testingSolution ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                  Run Test Suite Against Solution
-                </button>
+              <div className="pb-3 border-b border-[var(--border)]">
+                <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <Code2 className="w-4 h-4 text-[var(--accent)]" />
+                  Faculty Reference Solution Code
+                </h3>
+                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                  Write and verify the standard solution against sample and hidden test cases.
+                </p>
               </div>
 
               <div className="border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden h-[340px]">
                 <CodeEditor
-                  value={formData.solution_code}
+                  code={formData.solution_code || ''}
+                  value={formData.solution_code || ''}
                   onChange={(val) => setFormData((p) => ({ ...p, solution_code: val }))}
-                  language={formData.language || 'python'}
+                  language={formData.language || 'c'}
+                  onLanguageChange={(lang) => setFormData((p) => ({ ...p, language: lang }))}
                   height="340px"
                 />
               </div>
 
-              {/* Test Run Output */}
-              {solutionTestResult && (
-                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] space-y-2 animate-in fade-in">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="flex items-center gap-1.5 text-[var(--text-primary)]">
-                      <Terminal className="w-4 h-4 text-[var(--accent)]" />
-                      Execution Output
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded font-mono ${
-                        solutionTestResult.pass_count === solutionTestResult.total_test_cases
-                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30'
-                          : 'bg-rose-500/10 text-rose-600 border border-rose-500/30'
-                      }`}
-                    >
-                      {solutionTestResult.pass_count} / {solutionTestResult.total_test_cases} Passed
-                    </span>
+              {/* Test Suite Verification Results & Test Cases */}
+              <div className="space-y-4 pt-2">
+                {testingSolution ? (
+                  <div className="p-8 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)] flex flex-col items-center justify-center gap-3 text-center animate-in fade-in">
+                    <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)]" />
+                    <div>
+                      <p className="text-xs font-bold text-[var(--text-primary)]">
+                        Executing reference solution against sandbox test cases...
+                      </p>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                        Evaluating sample and hidden test cases with standard I/O streams
+                      </p>
+                    </div>
                   </div>
-                  {solutionTestResult.stdout && (
-                    <pre className="p-3 rounded bg-black/80 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-36">
-                      {solutionTestResult.stdout}
-                    </pre>
-                  )}
-                  {solutionTestResult.stderr && (
-                    <pre className="p-3 rounded bg-black/80 text-rose-400 font-mono text-[11px] overflow-x-auto max-h-36">
-                      {solutionTestResult.stderr}
-                    </pre>
-                  )}
-                </div>
-              )}
+                ) : solutionTestResult ? (
+                  <div className="space-y-4 animate-in fade-in">
+                    {/* Overview Banner */}
+                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {solutionTestResult.pass_count === solutionTestResult.total_test_cases ? (
+                          <div className="w-8 h-8 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center shrink-0 border border-[var(--border-accent)]">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-[var(--red-bg)] text-[var(--red)] flex items-center justify-center shrink-0 border border-[var(--red-border)]">
+                            <AlertCircle className="w-4 h-4" />
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="text-xs sm:text-[13px] font-bold text-[var(--text-primary)]">
+                            {solutionTestResult.pass_count === solutionTestResult.total_test_cases
+                              ? 'All Test Cases Verified & Passed'
+                              : `Test Verification (${solutionTestResult.total_test_cases - solutionTestResult.pass_count} Failed)`}
+                          </h4>
+                          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                            {solutionTestResult.pass_count} of {solutionTestResult.total_test_cases} test cases passed (
+                            {solutionTestResult.results?.filter((r) => !r.is_hidden && r.passed).length || 0}/
+                            {solutionTestResult.results?.filter((r) => !r.is_hidden).length || 0} Sample,{' '}
+                            {solutionTestResult.results?.filter((r) => r.is_hidden && r.passed).length || 0}/
+                            {solutionTestResult.results?.filter((r) => r.is_hidden).length || 0} Hidden)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <span className="font-mono text-xs font-bold px-3 py-1 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                          {solutionTestResult.pass_count} / {solutionTestResult.total_test_cases} Passed
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleTestRunSolution()}
+                          className="px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-xs font-semibold hover:bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer transition flex items-center gap-1.5"
+                        >
+                          <Play className="w-3 h-3 fill-current text-[var(--accent)]" />
+                          Re-run
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Individual Test Cases List */}
+                    <div className="space-y-3">
+                      <h4 className="text-[11px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        Test Cases Breakdown ({solutionTestResult.results?.length || 0})
+                      </h4>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {(solutionTestResult.results || []).map((r, idx) => (
+                          <div
+                            key={idx}
+                            className={`p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border transition-all ${
+                              r.passed
+                                ? 'border-[var(--border)] hover:border-[var(--border-strong)]'
+                                : 'border-[var(--red-border)] bg-[var(--red-bg)]/20'
+                            }`}
+                          >
+                            {/* Header */}
+                            <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border)]">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-[var(--radius-sm)] font-mono bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border)]">
+                                  {r.is_hidden ? <Lock className="w-3 h-3 text-[var(--text-muted)]" /> : <Eye className="w-3 h-3 text-[var(--text-muted)]" />}
+                                  {r.is_hidden ? `Hidden Case #${r.index || idx + 1}` : `Sample Case #${r.index || idx + 1}`}
+                                </span>
+                                <span className="text-[12px] font-bold text-[var(--text-primary)]">
+                                  {r.name || `Case ${idx + 1}`}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {r.execution_ms !== undefined && (
+                                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                    {r.execution_ms} ms
+                                  </span>
+                                )}
+                                <span
+                                  className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
+                                    r.passed
+                                      ? 'bg-[var(--bg-raised)] text-[var(--text-primary)] border-[var(--border-strong)]'
+                                      : 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-border)]'
+                                  }`}
+                                >
+                                  {r.passed ? <CheckCircle2 className="w-3 h-3 text-[var(--accent)]" /> : <AlertCircle className="w-3 h-3 text-[var(--red)]" />}
+                                  {r.passed ? 'PASSED' : 'FAILED'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* 3-Column Input / Expected / Actual breakdown */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3">
+                              {/* Input */}
+                              <div>
+                                <span className="text-[10px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                  Input (stdin)
+                                </span>
+                                <pre className="mt-1 p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-32">
+                                  {r.input?.trim() ? r.input : <span className="text-[var(--text-muted)] italic">No input</span>}
+                                </pre>
+                              </div>
+
+                              {/* Expected Output */}
+                              <div>
+                                <span className="text-[10px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                  Expected Output
+                                </span>
+                                <pre className="mt-1 p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-32">
+                                  {r.expected?.trim() ? r.expected : <span className="text-[var(--text-muted)] italic">Empty output</span>}
+                                </pre>
+                              </div>
+
+                              {/* Actual Output */}
+                              <div>
+                                <span className="text-[10px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                  Actual Output
+                                </span>
+                                <pre
+                                  className={`mt-1 p-2.5 rounded-[var(--radius-sm)] font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-32 border ${
+                                    r.passed
+                                      ? 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-primary)]'
+                                      : 'bg-[var(--red-bg)] border-[var(--red-border)] text-[var(--red)]'
+                                  }`}
+                                >
+                                  {r.actual?.trim() ? r.actual : <span className="text-[var(--text-muted)] italic">No output</span>}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Configured Test Cases (Pre-Execution View) */
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[11px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        Configured Test Cases ({parsedSampleCount + parsedHiddenCount})
+                      </h4>
+                      <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                        {parsedSampleCount} Sample, {parsedHiddenCount} Hidden
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Sample cases */}
+                      {getParsedCases(formData.sample_test_cases).map((tc, idx) => (
+                        <div
+                          key={`sample-${idx}`}
+                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border)]">
+                              <Eye className="w-3 h-3 text-[var(--text-muted)]" />
+                              Sample Case #{idx + 1}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Input:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.input || <span className="text-[var(--text-muted)] italic">None</span>}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Expected Output:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.expected_output || tc.expected || <span className="text-[var(--text-muted)] italic">None</span>}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Hidden cases */}
+                      {getParsedCases(formData.hidden_test_cases).map((tc, idx) => (
+                        <div
+                          key={`hidden-${idx}`}
+                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border)]">
+                              <Lock className="w-3 h-3 text-[var(--text-muted)]" />
+                              Hidden Case #{idx + 1}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Input:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.input || <span className="text-[var(--text-muted)] italic">None</span>}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Expected Output:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.expected_output || tc.expected || <span className="text-[var(--text-muted)] italic">None</span>}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1615,6 +1919,42 @@ export default function AdminLabCourseExperiments() {
                   }
                   className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
                 />
+              </div>
+
+              {/* Active / Inactive Status Switch */}
+              <div className="flex items-center justify-between p-3.5 rounded-[var(--radius-sm)] bg-[var(--bg-raised)] border border-[var(--border)]">
+                <div>
+                  <p className="text-[12px] font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                    Experiment Status
+                    <span
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                        expForm.is_active !== false
+                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
+                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                      }`}
+                    >
+                      {expForm.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                    {expForm.is_active !== false
+                      ? 'Experiment is accessible to students and faculty.'
+                      : 'Deactivated: Skipped in student prerequisite chains & hidden from execution.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExpForm((p) => ({ ...p, is_active: p.is_active === false }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer shrink-0 ${
+                    expForm.is_active !== false ? 'bg-[var(--accent)]' : 'bg-[var(--bg-input)] border border-[var(--border)]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      expForm.is_active !== false ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="flex gap-2 pt-2">

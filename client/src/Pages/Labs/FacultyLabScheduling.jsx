@@ -42,6 +42,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import api from '../../api/axios';
+import Pagination from '../../Components/Pagination';
 
 const inputCls =
   'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
@@ -1230,9 +1231,14 @@ export default function FacultyLabScheduling() {
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 text-[12px] scrollbar-thin">
                   {activeCourseExperiments.map((exp, idx) => {
-                    const isIncluded = (exp.experiment_no || 0) <= Number(bulkReleaseUpToExpNo);
-                    const isFirst = idx === 0;
-                    const prevExpNo = idx > 0 ? activeCourseExperiments[idx - 1].experiment_no : null;
+                    const isInactive = exp.is_active === false;
+                    const isIncluded = !isInactive && (exp.experiment_no || 0) <= Number(bulkReleaseUpToExpNo);
+                    // Find previous active experiment
+                    const prevActiveExp = activeCourseExperiments
+                      .slice(0, idx)
+                      .reverse()
+                      .find((e) => e.is_active !== false);
+                    const prevExpNo = prevActiveExp ? prevActiveExp.experiment_no : null;
 
                     return (
                       <React.Fragment key={exp.id}>
@@ -1245,19 +1251,25 @@ export default function FacultyLabScheduling() {
                         )}
                         <div
                           className={`px-3 py-2 rounded-[var(--radius-sm)] shrink-0 flex items-center gap-2 border transition-all ${
-                            isIncluded
+                            isInactive
+                              ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 opacity-60'
+                              : isIncluded
                               ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--text-primary)] font-semibold shadow-xs'
                               : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-muted)] opacity-60'
                           }`}
                         >
-                          {isIncluded ? (
+                          {isInactive ? (
+                            <Lock className="w-3.5 h-3.5 text-rose-400" />
+                          ) : isIncluded ? (
                             <Unlock className="w-3.5 h-3.5 text-[var(--accent)]" />
                           ) : (
                             <Lock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                           )}
                           <span>Exp #{exp.experiment_no}</span>
                           <span className="text-[11px] opacity-75 font-normal">
-                            {isFirst
+                            {isInactive
+                              ? '(Inactive)'
+                              : !prevExpNo
                               ? '(Open)'
                               : isIncluded
                               ? `(Prereq: #${prevExpNo})`
@@ -1361,7 +1373,14 @@ export default function FacultyLabScheduling() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-[var(--text-primary)] flex items-center justify-between gap-1">
-                            <span>Exp #{exp.experiment_no}</span>
+                            <span className="flex items-center gap-1.5">
+                              Exp #{exp.experiment_no}
+                              {exp.is_active === false && (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                  INACTIVE
+                                </span>
+                              )}
+                            </span>
                             <span className="text-[10px] font-mono text-[var(--text-muted)]">#{exp.id}</span>
                           </div>
                           <div className="text-[11px] text-[var(--text-secondary)] truncate mt-0.5">
@@ -1839,51 +1858,19 @@ export default function FacultyLabScheduling() {
 
             {/* Pagination Controls */}
             {activeCourseOverrides.length > 0 && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 text-xs text-[var(--text-secondary)] border-t border-[var(--border)]">
-                <div className="flex items-center gap-2">
-                  <span>Rows per page:</span>
-                  <select
-                    value={overrideLimit}
-                    onChange={(e) => {
-                      setOverrideLimit(Number(e.target.value));
-                      setOverridePage(1);
-                    }}
-                    className="bg-[var(--bg-input)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                  <span className="text-[var(--text-muted)]">
-                    Showing {(safeOverridePage - 1) * overrideLimit + 1}–
-                    {Math.min(safeOverridePage * overrideLimit, activeCourseOverrides.length)} of{' '}
-                    {activeCourseOverrides.length}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                  <button
-                    type="button"
-                    onClick={() => setOverridePage((p) => Math.max(1, p - 1))}
-                    disabled={safeOverridePage <= 1}
-                    className="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-raised)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-medium text-xs"
-                  >
-                    Previous
-                  </button>
-                  <span className="px-2 font-mono text-[11px] text-[var(--text-muted)]">
-                    Page {safeOverridePage} of {totalOverridePages}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setOverridePage((p) => Math.min(totalOverridePages, p + 1))}
-                    disabled={safeOverridePage >= totalOverridePages}
-                    className="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-raised)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-medium text-xs"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="pt-3 border-t border-[var(--border)]">
+                <Pagination
+                  page={safeOverridePage}
+                  totalPages={totalOverridePages}
+                  totalItems={activeCourseOverrides.length}
+                  limit={overrideLimit}
+                  onPageChange={(newPage) => setOverridePage(newPage)}
+                  onLimitChange={(newLimit) => {
+                    setOverrideLimit(newLimit);
+                    setOverridePage(1);
+                  }}
+                  pageSizeOptions={[5, 10, 25, 50, 100]}
+                />
               </div>
             )}
           </div>

@@ -223,17 +223,23 @@ export default function AdminLabPdfViewer() {
               const expNo = exp.experiment_no || idx + 1;
               return (
                 <React.Fragment key={idx}>
-                  <option value={`exp_${expNo}_left`}>
-                    🔬 Ex {expNo} [Left Page]: Program & Output
+                  <option value={`exp_${expNo}_aim_left`}>
+                    📄 Ex {expNo} [Left Page]: Blank Page (Observation)
                   </option>
-                  <option value={`exp_${expNo}_right`}>
-                    🔬 Ex {expNo} [Right Page]: Aim & Algorithm
+                  <option value={`exp_${expNo}_aim_right`}>
+                    🎯 Ex {expNo} [Right Page]: Aim & Algorithm
+                  </option>
+                  <option value={`exp_${expNo}_out_left`}>
+                    🖥️ Ex {expNo} [Left Page]: Program Output
+                  </option>
+                  <option value={`exp_${expNo}_code_right`}>
+                    💻 Ex {expNo} [Right Page]: Program Source Code
                   </option>
                   <option value={`exp_${expNo}_eval_left`}>
-                    🔬 Ex {expNo} [Left Page]: Blank Page
+                    📄 Ex {expNo} [Left Page]: Blank Page (Notes)
                   </option>
                   <option value={`exp_${expNo}_eval_right`}>
-                    🔬 Ex {expNo} [Right Page]: Rubrics & Result
+                    📊 Ex {expNo} [Right Page]: Rubrics & Result
                   </option>
                 </React.Fragment>
               );

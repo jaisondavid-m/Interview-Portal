@@ -164,6 +164,15 @@ func SetupRouter() *gin.Engine {
 
 			admin.GET("/departments", controllers.GetDistinctStudentDepartments)
 
+			// Data Management & Master Datasets
+			adminDataMgmt := admin.Group("/data-management")
+			adminDataMgmt.Use(middlewares.RequirePermission("admin_data_management", "admin_users", "admin_lab_config"))
+			{
+				adminDataMgmt.GET("/departments", controllers.AdminGetDepartmentsOverview)
+				adminDataMgmt.GET("/departments/:name/users", controllers.AdminGetDepartmentUsers)
+				adminDataMgmt.GET("/summary", controllers.AdminGetDataManagementSummary)
+			}
+
 			// Role & Page Access Management (Strictly Superadmin Only)
 			adminRoles := admin.Group("/roles")
 			adminRoles.Use(middlewares.RequireAdmin())
@@ -357,6 +366,7 @@ func SetupRouter() *gin.Engine {
 			adminLabs.POST("/courses/:courseId/pdf-template", controllers.AdminSaveCoursePdfTemplate)
 			adminLabs.POST("/record-pdf/custom", controllers.DownloadCustomLabRecordPDF)
 			adminLabs.PUT("/experiments/:id", controllers.AdminUpdateExperiment)
+			adminLabs.PATCH("/experiments/:id/status", controllers.AdminToggleExperimentStatus)
 			adminLabs.DELETE("/experiments/:id", controllers.AdminDeleteExperiment)
 			adminLabs.GET("/experiments/:expId/variants", controllers.AdminGetExperimentQuestionVariants)
 			adminLabs.POST("/experiments/:expId/variants", controllers.AdminSaveExperimentQuestionVariant)

@@ -144,6 +144,7 @@ func EnsureLabTables(db *gorm.DB) error {
 			log.Printf("[WARN] AutoMigrate for lab model %T: %v\n", m, err)
 		}
 	}
+	db.Exec("UPDATE lab_experiments SET is_active = true WHERE is_active IS NULL")
 	return nil
 }
 
@@ -568,6 +569,15 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			OrderIndex:  30,
 		},
 		{
+			Key:         "faculty_lab_curriculum",
+			Name:        "Lab Curriculum",
+			Path:        "/faculty/labs/curriculum",
+			Icon:        "BookOpen",
+			Category:    "Academic Labs",
+			Description: "Explore lab courses curriculum, experiments, problem statements, test suites, and reference solutions (read-only)",
+			OrderIndex:  30,
+		},
+		{
 			Key:         "lab_incharge_verification",
 			Name:        "Lab Dashboard",
 			Path:        "/faculty/labs",
@@ -611,6 +621,15 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			Category:    "Academic Labs",
 			Description: "Add lab courses, configure experiments & test cases, manage sections/semesters/academic years, and map students to faculty lab incharges",
 			OrderIndex:  35,
+		},
+		{
+			Key:         "admin_data_management",
+			Name:        "Data Management",
+			Path:        "/admin/data-management",
+			Icon:        "Database",
+			Category:    "Master Data",
+			Description: "Master institutional datasets, dynamic department directory, student batch datasets, and institutional taxonomy",
+			OrderIndex:  28,
 		},
 		{
 			Key:         "admin_lab_pdf_audit",
@@ -661,12 +680,13 @@ func syncAppPagesCatalog(db *gorm.DB) {
 			ensureRolePermission("student", page.Key)
 			ensureRolePermission("admin", page.Key)
 		}
-		if page.Key == "lab_incharge_verification" || page.Key == "faculty_lab_evaluation" || page.Key == "faculty_lab_scheduling" {
+		if page.Key == "faculty_lab_curriculum" || page.Key == "lab_incharge_verification" || page.Key == "faculty_lab_evaluation" || page.Key == "faculty_lab_scheduling" {
 			ensureRolePermission("faculty", page.Key)
 			ensureRolePermission("admin", page.Key)
 		}
-		if page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" || page.Key == "admin_lab_dashboard" {
+		if page.Key == "admin_lab_pdf_audit" || page.Key == "admin_lab_config" || page.Key == "admin_lab_dashboard" || page.Key == "admin_data_management" {
 			ensureRolePermission("admin", page.Key)
+			ensureRolePermission("developer", page.Key)
 		}
 	}
 }
