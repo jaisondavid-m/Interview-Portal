@@ -1638,20 +1638,13 @@ export default function LabRecordDocument({
                                 {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
                               </div>
 
-                              {/* Staff Sign-off Table */}
+                              {/* Staff Signature Place */}
                               {showSignatures && (
-                                <table className="grid-table" style={{ marginTop: '8px', marginBottom: '0' }}>
-                                  <tbody>
-                                    <tr>
-                                      <td style={{ width: '50%', fontSize: '9pt', padding: '10px' }}>
-                                        Evaluated by: <strong>{staff_incharge}</strong>
-                                      </td>
-                                      <td style={{ width: '50%', textAlign: 'right', fontSize: '9pt', padding: '10px', fontWeight: 'bold' }}>
-                                        Staff Signature: ____________________
-                                      </td>
-                                    </tr>
-                                  </tbody>
-                                </table>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '36px', marginBottom: '4px' }}>
+                                  <div style={{ fontSize: '11pt', fontWeight: 'bold', color: '#000000' }}>
+                                    Staff Signature: _______________________
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </>
