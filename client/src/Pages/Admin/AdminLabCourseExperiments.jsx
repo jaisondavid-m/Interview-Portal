@@ -38,6 +38,7 @@ import api from '../../api/axios';
 import CodeEditor from '../../Components/CodeEditor';
 import LabBulkModal from '../../Components/AdminLabs/LabBulkModal';
 import ConfirmModal from '../../Components/ConfirmModal';
+import Pagination from '../../Components/Pagination';
 
 export default function AdminLabCourseExperiments() {
   const { courseId } = useParams();
@@ -68,9 +69,19 @@ export default function AdminLabCourseExperiments() {
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
 
-  // Searches
+  // Experiments Pagination & Search
   const [expSearch, setExpSearch] = useState('');
+  const [expPage, setExpPage] = useState(1);
+  const [expLimit, setExpLimit] = useState(12);
+  const [expTotalPages, setExpTotalPages] = useState(1);
+  const [expTotalCount, setExpTotalCount] = useState(0);
+
+  // Variants Pagination & Search
   const [variantSearch, setVariantSearch] = useState('');
+  const [varPage, setVarPage] = useState(1);
+  const [varLimit, setVarLimit] = useState(10);
+  const [varTotalPages, setVarTotalPages] = useState(1);
+  const [varTotalCount, setVarTotalCount] = useState(0);
 
   // Experiment Modal (Add / Edit Experiment)
   const [expModal, setExpModal] = useState(null); // null | 'create' | 'edit'
@@ -136,15 +147,21 @@ export default function AdminLabCourseExperiments() {
 
   useEffect(() => {
     fetchCourseData();
-  }, [courseId]);
+  }, [courseId, expPage, expLimit, expSearch]);
 
   const fetchCourseData = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/admin/labs/courses/${courseId}/experiments`);
+      const res = await api.get(
+        `/admin/labs/courses/${courseId}/experiments?page=${expPage}&limit=${expLimit}&search=${encodeURIComponent(
+          expSearch.trim()
+        )}`
+      );
       setCourse(res?.course || null);
       const list = res?.experiments || [];
       setExperiments(list);
+      setExpTotalCount(res?.total ?? list.length);
+      setExpTotalPages(res?.total_pages ?? 1);
     } catch {
       showToast('Failed to load course experiments.', 'error');
     } finally {
@@ -152,13 +169,24 @@ export default function AdminLabCourseExperiments() {
     }
   };
 
-  const openExperimentVariants = async (exp) => {
-    setSelectedExp(exp);
-    setCurrentView('variants');
+  useEffect(() => {
+    if (selectedExp?.id && currentView === 'variants') {
+      fetchVariants(selectedExp);
+    }
+  }, [selectedExp?.id, varPage, varLimit, variantSearch, currentView]);
+
+  const fetchVariants = async (exp) => {
+    if (!exp?.id) return;
     setVariantsLoading(true);
     try {
-      const res = await api.get(`/admin/labs/experiments/${exp.id}/variants`);
+      const res = await api.get(
+        `/admin/labs/experiments/${exp.id}/variants?page=${varPage}&limit=${varLimit}&search=${encodeURIComponent(
+          variantSearch.trim()
+        )}`
+      );
       const varList = res?.variants || [];
+      setVarTotalCount(res?.total ?? varList.length);
+      setVarTotalPages(res?.total_pages ?? 1);
       if (varList.length > 0) {
         setVariants(varList);
       } else {
@@ -184,6 +212,13 @@ export default function AdminLabCourseExperiments() {
     } finally {
       setVariantsLoading(false);
     }
+  };
+
+  const openExperimentVariants = async (exp) => {
+    setSelectedExp(exp);
+    setVarPage(1);
+    setVariantSearch('');
+    setCurrentView('variants');
   };
 
   const openVariantStudio = (variant, index) => {
@@ -854,6 +889,22 @@ export default function AdminLabCourseExperiments() {
               })}
             </div>
           )}
+
+          {/* Experiments Pagination */}
+          {!loading && expTotalCount > 0 && (
+            <Pagination
+              page={expPage}
+              totalPages={expTotalPages}
+              totalItems={expTotalCount}
+              limit={expLimit}
+              onPageChange={(newPage) => setExpPage(newPage)}
+              onLimitChange={(newLimit) => {
+                setExpLimit(newLimit);
+                setExpPage(1);
+              }}
+              pageSizeOptions={[6, 12, 24, 48]}
+            />
+          )}
         </div>
       )}
 
@@ -1046,6 +1097,22 @@ export default function AdminLabCourseExperiments() {
                 );
               })}
             </div>
+          )}
+
+          {/* Variants Pagination */}
+          {!variantsLoading && varTotalCount > 0 && (
+            <Pagination
+              page={varPage}
+              totalPages={varTotalPages}
+              totalItems={varTotalCount}
+              limit={varLimit}
+              onPageChange={(newPage) => setVarPage(newPage)}
+              onLimitChange={(newLimit) => {
+                setVarLimit(newLimit);
+                setVarPage(1);
+              }}
+              pageSizeOptions={[5, 10, 20, 50]}
+            />
           )}
         </div>
       )}
@@ -1255,25 +1322,14 @@ export default function AdminLabCourseExperiments() {
           {/* TAB 3: Reference Solution Code & Runner */}
           {activeStudioTab === 'solution' && (
             <div className="panel-card p-6 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
-                <div>
-                  <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Code2 className="w-4 h-4 text-[var(--accent)]" />
-                    Faculty Reference Solution Code
-                  </h3>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Write and test the standard solution against sample and hidden test cases.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleTestRunSolution}
-                  disabled={testingSolution}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)] bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-all cursor-pointer shadow-sm disabled:opacity-50"
-                >
-                  {testingSolution ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                  Run Test Suite Against Solution
-                </button>
+              <div className="pb-3 border-b border-[var(--border)]">
+                <h3 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <Code2 className="w-4 h-4 text-[var(--accent)]" />
+                  Faculty Reference Solution Code
+                </h3>
+                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                  Write and verify the standard solution against sample and hidden test cases.
+                </p>
               </div>
 
               <div className="border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden h-[340px]">
@@ -1304,28 +1360,22 @@ export default function AdminLabCourseExperiments() {
                 ) : solutionTestResult ? (
                   <div className="space-y-4 animate-in fade-in">
                     {/* Overview Banner */}
-                    <div
-                      className={`p-4 rounded-[var(--radius-md)] border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                        solutionTestResult.pass_count === solutionTestResult.total_test_cases
-                          ? 'bg-emerald-500/10 border-emerald-500/30'
-                          : 'bg-rose-500/10 border-rose-500/30'
-                      }`}
-                    >
+                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         {solutionTestResult.pass_count === solutionTestResult.total_test_cases ? (
-                          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
-                            <CheckCircle2 className="w-5 h-5" />
+                          <div className="w-8 h-8 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center shrink-0 border border-[var(--border-accent)]">
+                            <CheckCircle2 className="w-4 h-4" />
                           </div>
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0">
-                            <AlertCircle className="w-5 h-5" />
+                          <div className="w-8 h-8 rounded-full bg-[var(--red-bg)] text-[var(--red)] flex items-center justify-center shrink-0 border border-[var(--red-border)]">
+                            <AlertCircle className="w-4 h-4" />
                           </div>
                         )}
                         <div>
                           <h4 className="text-xs sm:text-[13px] font-bold text-[var(--text-primary)]">
                             {solutionTestResult.pass_count === solutionTestResult.total_test_cases
-                              ? 'All Test Cases Verified & Passed!'
-                              : `Test Verification Issues (${solutionTestResult.total_test_cases - solutionTestResult.pass_count} Failed)`}
+                              ? 'All Test Cases Verified & Passed'
+                              : `Test Verification (${solutionTestResult.total_test_cases - solutionTestResult.pass_count} Failed)`}
                           </h4>
                           <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                             {solutionTestResult.pass_count} of {solutionTestResult.total_test_cases} test cases passed (
@@ -1338,19 +1388,13 @@ export default function AdminLabCourseExperiments() {
                       </div>
 
                       <div className="flex items-center gap-2 self-start sm:self-auto">
-                        <span
-                          className={`font-mono text-xs font-bold px-3 py-1 rounded-full border ${
-                            solutionTestResult.pass_count === solutionTestResult.total_test_cases
-                              ? 'bg-emerald-500 text-white border-emerald-400'
-                              : 'bg-rose-500 text-white border-rose-400'
-                          }`}
-                        >
+                        <span className="font-mono text-xs font-bold px-3 py-1 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
                           {solutionTestResult.pass_count} / {solutionTestResult.total_test_cases} Passed
                         </span>
                         <button
                           type="button"
                           onClick={() => handleTestRunSolution()}
-                          className="px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-xs font-semibold hover:bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer transition flex items-center gap-1.5"
+                          className="px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-xs font-semibold hover:bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer transition flex items-center gap-1.5"
                         >
                           <Play className="w-3 h-3 fill-current text-[var(--accent)]" />
                           Re-run
@@ -1360,7 +1404,7 @@ export default function AdminLabCourseExperiments() {
 
                     {/* Individual Test Cases List */}
                     <div className="space-y-3">
-                      <h4 className="text-[12px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-2">
+                      <h4 className="text-[11px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
                         <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
                         Test Cases Breakdown ({solutionTestResult.results?.length || 0})
                       </h4>
@@ -1369,23 +1413,17 @@ export default function AdminLabCourseExperiments() {
                         {(solutionTestResult.results || []).map((r, idx) => (
                           <div
                             key={idx}
-                            className={`p-4 rounded-[var(--radius-md)] border transition-all ${
+                            className={`p-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border transition-all ${
                               r.passed
-                                ? 'bg-[var(--bg-raised)]/60 border-emerald-500/30'
-                                : 'bg-rose-500/5 border-rose-500/30'
+                                ? 'border-[var(--border)] hover:border-[var(--border-strong)]'
+                                : 'border-[var(--red-border)] bg-[var(--red-bg)]/20'
                             }`}
                           >
                             {/* Header */}
                             <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border)]">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span
-                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded font-mono border ${
-                                    r.is_hidden
-                                      ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
-                                      : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                                  }`}
-                                >
-                                  {r.is_hidden ? <Lock className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-[var(--radius-sm)] font-mono bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border)]">
+                                  {r.is_hidden ? <Lock className="w-3 h-3 text-[var(--text-muted)]" /> : <Eye className="w-3 h-3 text-[var(--text-muted)]" />}
                                   {r.is_hidden ? `Hidden Case #${r.index || idx + 1}` : `Sample Case #${r.index || idx + 1}`}
                                 </span>
                                 <span className="text-[12px] font-bold text-[var(--text-primary)]">
@@ -1402,11 +1440,11 @@ export default function AdminLabCourseExperiments() {
                                 <span
                                   className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
                                     r.passed
-                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                      ? 'bg-[var(--bg-raised)] text-[var(--text-primary)] border-[var(--border-strong)]'
+                                      : 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-border)]'
                                   }`}
                                 >
-                                  {r.passed ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                                  {r.passed ? <CheckCircle2 className="w-3 h-3 text-[var(--accent)]" /> : <AlertCircle className="w-3 h-3 text-[var(--red)]" />}
                                   {r.passed ? 'PASSED' : 'FAILED'}
                                 </span>
                               </div>
@@ -1416,37 +1454,37 @@ export default function AdminLabCourseExperiments() {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3">
                               {/* Input */}
                               <div>
-                                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                <span className="text-[10px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider">
                                   Input (stdin)
                                 </span>
-                                <pre className="mt-1 p-2.5 rounded bg-black/70 border border-white/5 font-mono text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-32">
-                                  {r.input?.trim() ? r.input : <span className="text-gray-500 italic">No input</span>}
+                                <pre className="mt-1 p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-32">
+                                  {r.input?.trim() ? r.input : <span className="text-[var(--text-muted)] italic">No input</span>}
                                 </pre>
                               </div>
 
                               {/* Expected Output */}
                               <div>
-                                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                <span className="text-[10px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider">
                                   Expected Output
                                 </span>
-                                <pre className="mt-1 p-2.5 rounded bg-black/70 border border-white/5 font-mono text-[11px] text-gray-200 overflow-x-auto whitespace-pre-wrap max-h-32">
-                                  {r.expected?.trim() ? r.expected : <span className="text-gray-500 italic">Empty output</span>}
+                                <pre className="mt-1 p-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-32">
+                                  {r.expected?.trim() ? r.expected : <span className="text-[var(--text-muted)] italic">Empty output</span>}
                                 </pre>
                               </div>
 
                               {/* Actual Output */}
                               <div>
-                                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                <span className="text-[10px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider">
                                   Actual Output
                                 </span>
                                 <pre
-                                  className={`mt-1 p-2.5 rounded font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-32 border ${
+                                  className={`mt-1 p-2.5 rounded-[var(--radius-sm)] font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-32 border ${
                                     r.passed
-                                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400'
-                                      : 'bg-rose-950/20 border-rose-500/30 text-rose-400'
+                                      ? 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-primary)]'
+                                      : 'bg-[var(--red-bg)] border-[var(--red-border)] text-[var(--red)]'
                                   }`}
                                 >
-                                  {r.actual?.trim() ? r.actual : <span className="text-gray-500 italic">No output</span>}
+                                  {r.actual?.trim() ? r.actual : <span className="text-[var(--text-muted)] italic">No output</span>}
                                 </pre>
                               </div>
                             </div>
@@ -1459,11 +1497,11 @@ export default function AdminLabCourseExperiments() {
                   /* Configured Test Cases (Pre-Execution View) */
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-[12px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-2">
+                      <h4 className="text-[11px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
                         <Terminal className="w-3.5 h-3.5 text-[var(--accent)]" />
                         Configured Test Cases ({parsedSampleCount + parsedHiddenCount})
                       </h4>
-                      <span className="text-[11px] text-[var(--text-muted)]">
+                      <span className="text-[11px] font-mono text-[var(--text-muted)]">
                         {parsedSampleCount} Sample, {parsedHiddenCount} Hidden
                       </span>
                     </div>
@@ -1473,25 +1511,25 @@ export default function AdminLabCourseExperiments() {
                       {getParsedCases(formData.sample_test_cases).map((tc, idx) => (
                         <div
                           key={`sample-${idx}`}
-                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/60 border border-[var(--border)] space-y-2"
+                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-2"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                              <Eye className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border)]">
+                              <Eye className="w-3 h-3 text-[var(--text-muted)]" />
                               Sample Case #{idx + 1}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-[11px]">
                             <div>
-                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Input:</span>
-                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
-                                {tc.input || <span className="text-gray-500 italic">None</span>}
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Input:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.input || <span className="text-[var(--text-muted)] italic">None</span>}
                               </pre>
                             </div>
                             <div>
-                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Expected Output:</span>
-                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
-                                {tc.expected_output || tc.expected || <span className="text-gray-500 italic">None</span>}
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Expected Output:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.expected_output || tc.expected || <span className="text-[var(--text-muted)] italic">None</span>}
                               </pre>
                             </div>
                           </div>
@@ -1502,25 +1540,25 @@ export default function AdminLabCourseExperiments() {
                       {getParsedCases(formData.hidden_test_cases).map((tc, idx) => (
                         <div
                           key={`hidden-${idx}`}
-                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-raised)]/60 border border-[var(--border)] space-y-2"
+                          className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] space-y-2"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/30">
-                              <Lock className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border)]">
+                              <Lock className="w-3 h-3 text-[var(--text-muted)]" />
                               Hidden Case #{idx + 1}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-[11px]">
                             <div>
-                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Input:</span>
-                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
-                                {tc.input || <span className="text-gray-500 italic">None</span>}
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Input:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.input || <span className="text-[var(--text-muted)] italic">None</span>}
                               </pre>
                             </div>
                             <div>
-                              <span className="text-[10px] text-[var(--text-muted)] font-bold">Expected Output:</span>
-                              <pre className="mt-0.5 p-2 rounded bg-black/60 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap max-h-20">
-                                {tc.expected_output || tc.expected || <span className="text-gray-500 italic">None</span>}
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] font-bold uppercase">Expected Output:</span>
+                              <pre className="mt-0.5 p-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-primary)] overflow-x-auto whitespace-pre-wrap max-h-20">
+                                {tc.expected_output || tc.expected || <span className="text-[var(--text-muted)] italic">None</span>}
                               </pre>
                             </div>
                           </div>

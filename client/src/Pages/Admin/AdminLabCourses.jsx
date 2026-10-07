@@ -20,6 +20,7 @@ import {
 import api from '../../api/axios';
 import SearchableSelect from '../../Components/SearchableSelect';
 import ConfirmModal from '../../Components/ConfirmModal';
+import Pagination from '../../Components/Pagination';
 
 const inputCls =
   'w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all';
@@ -51,6 +52,12 @@ export default function AdminLabCourses() {
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState(null);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(12);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCourses, setTotalCourses] = useState(0);
+
   // Modal State
   const [courseModal, setCourseModal] = useState(null); // null | 'create' | 'edit'
   const [editingCourse, setEditingCourse] = useState(null);
@@ -74,16 +81,18 @@ export default function AdminLabCourses() {
 
   useEffect(() => {
     fetchCoursesAndData();
-  }, []);
+  }, [page, limit, search]);
 
   const fetchCoursesAndData = async () => {
     try {
       setLoading(true);
       const [coursesRes, adminDataRes] = await Promise.all([
-        api.get('/labs/courses'),
+        api.get(`/labs/courses?page=${page}&limit=${limit}&search=${encodeURIComponent(search.trim())}`),
         api.get('/admin/labs/data').catch(() => ({ mappings: [] })),
       ]);
       setCourses(coursesRes?.courses || []);
+      setTotalCourses(coursesRes?.total ?? (coursesRes?.courses?.length || 0));
+      setTotalPages(coursesRes?.total_pages ?? 1);
       setMappings(adminDataRes?.mappings || []);
     } catch {
       showToast('Failed to load lab courses', 'error');
@@ -371,6 +380,22 @@ export default function AdminLabCourses() {
             );
           })}
         </div>
+      )}
+
+      {/* Pagination Controls */}
+      {!loading && totalCourses > 0 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalCourses}
+          limit={limit}
+          onPageChange={(newPage) => setPage(newPage)}
+          onLimitChange={(newLimit) => {
+            setLimit(newLimit);
+            setPage(1);
+          }}
+          pageSizeOptions={[6, 12, 24, 48]}
+        />
       )}
 
       {/* MODAL: Create / Edit Lab Course */}

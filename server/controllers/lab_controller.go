@@ -460,6 +460,58 @@ func GetStudentLabCourses(c *gin.Context) {
 		})
 	}
 
+	// Search filter
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	if search != "" {
+		var filtered []EnhancedCourse
+		for _, item := range result {
+			if strings.Contains(strings.ToLower(item.Title), search) ||
+				strings.Contains(strings.ToLower(item.CourseCode), search) ||
+				strings.Contains(strings.ToLower(item.Department), search) {
+				filtered = append(filtered, item)
+			}
+		}
+		result = filtered
+	}
+
+	totalCount := len(result)
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "10"))
+
+	page := 1
+	limit := 10
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+		limit = l
+	}
+
+	var paginated []EnhancedCourse
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		paginated = result
+		limit = totalCount
+		if limit == 0 {
+			limit = 1
+		}
+	} else {
+		start := (page - 1) * limit
+		if start < totalCount {
+			end := start + limit
+			if end > totalCount {
+				end = totalCount
+			}
+			paginated = result[start:end]
+		} else {
+			paginated = []EnhancedCourse{}
+		}
+	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int(math.Ceil(float64(totalCount) / float64(limit)))
+	}
+
 	var allSections []string
 	database.DB.Model(&models.User{}).
 		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
@@ -467,9 +519,13 @@ func GetStudentLabCourses(c *gin.Context) {
 		Pluck("section", &allSections)
 
 	c.JSON(http.StatusOK, gin.H{
-		"courses":  result,
-		"sections": allSections,
-		"role":     userRole,
+		"courses":     paginated,
+		"sections":    allSections,
+		"role":        userRole,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -521,8 +577,64 @@ func GetCourseExperimentsForStudent(c *gin.Context) {
 		})
 	}
 
+	// Search filter
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	if search != "" {
+		var filtered []ExpItem
+		for _, item := range results {
+			if strings.Contains(strings.ToLower(item.Title), search) ||
+				strings.Contains(strings.ToLower(item.Aim), search) ||
+				strings.Contains(strconv.Itoa(item.ExperimentNo), search) {
+				filtered = append(filtered, item)
+			}
+		}
+		results = filtered
+	}
+
+	totalCount := len(results)
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "12"))
+
+	page := 1
+	limit := 12
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+		limit = l
+	}
+
+	var paginated []ExpItem
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		paginated = results
+		limit = totalCount
+		if limit == 0 {
+			limit = 1
+		}
+	} else {
+		start := (page - 1) * limit
+		if start < totalCount {
+			end := start + limit
+			if end > totalCount {
+				end = totalCount
+			}
+			paginated = results[start:end]
+		} else {
+			paginated = []ExpItem{}
+		}
+	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int(math.Ceil(float64(totalCount) / float64(limit)))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"experiments": results,
+		"experiments": paginated,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -2456,6 +2568,7 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 	userRole, _ := userRoleVal.(string)
 
 	sectionFilter := strings.TrimSpace(c.Query("section"))
+	searchQuery := strings.TrimSpace(c.Query("search"))
 
 	var course models.LabCourse
 	if err := database.DB.First(&course, courseID).Error; err != nil {
@@ -2516,7 +2629,7 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 		expIDs[i] = e.ID
 	}
 
-	// Fetch all students (filtered by section if specified)
+	// Fetch all students (filtered by section and search if specified)
 	studentQuery := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
 
 	if sectionFilter != "" && sectionFilter != "ALL" {
@@ -2533,6 +2646,11 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 		if len(secConds) > 0 {
 			studentQuery = studentQuery.Where(strings.Join(secConds, " OR "), secArgs...)
 		}
+	}
+
+	if searchQuery != "" {
+		s := "%" + strings.ToLower(searchQuery) + "%"
+		studentQuery = studentQuery.Where("LOWER(name) LIKE ? OR LOWER(roll_no) LIKE ? OR LOWER(email) LIKE ?", s, s, s)
 	}
 
 	var students []models.User
@@ -2808,6 +2926,33 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 		avgScoreAll = grandTotalMarksAll / totalStudentsCount
 	}
 
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "15"))
+	page := 1
+	limit := 15
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
+		limit = l
+	}
+
+	totalPages := 1
+	paginatedStudentMatrix := studentMatrix
+
+	if limitStr != "all" && limitStr != "0" && limitStr != "-1" && limit > 0 && totalStudentsCount > 0 {
+		totalPages = int((int64(totalStudentsCount) + int64(limit) - 1) / int64(limit))
+		start := (page - 1) * limit
+		if start > totalStudentsCount {
+			start = totalStudentsCount
+		}
+		end := start + limit
+		if end > totalStudentsCount {
+			end = totalStudentsCount
+		}
+		paginatedStudentMatrix = studentMatrix[start:end]
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"course":                  course,
 		"experiments":             experiments,
@@ -2815,8 +2960,12 @@ func FacultyGetCourseAnalytics(c *gin.Context) {
 		"overall_completion_rate": overallCompletionPct,
 		"average_score":           avgScoreAll,
 		"experiment_stats":        expStats,
-		"student_matrix":          studentMatrix,
+		"student_matrix":          paginatedStudentMatrix,
 		"sections":                finalSections,
+		"total":                   totalStudentsCount,
+		"page":                    page,
+		"limit":                   limit,
+		"total_pages":             totalPages,
 		"summary": gin.H{
 			"total_students":         totalStudentsCount,
 			"completion_rate_pct":    overallCompletionPct,

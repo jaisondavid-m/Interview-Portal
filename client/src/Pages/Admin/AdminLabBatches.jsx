@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users,
   Plus,
@@ -71,12 +71,40 @@ const DEPT_PRESETS = [
 
 export default function AdminLabBatches() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  // Active Tab state: 'batches' | 'roster'
+  const [activeTab, setActiveTab] = useState('batches');
+
+  // Dynamic Departments from Master
+  const [dynamicDepartments, setDynamicDepartments] = useState([]);
+
+  const deptOptions = useMemo(() => {
+    return dynamicDepartments.map((d) => ({
+      value: d.name,
+      label: d.name,
+      badge: d.code || undefined,
+      sublabel: `${d.student_count || 0} students · ${d.faculty_count || 0} faculty`,
+    }));
+  }, [dynamicDepartments]);
+
+  const drawerDeptOptions = useMemo(() => {
+    return [
+      { value: 'ALL', label: 'All Departments' },
+      ...dynamicDepartments.map((d) => ({
+        value: d.name,
+        label: d.name,
+        badge: d.code || undefined,
+        sublabel: `${d.student_count || 0} students`,
+      })),
+    ];
+  }, [dynamicDepartments]);
 
   // Persistence helpers
   const loadStored = (key, fallback) => {
@@ -120,6 +148,7 @@ export default function AdminLabBatches() {
 
   // Batch Stats
   const [batchStats, setBatchStats] = useState({});
+  const [totalStudentsCount, setTotalStudentsCount] = useState(0);
 
   // Batch Modal
   const [batchModal, setBatchModal] = useState(null); // null | 'create' | 'edit'
@@ -134,6 +163,7 @@ export default function AdminLabBatches() {
 
   // Student list state
   const [filterSection, setFilterSection] = useState('ALL');
+  const [filterDept, setFilterDept] = useState('ALL');
   const [students, setStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -152,6 +182,7 @@ export default function AdminLabBatches() {
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [drawerStudents, setDrawerStudents] = useState([]);
   const [drawerSearch, setDrawerSearch] = useState('');
+  const [drawerDept, setDrawerDept] = useState('ALL');
   const [drawerPage, setDrawerPage] = useState(1);
   const [drawerPagination, setDrawerPagination] = useState({ total_pages: 1, total_records: 0 });
   const [drawerLoading, setDrawerLoading] = useState(false);
@@ -175,18 +206,36 @@ export default function AdminLabBatches() {
 
   const STUDENT_LIMIT = 15;
 
-  const fetchBatchStats = async () => {
+  const fetchBatchStats = useCallback(async () => {
     try {
-      const res = await api.get('/admin/labs/batch-students/stats');
+      const params = {};
+      if (filterDept && filterDept !== 'ALL') {
+        params.department = filterDept;
+      }
+      const res = await api.get('/admin/labs/batch-students/stats', { params });
       if (Array.isArray(res?.stats)) {
         const statsMap = {};
+        let total = 0;
         res.stats.forEach((s) => {
           statsMap[s.section] = s.count;
+          total += s.count;
         });
         setBatchStats(statsMap);
+        setTotalStudentsCount(res?.total_students !== undefined ? res.total_students : total);
       }
     } catch {
       // silently catch
+    }
+  }, [filterDept]);
+
+  const fetchDynamicDepartments = async () => {
+    try {
+      const res = await api.get('/admin/data-management/departments');
+      if (res && res.data) {
+        setDynamicDepartments(Array.isArray(res.data) ? res.data : []);
+      }
+    } catch {
+      // Fallback
     }
   };
 
@@ -204,6 +253,9 @@ export default function AdminLabBatches() {
       } else if (filterSection !== 'ALL') {
         params.section = filterSection;
       }
+      if (filterDept && filterDept !== 'ALL') {
+        params.department = filterDept;
+      }
       const res = await api.get('/admin/users', { params });
       setStudents(Array.isArray(res.data) ? res.data : []);
       if (res.pagination) setPagination(res.pagination);
@@ -212,7 +264,7 @@ export default function AdminLabBatches() {
     } finally {
       setStudentsLoading(false);
     }
-  }, [page, search, filterSection]);
+  }, [page, search, filterSection, filterDept]);
 
   const fetchDrawerStudents = useCallback(async () => {
     try {
@@ -223,6 +275,9 @@ export default function AdminLabBatches() {
         search: drawerSearch.trim() || undefined,
         role: 'student',
       };
+      if (drawerDept !== 'ALL') {
+        params.department = drawerDept;
+      }
       const res = await api.get('/admin/users', { params });
       setDrawerStudents(Array.isArray(res.data) ? res.data : []);
       if (res.pagination) setDrawerPagination(res.pagination);
@@ -231,10 +286,36 @@ export default function AdminLabBatches() {
     } finally {
       setDrawerLoading(false);
     }
-  }, [drawerPage, drawerSearch]);
+  }, [drawerPage, drawerSearch, drawerDept]);
 
   useEffect(() => {
     fetchBatchStats();
+  }, [fetchBatchStats]);
+
+  useEffect(() => {
+    fetchDynamicDepartments();
+
+    // Check URL params for pre-loaded department or action
+    const deptParam = searchParams.get('dept');
+    const createParam = searchParams.get('create');
+    const tabParam = searchParams.get('tab');
+
+    if (tabParam === 'roster' || tabParam === 'allocation') {
+      setActiveTab('roster');
+    }
+    if (deptParam) {
+      setFilterDept(deptParam);
+      setBatchForm((prev) => ({
+        ...prev,
+        department: deptParam,
+        name: `${deptParam.slice(0, 4).toUpperCase()}-A`,
+      }));
+      setDrawerDept(deptParam);
+      setActiveTab('roster');
+    }
+    if (createParam === 'true') {
+      setBatchModal('create');
+    }
   }, []);
 
   useEffect(() => {
@@ -716,93 +797,145 @@ export default function AdminLabBatches() {
         </div>
       </div>
 
-      {/* SECTION 1: Batch Cohort Cards Grid */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[var(--accent)]" />
-            Configured Batches & Cohorts
-            <span className="text-[11px] font-mono text-[var(--text-muted)] ml-1">
-              ({batches.length} Batches · {totalAssignedStudents} Students Allocated)
-            </span>
-          </h2>
-        </div>
+      {/* Page Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-[var(--border)]">
+        <button
+          onClick={() => setActiveTab('batches')}
+          className={`px-4 py-2.5 text-xs sm:text-[13px] font-bold border-b-2 flex items-center gap-2 cursor-pointer transition-all -mb-[1px] ${
+            activeTab === 'batches'
+              ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-dim)]/40 rounded-t-[var(--radius-sm)] shadow-xs'
+              : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border)]'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Configured Batches &amp; Cohorts</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)]">
+            {batches.length}
+          </span>
+        </button>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {batches.map((b) => {
-            const count = batchStats[b.name] || 0;
-            const isFiltering = filterSection === b.name;
-
-            return (
-              <div
-                key={b.id}
-                onClick={() => {
-                  setFilterSection(b.name);
-                  setPage(1);
-                }}
-                className={`group relative bg-[var(--bg-card)] border rounded-[var(--radius-md)] p-4 space-y-3 transition-all cursor-pointer hover:shadow-sm ${
-                  isFiltering
-                    ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/20 shadow-sm'
-                    : 'border-[var(--border)] hover:border-[var(--border-accent)]'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="font-mono font-bold text-[16px] text-[var(--accent)] group-hover:underline">
-                      {b.name}
-                    </span>
-                    {b.department && (
-                      <span className="block text-[10px] text-[var(--text-muted)] font-medium">
-                        {b.department}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => openEditBatch(b)}
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
-                      title="Edit batch semester & year"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setDeletingBatch({ id: b.id, name: b.name })}
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] transition-colors cursor-pointer"
-                      title="Delete batch"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Linked Semester & Academic Year Badges */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
-                    <GraduationCap className="w-3 h-3 text-[var(--accent)]" />
-                    {b.semester}
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
-                    <Calendar className="w-3 h-3 text-[var(--accent)]" />
-                    {b.academic_year}
-                  </span>
-                </div>
-
-                {/* Footer Count & Filter Action */}
-                <div className="pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
-                  <span className="text-[var(--text-muted)]">Enrolled:</span>
-                  <span className="font-mono font-bold text-[var(--accent)]">
-                    {count} student{count === 1 ? '' : 's'}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <button
+          onClick={() => setActiveTab('roster')}
+          className={`px-4 py-2.5 text-xs sm:text-[13px] font-bold border-b-2 flex items-center gap-2 cursor-pointer transition-all -mb-[1px] ${
+            activeTab === 'roster'
+              ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-dim)]/40 rounded-t-[var(--radius-sm)] shadow-xs'
+              : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border)]'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" />
+          <span>Student Batch Allocation Roster</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)]">
+            {totalStudentsCount || '—'}
+          </span>
+        </button>
       </div>
 
-      {/* SECTION 2: Student Allocation Workspace */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4 shadow-[var(--shadow-xs)]">
+      {/* TAB 1: Configured Batches & Cohorts */}
+      {activeTab === 'batches' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[var(--accent)]" />
+                Configured Batches &amp; Cohorts
+                <span className="text-[11px] font-mono text-[var(--text-muted)] ml-1">
+                  ({batches.length} Batches · {totalAssignedStudents} Students Allocated)
+                </span>
+              </h2>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                Click any batch card to inspect and allocate students in the roster.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={openCreateBatch}
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Batch
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {batches.map((b) => {
+              const count = batchStats[b.name] || 0;
+              const isFiltering = filterSection === b.name;
+
+              return (
+                <div
+                  key={b.id}
+                  onClick={() => {
+                    setFilterSection(b.name);
+                    setPage(1);
+                    setActiveTab('roster');
+                  }}
+                  className={`group relative bg-[var(--bg-card)] border rounded-[var(--radius-md)] p-4 space-y-3 transition-all cursor-pointer hover:shadow-sm ${
+                    isFiltering
+                      ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/20 shadow-sm'
+                      : 'border-[var(--border)] hover:border-[var(--border-accent)]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono font-bold text-[16px] text-[var(--accent)] group-hover:underline">
+                        {b.name}
+                      </span>
+                      {b.department && (
+                        <span className="block text-[10px] text-[var(--text-muted)] font-medium">
+                          {b.department}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => openEditBatch(b)}
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                        title="Edit batch semester & year"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingBatch({ id: b.id, name: b.name })}
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] transition-colors cursor-pointer"
+                        title="Delete batch"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Linked Semester & Academic Year Badges */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
+                      <GraduationCap className="w-3 h-3 text-[var(--accent)]" />
+                      {b.semester}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
+                      <Calendar className="w-3 h-3 text-[var(--accent)]" />
+                      {b.academic_year}
+                    </span>
+                  </div>
+
+                  {/* Footer Count & Filter Action */}
+                  <div className="pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
+                    <span className="text-[var(--text-muted)]">Enrolled:</span>
+                    <span className="font-mono font-bold text-[var(--accent)]">
+                      {count} student{count === 1 ? '' : 's'} &rarr;
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: Student Allocation Workspace */}
+      {activeTab === 'roster' && (
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4 shadow-[var(--shadow-xs)]">
         {/* Workspace Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-[var(--border)]">
           <div>
@@ -864,7 +997,7 @@ export default function AdminLabBatches() {
           >
             <span>All Students</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20 text-inherit">
-              {pagination.total_records || '—'}
+              {totalStudentsCount || 0}
             </span>
           </button>
 
@@ -960,21 +1093,38 @@ export default function AdminLabBatches() {
           </div>
         )}
 
-        {/* Search Bar + Select All */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        {/* Search Bar + Department Filter + Select All */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search students by name, roll number, department, or email..."
+              placeholder="Search students by name, roll number, or email..."
               className={`${inputCls} pl-9`}
             />
           </div>
+
+          <div className="w-full sm:w-72 shrink-0">
+            <SearchableSelect
+              options={drawerDeptOptions}
+              value={filterDept}
+              onChange={(val) => {
+                setFilterDept(val);
+                setPage(1);
+                setSelectedIds(new Set());
+              }}
+              placeholder="All Departments"
+              searchPlaceholder="Search departments..."
+              fullWidth
+              clearable
+            />
+          </div>
+
           <button
             onClick={toggleAllStudents}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all shrink-0"
           >
             {selectedIds.size === students.length && students.length > 0 ? (
               <CheckSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -1103,47 +1253,48 @@ export default function AdminLabBatches() {
           </div>
         )}
 
-        {/* Pagination */}
-        {pagination.total_pages > 1 && (
-          <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-            <span className="text-[11px] text-[var(--text-muted)]">
-              {pagination.total_records} students · Page {page} of {pagination.total_pages}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                disabled={!pagination.has_prev}
-                onClick={() => setPage((p) => p - 1)}
-                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition-all"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              {Array.from({ length: Math.min(pagination.total_pages, 5) }, (_, i) => {
-                const p = i + 1;
-                return (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                      page === p
-                        ? 'bg-[var(--accent)] text-white'
-                        : 'bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-              <button
-                disabled={!pagination.has_next}
-                onClick={() => setPage((p) => p + 1)}
-                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition-all"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+          {/* Pagination */}
+          {pagination.total_pages > 1 && (
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+              <span className="text-[11px] text-[var(--text-muted)]">
+                {pagination.total_records} students · Page {page} of {pagination.total_pages}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={!pagination.has_prev}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition-all"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                {Array.from({ length: Math.min(pagination.total_pages, 5) }, (_, i) => {
+                  const p = i + 1;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-all ${
+                        page === p
+                          ? 'bg-[var(--accent)] text-white'
+                          : 'bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+                <button
+                  disabled={!pagination.has_next}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition-all"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* MODAL: Create / Edit Batch with Clean Presets Flow */}
       {batchModal && (
@@ -1180,25 +1331,18 @@ export default function AdminLabBatches() {
 
               {/* Department */}
               <div className="space-y-1.5">
-                <label className={labelCls}>Department</label>
-                <input
+                <label className={labelCls}>
+                  Department <span className="text-[var(--red)]">*</span>
+                </label>
+                <SearchableSelect
+                  options={deptOptions}
                   value={batchForm.department}
-                  onChange={(e) => setBatchForm((p) => ({ ...p, department: e.target.value }))}
-                  placeholder="e.g. Computer Science and Engineering"
-                  className={inputCls}
+                  onChange={(val) => setBatchForm((p) => ({ ...p, department: val }))}
+                  placeholder="Select Department..."
+                  searchPlaceholder="Search by department name or code..."
+                  fullWidth
+                  clearable
                 />
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {['CSE', 'AI&DS', 'IT', 'ECE', 'MECH'].map((dept) => (
-                    <button
-                      key={dept}
-                      type="button"
-                      onClick={() => setBatchForm((p) => ({ ...p, department: dept }))}
-                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--border-accent)] cursor-pointer transition-colors"
-                    >
-                      +{dept}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Semester Selector */}
@@ -1303,21 +1447,35 @@ export default function AdminLabBatches() {
                 </div>
               )}
 
-              {/* Search + Select All */}
-              <div className="flex gap-2">
+              {/* Controls: Department Filter + Search + Select All */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="w-full sm:w-64">
+                  <SearchableSelect
+                    options={drawerDeptOptions}
+                    value={drawerDept}
+                    onChange={(val) => {
+                      setDrawerDept(val);
+                      setDrawerPage(1);
+                    }}
+                    placeholder="All Departments"
+                    searchPlaceholder="Search departments..."
+                    fullWidth
+                  />
+                </div>
+
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={drawerSearch}
                     onChange={(e) => setDrawerSearch(e.target.value)}
-                    placeholder="Search by student name, roll number, or department..."
+                    placeholder="Search by name, roll no, email..."
                     className={`${inputCls} pl-9 text-xs`}
                   />
                 </div>
                 <button
                   onClick={toggleAllDrawerStudents}
-                  className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all"
+                  className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all shrink-0"
                 >
                   {drawerSelectedIds.size === drawerStudents.length && drawerStudents.length > 0
                     ? 'Deselect All'

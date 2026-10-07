@@ -26,6 +26,7 @@ import {
 import api from '../../api/axios';
 import LabStudentAnalyticsDrawer from '../../Components/AdminLabs/LabStudentAnalyticsDrawer';
 import SearchableSelect from '../../Components/SearchableSelect';
+import Pagination from '../../Components/Pagination';
 
 export default function AdminLabDashboard() {
   const navigate = useNavigate();
@@ -43,6 +44,12 @@ export default function AdminLabDashboard() {
   const [selectedSection, setSelectedSection] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(15);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalStudents, setTotalStudents] = useState(0);
+
   // Deep-Dive Student Drawer State
   const [selectedStudentDrawer, setSelectedStudentDrawer] = useState(null);
 
@@ -53,7 +60,7 @@ export default function AdminLabDashboard() {
 
   useEffect(() => {
     fetchDashboardAnalytics();
-  }, [selectedFaculty, selectedCourse, selectedSection]);
+  }, [selectedFaculty, selectedCourse, selectedSection, page, limit]);
 
   const fetchDashboardAnalytics = async () => {
     try {
@@ -64,9 +71,13 @@ export default function AdminLabDashboard() {
       if (selectedCourse !== 'ALL') params.append('course_id', selectedCourse);
       if (selectedSection !== 'ALL') params.append('section', selectedSection);
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
+      params.append('page', String(page));
+      params.append('limit', String(limit));
 
       const res = await api.get(`/admin/labs/dashboard-analytics?${params.toString()}`);
       setAnalytics(res);
+      setTotalStudents(res?.total ?? (res?.student_matrix?.length || 0));
+      setTotalPages(res?.total_pages ?? 1);
     } catch {
       setError('Failed to load administrative lab analytics.');
     } finally {
@@ -76,6 +87,7 @@ export default function AdminLabDashboard() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    setPage(1);
     fetchDashboardAnalytics();
   };
 
@@ -574,6 +586,24 @@ export default function AdminLabDashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {!loading && totalStudents > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalItems={totalStudents}
+                limit={limit}
+                onPageChange={(newPage) => setPage(newPage)}
+                onLimitChange={(newLimit) => {
+                  setLimit(newLimit);
+                  setPage(1);
+                }}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+              />
             </div>
           )}
         </div>

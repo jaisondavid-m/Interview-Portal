@@ -25,6 +25,7 @@ import {
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import LabMarkVerticalsModal from '../../Components/LabMarkVerticalsModal';
+import Pagination from '../../Components/Pagination';
 
 export default function LabDashboard() {
   const navigate = useNavigate();
@@ -37,18 +38,30 @@ export default function LabDashboard() {
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [courseError, setCourseError] = useState('');
 
+  // Course Pagination State
+  const [coursePage, setCoursePage] = useState(1);
+  const [courseLimit, setCourseLimit] = useState(12);
+  const [courseTotalPages, setCourseTotalPages] = useState(1);
+  const [courseTotalCount, setCourseTotalCount] = useState(0);
+
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [experiments, setExperiments] = useState([]);
   const [loadingExperiments, setLoadingExperiments] = useState(false);
   const [expError, setExpError] = useState('');
 
+  // Experiments Pagination State
+  const [expPage, setExpPage] = useState(1);
+  const [expLimit, setExpLimit] = useState(12);
+  const [expTotalPages, setExpTotalPages] = useState(1);
+  const [expTotalCount, setExpTotalCount] = useState(0);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [verticalsModalData, setVerticalsModalData] = useState(null);
 
-  // 1. Load enrolled courses on mount
+  // 1. Load enrolled courses on mount and filter changes
   useEffect(() => {
     fetchCourses();
-  }, []);
+  }, [coursePage, courseLimit, searchQuery, selectedSectionFilter]);
 
   // 2. Sync selected course from URL parameter if present
   useEffect(() => {
@@ -69,15 +82,21 @@ export default function LabDashboard() {
     if (selectedCourse?.id) {
       fetchExperiments(selectedCourse.id);
     }
-  }, [selectedCourse]);
+  }, [selectedCourse?.id, expPage, expLimit, searchQuery]);
 
   const fetchCourses = async () => {
     try {
       setLoadingCourses(true);
       setCourseError('');
-      const res = await api.get('/labs/courses');
+      const res = await api.get(
+        `/labs/courses?page=${coursePage}&limit=${courseLimit}&search=${encodeURIComponent(
+          searchQuery.trim()
+        )}`
+      );
       const courseList = res?.courses || [];
       setCourses(courseList);
+      setCourseTotalCount(res?.total ?? courseList.length);
+      setCourseTotalPages(res?.total_pages ?? 1);
       setAvailableSections(res?.sections || []);
 
       // Check if URL already has a courseId param
@@ -99,8 +118,15 @@ export default function LabDashboard() {
     try {
       setLoadingExperiments(true);
       setExpError('');
-      const res = await api.get(`/labs/courses/${courseId}/experiments`);
-      setExperiments(res?.experiments || []);
+      const res = await api.get(
+        `/labs/courses/${courseId}/experiments?page=${expPage}&limit=${expLimit}&search=${encodeURIComponent(
+          searchQuery.trim()
+        )}`
+      );
+      const expList = res?.experiments || [];
+      setExperiments(expList);
+      setExpTotalCount(res?.total ?? expList.length);
+      setExpTotalPages(res?.total_pages ?? 1);
     } catch {
       setExpError('Failed to load experiments for this course.');
     } finally {
@@ -428,6 +454,24 @@ export default function LabDashboard() {
                 })}
               </div>
             )}
+
+            {/* Experiments Pagination */}
+            {!loadingExperiments && expTotalCount > 0 && (
+              <div className="pt-2">
+                <Pagination
+                  page={expPage}
+                  totalPages={expTotalPages}
+                  totalItems={expTotalCount}
+                  limit={expLimit}
+                  onPageChange={(newPage) => setExpPage(newPage)}
+                  onLimitChange={(newLimit) => {
+                    setExpLimit(newLimit);
+                    setExpPage(1);
+                  }}
+                  pageSizeOptions={[6, 12, 24, 48]}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -661,6 +705,24 @@ export default function LabDashboard() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Courses Pagination */}
+          {!loadingCourses && courseTotalCount > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={coursePage}
+                totalPages={courseTotalPages}
+                totalItems={courseTotalCount}
+                limit={courseLimit}
+                onPageChange={(newPage) => setCoursePage(newPage)}
+                onLimitChange={(newLimit) => {
+                  setCourseLimit(newLimit);
+                  setCoursePage(1);
+                }}
+                pageSizeOptions={[6, 12, 24, 48]}
+              />
             </div>
           )}
         </div>

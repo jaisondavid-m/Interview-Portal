@@ -143,7 +143,7 @@ func AdminPreviewStudentRecordPDF(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
-// AdminGetLabFacultyList queries users table for users where role = 'faculty' with optional search
+// AdminGetLabFacultyList queries users table for users where role = 'faculty' with optional search and pagination
 func AdminGetLabFacultyList(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))
 	query := database.DB.Model(&models.User{}).Where("LOWER(role) = ?", "faculty")
@@ -153,14 +153,43 @@ func AdminGetLabFacultyList(c *gin.Context) {
 		query = query.Where("LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(department) LIKE ? OR LOWER(roll_no) LIKE ?", s, s, s, s)
 	}
 
+	var totalCount int64
+	query.Count(&totalCount)
+
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "0"))
+
+	page := 1
+	limit := 0
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
+		limit = l
+	}
+
 	var facultyList []models.User
-	if err := query.Order("name asc").Find(&facultyList).Error; err != nil {
+	dbQuery := query.Order("name asc")
+	if limit > 0 {
+		offset := (page - 1) * limit
+		dbQuery = dbQuery.Limit(limit).Offset(offset)
+	}
+	if err := dbQuery.Find(&facultyList).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch faculty users"})
 		return
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"faculty": facultyList,
+		"faculty":     facultyList,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -211,15 +240,26 @@ func GetBatchStudentStats(c *gin.Context) {
 		Count   int64  `json:"count"`
 	}
 
+	dept := strings.TrimSpace(c.Query("department"))
+
+	query := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
+	if dept != "" && !strings.EqualFold(dept, "all") {
+		query = query.Where("LOWER(department) = ?", strings.ToLower(dept))
+	}
+
 	var results []SectionCount
-	database.DB.Model(&models.User{}).
-		Select("COALESCE(NULLIF(section, ''), 'Unassigned') as section, count(*) as count").
-		Where("LOWER(role) IN ?", []string{"student", "user"}).
+	query.Select("COALESCE(NULLIF(section, ''), 'Unassigned') as section, count(*) as count").
 		Group("COALESCE(NULLIF(section, ''), 'Unassigned')").
 		Scan(&results)
 
+	var totalStudents int64
+	for _, r := range results {
+		totalStudents += r.Count
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"stats": results,
+		"stats":          results,
+		"total_students": totalStudents,
 	})
 }
 
@@ -371,15 +411,49 @@ func AdminGetCourseExperiments(c *gin.Context) {
 		return
 	}
 
+	query := database.DB.Where("course_id = ?", courseID)
+	search := strings.TrimSpace(c.Query("search"))
+	if search != "" {
+		s := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(title) LIKE ? OR LOWER(aim) LIKE ? OR CAST(experiment_no AS CHAR) LIKE ?", s, s, s)
+	}
+
+	var totalCount int64
+	query.Model(&models.LabExperiment{}).Count(&totalCount)
+
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "12"))
+
+	page := 1
+	limit := 12
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+		limit = l
+	}
+
 	var experiments []models.LabExperiment
-	if err := database.DB.Where("course_id = ?", courseID).Order("experiment_no asc").Find(&experiments).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch experiments"})
-		return
+	dbQuery := query.Order("experiment_no asc")
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		dbQuery.Find(&experiments)
+	} else {
+		offset := (page - 1) * limit
+		dbQuery.Limit(limit).Offset(offset).Find(&experiments)
+	}
+
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"course":      course,
 		"experiments": experiments,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -848,8 +922,36 @@ func AdminGetExperimentQuestionVariants(c *gin.Context) {
 		return
 	}
 
+	query := database.DB.Where("experiment_id = ?", expID)
+	search := strings.TrimSpace(c.Query("search"))
+	if search != "" {
+		s := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(title) LIKE ? OR LOWER(aim) LIKE ? OR LOWER(question_code) LIKE ?", s, s, s)
+	}
+
+	var totalCount int64
+	query.Model(&models.LabExperimentQuestion{}).Count(&totalCount)
+
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "10"))
+
+	page := 1
+	limit := 10
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 1 {
+		limit = l
+	}
+
 	var questions []models.LabExperimentQuestion
-	database.DB.Where("experiment_id = ?", expID).Order("id asc").Find(&questions)
+	dbQuery := query.Order("id asc")
+	if limitStr == "all" || limitStr == "0" || limitStr == "-1" {
+		dbQuery.Find(&questions)
+	} else {
+		offset := (page - 1) * limit
+		dbQuery.Limit(limit).Offset(offset).Find(&questions)
+	}
 
 	// Fetch Viva questions for each variant
 	type VariantWithVivas struct {
@@ -867,8 +969,17 @@ func AdminGetExperimentQuestionVariants(c *gin.Context) {
 		})
 	}
 
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"variants": results,
+		"variants":    results,
+		"total":       totalCount,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 	})
 }
 
@@ -1617,23 +1728,55 @@ func GetAdminLabDashboardAnalytics(c *gin.Context) {
 		})
 	}
 
+	pageStr := strings.TrimSpace(c.DefaultQuery("page", "1"))
+	limitStr := strings.TrimSpace(c.DefaultQuery("limit", "15"))
+	page := 1
+	limit := 15
+	if p, err := strconv.Atoi(pageStr); err == nil && p >= 1 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
+		limit = l
+	}
+
+	totalStudentsCount := len(studentMatrix)
+	totalPages := 1
+	paginatedStudentMatrix := studentMatrix
+
+	if limitStr != "all" && limitStr != "0" && limitStr != "-1" && limit > 0 && totalStudentsCount > 0 {
+		totalPages = int((int64(totalStudentsCount) + int64(limit) - 1) / int64(limit))
+		start := (page - 1) * limit
+		if start > totalStudentsCount {
+			start = totalStudentsCount
+		}
+		end := start + limit
+		if end > totalStudentsCount {
+			end = totalStudentsCount
+		}
+		paginatedStudentMatrix = studentMatrix[start:end]
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"summary": gin.H{
-			"total_courses":        len(courses),
-			"mapped_faculty_count": len(facultyList),
+			"total_courses":         len(courses),
+			"mapped_faculty_count":  len(facultyList),
 			"active_sections_count": len(sectionList),
-			"total_students":       len(students),
-			"total_submissions":    len(submissions),
-			"approved_submissions": approvedSubmissionsCount,
-			"pending_reviews":      pendingReviewsCount,
-			"avg_completion_pct":   avgCompPct,
+			"total_students":        len(students),
+			"total_submissions":     len(submissions),
+			"approved_submissions":  approvedSubmissionsCount,
+			"pending_reviews":       pendingReviewsCount,
+			"avg_completion_pct":    avgCompPct,
 		},
 		"courses":          courseOverviews,
 		"faculty_mappings": mappings,
 		"faculty":          facultyList,
 		"sections":         sectionList,
 		"experiments":      experiments,
-		"student_matrix":   studentMatrix,
+		"student_matrix":   paginatedStudentMatrix,
+		"total":            totalStudentsCount,
+		"page":             page,
+		"limit":            limit,
+		"total_pages":      totalPages,
 	})
 }
 
