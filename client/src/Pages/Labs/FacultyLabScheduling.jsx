@@ -73,6 +73,14 @@ export default function FacultyLabScheduling() {
   const [togglingExpId, setTogglingExpId] = useState(null);
   const [savingScheduleExpId, setSavingScheduleExpId] = useState(null);
 
+  // Bulk Milestone / Progressive Release State
+  const [bulkReleaseScope, setBulkReleaseScope] = useState('selected'); // 'selected' | 'all'
+  const [bulkReleaseUpToExpNo, setBulkReleaseUpToExpNo] = useState(1);
+  const [bulkReleaseStartsAt, setBulkReleaseStartsAt] = useState('');
+  const [bulkReleaseEndsAt, setBulkReleaseEndsAt] = useState('');
+  const [bulkReleaseMaxAttempts, setBulkReleaseMaxAttempts] = useState(0);
+  const [bulkReleaseApplying, setBulkReleaseApplying] = useState(false);
+
   // Inline Experiment Schedule Drafts: { [expId]: { is_unlocked, starts_at, ends_at, max_attempts, allow_late_submission, notes } }
   const [scheduleDrafts, setScheduleDrafts] = useState({});
 
@@ -128,11 +136,11 @@ export default function FacultyLabScheduling() {
   };
 
   const currentCourse = unlockData.courses.find((c) => String(c.id) === String(selectedUnlockCourseId));
-  const activeCourseExperiments = unlockData.experiments.filter(
-    (e) => String(e.course_id) === String(selectedUnlockCourseId)
-  );
+  const activeCourseExperiments = (unlockData.experiments || [])
+    .filter((e) => String(e.course_id) === String(selectedUnlockCourseId))
+    .sort((a, b) => (a.experiment_no || 0) - (b.experiment_no || 0));
 
-  // Initialize schedule drafts whenever selected course or section changes
+  // Initialize schedule drafts and default bulk release target whenever selected course or section changes
   useEffect(() => {
     if (!selectedUnlockCourseId) return;
     const drafts = {};
@@ -154,8 +162,25 @@ export default function FacultyLabScheduling() {
     });
     setScheduleDrafts(drafts);
 
-    if (activeCourseExperiments.length > 0 && selectedOverrideExpIds.length === 0) {
-      setSelectedOverrideExpIds([activeCourseExperiments[0].id]);
+    if (activeCourseExperiments.length > 0) {
+      if (selectedOverrideExpIds.length === 0) {
+        setSelectedOverrideExpIds([activeCourseExperiments[0].id]);
+      }
+      // Determine highest currently unlocked experiment number or default to first
+      const unlockedExps = activeCourseExperiments.filter((e) => {
+        const u = unlockData.unlocks.find(
+          (un) =>
+            un.experiment_id === e.id &&
+            (un.section === selectedUnlockSection || un.section === 'ALL')
+        );
+        return u?.is_unlocked;
+      });
+      if (unlockedExps.length > 0) {
+        const maxUnlockedNo = Math.max(...unlockedExps.map((e) => e.experiment_no || 0));
+        setBulkReleaseUpToExpNo(maxUnlockedNo);
+      } else {
+        setBulkReleaseUpToExpNo(activeCourseExperiments[0].experiment_no || 1);
+      }
     }
   }, [selectedUnlockCourseId, selectedUnlockSection, unlockData.unlocks, activeCourseExperiments.length]);
 
@@ -285,6 +310,70 @@ export default function FacultyLabScheduling() {
         ends_at: formatDateForInput(end),
       },
     }));
+  };
+
+  const applyBulkQuickWindow = (hours) => {
+    const now = new Date();
+    const end = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    setBulkReleaseStartsAt(formatDateForInput(now));
+    setBulkReleaseEndsAt(formatDateForInput(end));
+  };
+
+  const applyBulkStartNow = () => {
+    setBulkReleaseStartsAt(formatDateForInput(new Date()));
+  };
+
+  const handleApplyBulkProgressiveRelease = async () => {
+    if (!selectedUnlockCourseId || activeCourseExperiments.length === 0) return;
+
+    const targetUpTo = Number(bulkReleaseUpToExpNo);
+    const unlockExps = activeCourseExperiments.filter(
+      (e) => (e.experiment_no || 0) <= targetUpTo
+    );
+    const lockExps = activeCourseExperiments.filter(
+      (e) => (e.experiment_no || 0) > targetUpTo
+    );
+
+    const unlockExpIds = unlockExps.map((e) => e.id);
+    const lockExpIds = lockExps.map((e) => e.id);
+
+    const targetSections =
+      bulkReleaseScope === 'all'
+        ? unlockData.sections.length > 0
+          ? unlockData.sections
+          : ['ALL']
+        : [selectedUnlockSection || 'ALL'];
+
+    try {
+      setBulkReleaseApplying(true);
+      await api.post('/lab-incharge/unlocks/schedule', {
+        course_id: Number(selectedUnlockCourseId),
+        experiment_ids: unlockExpIds,
+        lock_experiment_ids: lockExpIds,
+        sections: targetSections,
+        is_unlocked: true,
+        starts_at: bulkReleaseStartsAt ? new Date(bulkReleaseStartsAt).toISOString() : null,
+        ends_at: bulkReleaseEndsAt ? new Date(bulkReleaseEndsAt).toISOString() : null,
+        max_attempts: Number(bulkReleaseMaxAttempts) || 0,
+        allow_late_submission: false,
+        notes: `Progressive milestone release up to Exp #${targetUpTo}`,
+      });
+
+      const scopeLabel =
+        bulkReleaseScope === 'all'
+          ? 'All Assigned Sections'
+          : `Section ${selectedUnlockSection}`;
+
+      showToast(
+        `Configured schedule up to Exp #${targetUpTo} for ${scopeLabel}! (Students progress sequentially via prerequisites)`
+      );
+      fetchUnlockMatrix();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to apply progressive release schedule.', 'error');
+    } finally {
+      setBulkReleaseApplying(false);
+    }
   };
 
   const handleSaveExpSchedule = async (expId) => {
@@ -492,7 +581,7 @@ export default function FacultyLabScheduling() {
       </div>
 
       {/* Experiment Release Roster & Window Timings (NO MODALS) */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-4 shadow-[var(--shadow-xs)]">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 space-y-5 shadow-[var(--shadow-xs)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
           <div>
             <h2 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -503,7 +592,7 @@ export default function FacultyLabScheduling() {
               </span>
             </h2>
             <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-              Set attendance window start/end times, attempt quotas, and toggle live unlocks directly inline.
+              Set attendance window start/end times, attempt quotas, and progressive milestone releases for your assigned batches.
             </p>
           </div>
 
@@ -521,6 +610,205 @@ export default function FacultyLabScheduling() {
               Lock All
             </button>
           </div>
+        </div>
+
+        {/* Progressive Milestone Release & Batch Scheduler Panel */}
+        <div className="bg-gradient-to-r from-[var(--bg-input)]/90 via-[var(--bg-card)] to-[var(--bg-input)]/90 border border-[var(--border-accent)]/50 rounded-[var(--radius-md)] p-4 sm:p-5 space-y-4 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-[var(--accent)]" />
+                <h3 className="text-[14px] font-bold text-[var(--text-primary)]">
+                  Progressive Milestone Release & Batch Scheduler
+                </h3>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                  Sequential Progression
+                </span>
+              </div>
+              <p className="text-[12px] text-[var(--text-secondary)]">
+                Choose up to which experiment number to release and schedule attendance windows for your batch. Students unlock each experiment one by one as they finish prerequisites.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleApplyBulkProgressiveRelease}
+                disabled={bulkReleaseApplying || activeCourseExperiments.length === 0}
+                className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {bulkReleaseApplying ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                Apply & Release Up to Exp #{bulkReleaseUpToExpNo}
+              </button>
+            </div>
+          </div>
+
+          {/* Configuration Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+            {/* Target Scope */}
+            <div className="space-y-1">
+              <label className={labelCls}>Target Batch / Scope</label>
+              <select
+                value={bulkReleaseScope}
+                onChange={(e) => setBulkReleaseScope(e.target.value)}
+                className={inputCls}
+              >
+                <option value="selected">
+                  Selected Section ({selectedUnlockSection})
+                </option>
+                <option value="all">
+                  All Assigned Sections ({unlockData.sections?.length > 0 ? unlockData.sections.join(', ') : 'ALL'})
+                </option>
+              </select>
+            </div>
+
+            {/* Release Up To Exp No */}
+            <div className="space-y-1">
+              <label className={labelCls}>Release Up To Exp #</label>
+              <select
+                value={bulkReleaseUpToExpNo}
+                onChange={(e) => setBulkReleaseUpToExpNo(Number(e.target.value))}
+                className={inputCls}
+              >
+                {activeCourseExperiments.map((e) => (
+                  <option key={e.id} value={e.experiment_no}>
+                    Exp #{e.experiment_no} — {e.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Starts At */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className={labelCls}>Window Starts At</label>
+                <button
+                  type="button"
+                  onClick={applyBulkStartNow}
+                  className="text-[10px] font-bold text-[var(--accent)] hover:underline cursor-pointer"
+                >
+                  Start Now
+                </button>
+              </div>
+              <input
+                type="datetime-local"
+                value={bulkReleaseStartsAt}
+                onChange={(e) => setBulkReleaseStartsAt(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+
+            {/* Ends At (Deadline) */}
+            <div className="space-y-1">
+              <label className={labelCls}>Window Ends At (Deadline)</label>
+              <input
+                type="datetime-local"
+                value={bulkReleaseEndsAt}
+                onChange={(e) => setBulkReleaseEndsAt(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+
+            {/* Max Attempts & Quick Window */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className={labelCls}>Max Attempts</label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => applyBulkQuickWindow(24)}
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                    title="24 Hours from now"
+                  >
+                    +24h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyBulkQuickWindow(168)}
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                    title="7 Days from now"
+                  >
+                    +7d
+                  </button>
+                </div>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                value={bulkReleaseMaxAttempts}
+                onChange={(e) => setBulkReleaseMaxAttempts(e.target.value)}
+                placeholder="0 = Unlimited"
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          {/* Live Step Sequence Pathway Visualizer */}
+          {activeCourseExperiments.length > 0 && (
+            <div className="pt-2 border-t border-[var(--border)]/60">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
+                  <ListOrdered className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  Student Progression Pathway (Up to Exp #{bulkReleaseUpToExpNo}):
+                </span>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                  {activeCourseExperiments.filter((e) => (e.experiment_no || 0) <= Number(bulkReleaseUpToExpNo)).length} / {activeCourseExperiments.length} Released
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-thin">
+                {activeCourseExperiments.map((exp, idx) => {
+                  const isIncluded = (exp.experiment_no || 0) <= Number(bulkReleaseUpToExpNo);
+                  const isFirst = idx === 0;
+                  const prevExpNo = idx > 0 ? activeCourseExperiments[idx - 1].experiment_no : null;
+
+                  return (
+                    <React.Fragment key={exp.id}>
+                      {idx > 0 && (
+                        <ArrowRight
+                          className={`w-3.5 h-3.5 shrink-0 ${
+                            isIncluded ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]/40'
+                          }`}
+                        />
+                      )}
+                      <div
+                        className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] shrink-0 flex items-center gap-1.5 border transition-all ${
+                          isIncluded
+                            ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--text-primary)] font-semibold'
+                            : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-muted)] opacity-60'
+                        }`}
+                      >
+                        {isIncluded ? (
+                          <Unlock className="w-3 h-3 text-[var(--accent)]" />
+                        ) : (
+                          <Lock className="w-3 h-3 text-[var(--text-muted)]" />
+                        )}
+                        <span>Exp #{exp.experiment_no}</span>
+                        <span className="text-[10px] opacity-75 font-normal">
+                          {isFirst
+                            ? '(Open)'
+                            : isIncluded
+                            ? `(Prereq: #${prevExpNo})`
+                            : '(Locked)'}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1.5 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" />
+                <span>
+                  <strong>Flow explanation:</strong> When applied, students on Exp 1 can write Exp 1. Upon finishing Exp 1, Exp 2 opens; finishing Exp 2 opens Exp 3, up to Exp #{bulkReleaseUpToExpNo}. Experiments after Exp #{bulkReleaseUpToExpNo} remain locked.
+                </span>
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Experiment Inline Roster Cards */}
