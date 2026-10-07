@@ -1,14 +1,11 @@
 import React from 'react';
 
-// Academic Double Border with Corner Squares matching manual specification
+// Academic Single Line Border matching manual specification
 export const PageBorderFrame = ({ isOdd = true, isDuplex = true }) => {
-  const gap = 2.2;
   const x1 = isDuplex ? (isOdd ? 14 : 10) : 10;
   const y1 = 8;
   const w = isDuplex ? 186 : 190;
   const h = 281;
-  const x2 = x1 + w;
-  const y2 = y1 + h;
 
   return (
     <svg
@@ -25,7 +22,7 @@ export const PageBorderFrame = ({ isOdd = true, isDuplex = true }) => {
         zIndex: 0
       }}
     >
-      {/* Outer Rectangle - Clean thin crisp black line */}
+      {/* Single clean crisp rectangular border in black */}
       <rect
         x={x1}
         y={y1}
@@ -34,53 +31,6 @@ export const PageBorderFrame = ({ isOdd = true, isDuplex = true }) => {
         fill="none"
         stroke="#000000"
         strokeWidth="0.38"
-      />
-      {/* Inner Rectangle */}
-      <rect
-        x={x1 + gap}
-        y={y1 + gap}
-        width={w - 2 * gap}
-        height={h - 2 * gap}
-        fill="none"
-        stroke="#000000"
-        strokeWidth="0.32"
-      />
-      {/* 4 Corner Squares */}
-      <rect
-        x={x1}
-        y={y1}
-        width={gap}
-        height={gap}
-        fill="#ffffff"
-        stroke="#000000"
-        strokeWidth="0.32"
-      />
-      <rect
-        x={x2 - gap}
-        y={y1}
-        width={gap}
-        height={gap}
-        fill="#ffffff"
-        stroke="#000000"
-        strokeWidth="0.32"
-      />
-      <rect
-        x={x1}
-        y={y2 - gap}
-        width={gap}
-        height={gap}
-        fill="#ffffff"
-        stroke="#000000"
-        strokeWidth="0.32"
-      />
-      <rect
-        x={x2 - gap}
-        y={y2 - gap}
-        width={gap}
-        height={gap}
-        fill="#ffffff"
-        stroke="#000000"
-        strokeWidth="0.32"
       />
     </svg>
   );
@@ -307,16 +257,14 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
   for (let i = 0; i < codeOutputPairsCount; i++) {
     const codeChunk = codeChunks[i] || '';
     const outChunk = outChunks[i] || '';
-    const codeSuffix = codeChunks.length > 1 ? `(PART ${i + 1})` : '';
-    const outSuffix = outChunks.length > 1 ? `(PART ${i + 1})` : '';
 
     pairs.push({
       spreadType: 'code_output',
       left: outChunk
-        ? { type: 'output', output: outChunk, titleSuffix: outSuffix }
+        ? { type: 'output', output: outChunk, titleSuffix: '' }
         : { type: 'blank', titleSuffix: '' },
       right: codeChunk
-        ? { type: 'code', code: codeChunk, titleSuffix: codeSuffix }
+        ? { type: 'code', code: codeChunk, titleSuffix: '' }
         : { type: 'blank', titleSuffix: '' }
     });
   }
@@ -1430,7 +1378,7 @@ export default function LabRecordDocument({
                                 <tbody>
                                   <tr>
                                     <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      SAMPLE INPUT & OUTPUT {left.titleSuffix || ''}
+                                      SAMPLE INPUT & OUTPUT
                                     </td>
                                   </tr>
                                 </tbody>
@@ -1608,7 +1556,7 @@ export default function LabRecordDocument({
                               <tbody>
                                 <tr>
                                   <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>PROGRAM SOURCE CODE {right.titleSuffix || ''}</span>
+                                    <span>PROGRAM SOURCE CODE</span>
                                     <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
                                       Language: {exp.language || 'Python'}
                                     </span>
