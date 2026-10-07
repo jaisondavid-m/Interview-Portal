@@ -261,11 +261,11 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
     pairs.push({
       spreadType: 'code_output',
       left: outChunk
-        ? { type: 'output', output: outChunk, titleSuffix: '' }
-        : { type: 'blank', titleSuffix: '' },
+        ? { type: 'output', output: outChunk, chunkIndex: i }
+        : { type: 'blank', chunkIndex: i },
       right: codeChunk
-        ? { type: 'code', code: codeChunk, titleSuffix: '' }
-        : { type: 'blank', titleSuffix: '' }
+        ? { type: 'code', code: codeChunk, chunkIndex: i }
+        : { type: 'blank', chunkIndex: i }
     });
   }
 
@@ -664,18 +664,20 @@ export default function LabRecordDocument({
           width: 100%;
           border-collapse: collapse;
           margin-top: 14px;
-          margin-bottom: 0;
+          margin-bottom: 4px;
         }
 
         .section-bar-table td {
-          border: 1px solid #000000;
-          text-align: center;
-          padding: 6px 10px;
-          font-size: 10.5pt;
+          border: none;
+          text-align: left;
+          padding: 4px 0;
+          font-size: 11pt;
           font-weight: bold;
           text-transform: uppercase;
-          background: #f4f4f5;
+          background: transparent;
           letter-spacing: 0.5px;
+          text-decoration: underline;
+          text-underline-offset: 3px;
         }
 
         .grid-table {
@@ -700,27 +702,26 @@ export default function LabRecordDocument({
         }
 
         .content-box {
-          border: 1px solid #000000;
-          border-top: none;
-          padding: 10px 14px;
-          font-size: 10pt;
-          line-height: 1.55;
-          margin-bottom: 14px;
+          border: none;
+          padding: 4px 0 10px 0;
+          font-size: 10.5pt;
+          line-height: 1.6;
+          margin-bottom: 12px;
           text-align: justify;
+          background: transparent;
         }
 
         .code-container {
-          border: 1px solid #000000;
-          border-top: none;
-          background: #fafafa;
-          padding: 10px 14px;
+          border: none;
+          background: transparent;
+          padding: 4px 0;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
           line-height: 1.45;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: -1px;
+          margin-top: 2px;
           margin-bottom: 12px;
           color: #111827;
           box-sizing: border-box;
@@ -728,17 +729,16 @@ export default function LabRecordDocument({
         }
 
         .output-container {
-          border: 1px solid #000000;
-          border-top: none;
-          background: #fafafa;
-          padding: 10px 14px;
+          border: none;
+          background: transparent;
+          padding: 4px 0;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
           line-height: 1.45;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: -1px;
+          margin-top: 2px;
           margin-bottom: 12px;
           color: #111827;
           box-sizing: border-box;
@@ -1374,16 +1374,12 @@ export default function LabRecordDocument({
 
                           {left.type === 'output' ? (
                             <>
-                              <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      SAMPLE INPUT & OUTPUT
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                              <div className="output-container" style={{ minHeight: '340px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
+                              {left.chunkIndex === 0 && (
+                                <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '14px', marginBottom: '4px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                                  SAMPLE INPUT & OUTPUT
+                                </div>
+                              )}
+                              <div className="output-container" style={{ minHeight: left.chunkIndex === 0 ? '340px' : '450px', marginTop: left.chunkIndex === 0 ? '2px' : '14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
                                 {renderFormattedOutput(left.output)}
                               </div>
                             </>
@@ -1436,41 +1432,23 @@ export default function LabRecordDocument({
                             </table>
 
                             {/* Main Experiment Title Bar - ONLY SHOWN ONCE HERE */}
-                            <table className="section-bar-table" style={{ marginTop: '10px', marginBottom: '4px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ fontSize: '12pt', padding: '10px 14px', fontWeight: 'bold', letterSpacing: '0.8px', lineHeight: '1.4' }}>
-                                    EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
+                            <div style={{ marginTop: '12px', marginBottom: '10px', textAlign: 'center', fontSize: '12pt', fontWeight: 'bold', letterSpacing: '0.8px', lineHeight: '1.4' }}>
+                              EXPERIMENT {expNo} : {exp.title ? exp.title.toUpperCase() : `LAB EXPERIMENT ${expNo}`}
+                            </div>
 
                             {/* AIM */}
-                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                                    AIM
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                            <div className="content-box" style={{ marginBottom: '14px', padding: '12px 16px', lineHeight: '1.7', fontSize: '10.5pt' }}>
+                            <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '14px', marginBottom: '4px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                              AIM
+                            </div>
+                            <div className="content-box" style={{ marginBottom: '14px', lineHeight: '1.7', fontSize: '10.5pt' }}>
                               {exp.aim || `To write, execute and verify the program for "${exp.title}".`}
                             </div>
 
                             {/* ALGORITHM / PROCEDURE */}
-                            <table className="section-bar-table" style={{ marginTop: '12px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ textAlign: 'left', padding: '6px 12px', fontSize: '10.5pt', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                                    ALGORITHM / PROCEDURE
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px', padding: '14px 16px' }}>
+                            <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '14px', marginBottom: '4px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                              ALGORITHM / PROCEDURE
+                            </div>
+                            <div className="content-box" style={{ minHeight: '140px', marginBottom: '14px' }}>
                               {procedureSteps.length > 0 ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                   {procedureSteps.map((step, sIdx) => (
@@ -1552,19 +1530,17 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                              <tbody>
-                                <tr>
-                                  <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>PROGRAM SOURCE CODE</span>
-                                    <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
-                                      Language: {exp.language || 'Python'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                            <pre className="code-container" style={{ minHeight: '340px' }}>
+                            {right.chunkIndex === 0 && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                                  PROGRAM SOURCE CODE
+                                </span>
+                                <span style={{ fontSize: '9pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal', color: '#444' }}>
+                                  Language: {exp.language || 'Python'}
+                                </span>
+                              </div>
+                            )}
+                            <pre className="code-container" style={{ minHeight: right.chunkIndex === 0 ? '340px' : '450px', marginTop: right.chunkIndex === 0 ? '2px' : '14px' }}>
                               {right.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
                             </pre>
                           </div>
@@ -1645,15 +1621,9 @@ export default function LabRecordDocument({
                             {/* BOTTOM: RESULT & STAFF SIGNATURE */}
                             <div className="prevent-break" style={{ marginBottom: '12mm' }}>
                               {/* RESULT */}
-                              <table className="section-bar-table">
-                                <tbody>
-                                  <tr>
-                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      RESULT
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
+                              <div style={{ fontSize: '11pt', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '14px', marginBottom: '4px', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                                RESULT
+                              </div>
                               <div className="content-box" style={{ marginBottom: '12px' }}>
                                 {exp.result_text || `Thus the program for "${exp.title}" was successfully written, executed, and the output was verified.`}
                               </div>
