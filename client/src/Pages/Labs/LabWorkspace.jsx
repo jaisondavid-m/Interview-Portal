@@ -180,27 +180,37 @@ export default function LabWorkspace() {
         console.warn('Auto-submit code execution failed:', err);
       }
 
-      setAutoSubmitStep('Progress saved safely! Redirecting to Dashboard...');
+      setAutoSubmitStep('Progress saved safely! Redirecting to Practical Labs...');
       setTimeout(() => {
-        navigate(`/labs/${courseId}`);
-      }, 1600);
+        navigate('/labs', { replace: true });
+      }, 1200);
     } catch (e) {
-      setAutoSubmitStep('Timing expired. Redirecting to Dashboard...');
+      setAutoSubmitStep('Timing expired. Redirecting to Practical Labs...');
       setTimeout(() => {
-        navigate(`/labs/${courseId}`);
-      }, 1400);
+        navigate('/labs', { replace: true });
+      }, 1000);
     }
   };
 
   // ── Real-time Countdown Timer Effect ────────────────────────────────────────
   useEffect(() => {
-    if (!accessStatus?.ends_at || isSubmittedOrApproved || isAutoSubmitting) {
+    // Only run live countdown if experiment is unlocked, has an ends_at in the future, and not submitted
+    if (!isUnlocked || !accessStatus?.ends_at || isSubmittedOrApproved || isAutoSubmitting) {
       setTimeLeft(null);
       return;
     }
 
     const endsAtMs = new Date(accessStatus.ends_at).getTime();
     if (isNaN(endsAtMs)) return;
+
+    // If already expired at mount time, do not trigger auto-submit loop
+    const initialDiff = Math.floor((endsAtMs - Date.now()) / 1000);
+    if (initialDiff <= 0) {
+      setTimeLeft(0);
+      return;
+    }
+
+    setTimeLeft(initialDiff);
 
     const checkTimeRemaining = () => {
       const now = Date.now();
@@ -214,9 +224,6 @@ export default function LabWorkspace() {
       return diffSec;
     };
 
-    const initialDiff = checkTimeRemaining();
-    if (initialDiff <= 0) return;
-
     const interval = setInterval(() => {
       const remaining = checkTimeRemaining();
       if (remaining <= 0) {
@@ -225,7 +232,7 @@ export default function LabWorkspace() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [accessStatus?.ends_at, isSubmittedOrApproved, isAutoSubmitting]);
+  }, [accessStatus?.ends_at, isUnlocked, isSubmittedOrApproved, isAutoSubmitting]);
 
   const formatTimeRemaining = (seconds) => {
     if (seconds === null || seconds === undefined) return null;
@@ -399,7 +406,7 @@ export default function LabWorkspace() {
         {/* Left: Back + Experiment & Locked Question Variant */}
         <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={() => navigate('/labs')}
+            onClick={() => navigate('/labs', { replace: true })}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] py-1.5 px-3 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -926,6 +933,15 @@ export default function LabWorkspace() {
                 {autoSubmitStep}
               </span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/labs', { replace: true })}
+              className="w-full py-2.5 px-4 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:brightness-110 active:scale-[0.98] transition shadow-md cursor-pointer flex items-center justify-center gap-2"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Go to Practical Labs
+            </button>
           </div>
         </div>
       )}
