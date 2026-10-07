@@ -179,128 +179,78 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
   const codeLines = (code || '').trim() ? (code || '').trim().split(/\r?\n/) : [];
   const outLines = (cleanOut || '').trim() ? (cleanOut || '').trim().split(/\r?\n/) : [];
 
-  const MAX_LINES_SINGLE_SECTION = 26; // Guarantees 0 lines ever cut off or hidden by page bounds
-  const MAX_LINES_COMBINED = 22;       // Page sharing both code and output
+  const MAX_LINES_PER_PAGE = 26; // Guarantees 0 lines ever cut off or hidden by page bounds
 
-  const leftPages = [];
-
-  // Case 1: Standard experiment where code fits on Left Page 1 and output fits on Left Page 2
-  if (codeLines.length <= MAX_LINES_SINGLE_SECTION && outLines.length <= MAX_LINES_SINGLE_SECTION) {
-    // Pair 1 Left: Program Code
-    leftPages.push({
-      type: 'code',
-      code: codeLines.join('\n') || `# Program for: ${title || 'Lab Experiment'}\ndef main():\n    print("Execution completed successfully")\n\nif __name__ == '__main__':\n    main()`,
-      output: '',
-      titleSuffix: '',
-    });
-
-    // Pair 2 Left: Sample Input & Output
-    leftPages.push({
-      type: 'output',
-      code: '',
-      output: outLines.join('\n') || 'Sample Output:\n>> Execution completed successfully.',
-      titleSuffix: '',
-    });
-
-    return leftPages;
-  }
-
-  // Case 2: Code or output spans more than 36 lines
-  // Step 1: Chunk code lines
-  let cIdx = 0;
+  // 1. Chunk code lines (for Right pages)
   const codeChunks = [];
+  let cIdx = 0;
   while (cIdx < codeLines.length) {
-    const chunk = codeLines.slice(cIdx, cIdx + MAX_LINES_SINGLE_SECTION);
+    const chunk = codeLines.slice(cIdx, cIdx + MAX_LINES_PER_PAGE);
     codeChunks.push(chunk.join('\n'));
-    cIdx += MAX_LINES_SINGLE_SECTION;
+    cIdx += MAX_LINES_PER_PAGE;
   }
   if (codeChunks.length === 0) {
     codeChunks.push(`# Program for: ${title || 'Lab Experiment'}\ndef main():\n    print("Execution completed successfully")\n\nif __name__ == '__main__':\n    main()`);
   }
 
-  // Step 2: Chunk output lines
-  let oIdx = 0;
+  // 2. Chunk output lines (for Left pages)
   const outChunks = [];
+  let oIdx = 0;
   while (oIdx < outLines.length) {
-    const chunk = outLines.slice(oIdx, oIdx + MAX_LINES_SINGLE_SECTION);
+    const chunk = outLines.slice(oIdx, oIdx + MAX_LINES_PER_PAGE);
     outChunks.push(chunk.join('\n'));
-    oIdx += MAX_LINES_SINGLE_SECTION;
+    oIdx += MAX_LINES_PER_PAGE;
   }
   if (outChunks.length === 0) {
     outChunks.push('Sample Output:\n>> Execution completed successfully.');
   }
 
-  const lastCodeLines = codeChunks[codeChunks.length - 1].split('\n').length;
-  const firstOutLines = outChunks[0].split('\n').length;
+  // Spreads count for code/output section
+  const codeOutputPairsCount = Math.max(codeChunks.length, outChunks.length);
+  const pairs = [];
 
-  // Add all code chunks except the last one
-  for (let i = 0; i < codeChunks.length - 1; i++) {
-    leftPages.push({
-      type: 'code',
-      code: codeChunks[i],
-      output: '',
-      titleSuffix: `(PART ${i + 1})`,
+  // Pair 1: Spread 1 (Aim & Algorithm)
+  // Left: Blank Page | Right: Aim & Algorithm
+  pairs.push({
+    spreadType: 'aim_algo',
+    left: { type: 'blank', titleSuffix: '' },
+    right: { type: 'aim_algo', titleSuffix: '' }
+  });
+
+  // Pair 2..N: Spread(s) for Program (Right) & Output (Left)
+  for (let i = 0; i < codeOutputPairsCount; i++) {
+    const codeChunk = codeChunks[i] || '';
+    const outChunk = outChunks[i] || '';
+    const codeSuffix = codeChunks.length > 1 ? `(PART ${i + 1})` : '';
+    const outSuffix = outChunks.length > 1 ? `(PART ${i + 1})` : '';
+
+    pairs.push({
+      spreadType: 'code_output',
+      left: outChunk
+        ? { type: 'output', output: outChunk, titleSuffix: outSuffix }
+        : { type: 'blank', titleSuffix: '' },
+      right: codeChunk
+        ? { type: 'code', code: codeChunk, titleSuffix: codeSuffix }
+        : { type: 'blank', titleSuffix: '' }
     });
   }
 
-  // Check if last code chunk and first output chunk can seamlessly share a page
-  if (codeChunks.length > 1 && lastCodeLines + firstOutLines <= MAX_LINES_COMBINED) {
-    leftPages.push({
-      type: 'combined',
-      code: codeChunks[codeChunks.length - 1],
-      output: outChunks[0],
-      titleSuffix: '(CONTINUATION & OUTPUT)',
-    });
-    for (let j = 1; j < outChunks.length; j++) {
-      leftPages.push({
-        type: 'output',
-        code: '',
-        output: outChunks[j],
-        titleSuffix: `(PART ${j + 1})`,
-      });
-    }
-  } else {
-    const codePartSuffix = codeChunks.length > 1 ? `(PART ${codeChunks.length})` : '';
-    leftPages.push({
-      type: 'code',
-      code: codeChunks[codeChunks.length - 1],
-      output: '',
-      titleSuffix: codePartSuffix,
-    });
+  // Pair Last: Spread (Evaluation Rubrics & Result)
+  // Left: Blank Page | Right: Rubrics & Result
+  pairs.push({
+    spreadType: 'eval_result',
+    left: { type: 'blank', titleSuffix: '' },
+    right: { type: 'eval_result', titleSuffix: '' }
+  });
 
-    for (let j = 0; j < outChunks.length; j++) {
-      const outPartSuffix = outChunks.length > 1 ? `(PART ${j + 1})` : '';
-      leftPages.push({
-        type: 'output',
-        code: '',
-        output: outChunks[j],
-        titleSuffix: outPartSuffix,
-      });
-    }
-  }
-
-  // Ensure at least 2 left pages
-  if (leftPages.length < 2) {
-    leftPages.push({
-      type: 'output',
-      code: '',
-      output: cleanOut || 'Sample Output:\n>> Execution completed successfully.',
-      titleSuffix: '',
-    });
-  }
-
-  return leftPages;
+  return pairs;
 };
 
 // Legacy compatibility export
 export const splitCodeAndOutput = (code = '', output = '', sampleTestCases = null, title = '') => {
-  const pages = paginateExperimentContent(code, output, sampleTestCases, title);
+  const pairs = paginateExperimentContent(code, output, sampleTestCases, title);
   return {
-    hasContinuation: pages.length > 1,
-    page1Code: pages[0]?.code || '',
-    page1Output: pages[0]?.output || '',
-    page3Code: pages[1]?.code || '',
-    page3Output: pages[1]?.output || '',
+    pairs,
   };
 };
 
@@ -429,8 +379,8 @@ export default function LabRecordDocument({
   let runningPageCount = 6;
   const experimentPaginator = experiments.map((exp, index) => {
     const expNo = exp.experiment_no || index + 1;
-    const leftPages = paginateExperimentContent(exp.submitted_code, exp.execution_output, exp.sample_test_cases, exp.title);
-    const pairCount = leftPages.length;
+    const pairs = paginateExperimentContent(exp.submitted_code, exp.execution_output, exp.sample_test_cases, exp.title);
+    const pairCount = pairs.length;
     const startPage = runningPageCount + 1;
     const endPage = startPage + (pairCount * 2) - 1;
     runningPageCount = endPage;
@@ -438,7 +388,7 @@ export default function LabRecordDocument({
     return {
       exp,
       expNo,
-      leftPages,
+      pairs,
       pairCount,
       startPage,
       endPage,
@@ -1247,30 +1197,49 @@ export default function LabRecordDocument({
             - Pair 1 (Right/Odd): Aim & Algorithm / Procedure
             - Intermediate Pairs (if needed): Continued Code/Output (Left) & Notes/Diagrams (Right)
             - Final Pair (Left/Even): Final Program / Console Output
-            - Final Pair (Right/Odd): Evaluation Rubrics & Result with Signature
+            - Spread 1 (Pair 1): Blank Page (Left) & Aim + Algorithm / Procedure (Right)
+            - Spread 2..N: Program Execution Output (Left) & Program Source Code (Right)
+            - Final Spread: Blank Page (Left) & Evaluation Rubrics + Result with Staff Sign (Right)
             All pages are strictly constrained to A4 sheet dimensions.
             ========================================================= */}
         {experimentPaginator.map((item, index) => {
-          const { exp, expNo, leftPages, pairCount, startPage } = item;
+          const { exp, expNo, pairs, startPage } = item;
           const procedureSteps = parseProcedureSteps(exp.procedure);
           const rubricsData = getExperimentRubrics(exp, 100);
 
           return (
             <React.Fragment key={index}>
-              {leftPages.map((leftPageContent, pairIdx) => {
+              {pairs.map((pair, pairIdx) => {
+                const { spreadType, left, right } = pair;
                 const leftPageNum = startPage + (pairIdx * 2);
                 const rightPageNum = leftPageNum + 1;
-                const isFirstPair = (pairIdx === 0);
-                const isLastPair = (pairIdx === pairCount - 1);
-                const isIntermediatePair = (!isFirstPair && !isLastPair);
 
-                const showLeft = viewMode === 'all' || viewMode === 'spread' || viewMode === expNo || viewMode === exp.id || viewMode === `exp_${expNo}_left` || viewMode === `exp_${expNo}_code` || viewMode === `exp_${expNo}_p${leftPageNum}`;
-                const showRight = viewMode === 'all' || viewMode === 'spread' || viewMode === expNo || viewMode === exp.id || viewMode === `exp_${expNo}_right` || viewMode === `exp_${expNo}_aim` || viewMode === `exp_${expNo}_eval` || viewMode === `exp_${expNo}_p${rightPageNum}`;
+                const showLeft =
+                  viewMode === 'all' ||
+                  viewMode === 'spread' ||
+                  viewMode === expNo ||
+                  viewMode === exp.id ||
+                  viewMode === `exp_${expNo}_left` ||
+                  viewMode === `exp_${expNo}_p${leftPageNum}` ||
+                  (spreadType === 'aim_algo' && viewMode === `exp_${expNo}_aim_left`) ||
+                  (spreadType === 'code_output' && (viewMode === `exp_${expNo}_out_left` || viewMode === `exp_${expNo}_output`)) ||
+                  (spreadType === 'eval_result' && viewMode === `exp_${expNo}_eval_left`);
+
+                const showRight =
+                  viewMode === 'all' ||
+                  viewMode === 'spread' ||
+                  viewMode === expNo ||
+                  viewMode === exp.id ||
+                  viewMode === `exp_${expNo}_right` ||
+                  viewMode === `exp_${expNo}_p${rightPageNum}` ||
+                  (spreadType === 'aim_algo' && (viewMode === `exp_${expNo}_aim_right` || viewMode === `exp_${expNo}_aim`)) ||
+                  (spreadType === 'code_output' && (viewMode === `exp_${expNo}_code_right` || viewMode === `exp_${expNo}_code`)) ||
+                  (spreadType === 'eval_result' && (viewMode === `exp_${expNo}_eval_right` || viewMode === `exp_${expNo}_eval`));
 
                 return (
                   <div key={pairIdx} className={isDuplex ? "booklet-spread-container" : "flex flex-col items-center w-full"}>
                     {/* -------------------------------------------------------------
-                        LEFT-HAND PAGE (EVEN): PROGRAM SOURCE CODE OR SAMPLE INPUT & OUTPUT
+                        LEFT-HAND PAGE (EVEN): ONLY PROGRAM OUTPUT OR BLANK PAGE
                         ------------------------------------------------------------- */}
                     {showLeft && (
                       <div className="academic-page page-even flex flex-col justify-between">
@@ -1280,7 +1249,7 @@ export default function LabRecordDocument({
                             <tbody>
                               <tr>
                                 <td style={{ textAlign: 'left' }}>
-                                  EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [{leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : 'SAMPLE INPUT & OUTPUT'}]
+                                  EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [{left.type === 'output' ? 'PROGRAM EXECUTION OUTPUT' : 'OBSERVATION / ROUGH WORK'}]
                                 </td>
                                 <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
                                 <td style={{ width: '195px' }}>
@@ -1298,99 +1267,45 @@ export default function LabRecordDocument({
                             </tbody>
                           </table>
 
-                          {/* Left Page Title Bar (Minimal) */}
-                          <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
-                            <tbody>
-                              <tr>
-                                <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
-                                  EXPERIMENT {expNo} &nbsp;|&nbsp; {leftPageContent.type === 'code' ? 'PROGRAM SOURCE CODE' : leftPageContent.type === 'combined' ? 'PROGRAM CONTINUATION & SAMPLE OUTPUT' : 'SAMPLE INPUT & OUTPUT'} {leftPageContent.titleSuffix || ''}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
+                          {left.type === 'output' ? (
+                            <>
+                              {/* Left Page Title Bar */}
+                              <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
+                                <tbody>
+                                  <tr>
+                                    <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
+                                      EXPERIMENT {expNo} &nbsp;|&nbsp; PROGRAM EXECUTION OUTPUT {left.titleSuffix || ''}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
 
-                          {leftPageContent.type === 'combined' ? (
-                            <>
-                              {/* PROGRAM CONTINUATION */}
-                              <table className="section-bar-table" style={{ marginTop: '10px' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ textAlign: 'left', padding: '4px 10px', fontSize: '9.5pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <span>PROGRAM SOURCE CODE (CONTINUED)</span>
-                                      <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
-                                        Language: {exp.language || 'Python'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                              <pre className="code-container" style={{ minHeight: '120px' }}>
-                                {leftPageContent.code}
-                              </pre>
-
-                              {/* SAMPLE INPUT & OUTPUT */}
-                              <table className="section-bar-table" style={{ marginTop: '10px' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ textAlign: 'left', padding: '4px 10px', fontSize: '9.5pt' }}>
-                                      SAMPLE INPUT & OUTPUT
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                              <div className="output-container" style={{ minHeight: '160px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
-                                {renderFormattedOutput(leftPageContent.output)}
-                              </div>
-                            </>
-                          ) : leftPageContent.type === 'code' ? (
-                            <>
-                              <table className="section-bar-table" style={{ marginTop: '14px' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <span>PROGRAM SOURCE CODE {leftPageContent.titleSuffix || ''}</span>
-                                      <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
-                                        Language: {exp.language || 'Python'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                              <pre className="code-container" style={{ minHeight: '340px' }}>
-                                {leftPageContent.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
-                              </pre>
-                              {pairIdx < pairCount - 1 && leftPages[pairIdx + 1]?.type === 'code' && (
-                                <div className="text-right text-[8.5pt] text-neutral-500 italic mt-2 select-none">
-                                  [Program source code continues on Page {leftPageNum + 2}...]
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <>
                               <table className="section-bar-table" style={{ marginTop: '14px' }}>
                                 <tbody>
                                   <tr>
                                     <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt' }}>
-                                      SAMPLE INPUT & OUTPUT {leftPageContent.titleSuffix || ''}
+                                      SAMPLE INPUT & OUTPUT {left.titleSuffix || ''}
                                     </td>
                                   </tr>
                                 </tbody>
                               </table>
                               <div className="output-container" style={{ minHeight: '340px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '9.5pt', lineHeight: '1.44' }}>
-                                {renderFormattedOutput(leftPageContent.output)}
+                                {renderFormattedOutput(left.output)}
                               </div>
-                              {pairIdx < pairCount - 1 && leftPages[pairIdx + 1]?.type === 'output' && (
-                                <div className="text-right text-[8.5pt] text-neutral-500 italic mt-2 select-none">
-                                  [Sample input & output continues on Page {leftPageNum + 2}...]
-                                </div>
-                              )}
                             </>
+                          ) : (
+                            /* Empty Blank Page on Left Side */
+                            <div className="flex flex-col items-center justify-center text-center" style={{ minHeight: '520px', paddingTop: '160px' }}>
+                              <div className="text-sm font-serif italic text-neutral-400 select-none">
+                                — THIS PAGE IS INTENTIONALLY LEFT BLANK FOR OBSERVATION / ROUGH WORK —
+                              </div>
+                            </div>
                           )}
                         </div>
 
                         {/* Footer */}
                         <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                          <span>{course_code} — Experiment {expNo} ({leftPageContent.type === 'code' ? 'Program' : leftPageContent.type === 'combined' ? 'Program & Output' : 'Sample Input & Output'}{leftPageContent.titleSuffix ? ' ' + leftPageContent.titleSuffix : ''})</span>
+                          <span>{course_code} — Experiment {expNo} ({left.type === 'output' ? 'Program Output' : 'Blank Page'})</span>
                           <span>Page {leftPageNum} of {totalDocPages}</span>
                         </div>
                       </div>
@@ -1398,13 +1313,13 @@ export default function LabRecordDocument({
 
                     {/* -------------------------------------------------------------
                         RIGHT-HAND PAGE (ODD):
-                        - Pair 1: AIM & ALGORITHM (Big & Bold Title above Aim)
-                        - Intermediate Pairs: Clean Blank Page
-                        - Final Pair: EVALUATION RUBRIC MATRIX & RESULT
+                        - Aim & Algorithm Spread: AIM & ALGORITHM
+                        - Program Spread: PROGRAM SOURCE CODE
+                        - Evaluation Spread: EVALUATION RUBRIC MATRIX & RESULT
                         ------------------------------------------------------------- */}
                     {showRight && (
                       <div className="academic-page page-odd flex flex-col justify-between">
-                        {isFirstPair ? (
+                        {spreadType === 'aim_algo' ? (
                           <div>
                             {/* Top Row: Right Page Header */}
                             <table className="top-row-table">
@@ -1429,7 +1344,7 @@ export default function LabRecordDocument({
                               </tbody>
                             </table>
 
-                            {/* Main Experiment Title Bar: Prominent Bold & Big */}
+                            {/* Main Experiment Title Bar */}
                             <table className="section-bar-table" style={{ marginTop: '10px', marginBottom: '4px' }}>
                               <tbody>
                                 <tr>
@@ -1520,7 +1435,61 @@ export default function LabRecordDocument({
                               )}
                             </div>
                           </div>
-                        ) : isLastPair ? (
+                        ) : spreadType === 'code_output' ? (
+                          /* Program Source Code (Right Side) */
+                          <div>
+                            {/* Top Row: Right Page Header */}
+                            <table className="top-row-table">
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left' }}>
+                                    EXP NO: <span className="font-bold">{expNo}</span> &nbsp;&nbsp;|&nbsp;&nbsp; [PROGRAM SOURCE CODE]
+                                  </td>
+                                  <td style={{ textAlign: 'right', paddingRight: '8px' }}>REGISTER NO.:</td>
+                                  <td style={{ width: '195px' }}>
+                                    <table className="register-boxes">
+                                      <tbody>
+                                        <tr>
+                                          {regCells.map((char, idx) => (
+                                            <td key={idx}>{char}</td>
+                                          ))}
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            {/* Program Source Code Bar */}
+                            <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ fontSize: '9.5pt', padding: '4px 8px', fontWeight: '600', letterSpacing: '0.3px', background: '#f8fafc', color: '#374151' }}>
+                                    EXPERIMENT {expNo} &nbsp;|&nbsp; VERIFIED SOURCE CODE {right.titleSuffix || ''}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            <table className="section-bar-table" style={{ marginTop: '14px' }}>
+                              <tbody>
+                                <tr>
+                                  <td style={{ textAlign: 'left', padding: '5px 10px', fontSize: '10pt', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>PROGRAM SOURCE CODE {right.titleSuffix || ''}</span>
+                                    <span style={{ fontSize: '8.5pt', fontFamily: 'inherit', textTransform: 'none', fontWeight: 'normal' }}>
+                                      Language: {exp.language || 'Python'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <pre className="code-container" style={{ minHeight: '340px' }}>
+                              {right.code || `# Program for Experiment ${expNo}: ${exp.title}\ndef main():\n    print("Program executed successfully")\n\nif __name__ == '__main__':\n    main()`}
+                            </pre>
+                          </div>
+                        ) : spreadType === 'eval_result' ? (
+                          /* Evaluation Rubrics & Result (Right Side) */
                           <>
                             <div>
                               {/* Top Row Header */}
@@ -1546,7 +1515,7 @@ export default function LabRecordDocument({
                                 </tbody>
                               </table>
 
-                              {/* Evaluation Page Title Bar (Minimal) */}
+                              {/* Evaluation Page Title Bar */}
                               <table className="section-bar-table" style={{ marginTop: '8px', marginBottom: '0' }}>
                                 <tbody>
                                   <tr>
@@ -1561,9 +1530,7 @@ export default function LabRecordDocument({
                             {/* Spacer to push rubrics towards centre */}
                             <div className="flex-1" />
 
-                            {/* --------------------------------------------------------
-                                CENTRE: EVALUATION RUBRIC & MARKS BREAKDOWN
-                                -------------------------------------------------------- */}
+                            {/* CENTRE: EVALUATION RUBRIC & MARKS BREAKDOWN */}
                             {showRubrics && (
                               <div className="prevent-break">
                                 <table className="section-bar-table" style={{ marginTop: '10px' }}>
@@ -1606,9 +1573,7 @@ export default function LabRecordDocument({
                             {/* Spacer to push result to bottom */}
                             <div className="flex-1" />
 
-                            {/* --------------------------------------------------------
-                                BOTTOM: RESULT & STAFF SIGNATURE
-                                -------------------------------------------------------- */}
+                            {/* BOTTOM: RESULT & STAFF SIGNATURE */}
                             <div className="prevent-break" style={{ marginBottom: '12mm' }}>
                               {/* RESULT */}
                               <table className="section-bar-table">
@@ -1642,9 +1607,8 @@ export default function LabRecordDocument({
                             </div>
                           </>
                         ) : (
-                          /* Intermediate Pairs: Clean Empty Blank Page */
+                          /* Intermediate Blank Page */
                           <div>
-                            {/* Top Row: Right Page Header */}
                             <table className="top-row-table">
                               <tbody>
                                 <tr>
@@ -1666,15 +1630,13 @@ export default function LabRecordDocument({
                                 </tr>
                               </tbody>
                             </table>
-
-                            {/* Completely Empty Content Area */}
                             <div style={{ minHeight: '620px' }} />
                           </div>
                         )}
 
                         {/* Footer */}
                         <div className="doc-footer" style={{ position: 'absolute', bottom: '14mm', left: '18mm', right: '18mm' }}>
-                          <span>{course_code} — Experiment {expNo} ({isFirstPair ? 'Aim & Algorithm' : isLastPair ? 'Evaluation & Result' : 'Continuation'})</span>
+                          <span>{course_code} — Experiment {expNo} ({spreadType === 'aim_algo' ? 'Aim & Algorithm' : spreadType === 'code_output' ? 'Program Source Code' : spreadType === 'eval_result' ? 'Evaluation & Result' : 'Continuation'})</span>
                           <span>Page {rightPageNum} of {totalDocPages}</span>
                         </div>
                       </div>
