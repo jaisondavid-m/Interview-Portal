@@ -121,28 +121,28 @@ export default function AdminLabPdfViewer() {
   };
 
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
 
   const handleDownloadPdf = async () => {
     if (!template) return;
     try {
       setDownloading(true);
+      setDownloadProgress({ current: 1, total: template?.experiments?.length ? template.experiments.length * 4 + 6 : 1 });
 
       const prevMode = viewMode;
       if (prevMode !== 'all') {
         setViewMode('all');
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 200));
       }
-
-      showToast('Generating official PDF identical to preview...', 'info');
 
       const fileName = `${template.course_code || 'LabRecord'}_Audit_Document.pdf`;
       const targetEl = documentCanvasRef.current || containerRef.current || document.querySelector('.lab-record-wrapper');
 
       await exportDomToPdf(targetEl, fileName, (current, total) => {
-        showToast(`Rendering page ${current} of ${total}...`, 'info');
+        setDownloadProgress({ current, total });
       });
 
-      showToast('PDF downloaded successfully!', 'success');
+      showToast('Laboratory manual PDF downloaded successfully!', 'success');
       if (prevMode !== 'all') {
         setViewMode(prevMode);
       }
@@ -151,6 +151,7 @@ export default function AdminLabPdfViewer() {
       showToast('Failed to generate PDF. Please try again.', 'error');
     } finally {
       setDownloading(false);
+      setDownloadProgress({ current: 0, total: 0 });
     }
   };
 
@@ -412,6 +413,58 @@ export default function AdminLabPdfViewer() {
           </div>
         </div>
       ) : null}
+
+      {/* High-Fidelity PDF Generation Progress Modal */}
+      {downloading && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 animate-scaleUp">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--accent-dim)] border border-[var(--border-accent)] text-[var(--accent)] flex items-center justify-center mx-auto shadow-sm">
+              <Download className="w-7 h-7 animate-bounce text-[var(--accent)]" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
+                Compiling Laboratory Manual PDF
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Rendering vector pages, verified source code, execution outputs, and evaluation rubrics.
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono font-bold">
+                <span className="text-[var(--text-primary)]">
+                  Page {downloadProgress.current} of {downloadProgress.total || '...'}
+                </span>
+                <span className="text-[var(--accent)]">
+                  {downloadProgress.total > 0
+                    ? `${Math.round((downloadProgress.current / downloadProgress.total) * 100)}%`
+                    : 'Processing...'}
+                </span>
+              </div>
+
+              <div className="w-full h-3 bg-[var(--bg-input)] rounded-full border border-[var(--border)] overflow-hidden p-0.5">
+                <div
+                  className="h-full bg-gradient-to-r from-[var(--accent)] to-indigo-500 rounded-full transition-all duration-150 ease-out"
+                  style={{
+                    width: `${
+                      downloadProgress.total > 0
+                        ? Math.min(100, Math.round((downloadProgress.current / downloadProgress.total) * 100))
+                        : 5
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[var(--bg-raised)] border border-[var(--border)] flex items-center justify-center gap-2.5 text-[11px] text-[var(--text-muted)] font-medium">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)] shrink-0" />
+              <span>Please keep this window open while downloading...</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
