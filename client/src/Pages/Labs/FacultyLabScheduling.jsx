@@ -142,6 +142,10 @@ export default function FacultyLabScheduling() {
   });
   const [bulkSavingOverrides, setBulkSavingOverrides] = useState(false);
 
+  // Override Table Pagination State
+  const [overridePage, setOverridePage] = useState(1);
+  const [overrideLimit, setOverrideLimit] = useState(10);
+
   // Quick Action loader state for sessions
   const [sessionActionKey, setSessionActionKey] = useState(null);
 
@@ -689,6 +693,18 @@ export default function FacultyLabScheduling() {
       o.experiment?.title?.toLowerCase().includes(q)
     );
   });
+
+  // Reset override page to 1 whenever search or scope changes
+  useEffect(() => {
+    setOverridePage(1);
+  }, [overrideSearch, selectedUnlockCourseId, selectedUnlockSection]);
+
+  const totalOverridePages = Math.ceil(activeCourseOverrides.length / overrideLimit) || 1;
+  const safeOverridePage = Math.min(overridePage, totalOverridePages);
+  const paginatedOverrides = activeCourseOverrides.slice(
+    (safeOverridePage - 1) * overrideLimit,
+    safeOverridePage * overrideLimit
+  );
 
   // Calculate distinct batch session data for Tab 3
   const sectionList = ['ALL', ...(unlockData.sections || [])];
@@ -1747,7 +1763,7 @@ export default function FacultyLabScheduling() {
                       </td>
                     </tr>
                   ) : (
-                    activeCourseOverrides.map((ovr) => {
+                    paginatedOverrides.map((ovr) => {
                       const isSelected = selectedTableOverrideIds.includes(ovr.id);
                       return (
                         <tr
@@ -1820,6 +1836,56 @@ export default function FacultyLabScheduling() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {activeCourseOverrides.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 text-xs text-[var(--text-secondary)] border-t border-[var(--border)]">
+                <div className="flex items-center gap-2">
+                  <span>Rows per page:</span>
+                  <select
+                    value={overrideLimit}
+                    onChange={(e) => {
+                      setOverrideLimit(Number(e.target.value));
+                      setOverridePage(1);
+                    }}
+                    className="bg-[var(--bg-input)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span className="text-[var(--text-muted)]">
+                    Showing {(safeOverridePage - 1) * overrideLimit + 1}–
+                    {Math.min(safeOverridePage * overrideLimit, activeCourseOverrides.length)} of{' '}
+                    {activeCourseOverrides.length}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setOverridePage((p) => Math.max(1, p - 1))}
+                    disabled={safeOverridePage <= 1}
+                    className="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-raised)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-medium text-xs"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-2 font-mono text-[11px] text-[var(--text-muted)]">
+                    Page {safeOverridePage} of {totalOverridePages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setOverridePage((p) => Math.min(totalOverridePages, p + 1))}
+                    disabled={safeOverridePage >= totalOverridePages}
+                    className="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-raised)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-medium text-xs"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Edit Student Override Modal */}

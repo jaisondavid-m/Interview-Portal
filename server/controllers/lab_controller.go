@@ -1835,6 +1835,31 @@ func FacultyGetCourseReleases(c *gin.Context) {
 	facultyID, _ := facultyIDVal.(uint)
 	userRole, _ := userRoleVal.(string)
 
+	courseIDQuery := strings.TrimSpace(c.Query("course_id"))
+	sectionQuery := strings.TrimSpace(c.Query("section"))
+	searchQuery := strings.TrimSpace(c.Query("search"))
+
+	// Pagination for student overrides
+	overridePage, _ := strconv.Atoi(c.DefaultQuery("override_page", "1"))
+	if overridePage < 1 {
+		overridePage = 1
+	}
+	overrideLimit, _ := strconv.Atoi(c.DefaultQuery("override_limit", "25"))
+	if overrideLimit < 1 {
+		overrideLimit = 25
+	} else if overrideLimit > 200 {
+		overrideLimit = 200
+	}
+	overrideOffset := (overridePage - 1) * overrideLimit
+
+	// Filter for student roster search
+	studentQuery := strings.TrimSpace(c.Query("student_search"))
+	studentSection := strings.TrimSpace(c.Query("student_section"))
+	studentLimit, _ := strconv.Atoi(c.DefaultQuery("student_limit", "100"))
+	if studentLimit < 1 || studentLimit > 500 {
+		studentLimit = 100
+	}
+
 	var mappings []models.LabMapping
 	var courses []models.LabCourse
 
@@ -1853,21 +1878,74 @@ func FacultyGetCourseReleases(c *gin.Context) {
 	}
 
 	// Fetch section-level unlocks
+	unlockQuery := database.DB.Preload("Course").Preload("Experiment").
+		Where("student_id IS NULL OR student_id = 0")
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		unlockQuery = unlockQuery.Where("course_id = ?", courseIDQuery)
+	}
+	if sectionQuery != "" && sectionQuery != "ALL" {
+		unlockQuery = unlockQuery.Where("section = ? OR section = 'ALL'", sectionQuery)
+	}
 	var sectionUnlocks []models.LabExperimentUnlock
-	database.DB.Preload("Course").Preload("Experiment").
-		Where("student_id IS NULL OR student_id = 0").
-		Order("experiment_id asc").
-		Find(&sectionUnlocks)
+	unlockQuery.Order("experiment_id asc").Find(&sectionUnlocks)
 
-	// Fetch student-specific overrides
+	// Fetch student-specific overrides with pagination & search
 	var studentOverrides []models.LabExperimentUnlock
-	database.DB.Preload("Course").Preload("Experiment").Preload("Student").
-		Where("student_id IS NOT NULL AND student_id > 0").
-		Order("created_at desc").
+	var overrideTotal int64
+
+	overrideCountDB := database.DB.Model(&models.LabExperimentUnlock{}).
+		Where("lab_experiment_unlocks.student_id IS NOT NULL AND lab_experiment_unlocks.student_id > 0")
+
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		overrideCountDB = overrideCountDB.Where("lab_experiment_unlocks.course_id = ?", courseIDQuery)
+	}
+	if sectionQuery != "" && sectionQuery != "ALL" {
+		overrideCountDB = overrideCountDB.Where("lab_experiment_unlocks.section = ?", sectionQuery)
+	}
+	if searchQuery != "" {
+		searchPattern := "%" + searchQuery + "%"
+		overrideCountDB = overrideCountDB.Joins("LEFT JOIN users ON users.id = lab_experiment_unlocks.student_id").
+			Joins("LEFT JOIN lab_experiments ON lab_experiments.id = lab_experiment_unlocks.experiment_id").
+			Where("users.name LIKE ? OR users.roll_no LIKE ? OR users.email LIKE ? OR lab_experiments.title LIKE ?",
+				searchPattern, searchPattern, searchPattern, searchPattern)
+	}
+
+	overrideCountDB.Count(&overrideTotal)
+
+	overrideDataDB := database.DB.Model(&models.LabExperimentUnlock{}).
+		Where("lab_experiment_unlocks.student_id IS NOT NULL AND lab_experiment_unlocks.student_id > 0")
+
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		overrideDataDB = overrideDataDB.Where("lab_experiment_unlocks.course_id = ?", courseIDQuery)
+	}
+	if sectionQuery != "" && sectionQuery != "ALL" {
+		overrideDataDB = overrideDataDB.Where("lab_experiment_unlocks.section = ?", sectionQuery)
+	}
+	if searchQuery != "" {
+		searchPattern := "%" + searchQuery + "%"
+		overrideDataDB = overrideDataDB.Joins("LEFT JOIN users ON users.id = lab_experiment_unlocks.student_id").
+			Joins("LEFT JOIN lab_experiments ON lab_experiments.id = lab_experiment_unlocks.experiment_id").
+			Where("users.name LIKE ? OR users.roll_no LIKE ? OR users.email LIKE ? OR lab_experiments.title LIKE ?",
+				searchPattern, searchPattern, searchPattern, searchPattern)
+	}
+
+	overrideDataDB.Preload("Course").Preload("Experiment").Preload("Student").
+		Order("lab_experiment_unlocks.created_at desc").
+		Offset(overrideOffset).
+		Limit(overrideLimit).
 		Find(&studentOverrides)
 
+	overrideTotalPages := int((overrideTotal + int64(overrideLimit) - 1) / int64(overrideLimit))
+	if overrideTotalPages < 1 {
+		overrideTotalPages = 1
+	}
+
 	var allExperiments []models.LabExperiment
-	database.DB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
+	expDB := database.DB
+	if courseIDQuery != "" && courseIDQuery != "0" {
+		expDB = expDB.Where("course_id = ?", courseIDQuery)
+	}
+	expDB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
 
 	// Fetch distinct sections from users
 	var sectionList []string
@@ -1876,21 +1954,38 @@ func FacultyGetCourseReleases(c *gin.Context) {
 		Distinct().
 		Pluck("section", &sectionList)
 
-	// Fetch student roster for individual overrides
+	// Fetch student roster for individual overrides with optional search/section filter & limit
 	var studentList []models.User
-	database.DB.Where("LOWER(role) IN ?", []string{"student", "user"}).
-		Select("id, name, roll_no, email, section, department").
+	var studentTotal int64
+	studentDB := database.DB.Model(&models.User{}).
+		Where("LOWER(role) IN ?", []string{"student", "user"})
+
+	if studentSection != "" && studentSection != "ALL" {
+		studentDB = studentDB.Where("section = ?", studentSection)
+	}
+	if studentQuery != "" {
+		sqPattern := "%" + studentQuery + "%"
+		studentDB = studentDB.Where("name LIKE ? OR roll_no LIKE ? OR email LIKE ?", sqPattern, sqPattern, sqPattern)
+	}
+	studentDB.Count(&studentTotal)
+	studentDB.Select("id, name, roll_no, email, section, department").
 		Order("name asc").
+		Limit(studentLimit).
 		Find(&studentList)
 
 	c.JSON(http.StatusOK, gin.H{
-		"courses":           courses,
-		"mappings":          mappings,
-		"unlocks":           sectionUnlocks,
-		"student_overrides": studentOverrides,
-		"experiments":       allExperiments,
-		"sections":          sectionList,
-		"students":          studentList,
+		"courses":              courses,
+		"mappings":             mappings,
+		"unlocks":              sectionUnlocks,
+		"student_overrides":    studentOverrides,
+		"override_total":       overrideTotal,
+		"override_page":        overridePage,
+		"override_limit":       overrideLimit,
+		"override_total_pages": overrideTotalPages,
+		"experiments":          allExperiments,
+		"sections":             sectionList,
+		"students":             studentList,
+		"student_total":        studentTotal,
 	})
 }
 

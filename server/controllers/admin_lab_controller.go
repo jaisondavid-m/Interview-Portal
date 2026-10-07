@@ -36,7 +36,10 @@ func GetAdminLabData(c *gin.Context) {
 	}
 
 	var studentList []models.User
-	if err := database.DB.Where("LOWER(role) IN ?", []string{"student", "user"}).Order("name asc").Find(&studentList).Error; err != nil {
+	if err := database.DB.Where("LOWER(role) IN ?", []string{"student", "user"}).
+		Select("id, name, roll_no, email, section, department").
+		Order("name asc").
+		Find(&studentList).Error; err != nil {
 		studentList = []models.User{}
 	}
 
