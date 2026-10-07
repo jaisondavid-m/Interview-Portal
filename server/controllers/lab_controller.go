@@ -2194,6 +2194,73 @@ func FacultyDeleteStudentOverride(c *gin.Context) {
 	})
 }
 
+type BulkDeleteStudentOverridesReq struct {
+	IDs []uint `json:"ids" binding:"required"`
+}
+
+// FacultyBulkDeleteStudentOverrides removes multiple student overrides in one call
+func FacultyBulkDeleteStudentOverrides(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	var req BulkDeleteStudentOverridesReq
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please provide override IDs to delete"})
+		return
+	}
+
+	res := database.DB.Where("id IN ?", req.IDs).Delete(&models.LabExperimentUnlock{})
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully removed %d student window override(s)!", res.RowsAffected),
+		"count":   res.RowsAffected,
+	})
+}
+
+type UpdateSingleOverrideReq struct {
+	BypassPrerequisite  bool       `json:"bypass_prerequisite"`
+	StartsAt            *time.Time `json:"starts_at"`
+	EndsAt              *time.Time `json:"ends_at"`
+	AllowLateSubmission bool       `json:"allow_late_submission"`
+	Notes               string     `json:"notes"`
+}
+
+// FacultyUpdateStudentOverride updates an individual student override
+func FacultyUpdateStudentOverride(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid override ID"})
+		return
+	}
+
+	var req UpdateSingleOverrideReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload: " + err.Error()})
+		return
+	}
+
+	var override models.LabExperimentUnlock
+	if err := database.DB.First(&override, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Override not found"})
+		return
+	}
+
+	override.BypassPrerequisite = req.BypassPrerequisite
+	override.StartsAt = req.StartsAt
+	override.EndsAt = req.EndsAt
+	override.AllowLateSubmission = req.AllowLateSubmission
+	override.Notes = strings.TrimSpace(req.Notes)
+
+	if err := database.DB.Save(&override).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update override"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Student window override updated successfully!",
+		"override": override,
+	})
+}
+
 // FacultyGetCourseAnalytics returns comprehensive completion rates, student progress matrix, and attempt analytics
 func FacultyGetCourseAnalytics(c *gin.Context) {
 	database.EnsureLabTables(database.DB)

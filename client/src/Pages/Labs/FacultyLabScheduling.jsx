@@ -38,7 +38,8 @@ import {
   Eye,
   SlidersHorizontal,
   GraduationCap,
-  ChevronDown
+  ChevronDown,
+  Edit3,
 } from 'lucide-react';
 import api from '../../api/axios';
 
@@ -85,7 +86,6 @@ export default function FacultyLabScheduling() {
   const [bulkReleaseUpToExpNo, setBulkReleaseUpToExpNo] = useState(1);
   const [bulkReleaseStartsAt, setBulkReleaseStartsAt] = useState('');
   const [bulkReleaseEndsAt, setBulkReleaseEndsAt] = useState('');
-  const [bulkReleaseMaxAttempts, setBulkReleaseMaxAttempts] = useState(0);
   const [bulkReleaseApplying, setBulkReleaseApplying] = useState(false);
 
   // Searchable Select State for Release Up To Exp #
@@ -105,12 +105,24 @@ export default function FacultyLabScheduling() {
     bypass_prerequisite: false,
     starts_at: '',
     ends_at: '',
-    max_attempts: 0,
     allow_late_submission: false,
     notes: '',
   });
   const [overrideSearch, setOverrideSearch] = useState('');
   const [overrideSubmitting, setOverrideSubmitting] = useState(false);
+
+  // Multi-Select and Edit for Student Overrides Table
+  const [selectedTableOverrideIds, setSelectedTableOverrideIds] = useState([]);
+  const [bulkDeletingOverrides, setBulkDeletingOverrides] = useState(false);
+  const [editingOverride, setEditingOverride] = useState(null);
+  const [editingForm, setEditingForm] = useState({
+    bypass_prerequisite: false,
+    starts_at: '',
+    ends_at: '',
+    allow_late_submission: false,
+    notes: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Quick Action loader state for sessions
   const [sessionActionKey, setSessionActionKey] = useState(null);
@@ -181,7 +193,6 @@ export default function FacultyLabScheduling() {
         if (firstUnlock) {
           if (firstUnlock.starts_at) setBulkReleaseStartsAt(formatDateForInput(firstUnlock.starts_at));
           if (firstUnlock.ends_at) setBulkReleaseEndsAt(formatDateForInput(firstUnlock.ends_at));
-          if (firstUnlock.max_attempts) setBulkReleaseMaxAttempts(firstUnlock.max_attempts);
         }
       } else {
         setBulkReleaseUpToExpNo(activeCourseExperiments[0].experiment_no || 1);
@@ -336,7 +347,6 @@ export default function FacultyLabScheduling() {
         is_unlocked: true,
         starts_at: bulkReleaseStartsAt ? new Date(bulkReleaseStartsAt).toISOString() : null,
         ends_at: bulkReleaseEndsAt ? new Date(bulkReleaseEndsAt).toISOString() : null,
-        max_attempts: Number(bulkReleaseMaxAttempts) || 0,
         allow_late_submission: false,
         notes: `Progressive milestone release up to Exp #${targetUpTo}`,
       });
@@ -388,7 +398,6 @@ export default function FacultyLabScheduling() {
         bypass_prerequisite: overrideForm.bypass_prerequisite,
         starts_at: overrideForm.starts_at ? new Date(overrideForm.starts_at).toISOString() : null,
         ends_at: overrideForm.ends_at ? new Date(overrideForm.ends_at).toISOString() : null,
-        max_attempts: Number(overrideForm.max_attempts) || 0,
         allow_late_submission: overrideForm.allow_late_submission,
         notes: overrideForm.notes || '',
       });
@@ -408,9 +417,82 @@ export default function FacultyLabScheduling() {
     try {
       await api.delete(`/lab-incharge/unlocks/student-override/${id}`);
       showToast('Student override removed.');
+      setSelectedTableOverrideIds((prev) => prev.filter((i) => i !== id));
       fetchUnlockMatrix();
     } catch {
       showToast('Failed to delete override.', 'error');
+    }
+  };
+
+  const handleToggleSelectOverride = (id) => {
+    setSelectedTableOverrideIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllOverrides = () => {
+    const activeIds = activeCourseOverrides.map((o) => o.id);
+    if (selectedTableOverrideIds.length === activeIds.length && activeIds.length > 0) {
+      setSelectedTableOverrideIds([]);
+    } else {
+      setSelectedTableOverrideIds(activeIds);
+    }
+  };
+
+  const handleBulkDeleteOverrides = async () => {
+    if (selectedTableOverrideIds.length === 0) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${selectedTableOverrideIds.length} selected student override(s)?`
+      )
+    ) {
+      return;
+    }
+    try {
+      setBulkDeletingOverrides(true);
+      await api.post('/lab-incharge/unlocks/student-overrides/bulk-delete', {
+        ids: selectedTableOverrideIds,
+      });
+      showToast(`Successfully deleted ${selectedTableOverrideIds.length} student override(s).`);
+      setSelectedTableOverrideIds([]);
+      fetchUnlockMatrix();
+    } catch {
+      showToast('Failed to delete selected overrides.', 'error');
+    } finally {
+      setBulkDeletingOverrides(false);
+    }
+  };
+
+  const handleStartEditOverride = (ovr) => {
+    setEditingOverride(ovr);
+    setEditingForm({
+      bypass_prerequisite: !!ovr.bypass_prerequisite,
+      starts_at: ovr.starts_at ? formatDateForInput(ovr.starts_at) : '',
+      ends_at: ovr.ends_at ? formatDateForInput(ovr.ends_at) : '',
+      allow_late_submission: !!ovr.allow_late_submission,
+      notes: ovr.notes || '',
+    });
+  };
+
+  const handleSaveEditedOverride = async (e) => {
+    e.preventDefault();
+    if (!editingOverride) return;
+    try {
+      setSavingEdit(true);
+      await api.put(`/lab-incharge/unlocks/student-override/${editingOverride.id}`, {
+        bypass_prerequisite: editingForm.bypass_prerequisite,
+        starts_at: editingForm.starts_at ? new Date(editingForm.starts_at).toISOString() : null,
+        ends_at: editingForm.ends_at ? new Date(editingForm.ends_at).toISOString() : null,
+        allow_late_submission: editingForm.allow_late_submission,
+        notes: editingForm.notes,
+      });
+      showToast('Student override updated successfully.');
+      setEditingOverride(null);
+      fetchUnlockMatrix();
+    } catch {
+      showToast('Failed to update student override.', 'error');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -512,7 +594,6 @@ export default function FacultyLabScheduling() {
     const sampleUnlock = unlockedList[0] || secUnlocks[0] || null;
     const startsAt = sampleUnlock?.starts_at ? new Date(sampleUnlock.starts_at) : null;
     const endsAt = sampleUnlock?.ends_at ? new Date(sampleUnlock.ends_at) : null;
-    const maxAttempts = sampleUnlock?.max_attempts || 0;
 
     const now = new Date();
     let status = 'LOCKED';
@@ -546,7 +627,6 @@ export default function FacultyLabScheduling() {
       maxUnlockedNo,
       startsAt,
       endsAt,
-      maxAttempts,
       status,
       statusLabel,
       statusColor,
@@ -767,7 +847,7 @@ export default function FacultyLabScheduling() {
             </div>
 
             {/* Configuration Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
               {/* Target Scope */}
               <div className="space-y-1">
                 <label className={labelCls}>Target Batch / Scope</label>
@@ -897,19 +977,8 @@ export default function FacultyLabScheduling() {
 
               {/* Ends At (Deadline) */}
               <div className="space-y-1">
-                <label className={labelCls}>Window Ends At (Deadline)</label>
-                <input
-                  type="datetime-local"
-                  value={bulkReleaseEndsAt}
-                  onChange={(e) => setBulkReleaseEndsAt(e.target.value)}
-                  className={inputCls}
-                />
-              </div>
-
-              {/* Max Attempts & Quick Window */}
-              <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className={labelCls}>Max Attempts</label>
+                  <label className={labelCls}>Window Ends At (Deadline)</label>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -930,12 +999,9 @@ export default function FacultyLabScheduling() {
                   </div>
                 </div>
                 <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={bulkReleaseMaxAttempts}
-                  onChange={(e) => setBulkReleaseMaxAttempts(e.target.value)}
-                  placeholder="0 = Unlimited"
+                  type="datetime-local"
+                  value={bulkReleaseEndsAt}
+                  onChange={(e) => setBulkReleaseEndsAt(e.target.value)}
                   className={inputCls}
                 />
               </div>
@@ -1273,7 +1339,7 @@ export default function FacultyLabScheduling() {
             <div className="space-y-2 pt-2 border-t border-[var(--border)]">
               <label className={labelCls}>3. Override Timings & Waiver Settings</label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {/* Starts At */}
                 <div className="space-y-1">
                   <label className={labelCls}>Override Starts At</label>
@@ -1319,19 +1385,6 @@ export default function FacultyLabScheduling() {
                     type="datetime-local"
                     value={overrideForm.ends_at}
                     onChange={(e) => setOverrideForm((p) => ({ ...p, ends_at: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-
-                {/* Max Attempts */}
-                <div className="space-y-1">
-                  <label className={labelCls}>Max Attempts (0 = Unlimited)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="99"
-                    value={overrideForm.max_attempts}
-                    onChange={(e) => setOverrideForm((p) => ({ ...p, max_attempts: e.target.value }))}
                     className={inputCls}
                   />
                 </div>
@@ -1418,10 +1471,57 @@ export default function FacultyLabScheduling() {
               </span>
             </div>
 
+            {/* Bulk Selection Bar */}
+            {selectedTableOverrideIds.length > 0 && (
+              <div className="flex items-center justify-between p-3 bg-rose-500/10 border border-rose-500/20 rounded-[var(--radius-md)] animate-in fade-in duration-150">
+                <div className="flex items-center gap-2 text-xs font-semibold text-rose-600">
+                  <CheckSquare className="w-4 h-4 text-rose-500" />
+                  <span>
+                    {selectedTableOverrideIds.length} override
+                    {selectedTableOverrideIds.length > 1 ? 's' : ''} selected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTableOverrideIds([])}
+                    className="px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] rounded transition-colors cursor-pointer"
+                  >
+                    Deselect All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkDeleteOverrides}
+                    disabled={bulkDeletingOverrides}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {bulkDeletingOverrides ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    Delete Selected ({selectedTableOverrideIds.length})
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto border border-[var(--border)] rounded-[var(--radius-md)]">
               <table className="w-full text-left text-[12px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] bg-[var(--bg-raised)]">
+                    <th className="py-2.5 pl-3 pr-2 w-9">
+                      <input
+                        type="checkbox"
+                        checked={
+                          activeCourseOverrides.length > 0 &&
+                          selectedTableOverrideIds.length === activeCourseOverrides.length
+                        }
+                        onChange={handleToggleSelectAllOverrides}
+                        className="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+                        title="Select all"
+                      />
+                    </th>
                     <th className="py-2.5 px-3 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                       Student Details
                     </th>
@@ -1442,58 +1542,203 @@ export default function FacultyLabScheduling() {
                 <tbody className="divide-y divide-[var(--border)]">
                   {activeCourseOverrides.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-xs text-[var(--text-muted)] italic">
+                      <td colSpan={6} className="py-8 text-center text-xs text-[var(--text-muted)] italic">
                         No individual student overrides configured for this course.
                       </td>
                     </tr>
                   ) : (
-                    activeCourseOverrides.map((ovr) => (
-                      <tr key={ovr.id} className="hover:bg-[var(--bg-raised)] transition-colors">
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-[var(--text-primary)]">{ovr.student?.name}</div>
-                          <div className="text-[11px] text-[var(--text-muted)] font-mono">
-                            {ovr.student?.roll_no || 'No Roll No'} · Sec: {ovr.section}
-                          </div>
-                        </td>
-                        <td className="py-2.5 pr-4 font-mono font-medium text-[var(--text-secondary)]">
-                          Exp #{ovr.experiment?.experiment_no} — {ovr.experiment?.title}
-                        </td>
-                        <td className="py-2.5 pr-4 text-[11px]">
-                          {ovr.starts_at || ovr.ends_at ? (
-                            <div className="space-y-0.5 font-mono text-[var(--text-secondary)]">
-                              <div>From: {ovr.starts_at ? new Date(ovr.starts_at).toLocaleString() : 'Immediate'}</div>
-                              <div>Until: {ovr.ends_at ? new Date(ovr.ends_at).toLocaleString() : 'No Expiry'}</div>
+                    activeCourseOverrides.map((ovr) => {
+                      const isSelected = selectedTableOverrideIds.includes(ovr.id);
+                      return (
+                        <tr
+                          key={ovr.id}
+                          className={`transition-colors ${
+                            isSelected ? 'bg-[var(--accent-dim)]/30' : 'hover:bg-[var(--bg-raised)]'
+                          }`}
+                        >
+                          <td className="py-2.5 pl-3 pr-2 w-9">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectOverride(ovr.id)}
+                              className="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-[var(--text-primary)]">{ovr.student?.name}</div>
+                            <div className="text-[11px] text-[var(--text-muted)] font-mono">
+                              {ovr.student?.roll_no || 'No Roll No'} · Sec: {ovr.section}
                             </div>
-                          ) : (
-                            <span className="text-[var(--text-muted)] italic">Custom Unlocked</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 pr-4">
-                          {ovr.bypass_prerequisite ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                              <Check className="w-3 h-3" />
-                              Bypassed
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-[var(--text-muted)]">—</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <button
-                            onClick={() => handleDeleteOverride(ovr.id)}
-                            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-colors cursor-pointer"
-                            title="Remove student override"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="py-2.5 pr-4 font-mono font-medium text-[var(--text-secondary)]">
+                            Exp #{ovr.experiment?.experiment_no} — {ovr.experiment?.title}
+                          </td>
+                          <td className="py-2.5 pr-4 text-[11px]">
+                            {ovr.starts_at || ovr.ends_at ? (
+                              <div className="space-y-0.5 font-mono text-[var(--text-secondary)]">
+                                <div>From: {ovr.starts_at ? new Date(ovr.starts_at).toLocaleString() : 'Immediate'}</div>
+                                <div>Until: {ovr.ends_at ? new Date(ovr.ends_at).toLocaleString() : 'No Expiry'}</div>
+                              </div>
+                            ) : (
+                              <span className="text-[var(--text-muted)] italic">Custom Unlocked</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            {ovr.bypass_prerequisite ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                <Check className="w-3 h-3" />
+                                Bypassed
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-[var(--text-muted)]">—</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditOverride(ovr)}
+                                className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-colors cursor-pointer"
+                                title="Edit student override"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteOverride(ovr.id)}
+                                className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-colors cursor-pointer"
+                                title="Remove student override"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {/* Edit Student Override Modal */}
+          {editingOverride && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-[var(--text-primary)]">Edit Student Override</h3>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5 font-mono">
+                      {editingOverride.student?.name} ({editingOverride.student?.roll_no || 'No Roll No'})
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setEditingOverride(null)}
+                    className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-md cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveEditedOverride} className="space-y-4">
+                  <div className="p-2.5 rounded-lg bg-[var(--bg-raised)] border border-[var(--border)] text-xs font-mono text-[var(--text-secondary)]">
+                    Exp #{editingOverride.experiment?.experiment_no} — {editingOverride.experiment?.title}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">
+                        Window Starts At
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={editingForm.starts_at}
+                        onChange={(e) => setEditingForm({ ...editingForm, starts_at: e.target.value })}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">
+                        Window Ends At (Deadline)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={editingForm.ends_at}
+                        onChange={(e) => setEditingForm({ ...editingForm, ends_at: e.target.value })}
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editingForm.bypass_prerequisite}
+                        onChange={(e) =>
+                          setEditingForm({ ...editingForm, bypass_prerequisite: e.target.checked })
+                        }
+                        className="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)]"
+                      />
+                      <span className="text-xs font-semibold text-[var(--text-primary)]">
+                        Bypass Sequential Experiment Prerequisite
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editingForm.allow_late_submission}
+                        onChange={(e) =>
+                          setEditingForm({ ...editingForm, allow_late_submission: e.target.checked })
+                        }
+                        className="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)]"
+                      />
+                      <span className="text-xs font-medium text-[var(--text-secondary)]">
+                        Allow late submission after window deadline
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">
+                      Reason / Waiver Notes
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Medical leave approved, re-exam requested"
+                      value={editingForm.notes}
+                      onChange={(e) => setEditingForm({ ...editingForm, notes: e.target.value })}
+                      className={inputCls}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
+                    <button
+                      type="button"
+                      onClick={() => setEditingOverride(null)}
+                      className="px-3.5 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-raised)] text-[var(--text-secondary)] transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingEdit}
+                      className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--accent)] hover:opacity-90 text-[var(--accent-text,#fff)] transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingEdit ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1597,9 +1842,6 @@ export default function FacultyLabScheduling() {
                     <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                       Window Timings (Start → Deadline)
                     </th>
-                    <th className="py-3 px-4 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Max Attempts
-                    </th>
                     <th className="py-3 px-4 text-right text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                       Quick Actions
                     </th>
@@ -1684,11 +1926,6 @@ export default function FacultyLabScheduling() {
                           ) : (
                             <span className="text-[var(--text-muted)] italic">—</span>
                           )}
-                        </td>
-
-                        {/* Max Attempts */}
-                        <td className="py-3.5 px-4 text-xs font-mono text-[var(--text-secondary)]">
-                          {sess.maxAttempts > 0 ? `${sess.maxAttempts} Attempts` : 'Unlimited (0)'}
                         </td>
 
                         {/* Quick Actions */}
