@@ -216,13 +216,13 @@ export const paginateExperimentContent = (code = '', output = '', sampleTestCase
   const outLines = (cleanOut || '').trim() ? (cleanOut || '').trim().split(/\r?\n/) : [];
 
   // Smart dynamic line thresholds per A4 page:
-  // - First page (with top register table & section header): ~38-40 lines
-  // - Continuation pages (with top register table only): ~45-48 lines
-  const FIRST_PAGE_MAX_CODE_LINES = 40;
-  const CONT_PAGE_MAX_CODE_LINES = 46;
+  // - First page (with top register table & section header + 38px gap): ~48 lines (fills page down to bottom footer)
+  // - Continuation pages (with top register table + 38px gap): ~52 lines
+  const FIRST_PAGE_MAX_CODE_LINES = 48;
+  const CONT_PAGE_MAX_CODE_LINES = 52;
 
-  const FIRST_PAGE_MAX_OUT_LINES = 38;
-  const CONT_PAGE_MAX_OUT_LINES = 45;
+  const FIRST_PAGE_MAX_OUT_LINES = 45;
+  const CONT_PAGE_MAX_OUT_LINES = 50;
 
   // 1. Chunk code lines (for Right pages)
   const codeChunks = [];
@@ -627,7 +627,7 @@ export default function LabRecordDocument({
           width: 100%;
           border-collapse: collapse;
           border: none;
-          margin-bottom: 22px;
+          margin-bottom: 38px;
         }
 
         .top-row-table td {
@@ -723,15 +723,15 @@ export default function LabRecordDocument({
         .code-container {
           border: none;
           background: transparent;
-          padding: 4px 0;
+          padding: 0;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
-          line-height: 1.45;
+          line-height: 1.42;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: 2px;
-          margin-bottom: 12px;
+          margin-top: 0;
+          margin-bottom: 0;
           color: #111827;
           box-sizing: border-box;
           -webkit-font-smoothing: antialiased;
@@ -740,15 +740,15 @@ export default function LabRecordDocument({
         .output-container {
           border: none;
           background: transparent;
-          padding: 4px 0;
+          padding: 0;
           font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif;
           font-size: 9.5pt;
-          line-height: 1.45;
+          line-height: 1.42;
           letter-spacing: 0.1px;
           white-space: pre-wrap;
           word-break: break-word;
-          margin-top: 2px;
-          margin-bottom: 12px;
+          margin-top: 0;
+          margin-bottom: 0;
           color: #111827;
           box-sizing: border-box;
           -webkit-font-smoothing: antialiased;

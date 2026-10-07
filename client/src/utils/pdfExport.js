@@ -78,7 +78,7 @@ const ACADEMIC_DOCUMENT_CSS = `
     width: 100% !important;
     border-collapse: collapse !important;
     border: none !important;
-    margin-bottom: 22px !important;
+    margin-bottom: 38px !important;
   }
   #pdf-export-sandbox .top-row-table td {
     border: none !important;
@@ -167,15 +167,15 @@ const ACADEMIC_DOCUMENT_CSS = `
   #pdf-export-sandbox .code-container {
     border: none !important;
     background: transparent !important;
-    padding: 4px 0 !important;
+    padding: 0 !important;
     font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif !important;
     font-size: 9.5pt !important;
-    line-height: 1.45 !important;
+    line-height: 1.42 !important;
     letter-spacing: 0.1px !important;
     white-space: pre-wrap !important;
     word-break: break-word !important;
-    margin-top: 2px !important;
-    margin-bottom: 12px !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
     color: #111827 !important;
     box-sizing: border-box !important;
     -webkit-font-smoothing: antialiased !important;
@@ -183,15 +183,15 @@ const ACADEMIC_DOCUMENT_CSS = `
   #pdf-export-sandbox .output-container {
     border: none !important;
     background: transparent !important;
-    padding: 4px 0 !important;
+    padding: 0 !important;
     font-family: Consolas, Monaco, "SF Pro Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", monospace, sans-serif !important;
     font-size: 9.5pt !important;
-    line-height: 1.45 !important;
+    line-height: 1.42 !important;
     letter-spacing: 0.1px !important;
     white-space: pre-wrap !important;
     word-break: break-word !important;
-    margin-top: 2px !important;
-    margin-bottom: 12px !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
     color: #111827 !important;
     box-sizing: border-box !important;
     -webkit-font-smoothing: antialiased !important;
