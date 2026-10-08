@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
+export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen, hideSidebarToggle = false, isFullWidth = false }) {
   const { user } = useAuth();
 
   const isAdmin = user?.role === 'admin';
@@ -20,8 +20,8 @@ export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
   return (
     <header className="sticky top-0 z-40 bg-[var(--bg-card)]/95 backdrop-blur-md border-b border-[var(--border)] shadow-[var(--shadow-sm)] h-16">
       <div className="flex items-center justify-between h-full w-full">
-        {/* Desktop Left Section: API Portal centered directly above the sidebar */}
-        <div className="hidden md:flex w-64 h-full border-r border-[var(--border)] items-center justify-center px-4 shrink-0">
+        {/* Desktop Left Section: API Portal Branding */}
+        <div className={`hidden md:flex ${isFullWidth ? 'px-6 border-r border-[var(--border)]' : 'w-64 border-r border-[var(--border)] justify-center px-4'} h-full items-center shrink-0`}>
           <Link
             to={targetPath}
             className="flex items-center gap-2.5 no-underline group focus:outline-none"
@@ -48,18 +48,20 @@ export default function Navbar({ onToggleMobileMenu, isMobileMenuOpen }) {
 
         {/* Mobile Left Section: Hamburger Button + Logo */}
         <div className="flex md:hidden items-center gap-2 px-3 shrink-0">
-          <button
-            type="button"
-            onClick={onToggleMobileMenu}
-            className="p-2 rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border)] transition-colors focus:outline-none"
-            aria-label="Toggle navigation menu"
-          >
-            {isMobileMenuOpen ? (
-              <X className="w-5 h-5 text-[var(--accent)]" />
-            ) : (
-              <Menu className="w-5 h-5" />
-            )}
-          </button>
+          {!hideSidebarToggle && (
+            <button
+              type="button"
+              onClick={onToggleMobileMenu}
+              className="p-2 rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border)] transition-colors focus:outline-none"
+              aria-label="Toggle navigation menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-5 h-5 text-[var(--accent)]" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
+            </button>
+          )}
 
           <Link
             to={targetPath}
