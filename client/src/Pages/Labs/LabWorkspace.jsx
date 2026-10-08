@@ -542,7 +542,7 @@ export default function LabWorkspace() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden bg-[var(--bg)]">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[var(--bg)]">
       {/* Toast Notification */}
       {toast && (
         <div
