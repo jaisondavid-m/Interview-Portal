@@ -306,6 +306,7 @@ export default function LabWorkspace() {
       setConsoleTab('testcases');
       const res = await api.post(`/labs/experiment/${expId}/run`, { code, language });
       setRunResult(res);
+      setTestResult(null);
       // Auto-expand all cases so student sees inputs, expected output, and actual output
       const newExpanded = {};
       (res?.results || []).forEach((_, idx) => {
@@ -367,6 +368,7 @@ export default function LabWorkspace() {
         message: res.message,
         results: res.results,
       });
+      setRunResult(null);
       if (res.submission) setSubmission(res.submission);
       const newExpanded = {};
       (res?.results || []).forEach((_, idx) => {
@@ -411,30 +413,21 @@ export default function LabWorkspace() {
   } catch {}
 
   // Unified list of executed test cases in order (Sample cases followed by Hidden cases)
-  const allExecutedCases = [
-    ...(runResult?.results?.map((res, i) => ({
+  const activeResults = testResult?.results || runResult?.results || [];
+  const allExecutedCases = activeResults.map((res, i) => {
+    const isHidden = Boolean(res.is_hidden || res.isHidden);
+    return {
       index: i,
-      name: res.name || `Sample Case ${i + 1}`,
+      name: res.name || (isHidden ? `Hidden Case ${i + 1}` : `Sample Case ${i + 1}`),
       passed: Boolean(res.passed),
       execution_ms: res.execution_ms,
       input: res.input,
       expected: res.expected,
       actual: res.actual,
-      isSample: true,
-      isHidden: false,
-    })) || []),
-    ...(testResult?.results?.map((res, i) => ({
-      index: (runResult?.results?.length || 0) + i,
-      name: res.name || `Hidden Case ${i + 1}`,
-      passed: Boolean(res.passed),
-      execution_ms: res.execution_ms,
-      input: res.input,
-      expected: res.expected,
-      actual: res.actual,
-      isSample: false,
-      isHidden: true,
-    })) || []),
-  ];
+      isSample: !isHidden,
+      isHidden: isHidden,
+    };
+  });
   const totalCasesCount = allExecutedCases.length;
   const totalPassedCount = allExecutedCases.filter((c) => c.passed).length;
 
@@ -469,15 +462,17 @@ export default function LabWorkspace() {
 
       {/* Top Studio Bar */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-card)] border-b border-[var(--border)] shadow-[var(--shadow-sm)] shrink-0 gap-3">
-        {/* Left: Back + Experiment & Locked Question Variant */}
+        {/* Left: Back (only when submitted/approved) + Experiment & Locked Question Variant */}
         <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => navigate('/labs', { replace: true })}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] py-1.5 px-3 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer shrink-0"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
-            Back
-          </button>
+          {isSubmittedOrApproved && (
+            <button
+              onClick={() => navigate('/labs', { replace: true })}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] py-1.5 px-3 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+              Back
+            </button>
+          )}
           <div className="flex items-center gap-2 truncate">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0">
               Ex {experiment?.experiment_no || expId}
@@ -522,19 +517,15 @@ export default function LabWorkspace() {
             </div>
           )}
 
-          {/* Submission Status Pill */}
-          {submission?.status && (
+          {/* Submission Status Pill (Only for finalized/pending verification states) */}
+          {submission?.status && ['APPROVED', 'SUBMITTED_FOR_VERIFICATION', 'REVISION_REQUESTED'].includes(submission.status) && (
             <span
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${
                 submission.status === 'APPROVED'
                   ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
                   : submission.status === 'SUBMITTED_FOR_VERIFICATION'
                   ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30'
-                  : submission.status === 'REVISION_REQUESTED'
-                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                  : submission.status === 'TEST_PASSED'
-                  ? 'bg-teal-500/10 text-teal-600 border-teal-500/30'
-                  : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
               }`}
             >
               {submission.status === 'APPROVED' ? (
@@ -547,20 +538,10 @@ export default function LabWorkspace() {
                   <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
                   Verification Pending
                 </>
-              ) : submission.status === 'REVISION_REQUESTED' ? (
+              ) : (
                 <>
                   <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
                   Revision Requested
-                </>
-              ) : submission.status === 'TEST_PASSED' ? (
-                <>
-                  <CheckCheck className="w-3.5 h-3.5 text-teal-600" />
-                  Tests Passed (Ready to Finish)
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  In Progress
                 </>
               )}
             </span>
@@ -950,20 +931,28 @@ export default function LabWorkspace() {
               </div>
 
               <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-2">
-                {consoleTab === 'testcases' && totalCasesCount > 0 && (
+                {consoleTab === 'testcases' && allExecutedCases.some((c) => !c.isHidden) && (
                   <button
                     type="button"
                     onClick={() => {
-                      const allOpen = Object.values(expandedCases).every(Boolean);
-                      const updated = {};
-                      allExecutedCases.forEach((_, idx) => {
+                      const sampleIndices = allExecutedCases
+                        .map((c, idx) => (!c.isHidden ? idx : null))
+                        .filter((idx) => idx !== null);
+                      const allOpen = sampleIndices.every((idx) => expandedCases[idx] !== false);
+                      const updated = { ...expandedCases };
+                      sampleIndices.forEach((idx) => {
                         updated[idx] = !allOpen;
                       });
                       setExpandedCases(updated);
                     }}
                     className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer"
                   >
-                    {Object.values(expandedCases).every(Boolean) ? 'Collapse All' : 'Expand All'}
+                    {allExecutedCases
+                      .map((c, idx) => (!c.isHidden ? idx : null))
+                      .filter((idx) => idx !== null)
+                      .every((idx) => expandedCases[idx] !== false)
+                      ? 'Collapse All'
+                      : 'Expand All'}
                   </button>
                 )}
                 <span>Execution Output</span>
@@ -988,7 +977,7 @@ export default function LabWorkspace() {
                 ) : (
                   <div className="space-y-2">
                     {allExecutedCases.map((res, i) => {
-                      const isExpanded = expandedCases[i] !== false; // expanded by default
+                      const isExpanded = !res.isHidden && expandedCases[i] !== false; // expanded by default for sample cases
                       const hasOutput = res.actual !== undefined && res.actual !== null;
 
                       return (
@@ -1002,13 +991,19 @@ export default function LabWorkspace() {
                         >
                           {/* Test Case Header Bar */}
                           <div
-                            onClick={() =>
-                              setExpandedCases((prev) => ({
-                                ...prev,
-                                [i]: !isExpanded,
-                              }))
-                            }
-                            className="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition select-none"
+                            onClick={() => {
+                              if (!res.isHidden) {
+                                setExpandedCases((prev) => ({
+                                  ...prev,
+                                  [i]: !isExpanded,
+                                }));
+                              }
+                            }}
+                            className={`px-3 py-2 flex items-center justify-between transition select-none ${
+                              res.isHidden
+                                ? 'cursor-default'
+                                : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5'
+                            }`}
                           >
                             <div className="flex items-center gap-2">
                               {res.passed ? (
@@ -1040,16 +1035,18 @@ export default function LabWorkspace() {
                                 <Clock className="w-3 h-3" />
                                 {res.execution_ms || 0} ms
                               </span>
-                              {isExpanded ? (
-                                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                              ) : (
-                                <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                              {!res.isHidden && (
+                                isExpanded ? (
+                                  <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                )
                               )}
                             </div>
                           </div>
 
-                          {/* Expanded Input / Expected Output / Actual Output Details */}
-                          {isExpanded && (
+                          {/* Expanded Input / Expected Output / Actual Output Details (Sample cases only) */}
+                          {!res.isHidden && isExpanded && (
                             <div className="p-3 pt-1 border-t border-[var(--border)]/40 space-y-2 bg-[var(--bg-card)]/60">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
                                 {/* Input Box */}

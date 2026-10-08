@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShieldCheck, LogOut, SlidersHorizontal, 
@@ -6,6 +6,7 @@ import {
   Building2, CalendarCheck, ClipboardCheck, FlaskConical, Database, Headphones, Zap
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from './ConfirmModal';
 
 const ICON_MAP = {
   LayoutDashboard,
@@ -31,6 +32,8 @@ export default function MobileSidebar({ isOpen, onClose }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, permissions } = useAuth();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Close drawer on route change
   useEffect(() => {
@@ -51,10 +54,18 @@ export default function MobileSidebar({ isOpen, onClose }) {
     };
   }, [isOpen]);
 
-  const handleLogout = async () => {
-    onClose();
-    await logout();
-    navigate('/login');
+  const handleConfirmLogout = async () => {
+    try {
+      setLoggingOut(true);
+      onClose();
+      await logout();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      setLoggingOut(false);
+      setShowLogoutModal(false);
+    }
   };
 
   const userRole = user?.role?.toLowerCase();
@@ -212,14 +223,29 @@ export default function MobileSidebar({ isOpen, onClose }) {
         {/* Footer with Sign Out */}
         <div className="p-3 border-t border-[var(--border)] bg-[var(--bg-card)]">
           <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-[var(--radius-sm)] text-[12px] font-semibold text-[var(--text-secondary)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] border border-[var(--border)] hover:border-[var(--red)]/20 transition-all duration-150"
+            type="button"
+            onClick={() => setShowLogoutModal(true)}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-[var(--radius-sm)] text-[12px] font-semibold text-[var(--text-secondary)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] border border-[var(--border)] hover:border-[var(--red)]/20 transition-all duration-150 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>
           </button>
         </div>
       </aside>
+
+      {/* Sign Out Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+        title="Sign Out Confirmation"
+        message="Are you sure you want to sign out? You will need to log back in to access your dashboard and lab workspace."
+        confirmText="Sign Out"
+        cancelText="Stay Signed In"
+        isDanger={true}
+        icon={LogOut}
+        loading={loggingOut}
+      />
     </div>
   );
 }

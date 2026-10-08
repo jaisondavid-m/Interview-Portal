@@ -966,48 +966,67 @@ func SubmitExperimentCode(c *gin.Context) {
 		req.Language = strings.ToLower(requiredLang)
 	}
 
-	// Parse Hidden Test Cases from assigned question (fallback to sample if empty)
-	var rawCases []RawTestCase
+	// Parse Sample Test Cases from assigned question (fallback to exp)
+	var sampleCases []RawTestCase
+	sampleSrc := assignedQ.SampleTestCases
+	if sampleSrc == "" {
+		sampleSrc = exp.SampleTestCases
+	}
+	if sampleSrc != "" {
+		_ = json.Unmarshal([]byte(sampleSrc), &sampleCases)
+	}
+
+	// Parse Hidden Test Cases from assigned question (fallback to exp)
+	var hiddenCases []RawTestCase
 	hiddenSrc := assignedQ.HiddenTestCases
 	if hiddenSrc == "" {
 		hiddenSrc = exp.HiddenTestCases
 	}
 	if hiddenSrc != "" {
-		_ = json.Unmarshal([]byte(hiddenSrc), &rawCases)
-	}
-	if len(rawCases) == 0 {
-		sampleSrc := assignedQ.SampleTestCases
-		if sampleSrc == "" {
-			sampleSrc = exp.SampleTestCases
-		}
-		if sampleSrc != "" {
-			_ = json.Unmarshal([]byte(sampleSrc), &rawCases)
-		}
+		_ = json.Unmarshal([]byte(hiddenSrc), &hiddenCases)
 	}
 
 	var evalCases []EvalTestCase
-	if len(rawCases) == 0 {
+	caseIdx := 1
+
+	for i, sc := range sampleCases {
+		expOut := sc.ExpectedOutput
+		if expOut == "" {
+			expOut = sc.Expected
+		}
+		evalCases = append(evalCases, EvalTestCase{
+			Index:          caseIdx,
+			IsHidden:       false,
+			Name:           fmt.Sprintf("Sample Case %d", i+1),
+			Input:          sc.Input,
+			ExpectedOutput: expOut,
+		})
+		caseIdx++
+	}
+
+	for j, hc := range hiddenCases {
+		expOut := hc.ExpectedOutput
+		if expOut == "" {
+			expOut = hc.Expected
+		}
+		evalCases = append(evalCases, EvalTestCase{
+			Index:          caseIdx,
+			IsHidden:       true,
+			Name:           fmt.Sprintf("Hidden Case %d", j+1),
+			Input:          hc.Input,
+			ExpectedOutput: expOut,
+		})
+		caseIdx++
+	}
+
+	if len(evalCases) == 0 {
 		evalCases = append(evalCases, EvalTestCase{
 			Index:          1,
-			IsHidden:       true,
-			Name:           "Hidden Benchmark Case 1",
+			IsHidden:       false,
+			Name:           "Sample Case 1",
 			Input:          "",
 			ExpectedOutput: "",
 		})
-	} else {
-		for i, rc := range rawCases {
-			expOut := rc.ExpectedOutput
-			if expOut == "" {
-				expOut = rc.Expected
-			}
-			evalCases = append(evalCases, EvalTestCase{
-				Index:          i + 1,
-				IsHidden:       true,
-				Name:           fmt.Sprintf("Hidden Case %d", i+1),
-				Input:          rc.Input,
-				ExpectedOutput: expOut,
-			})
-		}
 	}
 
 	results, execErr := ExecuteTestCases(req.Code, req.Language, evalCases)
@@ -1027,7 +1046,7 @@ func SubmitExperimentCode(c *gin.Context) {
 		IsHidden    bool   `json:"is_hidden"`
 		Input       string `json:"input,omitempty"`
 		Expected    string `json:"expected,omitempty"`
-		Actual      string `json:"actual"`
+		Actual      string `json:"actual,omitempty"`
 	}
 	var sanitizedResults []SafeResultItem
 
@@ -1039,16 +1058,29 @@ func SubmitExperimentCode(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("✗ %s Failed", r.Name))
 		}
 
-		sanitizedResults = append(sanitizedResults, SafeResultItem{
-			Index:       r.Index,
-			Name:        r.Name,
-			Passed:      r.Passed,
-			ExecutionMs: r.ExecutionMs,
-			IsHidden:    true,
-			Input:       r.Input,
-			Expected:    r.Expected,
-			Actual:      r.Actual,
-		})
+		if r.IsHidden {
+			sanitizedResults = append(sanitizedResults, SafeResultItem{
+				Index:       r.Index,
+				Name:        r.Name,
+				Passed:      r.Passed,
+				ExecutionMs: r.ExecutionMs,
+				IsHidden:    true,
+				Input:       "",
+				Expected:    "",
+				Actual:      "",
+			})
+		} else {
+			sanitizedResults = append(sanitizedResults, SafeResultItem{
+				Index:       r.Index,
+				Name:        r.Name,
+				Passed:      r.Passed,
+				ExecutionMs: r.ExecutionMs,
+				IsHidden:    false,
+				Input:       r.Input,
+				Expected:    r.Expected,
+				Actual:      r.Actual,
+			})
+		}
 	}
 
 	// Calculate Program & Output marks (out of 45 by default or according to course rubric)
