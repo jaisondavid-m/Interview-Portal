@@ -25,6 +25,10 @@ import {
   MessageSquareCheck,
   Save,
   SlidersHorizontal,
+  Maximize2,
+  Minimize2,
+  ShieldAlert,
+  AlertTriangle,
 } from 'lucide-react';
 import api from '../../api/axios';
 import CodeEditor from '../../Components/CodeEditor';
@@ -55,6 +59,12 @@ export default function LabWorkspace() {
   const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
+
+  // Assessment Proctoring & Tab Switch Tracking
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+  const [showFullscreenModal, setShowFullscreenModal] = useState(false);
+  const lastSwitchTimeRef = useRef(0);
 
   // Execution Console State: 'testcases' | 'custom'
   const [consoleTab, setConsoleTab] = useState('testcases');
@@ -126,6 +136,7 @@ export default function LabWorkspace() {
 
       if (sub) {
         setSubmission(sub);
+        setTabSwitchCount(sub.tab_switch_count || 0);
         if (sub.submitted_code) {
           setCode(sub.submitted_code);
         } else {
@@ -146,6 +157,7 @@ export default function LabWorkspace() {
           setProcedureSteps([]);
         }
       } else {
+        setTabSwitchCount(0);
         setCode('');
         setProcedureSteps([]);
         setLanguage(assignedQ?.language || data?.language || 'python');
@@ -159,6 +171,95 @@ export default function LabWorkspace() {
 
   const isSubmittedOrApproved =
     submission?.status === 'SUBMITTED_FOR_VERIFICATION' || submission?.status === 'APPROVED';
+
+  // ── Assessment Mode & Tab Switch Monitoring ─────────────────────────────────
+  const enterAssessmentMode = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      }
+      setShowFullscreenModal(false);
+      showToast('Assessment Mode active in Fullscreen. Tab switches are monitored.', 'success');
+    } catch (err) {
+      console.warn('Fullscreen request failed:', err);
+      showToast('Please grant fullscreen permission to enter assessment mode.', 'error');
+    }
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle failed:', err);
+    }
+  };
+
+  const recordTabSwitch = async (reason = 'Tab switch or window blur') => {
+    if (isSubmittedOrApproved || !isUnlocked) return;
+    const now = Date.now();
+    if (now - lastSwitchTimeRef.current < 2500) return; // 2.5s debounce
+    lastSwitchTimeRef.current = now;
+
+    setTabSwitchCount((prev) => {
+      const nextCount = prev + 1;
+      showToast(`⚠️ Warning: Tab switch / focus loss detected! (Total: ${nextCount}). Recorded for faculty evaluation.`, 'error');
+      return nextCount;
+    });
+
+    try {
+      const res = await api.post(`/labs/experiment/${expId}/tab-switch`);
+      if (res?.tab_switch_count !== undefined) {
+        setTabSwitchCount(res.tab_switch_count);
+      }
+    } catch (err) {
+      console.warn('Failed to record tab switch:', err);
+    }
+  };
+
+  // Fullscreen and Tab Switch Event Listeners
+  useEffect(() => {
+    if (isSubmittedOrApproved || !isUnlocked || loading) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordTabSwitch('Tab switched / window hidden');
+      }
+    };
+
+    const handleBlur = () => {
+      recordTabSwitch('Focus lost / window blurred');
+    };
+
+    const handleFullscreenChange = () => {
+      const inFs = Boolean(document.fullscreenElement);
+      setIsFullscreen(inFs);
+      if (!inFs && !isSubmittedOrApproved) {
+        recordTabSwitch('Exited fullscreen mode');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    // Auto-prompt fullscreen when entering active unsubmitted workspace
+    if (!document.fullscreenElement && !isSubmittedOrApproved) {
+      setShowFullscreenModal(true);
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [isSubmittedOrApproved, isUnlocked, loading, expId]);
 
   // ── Auto-save code & progress and Submit when assessment window time ends ──────
   const triggerAutoSubmitAndExit = async () => {
@@ -306,6 +407,7 @@ export default function LabWorkspace() {
       setConsoleTab('testcases');
       const res = await api.post(`/labs/experiment/${expId}/run`, { code, language });
       setRunResult(res);
+      setTestResult(null);
       // Auto-expand all cases so student sees inputs, expected output, and actual output
       const newExpanded = {};
       (res?.results || []).forEach((_, idx) => {
@@ -367,6 +469,7 @@ export default function LabWorkspace() {
         message: res.message,
         results: res.results,
       });
+      setRunResult(null);
       if (res.submission) setSubmission(res.submission);
       const newExpanded = {};
       (res?.results || []).forEach((_, idx) => {
@@ -411,30 +514,21 @@ export default function LabWorkspace() {
   } catch {}
 
   // Unified list of executed test cases in order (Sample cases followed by Hidden cases)
-  const allExecutedCases = [
-    ...(runResult?.results?.map((res, i) => ({
+  const activeResults = testResult?.results || runResult?.results || [];
+  const allExecutedCases = activeResults.map((res, i) => {
+    const isHidden = Boolean(res.is_hidden || res.isHidden);
+    return {
       index: i,
-      name: res.name || `Sample Case ${i + 1}`,
+      name: res.name || (isHidden ? `Hidden Case ${i + 1}` : `Sample Case ${i + 1}`),
       passed: Boolean(res.passed),
       execution_ms: res.execution_ms,
       input: res.input,
       expected: res.expected,
       actual: res.actual,
-      isSample: true,
-      isHidden: false,
-    })) || []),
-    ...(testResult?.results?.map((res, i) => ({
-      index: (runResult?.results?.length || 0) + i,
-      name: res.name || `Hidden Case ${i + 1}`,
-      passed: Boolean(res.passed),
-      execution_ms: res.execution_ms,
-      input: res.input,
-      expected: res.expected,
-      actual: res.actual,
-      isSample: false,
-      isHidden: true,
-    })) || []),
-  ];
+      isSample: !isHidden,
+      isHidden: isHidden,
+    };
+  });
   const totalCasesCount = allExecutedCases.length;
   const totalPassedCount = allExecutedCases.filter((c) => c.passed).length;
 
@@ -469,15 +563,17 @@ export default function LabWorkspace() {
 
       {/* Top Studio Bar */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-card)] border-b border-[var(--border)] shadow-[var(--shadow-sm)] shrink-0 gap-3">
-        {/* Left: Back + Experiment & Locked Question Variant */}
+        {/* Left: Back (only when submitted/approved) + Experiment & Locked Question Variant */}
         <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => navigate('/labs', { replace: true })}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] py-1.5 px-3 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer shrink-0"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
-            Back
-          </button>
+          {isSubmittedOrApproved && (
+            <button
+              onClick={() => navigate('/labs', { replace: true })}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] py-1.5 px-3 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+              Back
+            </button>
+          )}
           <div className="flex items-center gap-2 truncate">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0">
               Ex {experiment?.experiment_no || expId}
@@ -522,19 +618,64 @@ export default function LabWorkspace() {
             </div>
           )}
 
-          {/* Submission Status Pill */}
-          {submission?.status && (
+          {/* Proctoring & Tab Switch Badge */}
+          {!isSubmittedOrApproved && (
+            <div
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold border transition-all ${
+                tabSwitchCount > 0
+                  ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                  : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+              }`}
+              title={
+                tabSwitchCount > 0
+                  ? `${tabSwitchCount} tab switch(es) / focus loss events detected and recorded for faculty review.`
+                  : 'Assessment Mode Active — 0 tab switches detected.'
+              }
+            >
+              {tabSwitchCount > 0 ? (
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+              ) : (
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              )}
+              <span>{tabSwitchCount > 0 ? `${tabSwitchCount} Tab ${tabSwitchCount === 1 ? 'Switch' : 'Switches'}` : 'Proctored'}</span>
+            </div>
+          )}
+
+          {/* Assessment Fullscreen Toggle Button */}
+          {!isSubmittedOrApproved && (
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold border transition-all cursor-pointer ${
+                isFullscreen
+                  ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse'
+              }`}
+              title={isFullscreen ? 'Exit Full Screen Mode' : 'Enter Full Screen Assessment Mode'}
+            >
+              {isFullscreen ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Fullscreen</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Launch Fullscreen</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Submission Status Pill (Only for finalized/pending verification states) */}
+          {submission?.status && ['APPROVED', 'SUBMITTED_FOR_VERIFICATION', 'REVISION_REQUESTED'].includes(submission.status) && (
             <span
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${
                 submission.status === 'APPROVED'
                   ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
                   : submission.status === 'SUBMITTED_FOR_VERIFICATION'
                   ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30'
-                  : submission.status === 'REVISION_REQUESTED'
-                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                  : submission.status === 'TEST_PASSED'
-                  ? 'bg-teal-500/10 text-teal-600 border-teal-500/30'
-                  : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
               }`}
             >
               {submission.status === 'APPROVED' ? (
@@ -547,20 +688,10 @@ export default function LabWorkspace() {
                   <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
                   Verification Pending
                 </>
-              ) : submission.status === 'REVISION_REQUESTED' ? (
+              ) : (
                 <>
                   <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
                   Revision Requested
-                </>
-              ) : submission.status === 'TEST_PASSED' ? (
-                <>
-                  <CheckCheck className="w-3.5 h-3.5 text-teal-600" />
-                  Tests Passed (Ready to Finish)
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  In Progress
                 </>
               )}
             </span>
@@ -950,20 +1081,28 @@ export default function LabWorkspace() {
               </div>
 
               <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-2">
-                {consoleTab === 'testcases' && totalCasesCount > 0 && (
+                {consoleTab === 'testcases' && allExecutedCases.some((c) => !c.isHidden) && (
                   <button
                     type="button"
                     onClick={() => {
-                      const allOpen = Object.values(expandedCases).every(Boolean);
-                      const updated = {};
-                      allExecutedCases.forEach((_, idx) => {
+                      const sampleIndices = allExecutedCases
+                        .map((c, idx) => (!c.isHidden ? idx : null))
+                        .filter((idx) => idx !== null);
+                      const allOpen = sampleIndices.every((idx) => expandedCases[idx] !== false);
+                      const updated = { ...expandedCases };
+                      sampleIndices.forEach((idx) => {
                         updated[idx] = !allOpen;
                       });
                       setExpandedCases(updated);
                     }}
                     className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer"
                   >
-                    {Object.values(expandedCases).every(Boolean) ? 'Collapse All' : 'Expand All'}
+                    {allExecutedCases
+                      .map((c, idx) => (!c.isHidden ? idx : null))
+                      .filter((idx) => idx !== null)
+                      .every((idx) => expandedCases[idx] !== false)
+                      ? 'Collapse All'
+                      : 'Expand All'}
                   </button>
                 )}
                 <span>Execution Output</span>
@@ -988,7 +1127,7 @@ export default function LabWorkspace() {
                 ) : (
                   <div className="space-y-2">
                     {allExecutedCases.map((res, i) => {
-                      const isExpanded = expandedCases[i] !== false; // expanded by default
+                      const isExpanded = !res.isHidden && expandedCases[i] !== false; // expanded by default for sample cases
                       const hasOutput = res.actual !== undefined && res.actual !== null;
 
                       return (
@@ -1002,13 +1141,19 @@ export default function LabWorkspace() {
                         >
                           {/* Test Case Header Bar */}
                           <div
-                            onClick={() =>
-                              setExpandedCases((prev) => ({
-                                ...prev,
-                                [i]: !isExpanded,
-                              }))
-                            }
-                            className="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition select-none"
+                            onClick={() => {
+                              if (!res.isHidden) {
+                                setExpandedCases((prev) => ({
+                                  ...prev,
+                                  [i]: !isExpanded,
+                                }));
+                              }
+                            }}
+                            className={`px-3 py-2 flex items-center justify-between transition select-none ${
+                              res.isHidden
+                                ? 'cursor-default'
+                                : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5'
+                            }`}
                           >
                             <div className="flex items-center gap-2">
                               {res.passed ? (
@@ -1040,16 +1185,18 @@ export default function LabWorkspace() {
                                 <Clock className="w-3 h-3" />
                                 {res.execution_ms || 0} ms
                               </span>
-                              {isExpanded ? (
-                                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                              ) : (
-                                <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                              {!res.isHidden && (
+                                isExpanded ? (
+                                  <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                )
                               )}
                             </div>
                           </div>
 
-                          {/* Expanded Input / Expected Output / Actual Output Details */}
-                          {isExpanded && (
+                          {/* Expanded Input / Expected Output / Actual Output Details (Sample cases only) */}
+                          {!res.isHidden && isExpanded && (
                             <div className="p-3 pt-1 border-t border-[var(--border)]/40 space-y-2 bg-[var(--bg-card)]/60">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
                                 {/* Input Box */}
@@ -1185,6 +1332,48 @@ export default function LabWorkspace() {
         course={{ id: courseId }}
         submission={submission}
       />
+
+      {/* Assessment Mode Fullscreen Launch Modal */}
+      {showFullscreenModal && !isFullscreen && !isSubmittedOrApproved && !loading && isUnlocked && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-scaleUp text-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-500 mx-auto">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-[var(--text-primary)]">
+                Assessment Proctoring Mode
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                This practical lab assessment requires <strong>Full Screen Mode</strong>. Browser tab switching, window minimization, or exiting full screen will be recorded as a tab switch infraction for faculty verification.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-left text-xs space-y-1.5 font-mono text-[var(--text-muted)]">
+              <div className="flex items-center gap-2 text-emerald-500 font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Active window focus monitoring</span>
+              </div>
+              <div className="flex items-center gap-2 text-amber-500 font-semibold">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>Tab switches reported live to examiner</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={enterAssessmentMode}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[var(--accent)] hover:opacity-90 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              >
+                <Maximize2 className="w-4 h-4" />
+                <span>Launch Full Screen Assessment</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Auto-Save Progress & Exit Overlay when Window Timing Expires */}
       {isAutoSubmitting && (

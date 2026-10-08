@@ -23,6 +23,7 @@ type LabSubmission struct {
 	PassCount          int                    `gorm:"default:0" json:"pass_count"`
 	TotalTestCases     int                    `gorm:"default:0" json:"total_test_cases"`
 	AttemptCount       int                    `gorm:"default:0" json:"attempt_count"`
+	TabSwitchCount     int                    `gorm:"default:0" json:"tab_switch_count"` // Track assessment tab switching / blur infractions
 	IsUnderRevision    bool                   `gorm:"default:false" json:"is_under_revision"`
 	RevisionCount      int                    `gorm:"default:0" json:"revision_count"`
 	Status             string                 `gorm:"size:50;default:'DRAFT'" json:"status"` // DRAFT, TEST_PASSED, SUBMITTED_FOR_VERIFICATION, APPROVED, REVISION_REQUESTED

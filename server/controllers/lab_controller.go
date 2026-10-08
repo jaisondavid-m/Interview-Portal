@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -965,48 +966,67 @@ func SubmitExperimentCode(c *gin.Context) {
 		req.Language = strings.ToLower(requiredLang)
 	}
 
-	// Parse Hidden Test Cases from assigned question (fallback to sample if empty)
-	var rawCases []RawTestCase
+	// Parse Sample Test Cases from assigned question (fallback to exp)
+	var sampleCases []RawTestCase
+	sampleSrc := assignedQ.SampleTestCases
+	if sampleSrc == "" {
+		sampleSrc = exp.SampleTestCases
+	}
+	if sampleSrc != "" {
+		_ = json.Unmarshal([]byte(sampleSrc), &sampleCases)
+	}
+
+	// Parse Hidden Test Cases from assigned question (fallback to exp)
+	var hiddenCases []RawTestCase
 	hiddenSrc := assignedQ.HiddenTestCases
 	if hiddenSrc == "" {
 		hiddenSrc = exp.HiddenTestCases
 	}
 	if hiddenSrc != "" {
-		_ = json.Unmarshal([]byte(hiddenSrc), &rawCases)
-	}
-	if len(rawCases) == 0 {
-		sampleSrc := assignedQ.SampleTestCases
-		if sampleSrc == "" {
-			sampleSrc = exp.SampleTestCases
-		}
-		if sampleSrc != "" {
-			_ = json.Unmarshal([]byte(sampleSrc), &rawCases)
-		}
+		_ = json.Unmarshal([]byte(hiddenSrc), &hiddenCases)
 	}
 
 	var evalCases []EvalTestCase
-	if len(rawCases) == 0 {
+	caseIdx := 1
+
+	for i, sc := range sampleCases {
+		expOut := sc.ExpectedOutput
+		if expOut == "" {
+			expOut = sc.Expected
+		}
+		evalCases = append(evalCases, EvalTestCase{
+			Index:          caseIdx,
+			IsHidden:       false,
+			Name:           fmt.Sprintf("Sample Case %d", i+1),
+			Input:          sc.Input,
+			ExpectedOutput: expOut,
+		})
+		caseIdx++
+	}
+
+	for j, hc := range hiddenCases {
+		expOut := hc.ExpectedOutput
+		if expOut == "" {
+			expOut = hc.Expected
+		}
+		evalCases = append(evalCases, EvalTestCase{
+			Index:          caseIdx,
+			IsHidden:       true,
+			Name:           fmt.Sprintf("Hidden Case %d", j+1),
+			Input:          hc.Input,
+			ExpectedOutput: expOut,
+		})
+		caseIdx++
+	}
+
+	if len(evalCases) == 0 {
 		evalCases = append(evalCases, EvalTestCase{
 			Index:          1,
-			IsHidden:       true,
-			Name:           "Hidden Benchmark Case 1",
+			IsHidden:       false,
+			Name:           "Sample Case 1",
 			Input:          "",
 			ExpectedOutput: "",
 		})
-	} else {
-		for i, rc := range rawCases {
-			expOut := rc.ExpectedOutput
-			if expOut == "" {
-				expOut = rc.Expected
-			}
-			evalCases = append(evalCases, EvalTestCase{
-				Index:          i + 1,
-				IsHidden:       true,
-				Name:           fmt.Sprintf("Hidden Case %d", i+1),
-				Input:          rc.Input,
-				ExpectedOutput: expOut,
-			})
-		}
 	}
 
 	results, execErr := ExecuteTestCases(req.Code, req.Language, evalCases)
@@ -1026,7 +1046,7 @@ func SubmitExperimentCode(c *gin.Context) {
 		IsHidden    bool   `json:"is_hidden"`
 		Input       string `json:"input,omitempty"`
 		Expected    string `json:"expected,omitempty"`
-		Actual      string `json:"actual"`
+		Actual      string `json:"actual,omitempty"`
 	}
 	var sanitizedResults []SafeResultItem
 
@@ -1038,16 +1058,29 @@ func SubmitExperimentCode(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("✗ %s Failed", r.Name))
 		}
 
-		sanitizedResults = append(sanitizedResults, SafeResultItem{
-			Index:       r.Index,
-			Name:        r.Name,
-			Passed:      r.Passed,
-			ExecutionMs: r.ExecutionMs,
-			IsHidden:    true,
-			Input:       r.Input,
-			Expected:    r.Expected,
-			Actual:      r.Actual,
-		})
+		if r.IsHidden {
+			sanitizedResults = append(sanitizedResults, SafeResultItem{
+				Index:       r.Index,
+				Name:        r.Name,
+				Passed:      r.Passed,
+				ExecutionMs: r.ExecutionMs,
+				IsHidden:    true,
+				Input:       "",
+				Expected:    "",
+				Actual:      "",
+			})
+		} else {
+			sanitizedResults = append(sanitizedResults, SafeResultItem{
+				Index:       r.Index,
+				Name:        r.Name,
+				Passed:      r.Passed,
+				ExecutionMs: r.ExecutionMs,
+				IsHidden:    false,
+				Input:       r.Input,
+				Expected:    r.Expected,
+				Actual:      r.Actual,
+			})
+		}
 	}
 
 	// Calculate Program & Output marks (out of 45 by default or according to course rubric)
@@ -1185,6 +1218,52 @@ func SaveStudentProcedure(c *gin.Context) {
 		"status":  "success",
 		"message": "Step-by-step algorithm saved successfully!",
 		"submission": sub,
+	})
+}
+
+// RecordTabSwitch increments and records tab switch / blur count for student during experiment assessment
+func RecordTabSwitch(c *gin.Context) {
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	userIDVal, _ := c.Get("userID")
+	studentID, _ := userIDVal.(uint)
+
+	var sub models.LabSubmission
+	findErr := database.DB.Where("student_id = ? AND experiment_id = ?", studentID, expID).First(&sub).Error
+	if findErr != nil {
+		var exp models.LabExperiment
+		if err := database.DB.First(&exp, expID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+			return
+		}
+		assignedQ, _ := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, studentID)
+		qID := uint(0)
+		if assignedQ != nil {
+			qID = assignedQ.ID
+		}
+		sub = models.LabSubmission{
+			StudentID:      studentID,
+			ExperimentID:   uint(expID),
+			QuestionID:     qID,
+			Language:       exp.Language,
+			SubmittedCode:  "",
+			Status:         "DRAFT",
+			TabSwitchCount: 1,
+		}
+		database.DB.Create(&sub)
+	} else {
+		sub.TabSwitchCount++
+		database.DB.Model(&sub).Update("tab_switch_count", sub.TabSwitchCount)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":          true,
+		"tab_switch_count": sub.TabSwitchCount,
 	})
 }
 
@@ -2089,18 +2168,40 @@ func FacultyGetCourseReleases(c *gin.Context) {
 	}
 	expDB.Order("course_id asc, experiment_no asc").Find(&allExperiments)
 
-	// Fetch distinct sections from users
+	// Fetch distinct sections based on faculty mapping or all if admin
 	var sectionList []string
-	database.DB.Model(&models.User{}).
-		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
-		Distinct().
-		Pluck("section", &sectionList)
+	if strings.ToLower(userRole) == "admin" {
+		database.DB.Model(&models.User{}).
+			Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
+			Distinct().
+			Pluck("section", &sectionList)
+	} else {
+		secMap := make(map[string]bool)
+		for _, m := range mappings {
+			sec := strings.TrimSpace(m.Section)
+			if sec != "" && !strings.EqualFold(sec, "ALL") {
+				secMap[sec] = true
+			}
+		}
+		for s := range secMap {
+			sectionList = append(sectionList, s)
+		}
+		sort.Strings(sectionList)
+	}
 
 	// Fetch student roster for individual overrides with optional search/section filter & limit
 	var studentList []models.User
 	var studentTotal int64
 	studentDB := database.DB.Model(&models.User{}).
 		Where("LOWER(role) IN ?", []string{"student", "user"})
+
+	if strings.ToLower(userRole) != "admin" {
+		if len(sectionList) > 0 {
+			studentDB = studentDB.Where("section IN ?", sectionList)
+		} else {
+			studentDB = studentDB.Where("1 = 0")
+		}
+	}
 
 	if studentSection != "" && studentSection != "ALL" {
 		studentDB = studentDB.Where("section = ?", studentSection)
@@ -2142,12 +2243,23 @@ type ToggleUnlockReq struct {
 func FacultyToggleExperimentUnlock(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
 	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
 	var req ToggleUnlockReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unlock toggle payload"})
 		return
+	}
+
+	if strings.ToLower(userRole) != "admin" {
+		var mappingCount int64
+		database.DB.Model(&models.LabMapping{}).Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Count(&mappingCount)
+		if mappingCount == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not assigned to teach this lab course"})
+			return
+		}
 	}
 
 	var unlock models.LabExperimentUnlock
@@ -2184,25 +2296,27 @@ func FacultyToggleExperimentUnlock(c *gin.Context) {
 }
 
 type ScheduleWindowBulkReq struct {
-	CourseID            uint       `json:"course_id" binding:"required"`
-	ExperimentIDs       []uint     `json:"experiment_ids"`
-	LockExperimentIDs   []uint     `json:"lock_experiment_ids"`
-	Section             string     `json:"section"` // 'ALL' or specific section
-	Sections            []string   `json:"sections"`
-	IsUnlocked          bool       `json:"is_unlocked"`
-	RequiresPrerequisite bool      `json:"requires_prerequisite"`
-	StartsAt            *time.Time `json:"starts_at"`
-	EndsAt              *time.Time `json:"ends_at"`
-	MaxAttempts         int        `json:"max_attempts"`
-	AllowLateSubmission bool       `json:"allow_late_submission"`
-	Notes               string     `json:"notes"`
+	CourseID             uint       `json:"course_id" binding:"required"`
+	ExperimentIDs        []uint     `json:"experiment_ids"`
+	LockExperimentIDs    []uint     `json:"lock_experiment_ids"`
+	Section              string     `json:"section"` // 'ALL' or specific section
+	Sections             []string   `json:"sections"`
+	IsUnlocked           bool       `json:"is_unlocked"`
+	RequiresPrerequisite bool       `json:"requires_prerequisite"`
+	StartsAt             *time.Time `json:"starts_at"`
+	EndsAt               *time.Time `json:"ends_at"`
+	MaxAttempts          int        `json:"max_attempts"`
+	AllowLateSubmission  bool       `json:"allow_late_submission"`
+	Notes                string     `json:"notes"`
 }
 
 // FacultyScheduleWindowBulk configures open window timings for multiple experiments across a section in bulk
 func FacultyScheduleWindowBulk(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
 	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
 	var req ScheduleWindowBulkReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2225,6 +2339,48 @@ func FacultyScheduleWindowBulk(c *gin.Context) {
 			sec = "ALL"
 		}
 		targetSections = []string{sec}
+	}
+
+	if strings.ToLower(userRole) != "admin" {
+		var facultyMappings []models.LabMapping
+		database.DB.Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Find(&facultyMappings)
+		if len(facultyMappings) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not assigned to teach this lab course"})
+			return
+		}
+		var allowedSections []string
+		for _, m := range facultyMappings {
+			sec := strings.TrimSpace(m.Section)
+			if sec != "" && !strings.EqualFold(sec, "ALL") {
+				allowedSections = append(allowedSections, sec)
+			}
+		}
+		if len(allowedSections) > 0 {
+			var filtered []string
+			for _, ts := range targetSections {
+				if strings.EqualFold(ts, "ALL") {
+					filtered = append(filtered, allowedSections...)
+				} else {
+					for _, as := range allowedSections {
+						if strings.EqualFold(as, ts) {
+							filtered = append(filtered, ts)
+							break
+						}
+					}
+				}
+			}
+			secMap := make(map[string]bool)
+			var deduped []string
+			for _, f := range filtered {
+				if !secMap[f] {
+					secMap[f] = true
+					deduped = append(deduped, f)
+				}
+			}
+			if len(deduped) > 0 {
+				targetSections = deduped
+			}
+		}
 	}
 
 	now := time.Now()
@@ -2299,7 +2455,9 @@ type SetStudentOverrideReq struct {
 func FacultySetStudentOverride(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	facultyIDVal, _ := c.Get("userID")
+	userRoleVal, _ := c.Get("userRole")
 	facultyID, _ := facultyIDVal.(uint)
+	userRole, _ := userRoleVal.(string)
 
 	var req SetStudentOverrideReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2327,10 +2485,44 @@ func FacultySetStudentOverride(c *gin.Context) {
 		return
 	}
 
+	if strings.ToLower(userRole) != "admin" {
+		var facultyMappings []models.LabMapping
+		database.DB.Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Find(&facultyMappings)
+		if len(facultyMappings) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not assigned to teach this lab course"})
+			return
+		}
+	}
+
 	var students []models.User
 	if err := database.DB.Where("id IN ?", sIDs).Find(&students).Error; err != nil || len(students) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Selected students not found"})
 		return
+	}
+
+	if strings.ToLower(userRole) != "admin" {
+		var facultyMappings []models.LabMapping
+		database.DB.Where("faculty_id = ? AND course_id = ?", facultyID, req.CourseID).Find(&facultyMappings)
+		allowedSecMap := make(map[string]bool)
+		for _, m := range facultyMappings {
+			sec := strings.TrimSpace(m.Section)
+			if sec != "" && !strings.EqualFold(sec, "ALL") {
+				allowedSecMap[strings.ToUpper(sec)] = true
+			}
+		}
+		if len(allowedSecMap) > 0 {
+			var allowedStudents []models.User
+			for _, s := range students {
+				if allowedSecMap[strings.ToUpper(strings.TrimSpace(s.Section))] {
+					allowedStudents = append(allowedStudents, s)
+				}
+			}
+			students = allowedStudents
+			if len(students) == 0 {
+				c.JSON(http.StatusForbidden, gin.H{"error": "None of the selected students belong to your assigned sections"})
+				return
+			}
+		}
 	}
 
 	now := time.Now()

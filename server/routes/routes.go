@@ -322,6 +322,7 @@ func SetupRouter() *gin.Engine {
 			labs.POST("/experiment/:expId/submit", controllers.SubmitExperimentCode)
 			labs.POST("/experiment/:expId/procedure", controllers.SaveStudentProcedure)
 			labs.POST("/experiment/:expId/finish", controllers.FinishAndSendForVerification)
+			labs.POST("/experiment/:expId/tab-switch", controllers.RecordTabSwitch)
 			labs.GET("/record-pdf/:courseId/student/:studentId", controllers.DownloadStudentRecordPDF)
 			labs.POST("/record-pdf/custom", controllers.DownloadCustomLabRecordPDF)
 		}
