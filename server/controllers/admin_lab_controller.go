@@ -194,30 +194,44 @@ func AdminGetLabFacultyList(c *gin.Context) {
 }
 
 type BatchAssignSectionReq struct {
-	StudentIDs []uint `json:"student_ids" binding:"required"`
-	Section    string `json:"section"` // empty string unassigns/removes
+	StudentIDs      []uint `json:"student_ids"`
+	AssignAllInDept bool   `json:"assign_all_in_dept"`
+	Department      string `json:"department"`
+	Search          string `json:"search"`
+	Section         string `json:"section"` // empty string unassigns/removes
 }
 
 // BatchAssignStudentSection updates section/batch for multiple students
 func BatchAssignStudentSection(c *gin.Context) {
 	var req BatchAssignSectionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload, student_ids required"})
-		return
-	}
-
-	if len(req.StudentIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No students selected"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload format"})
 		return
 	}
 
 	trimmedSection := strings.TrimSpace(req.Section)
-	res := database.DB.Model(&models.User{}).
-		Where("id IN ?", req.StudentIDs).
-		Update("section", trimmedSection)
+	query := database.DB.Model(&models.User{}).Where("role = 'student'")
 
+	if req.AssignAllInDept {
+		dept := strings.TrimSpace(req.Department)
+		if dept != "" && !strings.EqualFold(dept, "all") {
+			query = query.Where("LOWER(department) = ?", strings.ToLower(dept))
+		}
+		if search := strings.TrimSpace(req.Search); search != "" {
+			searchTerm := "%" + search + "%"
+			query = query.Where("name LIKE ? OR email LIKE ? OR roll_no LIKE ?", searchTerm, searchTerm, searchTerm)
+		}
+	} else {
+		if len(req.StudentIDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No students selected"})
+			return
+		}
+		query = query.Where("id IN ?", req.StudentIDs)
+	}
+
+	res := query.Update("section", trimmedSection)
 	if res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student sections"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student sections: " + res.Error.Error()})
 		return
 	}
 
