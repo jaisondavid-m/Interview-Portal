@@ -641,31 +641,7 @@ export default function LabWorkspace() {
             </div>
           )}
 
-          {/* Assessment Fullscreen Toggle Button */}
-          {!isSubmittedOrApproved && (
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold border transition-all cursor-pointer ${
-                isFullscreen
-                  ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
-                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse'
-              }`}
-              title={isFullscreen ? 'Exit Full Screen Mode' : 'Enter Full Screen Assessment Mode'}
-            >
-              {isFullscreen ? (
-                <>
-                  <Minimize2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Fullscreen</span>
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Launch Fullscreen</span>
-                </>
-              )}
-            </button>
-          )}
+
 
           {/* Submission Status Pill (Only for finalized/pending verification states) */}
           {submission?.status && ['APPROVED', 'SUBMITTED_FOR_VERIFICATION', 'REVISION_REQUESTED'].includes(submission.status) && (
