@@ -1221,6 +1221,52 @@ func SaveStudentProcedure(c *gin.Context) {
 	})
 }
 
+// RecordTabSwitch increments and records tab switch / blur count for student during experiment assessment
+func RecordTabSwitch(c *gin.Context) {
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	userIDVal, _ := c.Get("userID")
+	studentID, _ := userIDVal.(uint)
+
+	var sub models.LabSubmission
+	findErr := database.DB.Where("student_id = ? AND experiment_id = ?", studentID, expID).First(&sub).Error
+	if findErr != nil {
+		var exp models.LabExperiment
+		if err := database.DB.First(&exp, expID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Experiment not found"})
+			return
+		}
+		assignedQ, _ := getOrAllocateQuestionForStudent(exp.CourseID, exp.ID, studentID)
+		qID := uint(0)
+		if assignedQ != nil {
+			qID = assignedQ.ID
+		}
+		sub = models.LabSubmission{
+			StudentID:      studentID,
+			ExperimentID:   uint(expID),
+			QuestionID:     qID,
+			Language:       exp.Language,
+			SubmittedCode:  "",
+			Status:         "DRAFT",
+			TabSwitchCount: 1,
+		}
+		database.DB.Create(&sub)
+	} else {
+		sub.TabSwitchCount++
+		database.DB.Model(&sub).Update("tab_switch_count", sub.TabSwitchCount)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":          true,
+		"tab_switch_count": sub.TabSwitchCount,
+	})
+}
+
 // FinishAndSendForVerification locks the student's submission, draws random viva questions, and queues for faculty
 func FinishAndSendForVerification(c *gin.Context) {
 	expIDStr := c.Param("expId")

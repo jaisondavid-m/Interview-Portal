@@ -34,7 +34,9 @@ import {
   RefreshCw,
   Pencil,
   CloudCheck,
-  Save
+  Save,
+  ShieldAlert,
+  AlertTriangle,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -718,6 +720,34 @@ export default function LabEvaluationPage() {
               }`}>
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 {testExecutionSummary ? testExecutionSummary.pass_count : (sub?.pass_count || 0)} / {testExecutionSummary ? testExecutionSummary.total_test_cases : (sub?.total_test_cases || 0)} Passed
+              </span>
+            </div>
+
+            {/* Proctoring Tab Switches Count Badge */}
+            <div className={`px-3.5 py-2 rounded-xl border space-y-0.5 ${
+              (sub?.tab_switch_count || 0) > 0
+                ? 'bg-rose-500/10 border-rose-500/30'
+                : 'bg-[var(--bg-card)] border-[var(--border)]'
+            }`}>
+              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider block">
+                Tab Switches
+              </span>
+              <span className={`font-mono text-xs font-bold flex items-center gap-1.5 ${
+                (sub?.tab_switch_count || 0) > 0
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : 'text-emerald-500'
+              }`}>
+                {(sub?.tab_switch_count || 0) > 0 ? (
+                  <>
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span>{sub.tab_switch_count} {sub.tab_switch_count === 1 ? 'Switch' : 'Switches'}</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span>0 (Clean)</span>
+                  </>
+                )}
               </span>
             </div>
 

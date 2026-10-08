@@ -313,9 +313,16 @@ export default function FacultyLabEvaluation() {
                     </div>
 
                     <div className="pt-3 mt-3 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                      <span className="text-[var(--text-secondary)] font-semibold">
-                        {sub.pass_count}/{sub.total_test_cases} tests passed
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[var(--text-secondary)] font-semibold">
+                          {sub.pass_count}/{sub.total_test_cases} tests
+                        </span>
+                        {(sub.tab_switch_count || 0) > 0 && (
+                          <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-0.5 bg-rose-500/10 border border-rose-500/30 px-1.5 py-0.2 rounded text-[10px]" title={`${sub.tab_switch_count} tab switch infractions during assessment`}>
+                            ⚠️ {sub.tab_switch_count} {sub.tab_switch_count === 1 ? 'switch' : 'switches'}
+                          </span>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={(e) => {
