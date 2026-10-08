@@ -31,7 +31,8 @@ import {
   AlertTriangle,
   Eye,
   HelpCircle,
-  Check
+  Check,
+  CheckCheck
 } from 'lucide-react';
 import api from '../../api/axios';
 import SearchableSelect from '../../Components/SearchableSelect';
@@ -178,6 +179,7 @@ export default function AdminLabBatches() {
   const [drawerPagination, setDrawerPagination] = useState({ total_pages: 1, total_records: 0 });
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerSelectedIds, setDrawerSelectedIds] = useState(new Set());
+  const [isSelectAllMatching, setIsSelectAllMatching] = useState(false);
 
   // Bulk Upload State
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -466,7 +468,19 @@ export default function AdminLabBatches() {
   };
 
   // Drawer handlers
+  const openAddDrawer = () => {
+    setDrawerSelectedIds(new Set());
+    setIsSelectAllMatching(false);
+    setDrawerPage(1);
+    setDrawerSearch('');
+    if (filterDept !== 'ALL') {
+      setDrawerDept(filterDept);
+    }
+    setShowAddDrawer(true);
+  };
+
   const toggleDrawerStudent = (id) => {
+    setIsSelectAllMatching(false);
     setDrawerSelectedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -474,16 +488,41 @@ export default function AdminLabBatches() {
     });
   };
 
-  const toggleAllDrawerStudents = () => {
-    if (drawerSelectedIds.size === drawerStudents.length && drawerStudents.length > 0) {
-      setDrawerSelectedIds(new Set());
-    } else {
-      setDrawerSelectedIds(new Set(drawerStudents.map((s) => s.id)));
-    }
+  const isCurrentPageAllSelected = useMemo(() => {
+    if (drawerStudents.length === 0) return false;
+    return drawerStudents.every((s) => drawerSelectedIds.has(s.id));
+  }, [drawerStudents, drawerSelectedIds]);
+
+  const toggleCurrentPageStudents = () => {
+    setIsSelectAllMatching(false);
+    setDrawerSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isCurrentPageAllSelected) {
+        drawerStudents.forEach((s) => next.delete(s.id));
+      } else {
+        drawerStudents.forEach((s) => next.add(s.id));
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllMatching = () => {
+    setIsSelectAllMatching(true);
+    setDrawerSelectedIds((prev) => {
+      const next = new Set(prev);
+      drawerStudents.forEach((s) => next.add(s.id));
+      return next;
+    });
+  };
+
+  const handleClearDrawerSelection = () => {
+    setIsSelectAllMatching(false);
+    setDrawerSelectedIds(new Set());
   };
 
   const handleAddSelectedToBatch = async () => {
-    if (drawerSelectedIds.size === 0) {
+    const totalSelected = isSelectAllMatching ? drawerPagination.total_records : drawerSelectedIds.size;
+    if (totalSelected === 0) {
       showToast('Select students to add.', 'error');
       return;
     }
@@ -491,13 +530,28 @@ export default function AdminLabBatches() {
       filterSection === 'ALL' || filterSection === 'UNASSIGNED' ? targetSection : filterSection;
     try {
       setAssigning(true);
-      await api.post('/admin/labs/batch-students/assign', {
-        student_ids: Array.from(drawerSelectedIds),
-        section: target,
-      });
-      showToast(`${drawerSelectedIds.size} student(s) added to batch "${target}"!`);
+      if (isSelectAllMatching) {
+        await api.post('/admin/labs/batch-students/assign', {
+          assign_all_in_dept: true,
+          department: drawerDept !== 'ALL' ? drawerDept : undefined,
+          search: drawerSearch.trim() || undefined,
+          section: target,
+        });
+        showToast(
+          `All ${drawerPagination.total_records} student(s) ${
+            drawerDept !== 'ALL' ? `in ${drawerDept}` : ''
+          } assigned to batch "${target}"!`
+        );
+      } else {
+        await api.post('/admin/labs/batch-students/assign', {
+          student_ids: Array.from(drawerSelectedIds),
+          section: target,
+        });
+        showToast(`${drawerSelectedIds.size} student(s) added to batch "${target}"!`);
+      }
       setShowAddDrawer(false);
       setDrawerSelectedIds(new Set());
+      setIsSelectAllMatching(false);
       fetchStudents();
       fetchBatchStats();
     } catch {
@@ -949,7 +1003,7 @@ export default function AdminLabBatches() {
               Bulk Upload
             </button>
             <button
-              onClick={() => setShowAddDrawer(true)}
+              onClick={openAddDrawer}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
             >
               <UserPlus className="w-3.5 h-3.5" />
@@ -1439,40 +1493,138 @@ export default function AdminLabBatches() {
                 </div>
               )}
 
-              {/* Controls: Department Filter + Search + Select All */}
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="w-full sm:w-64">
-                  <SearchableSelect
-                    options={drawerDeptOptions}
-                    value={drawerDept}
-                    onChange={(val) => {
-                      setDrawerDept(val);
-                      setDrawerPage(1);
-                    }}
-                    placeholder="All Departments"
-                    searchPlaceholder="Search departments..."
-                    fullWidth
-                  />
+              {/* Controls: Department Filter + Search + Multi Select Controls */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="w-full sm:w-60">
+                    <SearchableSelect
+                      options={drawerDeptOptions}
+                      value={drawerDept}
+                      onChange={(val) => {
+                        setDrawerDept(val);
+                        setDrawerPage(1);
+                        setDrawerSelectedIds(new Set());
+                        setIsSelectAllMatching(false);
+                      }}
+                      placeholder="All Departments"
+                      searchPlaceholder="Search departments..."
+                      fullWidth
+                    />
+                  </div>
+
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={drawerSearch}
+                      onChange={(e) => {
+                        setDrawerSearch(e.target.value);
+                        setDrawerPage(1);
+                        setDrawerSelectedIds(new Set());
+                        setIsSelectAllMatching(false);
+                      }}
+                      placeholder="Search by name, roll no, email..."
+                      className={`${inputCls} pl-9 text-xs`}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={toggleCurrentPageStudents}
+                      className={`px-3 py-2 rounded-[var(--radius-sm)] border text-xs font-semibold cursor-pointer transition-all flex items-center gap-1.5 ${
+                        isCurrentPageAllSelected
+                          ? 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--accent)]'
+                          : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                      }`}
+                      title="Select or deselect all students currently visible on this page"
+                    >
+                      {isCurrentPageAllSelected ? (
+                        <>
+                          <CheckSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <span>Deselect Page</span>
+                        </>
+                      ) : (
+                        <>
+                          <Square className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                          <span>Select Page</span>
+                        </>
+                      )}
+                    </button>
+
+                    {drawerPagination.total_records > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleSelectAllMatching}
+                        className={`px-3 py-2 rounded-[var(--radius-sm)] border text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${
+                          isSelectAllMatching
+                            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600'
+                            : 'bg-[var(--accent-dim)] border-[var(--border-accent)] text-[var(--accent)] hover:opacity-90'
+                        }`}
+                        title="Select all matching students across all pages in this department/search"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5" />
+                        <span>
+                          {isSelectAllMatching
+                            ? `All ${drawerPagination.total_records} Selected`
+                            : `Select All (${drawerPagination.total_records})`}
+                        </span>
+                      </button>
+                    )}
+
+                    {(drawerSelectedIds.size > 0 || isSelectAllMatching) && (
+                      <button
+                        type="button"
+                        onClick={handleClearDrawerSelection}
+                        className="px-2.5 py-2 rounded-[var(--radius-sm)] bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-semibold hover:bg-rose-500/20 cursor-pointer transition-all"
+                        title="Clear all selections"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={drawerSearch}
-                    onChange={(e) => setDrawerSearch(e.target.value)}
-                    placeholder="Search by name, roll no, email..."
-                    className={`${inputCls} pl-9 text-xs`}
-                  />
-                </div>
-                <button
-                  onClick={toggleAllDrawerStudents}
-                  className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all shrink-0"
-                >
-                  {drawerSelectedIds.size === drawerStudents.length && drawerStudents.length > 0
-                    ? 'Deselect All'
-                    : 'Select All'}
-                </button>
+                {/* Smart Selection Banner */}
+                {isCurrentPageAllSelected &&
+                  drawerPagination.total_records > drawerStudents.length &&
+                  !isSelectAllMatching && (
+                    <div className="p-2.5 px-3.5 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] border border-[var(--border-accent)] text-xs text-[var(--text-primary)] flex items-center justify-between animate-fadeIn">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                        <span>
+                          All <strong>{drawerStudents.length}</strong> students on this page are selected.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSelectAllMatching}
+                        className="font-bold text-[var(--accent)] hover:underline cursor-pointer ml-3 shrink-0"
+                      >
+                        Select all {drawerPagination.total_records} students{' '}
+                        {drawerDept !== 'ALL' ? `in ${drawerDept}` : 'in list'}
+                      </button>
+                    </div>
+                  )}
+
+                {isSelectAllMatching && (
+                  <div className="p-2.5 px-3.5 rounded-[var(--radius-sm)] bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-600 flex items-center justify-between animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>
+                        All <strong>{drawerPagination.total_records}</strong> students{' '}
+                        {drawerDept !== 'ALL' ? `in ${drawerDept}` : 'matching filter'} are selected across all pages.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearDrawerSelection}
+                      className="font-bold text-rose-600 hover:underline cursor-pointer ml-3 shrink-0"
+                    >
+                      Clear selection
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Student Drawer List */}
@@ -1482,12 +1634,12 @@ export default function AdminLabBatches() {
                   <span className="text-xs">Loading students...</span>
                 </div>
               ) : (
-                <div className="max-h-64 overflow-y-auto border border-[var(--border)] rounded-[var(--radius-md)] divide-y divide-[var(--border)]">
+                <div className="max-h-64 overflow-y-auto border border-[var(--border)] rounded-[var(--radius-md)] divide-y divide-[var(--border)] custom-scrollbar">
                   {drawerStudents.length === 0 ? (
                     <div className="py-8 text-center text-xs text-[var(--text-muted)]">No students found.</div>
                   ) : (
                     drawerStudents.map((s) => {
-                      const isSel = drawerSelectedIds.has(s.id);
+                      const isSel = isSelectAllMatching || drawerSelectedIds.has(s.id);
                       return (
                         <div
                           key={s.id}
@@ -1529,20 +1681,20 @@ export default function AdminLabBatches() {
               {drawerPagination.total_pages > 1 && (
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-[11px] text-[var(--text-muted)]">
-                    Page {drawerPage} of {drawerPagination.total_pages}
+                    Page {drawerPage} of {drawerPagination.total_pages} ({drawerPagination.total_records} total)
                   </span>
                   <div className="flex items-center gap-1">
                     <button
                       disabled={drawerPage <= 1}
                       onClick={() => setDrawerPage((p) => p - 1)}
-                      className="p-1 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-40 cursor-pointer"
+                      className="p-1.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-40 cursor-pointer hover:text-[var(--text-primary)] transition"
                     >
                       <ChevronLeft className="w-3.5 h-3.5" />
                     </button>
                     <button
                       disabled={drawerPage >= drawerPagination.total_pages}
                       onClick={() => setDrawerPage((p) => p + 1)}
-                      className="p-1 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-40 cursor-pointer"
+                      className="p-1.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-40 cursor-pointer hover:text-[var(--text-primary)] transition"
                     >
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
@@ -1552,9 +1704,22 @@ export default function AdminLabBatches() {
             </div>
 
             <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] bg-[var(--bg-raised)] rounded-b-[var(--radius-xl)]">
-              <span className="text-xs font-semibold text-[var(--text-secondary)]">
-                {drawerSelectedIds.size} student(s) selected
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">
+                  {isSelectAllMatching
+                    ? `All ${drawerPagination.total_records} student(s) selected`
+                    : `${drawerSelectedIds.size} of ${drawerPagination.total_records || 0} student(s) selected`}
+                </span>
+                {(drawerSelectedIds.size > 0 || isSelectAllMatching) && (
+                  <button
+                    type="button"
+                    onClick={handleClearDrawerSelection}
+                    className="text-[11px] text-rose-500 hover:underline cursor-pointer"
+                  >
+                    (Clear)
+                  </button>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowAddDrawer(false)}
@@ -1564,11 +1729,14 @@ export default function AdminLabBatches() {
                 </button>
                 <button
                   onClick={handleAddSelectedToBatch}
-                  disabled={drawerSelectedIds.size === 0 || assigning}
+                  disabled={
+                    (isSelectAllMatching ? drawerPagination.total_records : drawerSelectedIds.size) === 0 || assigning
+                  }
                   className="px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                 >
                   {assigning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
-                  Assign to {filterSection !== 'ALL' && filterSection !== 'UNASSIGNED' ? filterSection : targetSection}
+                  Assign {isSelectAllMatching ? drawerPagination.total_records : drawerSelectedIds.size} Students to{' '}
+                  {filterSection !== 'ALL' && filterSection !== 'UNASSIGNED' ? filterSection : targetSection}
                 </button>
               </div>
             </div>
