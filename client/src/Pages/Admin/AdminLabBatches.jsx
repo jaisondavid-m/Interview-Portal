@@ -117,28 +117,19 @@ export default function AdminLabBatches() {
   };
   const saveStored = (key, val) => localStorage.setItem(key, JSON.stringify(val));
 
-  // Batches state
-  const defaultBatches = [
-    { id: '1', name: 'CSE-A', semester: 'Semester III', academic_year: '2025-2026', department: 'CSE' },
-    { id: '2', name: 'CSE-B', semester: 'Semester III', academic_year: '2025-2026', department: 'CSE' },
-    { id: '3', name: 'AI&DS-A', semester: 'Semester III', academic_year: '2025-2026', department: 'AI&DS' },
-    { id: '4', name: 'AI&DS-B', semester: 'Semester III', academic_year: '2025-2026', department: 'AI&DS' },
-  ];
-
+  // Batches state (User-managed, no dummy seedings)
   const [batches, setBatches] = useState(() => {
     const raw = loadStored('lab_batches_v2', null);
-    if (raw && Array.isArray(raw)) return raw;
-    const legacy = loadStored('lab_sections', null);
-    if (legacy && Array.isArray(legacy)) {
-      return legacy.map((sec, idx) => ({
-        id: String(idx + 1),
-        name: typeof sec === 'string' ? sec : sec.name || `Batch-${idx + 1}`,
-        semester: 'Semester III',
-        academic_year: '2025-2026',
-        department: '',
-      }));
+    if (raw && Array.isArray(raw)) {
+      const defaultNames = ['CSE-A', 'CSE-B', 'AI&DS-A', 'AI&DS-B'];
+      const isOnlyLegacySeeded = raw.length === 4 && raw.every((b) => defaultNames.includes(b.name));
+      if (isOnlyLegacySeeded) {
+        saveStored('lab_batches_v2', []);
+        return [];
+      }
+      return raw;
     }
-    return defaultBatches;
+    return [];
   });
 
   const saveBatches = (newBatches) => {
@@ -175,7 +166,7 @@ export default function AdminLabBatches() {
     has_prev: false,
   });
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [targetSection, setTargetSection] = useState(() => batches[0]?.name || 'CSE-A');
+  const [targetSection, setTargetSection] = useState(() => batches[0]?.name || '');
   const [assigning, setAssigning] = useState(false);
 
   // Add Students Drawer
@@ -192,7 +183,7 @@ export default function AdminLabBatches() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkTab, setBulkTab] = useState('file'); // 'file' | 'text'
   const [bulkTargetBatchMode, setBulkTargetBatchMode] = useState('selected'); // 'selected' | 'from_csv'
-  const [bulkTargetBatch, setBulkTargetBatch] = useState(() => batches[0]?.name || 'CSE-A');
+  const [bulkTargetBatch, setBulkTargetBatch] = useState(() => batches[0]?.name || '');
   const [bulkImportMode, setBulkImportMode] = useState('upsert'); // 'upsert' | 'create_only' | 'update_only'
   const [bulkDefaultDept, setBulkDefaultDept] = useState('CSE');
   const [bulkDefaultPassword, setBulkDefaultPassword] = useState('mockmate-bitsathy-4321');
@@ -658,13 +649,14 @@ export default function AdminLabBatches() {
   };
 
   const downloadSampleCSV = () => {
-    const defaultBatchName = batches[0]?.name || 'CSE-A';
+    const defaultBatchName = batches[0]?.name || 'Batch-1';
+    const secondBatchName = batches[1]?.name || 'Batch-2';
     const csvContent =
       'Name,Email,Roll No,Department,Section\n' +
       `Rahul K,rahul.22cs@bitsathy.ac.in,7376221CS101,CSE,${defaultBatchName}\n` +
       `Priya S,priya.22cs@bitsathy.ac.in,7376221CS102,CSE,${defaultBatchName}\n` +
-      `Arun M,arun.22ai@bitsathy.ac.in,7376221AD101,AI&DS,${batches[1]?.name || 'CSE-B'}\n` +
-      `Kavitha R,kavitha.22ai@bitsathy.ac.in,7376221AD102,AI&DS,${batches[1]?.name || 'CSE-B'}\n`;
+      `Arun M,arun.22ai@bitsathy.ac.in,7376221AD101,AI&DS,${secondBatchName}\n` +
+      `Kavitha R,kavitha.22ai@bitsathy.ac.in,7376221AD102,AI&DS,${secondBatchName}\n`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

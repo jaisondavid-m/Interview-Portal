@@ -43,20 +43,23 @@ export default function AdminLabFacultyMapping() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Batches from localStorage
+  // Batches from localStorage (no dummy seedings)
   const [batches, setBatches] = useState(() => {
     try {
       const raw = localStorage.getItem('lab_batches_v2');
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const defaultNames = ['CSE-A', 'CSE-B', 'AI&DS-A', 'AI&DS-B'];
+          const isOnlyLegacySeeded = parsed.length === 4 && parsed.every((b) => defaultNames.includes(b.name));
+          if (isOnlyLegacySeeded) return [];
+          return parsed;
+        }
+      }
     } catch {
       // fallback
     }
-    return [
-      { id: '1', name: 'CSE-A', semester: 'Semester III', academic_year: '2025-2026', department: 'CSE' },
-      { id: '2', name: 'CSE-B', semester: 'Semester III', academic_year: '2025-2026', department: 'CSE' },
-      { id: '3', name: 'AI&DS-A', semester: 'Semester III', academic_year: '2025-2026', department: 'AI&DS' },
-      { id: '4', name: 'AI&DS-B', semester: 'Semester III', academic_year: '2025-2026', department: 'AI&DS' },
-    ];
+    return [];
   });
 
   // Courses & Faculty
