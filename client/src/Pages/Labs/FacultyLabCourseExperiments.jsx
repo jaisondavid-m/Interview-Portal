@@ -21,11 +21,13 @@ import {
   Lock,
   Layers,
   Terminal,
-  Hash
+  Hash,
+  Users
 } from 'lucide-react';
 import api from '../../api/axios';
 import CodeEditor from '../../Components/CodeEditor';
 import Pagination from '../../Components/Pagination';
+import LabVariantMappingModal from '../../Components/AdminLabs/LabVariantMappingModal';
 
 export default function FacultyLabCourseExperiments() {
   const { courseId } = useParams();
@@ -37,12 +39,18 @@ export default function FacultyLabCourseExperiments() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
-  // View Mode: 'experiments' | 'variants' | 'studio'
+  // View Mode: 'experiments' | 'variants' | 'questions' | 'studio'
   const [currentView, setCurrentView] = useState('experiments');
   const [selectedExp, setSelectedExp] = useState(null);
   const [variants, setVariants] = useState([]);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState(null);
+
+  // Student Variant Allocation Modal
+  const [mappingModal, setMappingModal] = useState(false);
 
   // Experiments Pagination & Search
   const [expSearch, setExpSearch] = useState('');
@@ -51,14 +59,11 @@ export default function FacultyLabCourseExperiments() {
   const [expTotalPages, setExpTotalPages] = useState(1);
   const [expTotalCount, setExpTotalCount] = useState(0);
 
-  // Variants Pagination & Search
+  // Variants & Questions Search
   const [variantSearch, setVariantSearch] = useState('');
-  const [varPage, setVarPage] = useState(1);
-  const [varLimit, setVarLimit] = useState(10);
-  const [varTotalPages, setVarTotalPages] = useState(1);
-  const [varTotalCount, setVarTotalCount] = useState(0);
+  const [questionSearch, setQuestionSearch] = useState('');
 
-  // Active Variant Studio Tab
+  // Active Question Studio Tab
   const [activeStudioTab, setActiveStudioTab] = useState('details'); // 'details' | 'algo' | 'solution' | 'testcases' | 'viva'
 
   const showToast = (msg, type = 'success') => {
@@ -94,57 +99,61 @@ export default function FacultyLabCourseExperiments() {
     if (selectedExp?.id && currentView === 'variants') {
       fetchVariants(selectedExp);
     }
-  }, [selectedExp?.id, varPage, varLimit, variantSearch, currentView]);
+  }, [selectedExp?.id, variantSearch, currentView]);
+
+  useEffect(() => {
+    if (selectedVariant?.id && currentView === 'questions') {
+      fetchVariantQuestions(selectedVariant);
+    }
+  }, [selectedVariant?.id, questionSearch, currentView]);
 
   const fetchVariants = async (exp) => {
     if (!exp?.id) return;
     setVariantsLoading(true);
     try {
       const res = await api.get(
-        `/admin/labs/experiments/${exp.id}/variants?page=${varPage}&limit=${varLimit}&search=${encodeURIComponent(
-          variantSearch.trim()
-        )}`
+        `/faculty/labs/experiments/${exp.id}/variants?search=${encodeURIComponent(variantSearch.trim())}`
       );
-      const varList = res?.variants || [];
-      setVarTotalCount(res?.total ?? varList.length);
-      setVarTotalPages(res?.total_pages ?? 1);
-      if (varList.length > 0) {
-        setVariants(varList);
-      } else {
-        // Fallback default variant based on experiment info
-        const defaultVar = {
-          id: 0,
-          experiment_id: exp.id,
-          course_id: exp.course_id,
-          question_code: `EX${exp.experiment_no}_VAR_A`,
-          title: exp.title,
-          aim: exp.aim,
-          reference_algorithm: exp.procedure || '["Step 1: Read problem input.", "Step 2: Compute result.", "Step 3: Output formatted answer."]',
-          solution_code: exp.starter_code || '# Faculty Reference Solution\n',
-          language: exp.language || 'python',
-          sample_test_cases: exp.sample_test_cases || '[]',
-          hidden_test_cases: exp.hidden_test_cases || '[]',
-          max_marks: exp.max_marks || 100,
-          viva_questions: [],
-        };
-        setVariants([defaultVar]);
-      }
+      setVariants(res?.variants || []);
     } catch {
-      showToast('Could not load question variants.', 'error');
+      showToast('Could not load experiment variants.', 'error');
     } finally {
       setVariantsLoading(false);
     }
   };
 
+  const fetchVariantQuestions = async (variant) => {
+    if (!variant?.id) return;
+    setQuestionsLoading(true);
+    try {
+      const res = await api.get(
+        `/faculty/labs/variants/${variant.id}/questions?search=${encodeURIComponent(questionSearch.trim())}`
+      );
+      setQuestions(res?.questions || []);
+    } catch {
+      showToast('Could not load variant questions.', 'error');
+    } finally {
+      setQuestionsLoading(false);
+    }
+  };
+
   const openExperimentVariants = (exp) => {
     setSelectedExp(exp);
-    setVarPage(1);
+    setSelectedVariant(null);
+    setSelectedQuestion(null);
     setVariantSearch('');
     setCurrentView('variants');
   };
 
-  const openVariantStudio = (v) => {
-    setSelectedVariant(v);
+  const openVariantQuestions = (variant) => {
+    setSelectedVariant(variant);
+    setSelectedQuestion(null);
+    setQuestionSearch('');
+    setCurrentView('questions');
+  };
+
+  const openQuestionStudio = (q) => {
+    setSelectedQuestion(q);
     setCurrentView('studio');
     setActiveStudioTab('details');
   };
@@ -178,14 +187,44 @@ export default function FacultyLabCourseExperiments() {
     return [];
   };
 
+  const filteredExperiments = experiments.filter((e) => {
+    if (!expSearch) return true;
+    const term = expSearch.toLowerCase();
+    return (
+      e.title?.toLowerCase().includes(term) ||
+      e.aim?.toLowerCase().includes(term) ||
+      String(e.experiment_no).includes(term)
+    );
+  });
+
+  const filteredVariants = variants.filter((v) => {
+    if (!variantSearch) return true;
+    const term = variantSearch.toLowerCase();
+    return (
+      v.variant_code?.toLowerCase().includes(term) ||
+      v.title?.toLowerCase().includes(term) ||
+      v.description?.toLowerCase().includes(term)
+    );
+  });
+
+  const filteredQuestions = questions.filter((q) => {
+    if (!questionSearch) return true;
+    const term = questionSearch.toLowerCase();
+    return (
+      q.question_code?.toLowerCase().includes(term) ||
+      q.title?.toLowerCase().includes(term) ||
+      q.aim?.toLowerCase().includes(term)
+    );
+  });
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold transition-all ${
+          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-[var(--radius-md)] text-xs font-semibold shadow-lg border flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 ${
             toast.type === 'error'
-              ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red)]/30'
+              ? 'bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-border)]'
               : 'bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--border-accent)]'
           }`}
         >
@@ -212,6 +251,7 @@ export default function FacultyLabCourseExperiments() {
               setCurrentView('experiments');
               setSelectedExp(null);
               setSelectedVariant(null);
+              setSelectedQuestion(null);
             }}
             className={`font-semibold transition-colors cursor-pointer ${
               currentView === 'experiments' ? 'text-[var(--accent)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -227,6 +267,7 @@ export default function FacultyLabCourseExperiments() {
                 onClick={() => {
                   setCurrentView('variants');
                   setSelectedVariant(null);
+                  setSelectedQuestion(null);
                 }}
                 className={`font-semibold transition-colors cursor-pointer ${
                   currentView === 'variants' ? 'text-[var(--accent)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -237,11 +278,28 @@ export default function FacultyLabCourseExperiments() {
             </>
           )}
 
-          {selectedVariant && currentView === 'studio' && (
+          {selectedVariant && (
+            <>
+              <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+              <button
+                onClick={() => {
+                  setCurrentView('questions');
+                  setSelectedQuestion(null);
+                }}
+                className={`font-semibold transition-colors cursor-pointer ${
+                  currentView === 'questions' ? 'text-[var(--accent)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Variant {selectedVariant.variant_code}
+              </button>
+            </>
+          )}
+
+          {selectedQuestion && currentView === 'studio' && (
             <>
               <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
               <span className="font-mono font-bold text-[var(--accent)]">
-                {selectedVariant.question_code || 'Variant'}
+                {selectedQuestion.question_code || 'Question'}
               </span>
             </>
           )}
@@ -250,7 +308,7 @@ export default function FacultyLabCourseExperiments() {
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] flex items-center gap-1">
             <Eye className="w-3 h-3" />
-            Read-Only Inspector
+            Faculty Inspector
           </span>
         </div>
       </div>
@@ -286,6 +344,13 @@ export default function FacultyLabCourseExperiments() {
                 <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
                   {course.department || 'Practical laboratory problem statements, reference algorithms, and test suites.'}
                 </p>
+              </div>
+
+              <div className="text-center pr-2 shrink-0">
+                <p className="text-[20px] font-bold font-mono text-[var(--text-primary)]">
+                  {experiments?.length || 0}
+                </p>
+                <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase">Experiments</p>
               </div>
             </div>
           )}
@@ -326,7 +391,7 @@ export default function FacultyLabCourseExperiments() {
               <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
               <span className="text-sm font-medium">Loading experiments...</span>
             </div>
-          ) : experiments.length === 0 ? (
+          ) : filteredExperiments.length === 0 ? (
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-12 text-center space-y-3">
               <Code2 className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
               <p className="text-[14px] font-semibold text-[var(--text-primary)]">
@@ -338,7 +403,7 @@ export default function FacultyLabCourseExperiments() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {experiments.map((exp) => (
+              {filteredExperiments.map((exp) => (
                 <div
                   key={exp.id}
                   className="group relative bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-[var(--radius-lg)] p-5 flex flex-col justify-between cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
@@ -376,10 +441,10 @@ export default function FacultyLabCourseExperiments() {
                   <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                     <span className="text-[var(--text-primary)] font-semibold flex items-center gap-1">
                       <Layers className="w-3.5 h-3.5 text-[var(--accent)]" />
-                      Explore Variants
+                      Variants Catalog
                     </span>
                     <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                      Inspect &rarr;
+                      View Variants &rarr;
                     </span>
                   </div>
                 </div>
@@ -406,7 +471,7 @@ export default function FacultyLabCourseExperiments() {
       )}
 
       {/* ================================================================ */}
-      {/* VIEW 2: QUESTION VARIANTS CATALOG                                */}
+      {/* VIEW 2: EXPERIMENT VARIANTS CATALOG (Level 2)                     */}
       {/* ================================================================ */}
       {currentView === 'variants' && selectedExp && (
         <div className="space-y-6">
@@ -432,14 +497,25 @@ export default function FacultyLabCourseExperiments() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setCurrentView('experiments')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] hover:bg-[var(--bg-hover)] text-xs text-[var(--text-primary)] font-medium transition cursor-pointer self-start sm:self-auto shrink-0"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              All Experiments
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setCurrentView('experiments')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] hover:bg-[var(--bg-hover)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium transition cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                All Experiments
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMappingModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:opacity-90 text-xs font-bold transition cursor-pointer shadow-[var(--shadow-xs)]"
+              >
+                <Users className="w-3.5 h-3.5" />
+                Map to Students
+              </button>
+            </div>
           </div>
 
           {/* Variants Search */}
@@ -449,20 +525,14 @@ export default function FacultyLabCourseExperiments() {
               <input
                 type="text"
                 value={variantSearch}
-                onChange={(e) => {
-                  setVariantSearch(e.target.value);
-                  setVarPage(1);
-                }}
-                placeholder="Search question variants by code, title, or aim..."
+                onChange={(e) => setVariantSearch(e.target.value)}
+                placeholder="Search variants by code, title, or description..."
                 className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-9 pr-8 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
               />
               {variantSearch && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setVariantSearch('');
-                    setVarPage(1);
-                  }}
+                  onClick={() => setVariantSearch('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition cursor-pointer"
                   title="Clear search"
                 >
@@ -476,47 +546,190 @@ export default function FacultyLabCourseExperiments() {
           {variantsLoading ? (
             <div className="flex items-center justify-center py-20 gap-3 text-[var(--text-muted)]">
               <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
-              <span className="text-sm font-medium">Loading question variants...</span>
+              <span className="text-sm font-medium">Loading experiment variants...</span>
             </div>
-          ) : variants.length === 0 ? (
+          ) : filteredVariants.length === 0 ? (
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-12 text-center space-y-3">
-              <FileText className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
+              <Layers className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
               <p className="text-[14px] font-semibold text-[var(--text-primary)]">
-                {variantSearch ? 'No question variants match your search keyword.' : 'No variants created for this experiment.'}
+                {variantSearch ? 'No variants match your search keyword.' : 'No variants created for this experiment.'}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {variants.map((v, idx) => {
-                const sampleCount = parseTestCases(v.sample_test_cases).length;
-                const hiddenCount = parseTestCases(v.hidden_test_cases).length;
-                const vivaCount = (v.viva_questions || []).length;
+              {filteredVariants.map((v) => {
+                const qCount = v.questions_count ?? 0;
+                return (
+                  <div
+                    key={v.id}
+                    className="group relative bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-[var(--radius-lg)] p-5 flex flex-col justify-between cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+                    onClick={() => openVariantQuestions(v)}
+                  >
+                    <div className="space-y-3.5">
+                      {/* Code Badge */}
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono font-bold text-[12px] px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                          Variant {v.variant_code}
+                        </span>
+
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                          {qCount} {qCount === 1 ? 'Question' : 'Questions'}
+                        </span>
+                      </div>
+
+                      {/* Title & Description */}
+                      <div>
+                        <h3 className="text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-snug">
+                          {v.title}
+                        </h3>
+                        <p className="text-[12px] text-[var(--text-secondary)] mt-1.5 line-clamp-2 leading-relaxed">
+                          {v.description || 'Custom problem variant with curated questions and test cases.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMappingModal(true);
+                        }}
+                        className="text-[var(--text-muted)] hover:text-[var(--accent)] flex items-center gap-1 transition"
+                      >
+                        <Users className="w-3 h-3" />
+                        Map Students
+                      </button>
+
+                      <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        Explore Questions &rarr;
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================================================================ */}
+      {/* VIEW 3: QUESTIONS LIST INSIDE VARIANT (Level 3)                   */}
+      {/* ================================================================ */}
+      {currentView === 'questions' && selectedVariant && (
+        <div className="space-y-6">
+          {/* Variant Summary Banner */}
+          <div className="panel-card p-5 bg-[var(--bg-raised)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant.variant_code}
+                </span>
+                <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] uppercase">
+                  {selectedExp?.language || 'python'}
+                </span>
+              </div>
+              <h2 className="text-[18px] sm:text-[20px] font-bold text-[var(--text-primary)]">
+                {selectedVariant.title}
+              </h2>
+              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed max-w-3xl">
+                {selectedVariant.description || 'Questions assigned to students allocated to this variant.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setCurrentView('variants')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] hover:bg-[var(--bg-hover)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium transition cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                All Variants
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMappingModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:opacity-90 text-xs font-bold transition cursor-pointer shadow-[var(--shadow-xs)]"
+              >
+                <Users className="w-3.5 h-3.5" />
+                Map to Students
+              </button>
+            </div>
+          </div>
+
+          {/* Questions Search */}
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4 shadow-[var(--shadow-xs)]">
+            <div className="relative w-full max-w-md flex items-center">
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={questionSearch}
+                onChange={(e) => setQuestionSearch(e.target.value)}
+                placeholder="Search questions by code, title, or aim..."
+                className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-9 pr-8 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
+              />
+              {questionSearch && (
+                <button
+                  type="button"
+                  onClick={() => setQuestionSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Questions Grid */}
+          {questionsLoading ? (
+            <div className="flex items-center justify-center py-20 gap-3 text-[var(--text-muted)]">
+              <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
+              <span className="text-sm font-medium">Loading questions for Variant {selectedVariant.variant_code}...</span>
+            </div>
+          ) : filteredQuestions.length === 0 ? (
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-12 text-center space-y-3">
+              <FileText className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
+              <p className="text-[14px] font-semibold text-[var(--text-primary)]">
+                {questionSearch
+                  ? 'No questions match your search keyword.'
+                  : `No questions found under Variant ${selectedVariant.variant_code}.`}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredQuestions.map((q) => {
+                const sampleCount = parseTestCases(q.sample_test_cases).length;
+                const hiddenCount = parseTestCases(q.hidden_test_cases).length;
+                const vivaCount = (q.viva_questions || []).length;
 
                 return (
                   <div
-                    key={v.id || idx}
+                    key={q.id}
                     className="group relative bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--border-accent)] rounded-[var(--radius-lg)] p-5 flex flex-col justify-between cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
-                    onClick={() => openVariantStudio(v)}
+                    onClick={() => openQuestionStudio(q)}
                   >
                     <div className="space-y-3.5">
                       {/* Code Badge */}
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-mono font-bold text-[11px] px-2.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                          {v.question_code || `VAR_${String.fromCharCode(65 + idx)}`}
+                          {q.question_code || 'Question'}
                         </span>
 
                         <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-semibold">
-                          {v.language || selectedExp.language || 'python'}
+                          {q.language || selectedExp?.language || 'python'}
                         </span>
                       </div>
 
                       {/* Title & Aim */}
                       <div>
                         <h3 className="text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-snug">
-                          {v.title || `Variant ${String.fromCharCode(65 + idx)}`}
+                          {q.title}
                         </h3>
                         <p className="text-[12px] text-[var(--text-secondary)] mt-1.5 line-clamp-2 leading-relaxed">
-                          {v.aim || 'No specific objective provided.'}
+                          {q.aim || 'No specific objective provided.'}
                         </p>
                       </div>
 
@@ -536,7 +749,7 @@ export default function FacultyLabCourseExperiments() {
                     {/* Footer */}
                     <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                       <span className="text-[var(--text-secondary)] font-semibold">
-                        {v.max_marks || 100} Marks
+                        {q.max_marks || 100} Marks
                       </span>
                       <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
                         Inspect Details &rarr;
@@ -547,53 +760,37 @@ export default function FacultyLabCourseExperiments() {
               })}
             </div>
           )}
-
-          {/* Variants Pagination */}
-          {!variantsLoading && varTotalCount > 0 && (
-            <Pagination
-              page={varPage}
-              totalPages={varTotalPages}
-              totalItems={varTotalCount}
-              limit={varLimit}
-              onPageChange={(newPage) => setVarPage(newPage)}
-              onLimitChange={(newLimit) => {
-                setVarLimit(newLimit);
-                setVarPage(1);
-              }}
-              pageSizeOptions={[5, 10, 20, 50]}
-            />
-          )}
         </div>
       )}
 
       {/* ================================================================ */}
-      {/* VIEW 3: VARIANT INSPECTOR STUDIO (100% READ-ONLY)                */}
+      {/* VIEW 4: QUESTION INSPECTOR STUDIO (Level 4 Read-Only)            */}
       {/* ================================================================ */}
-      {currentView === 'studio' && selectedVariant && (
+      {currentView === 'studio' && selectedQuestion && (
         <div className="space-y-6">
           {/* Header Action Bar */}
           <div className="panel-card p-5 bg-[var(--bg-raised)] flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono font-bold text-[12px] px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                  {selectedVariant.question_code || 'VARIANT'}
+                  {selectedQuestion.question_code || 'QUESTION'}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                  Exp {selectedExp?.experiment_no}: {selectedExp?.title}
+                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant?.variant_code}: {selectedVariant?.title}
                 </span>
               </div>
               <h1 className="text-[18px] sm:text-[22px] font-bold text-[var(--text-primary)]">
-                {selectedVariant.title}
+                {selectedQuestion.title}
               </h1>
             </div>
 
             <button
               type="button"
-              onClick={() => setCurrentView('variants')}
+              onClick={() => setCurrentView('questions')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] hover:bg-[var(--bg-hover)] text-xs text-[var(--text-primary)] font-medium transition cursor-pointer self-start md:self-auto shrink-0"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Variants List
+              Back to Questions
             </button>
           </div>
 
@@ -632,33 +829,33 @@ export default function FacultyLabCourseExperiments() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-[var(--radius-md)] bg-[var(--bg-raised)] border border-[var(--border)]">
                 <div>
                   <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">Question Code</span>
-                  <span className="font-mono font-bold text-[13px] text-[var(--accent)] mt-0.5 block">{selectedVariant.question_code}</span>
+                  <span className="font-mono font-bold text-[13px] text-[var(--accent)] mt-0.5 block">{selectedQuestion.question_code}</span>
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">Target Language</span>
-                  <span className="font-mono font-bold text-[13px] text-[var(--text-primary)] uppercase mt-0.5 block">{selectedVariant.language || 'python'}</span>
+                  <span className="font-mono font-bold text-[13px] text-[var(--text-primary)] uppercase mt-0.5 block">{selectedQuestion.language || 'python'}</span>
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">Max Marks</span>
-                  <span className="font-mono font-bold text-[13px] text-[var(--text-primary)] mt-0.5 block">{selectedVariant.max_marks || 100} Marks</span>
+                  <span className="font-mono font-bold text-[13px] text-[var(--text-primary)] mt-0.5 block">{selectedQuestion.max_marks || 100} Marks</span>
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">Viva Questions Count</span>
-                  <span className="font-mono font-bold text-[13px] text-[var(--text-primary)] mt-0.5 block">{selectedVariant.viva_questions_count || 5} Questions</span>
+                  <span className="font-mono font-bold text-[13px] text-[var(--text-primary)] mt-0.5 block">{(selectedQuestion.viva_questions || []).length} Questions</span>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Title / Problem Heading</h3>
                 <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-sm font-semibold text-[var(--text-primary)]">
-                  {selectedVariant.title}
+                  {selectedQuestion.title}
                 </div>
               </div>
 
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Aim & Problem Statement</h3>
                 <div className="p-4 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap">
-                  {selectedVariant.aim}
+                  {selectedQuestion.aim}
                 </div>
               </div>
             </div>
@@ -677,13 +874,13 @@ export default function FacultyLabCourseExperiments() {
                 </p>
               </div>
 
-              {parseAlgorithmSteps(selectedVariant.reference_algorithm).length === 0 ? (
+              {parseAlgorithmSteps(selectedQuestion.reference_algorithm).length === 0 ? (
                 <div className="p-8 text-center text-xs text-[var(--text-muted)] italic">
-                  No reference algorithm specified for this variant.
+                  No reference algorithm specified for this question.
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {parseAlgorithmSteps(selectedVariant.reference_algorithm).map((step, idx) => (
+                  {parseAlgorithmSteps(selectedQuestion.reference_algorithm).map((step, idx) => (
                     <div
                       key={idx}
                       className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-input)] border border-[var(--border)] flex items-start gap-3.5"
@@ -716,15 +913,15 @@ export default function FacultyLabCourseExperiments() {
                 </div>
 
                 <span className="text-[11px] font-mono uppercase px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] font-bold">
-                  {selectedVariant.language || 'python'}
+                  {selectedQuestion.language || 'python'}
                 </span>
               </div>
 
               <div className="border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden h-[380px]">
                 <CodeEditor
-                  code={selectedVariant.solution_code || '# No reference solution code uploaded'}
-                  value={selectedVariant.solution_code || '# No reference solution code uploaded'}
-                  language={selectedVariant.language || 'python'}
+                  code={selectedQuestion.solution_code || '# No reference solution code uploaded'}
+                  value={selectedQuestion.solution_code || '# No reference solution code uploaded'}
+                  language={selectedQuestion.language || 'python'}
                   isEditable={false}
                   height="380px"
                 />
@@ -748,15 +945,15 @@ export default function FacultyLabCourseExperiments() {
                     </p>
                   </div>
                   <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                    {parseTestCases(selectedVariant.sample_test_cases).length} Cases
+                    {parseTestCases(selectedQuestion.sample_test_cases).length} Cases
                   </span>
                 </div>
 
-                {parseTestCases(selectedVariant.sample_test_cases).length === 0 ? (
+                {parseTestCases(selectedQuestion.sample_test_cases).length === 0 ? (
                   <p className="text-xs text-[var(--text-muted)] italic">No sample test cases configured.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {parseTestCases(selectedVariant.sample_test_cases).map((tc, idx) => (
+                    {parseTestCases(selectedQuestion.sample_test_cases).map((tc, idx) => (
                       <div key={idx} className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-input)] border border-[var(--border)] space-y-3">
                         <span className="font-mono font-bold text-xs text-[var(--accent)] block">Sample #{idx + 1}</span>
                         <div>
@@ -790,15 +987,15 @@ export default function FacultyLabCourseExperiments() {
                     </p>
                   </div>
                   <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                    {parseTestCases(selectedVariant.hidden_test_cases).length} Cases
+                    {parseTestCases(selectedQuestion.hidden_test_cases).length} Cases
                   </span>
                 </div>
 
-                {parseTestCases(selectedVariant.hidden_test_cases).length === 0 ? (
+                {parseTestCases(selectedQuestion.hidden_test_cases).length === 0 ? (
                   <p className="text-xs text-[var(--text-muted)] italic">No hidden test cases configured.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {parseTestCases(selectedVariant.hidden_test_cases).map((tc, idx) => (
+                    {parseTestCases(selectedQuestion.hidden_test_cases).map((tc, idx) => (
                       <div key={idx} className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-input)] border border-[var(--border)] space-y-3">
                         <span className="font-mono font-bold text-xs text-amber-500 block">Hidden Case #{idx + 1}</span>
                         <div>
@@ -835,17 +1032,17 @@ export default function FacultyLabCourseExperiments() {
                   </p>
                 </div>
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
-                  {(selectedVariant.viva_questions || []).length} Viva Questions
+                  {(selectedQuestion.viva_questions || []).length} Viva Questions
                 </span>
               </div>
 
-              {(selectedVariant.viva_questions || []).length === 0 ? (
+              {(selectedQuestion.viva_questions || []).length === 0 ? (
                 <div className="p-8 text-center text-xs text-[var(--text-muted)] italic">
-                  No oral viva questions configured for this variant.
+                  No oral viva questions configured for this question.
                 </div>
               ) : (
                 <div className="space-y-3.5">
-                  {(selectedVariant.viva_questions || []).map((vq, idx) => (
+                  {(selectedQuestion.viva_questions || []).map((vq, idx) => (
                     <div
                       key={vq.id || idx}
                       className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-input)] border border-[var(--border)] space-y-2"
@@ -874,6 +1071,19 @@ export default function FacultyLabCourseExperiments() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Student Variant Allocation Modal */}
+      {mappingModal && selectedExp && (
+        <LabVariantMappingModal
+          isOpen={mappingModal}
+          onClose={() => setMappingModal(false)}
+          courseId={courseId}
+          experiment={selectedExp}
+          onSuccess={() => {
+            if (selectedExp) fetchVariants(selectedExp);
+          }}
+        />
       )}
     </div>
   );

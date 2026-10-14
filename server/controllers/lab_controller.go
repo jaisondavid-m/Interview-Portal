@@ -639,34 +639,98 @@ func GetCourseExperimentsForStudent(c *gin.Context) {
 	})
 }
 
-// getOrAllocateQuestionForStudent deterministically retrieves or allocates a question variant for a student
+// getOrAllocateQuestionForStudent deterministically retrieves or allocates a variant & question for a student
 func getOrAllocateQuestionForStudent(courseID uint, expID uint, studentID uint) (*models.LabExperimentQuestion, error) {
 	database.EnsureLabTables(database.DB)
 	// Check if already allocated
 	var alloc models.LabQuestionAllocation
 	err := database.DB.Where("student_id = ? AND course_id = ? AND experiment_id = ?", studentID, courseID, expID).First(&alloc).Error
-	if err == nil && alloc.QuestionID > 0 {
-		var q models.LabExperimentQuestion
-		if err := database.DB.First(&q, alloc.QuestionID).Error; err == nil {
-			return &q, nil
+	if err == nil {
+		if alloc.QuestionID > 0 {
+			var q models.LabExperimentQuestion
+			if err := database.DB.First(&q, alloc.QuestionID).Error; err == nil {
+				if alloc.VariantID == 0 && q.VariantID > 0 {
+					alloc.VariantID = q.VariantID
+					database.DB.Model(&alloc).Update("variant_id", q.VariantID)
+				}
+				return &q, nil
+			}
+		}
+		// If allocated by variant_id without specific question
+		if alloc.VariantID > 0 {
+			var q models.LabExperimentQuestion
+			if err := database.DB.Where("variant_id = ? AND is_active = ?", alloc.VariantID, true).Order("id asc").First(&q).Error; err == nil {
+				alloc.QuestionID = q.ID
+				database.DB.Model(&alloc).Update("question_id", q.ID)
+				return &q, nil
+			}
 		}
 	}
 
-	// Fetch active question variants for this experiment
+	// Fetch active variants for this experiment
+	var variants []models.LabExperimentVariant
+	database.DB.Where("experiment_id = ? AND is_active = ?", expID, true).Order("variant_code asc, id asc").Find(&variants)
+	if len(variants) == 0 {
+		database.DB.Where("experiment_id = ?", expID).Order("variant_code asc, id asc").Find(&variants)
+	}
+
+	if len(variants) == 0 {
+		// Run backfill to create default Variant A
+		var exp models.LabExperiment
+		if err := database.DB.First(&exp, expID).Error; err == nil {
+			varA := models.LabExperimentVariant{
+				ExperimentID: exp.ID,
+				CourseID:     exp.CourseID,
+				VariantCode:  "A",
+				Title:        "Variant A",
+				Description:  "Default Variant A",
+				IsActive:     true,
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			database.DB.Create(&varA)
+			variants = append(variants, varA)
+
+			// Update any questions without variant
+			database.DB.Model(&models.LabExperimentQuestion{}).
+				Where("experiment_id = ? AND (variant_id = 0 OR variant_id IS NULL)", exp.ID).
+				Update("variant_id", varA.ID)
+		}
+	}
+
+	if len(variants) == 0 {
+		return nil, fmt.Errorf("no variants configured for experiment %d", expID)
+	}
+
+	// Deterministic selection of variant for this student
+	seed := time.Now().UnixNano() + int64(studentID*1000) + int64(expID)
+	r := rand.New(rand.NewSource(seed))
+	selectedVar := variants[r.Intn(len(variants))]
+
+	// Fetch question under this variant
 	var questions []models.LabExperimentQuestion
-	database.DB.Where("experiment_id = ? AND is_active = ?", expID, true).Order("id asc").Find(&questions)
+	database.DB.Where("variant_id = ? AND is_active = ?", selectedVar.ID, true).Order("id asc").Find(&questions)
 	if len(questions) == 0 {
+		database.DB.Where("variant_id = ?", selectedVar.ID).Order("id asc").Find(&questions)
+	}
+	if len(questions) == 0 {
+		// If variant has no question yet, check if experiment has any questions
 		database.DB.Where("experiment_id = ?", expID).Order("id asc").Find(&questions)
+		if len(questions) > 0 {
+			// Link to selected variant
+			database.DB.Model(&models.LabExperimentQuestion{}).Where("id = ?", questions[0].ID).Update("variant_id", selectedVar.ID)
+		}
 	}
 
 	if len(questions) == 0 {
-		// Auto-create initial default question variant from parent experiment
+		// Create default question
 		var parentExp models.LabExperiment
 		if err := database.DB.First(&parentExp, expID).Error; err == nil {
 			q := models.LabExperimentQuestion{
 				ExperimentID:       parentExp.ID,
+				VariantID:          selectedVar.ID,
 				CourseID:           parentExp.CourseID,
-				QuestionCode:       fmt.Sprintf("EX%d_VAR_A", parentExp.ExperimentNo),
+				QuestionCode:       fmt.Sprintf("EX%d_Q1", parentExp.ExperimentNo),
 				Title:              parentExp.Title,
 				Aim:                parentExp.Aim,
 				ReferenceAlgorithm: parentExp.Procedure,
@@ -686,19 +750,17 @@ func getOrAllocateQuestionForStudent(courseID uint, expID uint, studentID uint) 
 	}
 
 	if len(questions) == 0 {
-		return nil, fmt.Errorf("no question variants configured for experiment %d", expID)
+		return nil, fmt.Errorf("no questions configured for experiment %d variant %s", expID, selectedVar.VariantCode)
 	}
 
-	// Deterministic random selection for this student
-	seed := time.Now().UnixNano() + int64(studentID*1000) + int64(expID)
-	r := rand.New(rand.NewSource(seed))
-	selectedQ := questions[r.Intn(len(questions))]
+	selectedQ := questions[0]
 
 	// Save allocation lock
 	newAlloc := models.LabQuestionAllocation{
 		StudentID:    studentID,
 		CourseID:     courseID,
 		ExperimentID: expID,
+		VariantID:    selectedVar.ID,
 		QuestionID:   selectedQ.ID,
 		AllocatedAt:  time.Now(),
 	}
@@ -736,6 +798,37 @@ func GetExperimentDetails(c *gin.Context) {
 		return
 	}
 
+	// Fetch Variant Info
+	var assignedVar *models.LabExperimentVariant
+	if assignedQ.VariantID > 0 {
+		var v models.LabExperimentVariant
+		if err := database.DB.First(&v, assignedQ.VariantID).Error; err == nil {
+			assignedVar = &v
+		}
+	}
+
+	// Fetch all safe questions under this variant for student
+	var variantQuestions []gin.H
+	if assignedQ.VariantID > 0 {
+		var allVarQ []models.LabExperimentQuestion
+		database.DB.Where("variant_id = ? AND is_active = ?", assignedQ.VariantID, true).Order("id asc").Find(&allVarQ)
+		for _, q := range allVarQ {
+			variantQuestions = append(variantQuestions, gin.H{
+				"id":                   q.ID,
+				"experiment_id":        q.ExperimentID,
+				"variant_id":           q.VariantID,
+				"course_id":            q.CourseID,
+				"question_code":        q.QuestionCode,
+				"title":                q.Title,
+				"aim":                  q.Aim,
+				"language":             q.Language,
+				"sample_test_cases":    q.SampleTestCases,
+				"max_marks":            q.MaxMarks,
+				"viva_questions_count": q.VivaQuestionsCount,
+			})
+		}
+	}
+
 	// Sanitized experiment payload (NEVER leak HiddenTestCases to student)
 	safeExperiment := gin.H{
 		"id":                exp.ID,
@@ -757,6 +850,7 @@ func GetExperimentDetails(c *gin.Context) {
 	safeQuestion := gin.H{
 		"id":                   assignedQ.ID,
 		"experiment_id":        assignedQ.ExperimentID,
+		"variant_id":           assignedQ.VariantID,
 		"course_id":            assignedQ.CourseID,
 		"question_code":        assignedQ.QuestionCode,
 		"title":                assignedQ.Title,
@@ -777,6 +871,8 @@ func GetExperimentDetails(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"experiment":        safeExperiment,
 		"assigned_question": safeQuestion,
+		"assigned_variant":  assignedVar,
+		"variant_questions": variantQuestions,
 		"submission":        subPtr,
 		"is_unlocked":       accessStatus.IsUnlocked,
 		"user_section":      accessStatus.Section,
@@ -3416,4 +3512,319 @@ func DownloadCustomLabRecordPDF(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
+
+// FacultyGetExperimentVariantAllocations returns enrolled students, their allocated variants, and available variants
+func FacultyGetExperimentVariantAllocations(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	courseIDStr := c.Param("courseId")
+	expIDStr := c.Param("expId")
+
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	// Fetch active variants for this experiment
+	var variants []models.LabExperimentVariant
+	database.DB.Where("experiment_id = ?", expID).Order("variant_code asc, id asc").Find(&variants)
+	if len(variants) == 0 {
+		var exp models.LabExperiment
+		if database.DB.First(&exp, expID).Error == nil {
+			varA := models.LabExperimentVariant{
+				ExperimentID: exp.ID,
+				CourseID:     exp.CourseID,
+				VariantCode:  "A",
+				Title:        "Variant A",
+				Description:  "Default Variant A",
+				IsActive:     true,
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			database.DB.Create(&varA)
+			variants = append(variants, varA)
+		}
+	}
+
+	// Fetch all allocations for this experiment
+	var allocations []models.LabQuestionAllocation
+	database.DB.Preload("Variant").Preload("Question").
+		Where("course_id = ? AND experiment_id = ?", courseID, expID).
+		Find(&allocations)
+
+	allocMap := make(map[uint]models.LabQuestionAllocation)
+	for _, a := range allocations {
+		allocMap[a.StudentID] = a
+	}
+
+	// Query students
+	sectionFilter := strings.TrimSpace(c.Query("section"))
+	search := strings.TrimSpace(c.Query("search"))
+
+	studentQuery := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
+	if sectionFilter != "" && sectionFilter != "ALL" {
+		sPattern := "%" + strings.ToLower(sectionFilter) + "%"
+		studentQuery = studentQuery.Where("section = ? OR LOWER(section) LIKE ?", sectionFilter, sPattern)
+	}
+	if search != "" {
+		sp := "%" + strings.ToLower(search) + "%"
+		studentQuery = studentQuery.Where("LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(roll_no) LIKE ?", sp, sp, sp)
+	}
+
+	var students []models.User
+	studentQuery.Order("section asc, roll_no asc, name asc").Find(&students)
+
+	type StudentAllocationItem struct {
+		StudentID        uint       `json:"student_id"`
+		Name             string     `json:"name"`
+		RollNo           string     `json:"roll_no"`
+		Email            string     `json:"email"`
+		Section          string     `json:"section"`
+		Department       string     `json:"department"`
+		VariantID        uint       `json:"variant_id"`
+		VariantCode      string     `json:"variant_code"`
+		VariantTitle     string     `json:"variant_title"`
+		QuestionID       uint       `json:"question_id"`
+		QuestionCode     string     `json:"question_code"`
+		AllocatedAt      *time.Time `json:"allocated_at,omitempty"`
+		IsManuallyMapped bool       `json:"is_manually_mapped"`
+	}
+
+	var studentItems []StudentAllocationItem
+	for _, s := range students {
+		item := StudentAllocationItem{
+			StudentID:  s.ID,
+			Name:       s.Name,
+			RollNo:     s.RollNo,
+			Email:      s.Email,
+			Section:    s.Section,
+			Department: s.Department,
+		}
+
+		if alloc, exists := allocMap[s.ID]; exists {
+			item.VariantID = alloc.VariantID
+			item.QuestionID = alloc.QuestionID
+			item.AllocatedAt = &alloc.AllocatedAt
+			item.IsManuallyMapped = true
+			if alloc.Variant != nil {
+				item.VariantCode = alloc.Variant.VariantCode
+				item.VariantTitle = alloc.Variant.Title
+			}
+			if alloc.Question.ID > 0 {
+				item.QuestionCode = alloc.Question.QuestionCode
+			}
+		}
+
+		studentItems = append(studentItems, item)
+	}
+
+	// Fetch distinct sections
+	var distinctSections []string
+	database.DB.Model(&models.User{}).
+		Where("section IS NOT NULL AND section != '' AND LOWER(role) IN ?", []string{"student", "user"}).
+		Distinct().
+		Order("section asc").
+		Pluck("section", &distinctSections)
+
+	c.JSON(http.StatusOK, gin.H{
+		"course_id":      courseID,
+		"experiment_id":  expID,
+		"variants":       variants,
+		"students":       studentItems,
+		"sections":       distinctSections,
+		"total_students": len(studentItems),
+	})
+}
+
+type SetVariantAllocationReq struct {
+	StudentID uint `json:"student_id"`
+	VariantID uint `json:"variant_id"`
+	// Bulk support
+	Allocations []struct {
+		StudentID uint `json:"student_id"`
+		VariantID uint `json:"variant_id"`
+	} `json:"allocations"`
+}
+
+// FacultySetVariantAllocation assigns or changes student's variant mapping
+func FacultySetVariantAllocation(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	courseIDStr := c.Param("courseId")
+	expIDStr := c.Param("expId")
+
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var req SetVariantAllocationReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid allocation request: " + err.Error()})
+		return
+	}
+
+	type AllocPair struct {
+		StudentID uint
+		VariantID uint
+	}
+	var pairs []AllocPair
+
+	if req.StudentID > 0 && req.VariantID > 0 {
+		pairs = append(pairs, AllocPair{StudentID: req.StudentID, VariantID: req.VariantID})
+	}
+	for _, a := range req.Allocations {
+		if a.StudentID > 0 && a.VariantID > 0 {
+			pairs = append(pairs, AllocPair{StudentID: a.StudentID, VariantID: a.VariantID})
+		}
+	}
+
+	if len(pairs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid student and variant allocations provided"})
+		return
+	}
+
+	for _, p := range pairs {
+		// Find primary question for variant
+		var q models.LabExperimentQuestion
+		database.DB.Where("variant_id = ? AND is_active = ?", p.VariantID, true).Order("id asc").First(&q)
+		if q.ID == 0 {
+			database.DB.Where("variant_id = ?", p.VariantID).Order("id asc").First(&q)
+		}
+
+		var existing models.LabQuestionAllocation
+		err := database.DB.Where("student_id = ? AND course_id = ? AND experiment_id = ?", p.StudentID, courseID, expID).First(&existing).Error
+		if err == nil && existing.ID > 0 {
+			database.DB.Model(&existing).Updates(map[string]interface{}{
+				"variant_id":   p.VariantID,
+				"question_id":  q.ID,
+				"allocated_at": time.Now(),
+			})
+		} else {
+			newAlloc := models.LabQuestionAllocation{
+				StudentID:    p.StudentID,
+				CourseID:     uint(courseID),
+				ExperimentID: uint(expID),
+				VariantID:    p.VariantID,
+				QuestionID:   q.ID,
+				AllocatedAt:  time.Now(),
+			}
+			database.DB.Create(&newAlloc)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully mapped %d student(s) to variants!", len(pairs)),
+		"count":   len(pairs),
+	})
+}
+
+type AutoDistributeVariantsReq struct {
+	Section string `json:"section"` // "ALL" or specific section
+	Mode    string `json:"mode"`    // "round_robin" or "random"
+}
+
+// FacultyAutoDistributeVariants automatically distributes active variants evenly across students
+func FacultyAutoDistributeVariants(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	courseIDStr := c.Param("courseId")
+	expIDStr := c.Param("expId")
+
+	courseID, err := strconv.ParseUint(courseIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	var req AutoDistributeVariantsReq
+	_ = c.ShouldBindJSON(&req)
+
+	// Fetch active variants
+	var variants []models.LabExperimentVariant
+	database.DB.Where("experiment_id = ? AND is_active = ?", expID, true).Order("variant_code asc, id asc").Find(&variants)
+	if len(variants) == 0 {
+		database.DB.Where("experiment_id = ?", expID).Order("variant_code asc, id asc").Find(&variants)
+	}
+
+	if len(variants) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No variants configured for this experiment. Please add variants first."})
+		return
+	}
+
+	// Fetch students
+	studentQuery := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
+	if req.Section != "" && req.Section != "ALL" {
+		sPattern := "%" + strings.ToLower(req.Section) + "%"
+		studentQuery = studentQuery.Where("section = ? OR LOWER(section) LIKE ?", req.Section, sPattern)
+	}
+
+	var students []models.User
+	studentQuery.Order("section asc, roll_no asc, name asc").Find(&students)
+
+	if len(students) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No students found matching the selected section."})
+		return
+	}
+
+	assignedCount := 0
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for i, s := range students {
+		var chosenVar models.LabExperimentVariant
+		if req.Mode == "random" {
+			chosenVar = variants[r.Intn(len(variants))]
+		} else {
+			// Round-robin
+			chosenVar = variants[i%len(variants)]
+		}
+
+		var q models.LabExperimentQuestion
+		database.DB.Where("variant_id = ? AND is_active = ?", chosenVar.ID, true).Order("id asc").First(&q)
+		if q.ID == 0 {
+			database.DB.Where("variant_id = ?", chosenVar.ID).Order("id asc").First(&q)
+		}
+
+		var existing models.LabQuestionAllocation
+		err := database.DB.Where("student_id = ? AND course_id = ? AND experiment_id = ?", s.ID, courseID, expID).First(&existing).Error
+		if err == nil && existing.ID > 0 {
+			database.DB.Model(&existing).Updates(map[string]interface{}{
+				"variant_id":   chosenVar.ID,
+				"question_id":  q.ID,
+				"allocated_at": time.Now(),
+			})
+		} else {
+			newAlloc := models.LabQuestionAllocation{
+				StudentID:    s.ID,
+				CourseID:     uint(courseID),
+				ExperimentID: uint(expID),
+				VariantID:    chosenVar.ID,
+				QuestionID:   q.ID,
+				AllocatedAt:  time.Now(),
+			}
+			database.DB.Create(&newAlloc)
+		}
+		assignedCount++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully distributed %d variants across %d student(s)!", len(variants), assignedCount),
+		"count":   assignedCount,
+	})
+}
+
 

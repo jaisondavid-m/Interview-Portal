@@ -41,6 +41,8 @@ export default function LabWorkspace() {
 
   const [experiment, setExperiment] = useState(null);
   const [assignedQuestion, setAssignedQuestion] = useState(null);
+  const [assignedVariant, setAssignedVariant] = useState(null);
+  const [variantQuestions, setVariantQuestions] = useState([]);
   const [courseExperiments, setCourseExperiments] = useState([]);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
@@ -127,10 +129,14 @@ export default function LabWorkspace() {
       const res = await api.get(`/labs/experiment/${expId}`);
       const data = res?.experiment;
       const assignedQ = res?.assigned_question;
+      const assignedV = res?.assigned_variant;
+      const vQuestions = res?.variant_questions || [];
       const sub = res?.submission;
 
       setExperiment(data);
       setAssignedQuestion(assignedQ);
+      setAssignedVariant(assignedV);
+      setVariantQuestions(vQuestions);
       setIsUnlocked(res?.is_unlocked !== false);
       setAccessStatus(res?.access_status || null);
 
@@ -167,6 +173,11 @@ export default function LabWorkspace() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectQuestion = (q) => {
+    setAssignedQuestion(q);
+    setLanguage(q.language || experiment?.language || 'python');
   };
 
   const isSubmittedOrApproved =
@@ -578,6 +589,11 @@ export default function LabWorkspace() {
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0">
               Ex {experiment?.experiment_no || expId}
             </span>
+            {assignedVariant?.variant_code && (
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--bg-input)] text-[var(--accent)] border border-[var(--border-accent)] shrink-0">
+                Variant {assignedVariant.variant_code}
+              </span>
+            )}
             <div className="flex items-center gap-1.5 truncate">
               <span className="text-[13px] font-bold text-[var(--text-primary)] truncate">
                 {assignedQuestion?.title || experiment?.title}
@@ -585,7 +601,7 @@ export default function LabWorkspace() {
               {assignedQuestion?.question_code && (
                 <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--bg-raised)] text-[var(--accent)] border border-[var(--border)] flex items-center gap-1 shrink-0">
                   <Lock className="w-2.5 h-2.5 text-[var(--accent)]" />
-                  {assignedQuestion.question_code} Locked
+                  {assignedQuestion.question_code}
                 </span>
               )}
             </div>
@@ -784,6 +800,32 @@ export default function LabWorkspace() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel: Problem Statement / Step-by-Step Procedure / Test Cases */}
         <div className="w-[45%] shrink-0 border-r border-[var(--border)] bg-[var(--bg-raised)] flex flex-col overflow-hidden">
+          {/* Multi-Question Variant Switcher (if this variant has >1 question) */}
+          {variantQuestions.length > 1 && (
+            <div className="bg-[var(--bg-input)] border-b border-[var(--border)] px-3 py-2 flex items-center gap-2 overflow-x-auto shrink-0">
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase shrink-0 font-bold">
+                Variant {assignedVariant?.variant_code || 'A'} Questions:
+              </span>
+              {variantQuestions.map((vq, idx) => {
+                const isSelected = assignedQuestion?.id === vq.id;
+                return (
+                  <button
+                    key={vq.id}
+                    type="button"
+                    onClick={() => handleSelectQuestion(vq)}
+                    className={`px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-[var(--accent)] text-white shadow-xs'
+                        : 'bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    Q{idx + 1}: {vq.question_code || `Q${idx + 1}`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Left Pane Tab Buttons */}
           <div className="flex items-center border-b border-[var(--border)] bg-[var(--bg-card)] px-3 pt-2 gap-2 shrink-0">
             <button

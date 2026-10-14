@@ -997,9 +997,241 @@ func AdminGetExperimentQuestionVariants(c *gin.Context) {
 	})
 }
 
+type ExperimentVariantItem struct {
+	models.LabExperimentVariant
+	QuestionsCount int `json:"questions_count"`
+}
+
+// AdminGetExperimentVariants returns all variants under an experiment with their question counts
+func AdminGetExperimentVariants(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	expIDStr := c.Param("expId")
+	expID, err := strconv.ParseUint(expIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid experiment ID"})
+		return
+	}
+
+	search := strings.TrimSpace(c.Query("search"))
+	query := database.DB.Where("experiment_id = ?", expID)
+	if search != "" {
+		s := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(title) LIKE ? OR LOWER(variant_code) LIKE ? OR LOWER(description) LIKE ?", s, s, s)
+	}
+
+	var variants []models.LabExperimentVariant
+	query.Order("variant_code asc, id asc").Find(&variants)
+
+	// If no variants exist yet, ensure default Variant A is created and questions backfilled
+	if len(variants) == 0 && search == "" {
+		var exp models.LabExperiment
+		if database.DB.First(&exp, expID).Error == nil {
+			varA := models.LabExperimentVariant{
+				ExperimentID: exp.ID,
+				CourseID:     exp.CourseID,
+				VariantCode:  "A",
+				Title:        "Variant A",
+				Description:  "Default Variant A",
+				IsActive:     true,
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			if err := database.DB.Create(&varA).Error; err == nil {
+				variants = append(variants, varA)
+				// Attach any existing unmapped questions to this variant
+				database.DB.Model(&models.LabExperimentQuestion{}).
+					Where("experiment_id = ? AND (variant_id = 0 OR variant_id IS NULL)", exp.ID).
+					Update("variant_id", varA.ID)
+			}
+		}
+	}
+
+	var results []ExperimentVariantItem
+	for _, v := range variants {
+		var qCount int64
+		database.DB.Model(&models.LabExperimentQuestion{}).Where("variant_id = ?", v.ID).Count(&qCount)
+		results = append(results, ExperimentVariantItem{
+			LabExperimentVariant: v,
+			QuestionsCount:       int(qCount),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"variants": results,
+		"total":    len(results),
+	})
+}
+
+type SaveExperimentVariantReq struct {
+	ID           uint   `json:"id"`
+	ExperimentID uint   `json:"experiment_id"`
+	CourseID     uint   `json:"course_id"`
+	VariantCode  string `json:"variant_code" binding:"required"`
+	Title        string `json:"title" binding:"required"`
+	Description  string `json:"description"`
+	IsActive     bool   `json:"is_active"`
+}
+
+// AdminSaveExperimentVariant creates or updates a variant under an experiment
+func AdminSaveExperimentVariant(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	var req SaveExperimentVariantReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid variant payload: " + err.Error()})
+		return
+	}
+
+	expIDStr := c.Param("expId")
+	if expIDStr != "" {
+		expID, _ := strconv.ParseUint(expIDStr, 10, 64)
+		if req.ExperimentID == 0 && expID > 0 {
+			req.ExperimentID = uint(expID)
+		}
+	}
+
+	if req.CourseID == 0 && req.ExperimentID > 0 {
+		var exp models.LabExperiment
+		if err := database.DB.First(&exp, req.ExperimentID).Error; err == nil {
+			req.CourseID = exp.CourseID
+		}
+	}
+
+	var variant models.LabExperimentVariant
+	isNew := true
+	if req.ID > 0 {
+		if err := database.DB.First(&variant, req.ID).Error; err == nil {
+			isNew = false
+		}
+	}
+
+	variant.ExperimentID = req.ExperimentID
+	variant.CourseID = req.CourseID
+	variant.VariantCode = strings.ToUpper(strings.TrimSpace(req.VariantCode))
+	variant.Title = strings.TrimSpace(req.Title)
+	variant.Description = strings.TrimSpace(req.Description)
+	variant.IsActive = req.IsActive
+
+	if isNew {
+		variant.CreatedAt = time.Now()
+		variant.UpdatedAt = time.Now()
+		if err := database.DB.Create(&variant).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create variant: " + err.Error()})
+			return
+		}
+	} else {
+		variant.UpdatedAt = time.Now()
+		if err := database.DB.Save(&variant).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update variant: " + err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Variant saved successfully!",
+		"variant": variant,
+	})
+}
+
+// AdminDeleteExperimentVariant removes a variant and its associated questions
+func AdminDeleteExperimentVariant(c *gin.Context) {
+	idStr := c.Param("variantId")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid variant ID"})
+		return
+	}
+
+	// Delete vivas for questions under this variant
+	var questions []models.LabExperimentQuestion
+	database.DB.Where("variant_id = ?", id).Find(&questions)
+	for _, q := range questions {
+		database.DB.Where("question_id = ?", q.ID).Delete(&models.LabVivaQuestion{})
+		database.DB.Where("question_id = ?", q.ID).Delete(&models.LabQuestionAllocation{})
+	}
+	database.DB.Where("variant_id = ?", id).Delete(&models.LabExperimentQuestion{})
+	database.DB.Where("variant_id = ?", id).Delete(&models.LabQuestionAllocation{})
+	database.DB.Delete(&models.LabExperimentVariant{}, id)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Variant and its associated questions deleted successfully!",
+	})
+}
+
+// AdminGetVariantQuestions returns questions under a specific variant
+func AdminGetVariantQuestions(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	variantIDStr := c.Param("variantId")
+	variantID, err := strconv.ParseUint(variantIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid variant ID"})
+		return
+	}
+
+	var variant models.LabExperimentVariant
+	if err := database.DB.First(&variant, variantID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Variant not found"})
+		return
+	}
+
+	query := database.DB.Where("variant_id = ?", variantID)
+	search := strings.TrimSpace(c.Query("search"))
+	if search != "" {
+		s := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(title) LIKE ? OR LOWER(aim) LIKE ? OR LOWER(question_code) LIKE ?", s, s, s)
+	}
+
+	var questions []models.LabExperimentQuestion
+	query.Order("id asc").Find(&questions)
+
+	type QuestionWithVivas struct {
+		models.LabExperimentQuestion
+		VivaQuestions []models.LabVivaQuestion `json:"viva_questions"`
+	}
+
+	var results []QuestionWithVivas
+	for _, q := range questions {
+		var vivas []models.LabVivaQuestion
+		database.DB.Where("question_id = ?", q.ID).Order("order_index asc, id asc").Find(&vivas)
+		results = append(results, QuestionWithVivas{
+			LabExperimentQuestion: q,
+			VivaQuestions:         vivas,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"variant":   variant,
+		"questions": results,
+		"total":     len(results),
+	})
+}
+
+// AdminDeleteVariantQuestion removes a specific question inside a variant
+func AdminDeleteVariantQuestion(c *gin.Context) {
+	idStr := c.Param("questionId")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid question ID"})
+		return
+	}
+
+	database.DB.Where("question_id = ?", id).Delete(&models.LabVivaQuestion{})
+	database.DB.Where("question_id = ?", id).Delete(&models.LabQuestionAllocation{})
+	database.DB.Delete(&models.LabExperimentQuestion{}, id)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Question deleted successfully!",
+	})
+}
+
+// AdminSaveVariantQuestion creates or updates a question inside a variant
+func AdminSaveVariantQuestion(c *gin.Context) {
+	AdminSaveExperimentQuestionVariant(c)
+}
+
 type SaveQuestionVariantReq struct {
 	ID                 uint                     `json:"id"`
 	ExperimentID       uint                     `json:"experiment_id"`
+	VariantID          uint                     `json:"variant_id"`
 	CourseID           uint                     `json:"course_id"`
 	QuestionCode       string                   `json:"question_code"`
 	Title              string                   `json:"title" binding:"required"`
@@ -1024,11 +1256,29 @@ func AdminSaveExperimentQuestionVariant(c *gin.Context) {
 		return
 	}
 
-	expIDStr := c.Param("expId")
-	expID, _ := strconv.ParseUint(expIDStr, 10, 64)
-	if req.ExperimentID == 0 && expID > 0 {
-		req.ExperimentID = uint(expID)
+	variantIDStr := c.Param("variantId")
+	if variantIDStr != "" {
+		if vid, err := strconv.ParseUint(variantIDStr, 10, 64); err == nil && vid > 0 {
+			req.VariantID = uint(vid)
+		}
 	}
+
+	expIDStr := c.Param("expId")
+	if expIDStr != "" {
+		expID, _ := strconv.ParseUint(expIDStr, 10, 64)
+		if req.ExperimentID == 0 && expID > 0 {
+			req.ExperimentID = uint(expID)
+		}
+	}
+
+	if req.VariantID > 0 && (req.ExperimentID == 0 || req.CourseID == 0) {
+		var v models.LabExperimentVariant
+		if err := database.DB.First(&v, req.VariantID).Error; err == nil {
+			req.ExperimentID = v.ExperimentID
+			req.CourseID = v.CourseID
+		}
+	}
+
 	if req.CourseID == 0 && req.ExperimentID > 0 {
 		var exp models.LabExperiment
 		if err := database.DB.First(&exp, req.ExperimentID).Error; err == nil {
@@ -1059,6 +1309,29 @@ func AdminSaveExperimentQuestionVariant(c *gin.Context) {
 
 	variant.ExperimentID = req.ExperimentID
 	variant.CourseID = req.CourseID
+	if req.VariantID > 0 {
+		variant.VariantID = req.VariantID
+	}
+	if variant.VariantID == 0 && variant.ExperimentID > 0 {
+		var varA models.LabExperimentVariant
+		if err := database.DB.Where("experiment_id = ?", variant.ExperimentID).Order("id asc").First(&varA).Error; err == nil && varA.ID > 0 {
+			variant.VariantID = varA.ID
+		} else {
+			varA = models.LabExperimentVariant{
+				ExperimentID: variant.ExperimentID,
+				CourseID:     variant.CourseID,
+				VariantCode:  "A",
+				Title:        "Variant A",
+				Description:  "Default Variant A",
+				IsActive:     true,
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			if err := database.DB.Create(&varA).Error; err == nil {
+				variant.VariantID = varA.ID
+			}
+		}
+	}
 	variant.QuestionCode = req.QuestionCode
 	variant.Title = req.Title
 	variant.Aim = req.Aim

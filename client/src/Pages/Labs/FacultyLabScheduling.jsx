@@ -154,6 +154,16 @@ export default function FacultyLabScheduling() {
   // Quick Action loader state for sessions
   const [sessionActionKey, setSessionActionKey] = useState(null);
 
+  // Variant Allocation Tab State
+  const [selectedVariantExpId, setSelectedVariantExpId] = useState('');
+  const [variantMappingLoading, setVariantMappingLoading] = useState(false);
+  const [variantExpData, setVariantExpData] = useState({ variants: [], students: [] });
+  const [variantStudentSearch, setVariantStudentSearch] = useState('');
+  const [variantSectionFilter, setVariantSectionFilter] = useState('ALL');
+  const [autoDistributing, setAutoDistributing] = useState(false);
+  const [selectedBulkVariantId, setSelectedBulkVariantId] = useState('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
@@ -833,6 +843,111 @@ export default function FacultyLabScheduling() {
     };
   });
 
+  // Variant Allocation Hooks & Handlers
+  useEffect(() => {
+    if (activeTab === 'variants' && selectedUnlockCourseId) {
+      if (!selectedVariantExpId && activeCourseExperiments.length > 0) {
+        setSelectedVariantExpId(String(activeCourseExperiments[0].id));
+      } else if (selectedVariantExpId) {
+        fetchVariantAllocations(selectedUnlockCourseId, selectedVariantExpId);
+      }
+    }
+  }, [activeTab, selectedUnlockCourseId, selectedVariantExpId, activeCourseExperiments.length]);
+
+  const fetchVariantAllocations = async (cId, eId) => {
+    if (!cId || !eId) return;
+    setVariantMappingLoading(true);
+    try {
+      const res = await api.get(`/faculty/labs/courses/${cId}/experiments/${eId}/variant-allocations`);
+      setVariantExpData({
+        variants: res?.variants || [],
+        students: res?.students || [],
+      });
+    } catch {
+      showToast('Failed to load variant allocations.', 'error');
+    } finally {
+      setVariantMappingLoading(false);
+    }
+  };
+
+  const handleUpdateStudentVariant = async (studentId, variantId) => {
+    try {
+      await api.post(`/faculty/labs/courses/${selectedUnlockCourseId}/experiments/${selectedVariantExpId}/variant-allocations`, {
+        student_id: studentId,
+        variant_id: variantId ? Number(variantId) : null,
+      });
+      setVariantExpData((prev) => ({
+        ...prev,
+        students: prev.students.map((s) =>
+          s.id === studentId ? { ...s, variant_id: variantId ? Number(variantId) : null } : s
+        ),
+      }));
+      showToast('Variant updated for student.');
+    } catch {
+      showToast('Failed to update student variant.', 'error');
+    }
+  };
+
+  const handleAutoDistribute = async () => {
+    if (!selectedUnlockCourseId || !selectedVariantExpId) return;
+    try {
+      setAutoDistributing(true);
+      await api.post(
+        `/faculty/labs/courses/${selectedUnlockCourseId}/experiments/${selectedVariantExpId}/variant-allocations/auto`,
+        {
+          section: variantSectionFilter === 'ALL' ? '' : variantSectionFilter,
+        }
+      );
+      showToast('Variants distributed evenly among students!');
+      fetchVariantAllocations(selectedUnlockCourseId, selectedVariantExpId);
+    } catch {
+      showToast('Failed to auto-distribute variants.', 'error');
+    } finally {
+      setAutoDistributing(false);
+    }
+  };
+
+  const handleBulkAssignVariant = async () => {
+    if (!selectedBulkVariantId) {
+      showToast('Please select a variant to assign.', 'error');
+      return;
+    }
+    const targetStudents = variantExpData.students.filter((s) => {
+      if (variantSectionFilter !== 'ALL' && s.section !== variantSectionFilter) return false;
+      return true;
+    });
+
+    try {
+      setBulkAssigning(true);
+      for (const s of targetStudents) {
+        await api.post(
+          `/faculty/labs/courses/${selectedUnlockCourseId}/experiments/${selectedVariantExpId}/variant-allocations`,
+          {
+            student_id: s.id,
+            variant_id: Number(selectedBulkVariantId),
+          }
+        );
+      }
+      showToast(`Assigned ${targetStudents.length} students to selected variant.`);
+      fetchVariantAllocations(selectedUnlockCourseId, selectedVariantExpId);
+    } catch {
+      showToast('Failed to bulk assign variant.', 'error');
+    } finally {
+      setBulkAssigning(false);
+    }
+  };
+
+  const filteredVariantStudents = (variantExpData.students || []).filter((s) => {
+    if (variantSectionFilter !== 'ALL' && s.section !== variantSectionFilter) return false;
+    if (!variantStudentSearch.trim()) return true;
+    const q = variantStudentSearch.toLowerCase();
+    return (
+      s.name?.toLowerCase().includes(q) ||
+      s.roll_no?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* Toast Notification */}
@@ -943,6 +1058,19 @@ export default function FacultyLabScheduling() {
         >
           <History className="w-4 h-4" />
           <span>Window Sessions & Release History</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('variants')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-md)] text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'variants'
+              ? 'bg-[var(--accent)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Variant Allocations</span>
         </button>
       </div>
 
@@ -2546,6 +2674,250 @@ export default function FacultyLabScheduling() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: VARIANT ALLOCATIONS */}
+      {activeTab === 'variants' && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          {/* Target Selector Bar */}
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 shadow-[var(--shadow-xs)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-wrap flex-1">
+              <div className="space-y-1 min-w-[260px] flex-1 max-w-[400px]">
+                <label className={labelCls}>Active Lab Course</label>
+                <SearchableSelect
+                  options={courseOptions}
+                  value={selectedUnlockCourseId}
+                  onChange={(val) => {
+                    setSelectedUnlockCourseId(String(val));
+                    setSelectedVariantExpId('');
+                  }}
+                  placeholder="Select Lab Course..."
+                  searchPlaceholder="Search course code, title..."
+                  fullWidth
+                />
+              </div>
+
+              <div className="space-y-1 min-w-[240px] flex-1 max-w-[360px]">
+                <label className={labelCls}>Selected Experiment</label>
+                <select
+                  value={selectedVariantExpId}
+                  onChange={(e) => setSelectedVariantExpId(e.target.value)}
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
+                >
+                  {activeCourseExperiments.length === 0 ? (
+                    <option value="">No experiments configured</option>
+                  ) : (
+                    activeCourseExperiments.map((exp) => (
+                      <option key={exp.id} value={exp.id}>
+                        Exp {exp.experiment_no}: {exp.title}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="space-y-1 min-w-[160px]">
+                <label className={labelCls}>Filter Section</label>
+                <select
+                  value={variantSectionFilter}
+                  onChange={(e) => setVariantSectionFilter(e.target.value)}
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
+                >
+                  <option value="ALL">All Sections</option>
+                  {mappedSections.map((sec) => (
+                    <option key={sec} value={sec}>
+                      Section {sec}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => fetchVariantAllocations(selectedUnlockCourseId, selectedVariantExpId)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer transition-all shrink-0"
+                title="Reload Allocations"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${variantMappingLoading ? 'animate-spin text-[var(--accent)]' : ''}`}
+                />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Variants Summary Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] font-bold">Total Variants</span>
+              <p className="text-[18px] font-bold font-mono text-[var(--text-primary)]">
+                {variantExpData.variants.length}
+              </p>
+            </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] font-bold">Total Students</span>
+              <p className="text-[18px] font-bold font-mono text-[var(--text-primary)]">
+                {variantExpData.students.length}
+              </p>
+            </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-emerald-500 font-bold">Allocated</span>
+              <p className="text-[18px] font-bold font-mono text-emerald-500">
+                {variantExpData.students.filter((s) => s.variant_id).length}
+              </p>
+            </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-amber-500 font-bold">Unassigned</span>
+              <p className="text-[18px] font-bold font-mono text-amber-500">
+                {variantExpData.students.filter((s) => !s.variant_id).length}
+              </p>
+            </div>
+          </div>
+
+          {/* Allocation Actions Toolbar */}
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 shadow-[var(--shadow-xs)] flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={variantStudentSearch}
+                onChange={(e) => setVariantStudentSearch(e.target.value)}
+                placeholder="Search students by name, roll no..."
+                className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)]"
+              />
+            </div>
+
+            {/* Actions: Auto Distribute & Bulk Assign */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={selectedBulkVariantId}
+                  onChange={(e) => setSelectedBulkVariantId(e.target.value)}
+                  className="bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
+                >
+                  <option value="">Bulk Assign Variant...</option>
+                  {variantExpData.variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      Variant {v.variant_code}: {v.title}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleBulkAssignVariant}
+                  disabled={bulkAssigning || !selectedBulkVariantId}
+                  className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-xs font-bold text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer disabled:opacity-50 transition"
+                >
+                  {bulkAssigning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Apply'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAutoDistribute}
+                disabled={autoDistributing || variantExpData.variants.length === 0}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition cursor-pointer shadow-sm disabled:opacity-50"
+                title="Distribute variants in round-robin fashion evenly across students"
+              >
+                {autoDistributing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                Auto-Distribute (A/B/C...)
+              </button>
+            </div>
+          </div>
+
+          {/* Allocation Table */}
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden shadow-[var(--shadow-xs)]">
+            {variantMappingLoading ? (
+              <div className="flex items-center justify-center py-20 gap-3 text-[var(--text-muted)]">
+                <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
+                <span className="text-sm font-medium">Loading student variant allocations...</span>
+              </div>
+            ) : filteredVariantStudents.length === 0 ? (
+              <div className="p-12 text-center text-xs text-[var(--text-muted)]">
+                No students found matching your criteria.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--bg-raised)] text-[10px] font-mono text-[var(--text-muted)] uppercase">
+                      <th className="py-3 px-4 font-bold">#</th>
+                      <th className="py-3 px-4 font-bold">Student Name & Roll No</th>
+                      <th className="py-3 px-4 font-bold">Section</th>
+                      <th className="py-3 px-4 font-bold">Assigned Variant</th>
+                      <th className="py-3 px-4 font-bold">Questions</th>
+                      <th className="py-3 px-4 font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {filteredVariantStudents.map((st, idx) => {
+                      const assignedVar = variantExpData.variants.find((v) => v.id === st.variant_id);
+                      return (
+                        <tr key={st.id} className="hover:bg-[var(--bg-hover)] transition-colors">
+                          <td className="py-3 px-4 font-mono text-[var(--text-muted)]">{idx + 1}</td>
+                          <td className="py-3 px-4">
+                            <span className="font-bold text-[var(--text-primary)] block">{st.name}</span>
+                            <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                              {st.roll_no || st.email}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] text-[11px] font-mono font-semibold">
+                              {st.section || '—'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <select
+                              value={st.variant_id || ''}
+                              onChange={(e) => handleUpdateStudentVariant(st.id, e.target.value)}
+                              className="bg-[var(--bg-input)] border border-[var(--border)] rounded px-2.5 py-1 text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
+                            >
+                              <option value="">Unassigned</option>
+                              {variantExpData.variants.map((v) => (
+                                <option key={v.id} value={v.id}>
+                                  Variant {v.variant_code}: {v.title}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-3 px-4">
+                            {assignedVar ? (
+                              <span className="text-[11px] font-mono text-[var(--text-secondary)]">
+                                {assignedVar.questions_count ?? 0} Questions
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-[var(--text-muted)] italic">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {st.variant_id ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                <Check className="w-3 h-3" />
+                                Assigned
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                Pending
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -37,6 +37,7 @@ import {
 import api from '../../api/axios';
 import CodeEditor from '../../Components/CodeEditor';
 import LabBulkModal from '../../Components/AdminLabs/LabBulkModal';
+import LabVariantMappingModal from '../../Components/AdminLabs/LabVariantMappingModal';
 import ConfirmModal from '../../Components/ConfirmModal';
 import Pagination from '../../Components/Pagination';
 
@@ -57,17 +58,36 @@ export default function AdminLabCourseExperiments() {
   // Delete Confirmation Modal State
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
-    type: null, // 'experiment' | 'variant'
+    type: null, // 'experiment' | 'variant' | 'question'
     data: null,
     loading: false,
   });
 
-  // View Mode: 'experiments' | 'variants' | 'studio'
+  // View Mode: 'experiments' | 'variants' | 'questions' | 'studio'
   const [currentView, setCurrentView] = useState('experiments');
   const [selectedExp, setSelectedExp] = useState(null);
   const [variants, setVariants] = useState([]);
   const [variantsLoading, setVariantsLoading] = useState(false);
-  const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
+  const [selectedVariant, setSelectedVariant] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState(null);
+
+  // Variant Modal State (Create / Edit Variant)
+  const [variantModal, setVariantModal] = useState(null); // null | 'create' | 'edit'
+  const [editingVariant, setEditingVariant] = useState(null);
+  const emptyVariantModel = {
+    id: 0,
+    variant_code: 'A',
+    title: '',
+    description: '',
+    is_active: true,
+  };
+  const [variantForm, setVariantForm] = useState(emptyVariantModel);
+  const [variantSubmitting, setVariantSubmitting] = useState(false);
+
+  // Student Variant Allocation Modal
+  const [mappingModal, setMappingModal] = useState(false);
 
   // Experiments Pagination & Search
   const [expSearch, setExpSearch] = useState('');
@@ -76,12 +96,9 @@ export default function AdminLabCourseExperiments() {
   const [expTotalPages, setExpTotalPages] = useState(1);
   const [expTotalCount, setExpTotalCount] = useState(0);
 
-  // Variants Pagination & Search
+  // Variants & Questions Search
   const [variantSearch, setVariantSearch] = useState('');
-  const [varPage, setVarPage] = useState(1);
-  const [varLimit, setVarLimit] = useState(10);
-  const [varTotalPages, setVarTotalPages] = useState(1);
-  const [varTotalCount, setVarTotalCount] = useState(0);
+  const [questionSearch, setQuestionSearch] = useState('');
 
   // Experiment Modal (Add / Edit Experiment)
   const [expModal, setExpModal] = useState(null); // null | 'create' | 'edit'
@@ -173,85 +190,108 @@ export default function AdminLabCourseExperiments() {
     if (selectedExp?.id && currentView === 'variants') {
       fetchVariants(selectedExp);
     }
-  }, [selectedExp?.id, varPage, varLimit, variantSearch, currentView]);
+  }, [selectedExp?.id, variantSearch, currentView]);
+
+  useEffect(() => {
+    if (selectedVariant?.id && currentView === 'questions') {
+      fetchVariantQuestions(selectedVariant);
+    }
+  }, [selectedVariant?.id, questionSearch, currentView]);
 
   const fetchVariants = async (exp) => {
     if (!exp?.id) return;
     setVariantsLoading(true);
     try {
       const res = await api.get(
-        `/admin/labs/experiments/${exp.id}/variants?page=${varPage}&limit=${varLimit}&search=${encodeURIComponent(
-          variantSearch.trim()
-        )}`
+        `/admin/labs/experiments/${exp.id}/variants?search=${encodeURIComponent(variantSearch.trim())}`
       );
-      const varList = res?.variants || [];
-      setVarTotalCount(res?.total ?? varList.length);
-      setVarTotalPages(res?.total_pages ?? 1);
-      if (varList.length > 0) {
-        setVariants(varList);
-      } else {
-        // Fallback default variant based on experiment info
-        const defaultVar = {
-          ...emptyVariant,
-          experiment_id: exp.id,
-          course_id: exp.course_id,
-          question_code: `EX${exp.experiment_no}_VAR_A`,
-          title: exp.title,
-          aim: exp.aim,
-          reference_algorithm: exp.procedure || emptyVariant.reference_algorithm,
-          solution_code: exp.starter_code || emptyVariant.solution_code,
-          language: exp.language || 'python',
-          sample_test_cases: exp.sample_test_cases || emptyVariant.sample_test_cases,
-          hidden_test_cases: exp.hidden_test_cases || emptyVariant.hidden_test_cases,
-          max_marks: exp.max_marks || 100,
-        };
-        setVariants([defaultVar]);
-      }
+      setVariants(res?.variants || []);
     } catch {
-      showToast('Could not load question variants.', 'error');
+      showToast('Could not load experiment variants.', 'error');
     } finally {
       setVariantsLoading(false);
     }
   };
 
-  const openExperimentVariants = async (exp) => {
+  const fetchVariantQuestions = async (variant) => {
+    if (!variant?.id) return;
+    setQuestionsLoading(true);
+    try {
+      const res = await api.get(
+        `/admin/labs/variants/${variant.id}/questions?search=${encodeURIComponent(questionSearch.trim())}`
+      );
+      setQuestions(res?.questions || []);
+    } catch {
+      showToast('Could not load variant questions.', 'error');
+    } finally {
+      setQuestionsLoading(false);
+    }
+  };
+
+  const openExperimentVariants = (exp) => {
     setSelectedExp(exp);
-    setVarPage(1);
+    setSelectedVariant(null);
+    setSelectedQuestion(null);
     setVariantSearch('');
     setCurrentView('variants');
   };
 
-  const openVariantStudio = (variant, index) => {
-    setSelectedVariantIndex(index);
-    loadVariantIntoForm(variant, selectedExp);
+  const openVariantQuestions = (variant) => {
+    setSelectedVariant(variant);
+    setSelectedQuestion(null);
+    setQuestionSearch('');
+    setCurrentView('questions');
+  };
+
+  const openQuestionStudio = (question = null) => {
+    setSelectedQuestion(question);
+    if (question) {
+      loadQuestionIntoForm(question, selectedExp, selectedVariant);
+    } else {
+      const nextQNum = (questions?.length || 0) + 1;
+      const newQ = {
+        ...emptyVariant,
+        id: 0,
+        experiment_id: selectedExp?.id,
+        variant_id: selectedVariant?.id,
+        course_id: Number(courseId) || 1,
+        question_code: `EX${selectedExp?.experiment_no || 1}_${selectedVariant?.variant_code || 'A'}_Q${nextQNum}`,
+        title: `${selectedVariant?.title || 'Variant'} - Question ${nextQNum}`,
+        aim: selectedExp?.aim || '',
+        language: selectedExp?.language || 'python',
+        max_marks: 100,
+      };
+      loadQuestionIntoForm(newQ, selectedExp, selectedVariant);
+    }
     setSolutionTestResult(null);
     setCurrentView('studio');
     setActiveStudioTab('details');
   };
 
-  const loadVariantIntoForm = (v, parentExp) => {
-    let algoText = v.reference_algorithm || '';
+  const loadQuestionIntoForm = (q, parentExp, parentVar) => {
+    let algoText = q.reference_algorithm || '';
     if (algoText && !algoText.startsWith('[') && !algoText.startsWith('{')) {
       const lines = algoText.split('\n').filter((l) => l.trim().length > 0);
       algoText = JSON.stringify(lines, null, 2);
     }
 
     setFormData({
-      id: v.id || 0,
-      experiment_id: v.experiment_id || parentExp?.id,
-      course_id: v.course_id || Number(courseId),
-      question_code: v.question_code || `EX${parentExp?.experiment_no || 1}_VAR_A`,
-      title: v.title || parentExp?.title || '',
-      aim: v.aim || parentExp?.aim || '',
+      id: q.id || 0,
+      experiment_id: q.experiment_id || parentExp?.id,
+      variant_id: q.variant_id || parentVar?.id,
+      course_id: q.course_id || Number(courseId),
+      question_code: q.question_code || `EX${parentExp?.experiment_no || 1}_${parentVar?.variant_code || 'A'}_Q1`,
+      title: q.title || parentExp?.title || '',
+      aim: q.aim || parentExp?.aim || '',
       reference_algorithm: algoText || emptyVariant.reference_algorithm,
-      solution_code: v.solution_code || emptyVariant.solution_code,
-      language: v.language || parentExp?.language || 'python',
-      sample_test_cases: v.sample_test_cases || emptyVariant.sample_test_cases,
-      hidden_test_cases: v.hidden_test_cases || emptyVariant.hidden_test_cases,
-      max_marks: v.max_marks || parentExp?.max_marks || 100,
-      viva_questions_count: v.viva_questions_count || 5,
-      is_active: v.is_active !== false,
-      viva_questions: v.viva_questions || emptyVariant.viva_questions,
+      solution_code: q.solution_code || emptyVariant.solution_code,
+      language: q.language || parentExp?.language || 'python',
+      sample_test_cases: q.sample_test_cases || emptyVariant.sample_test_cases,
+      hidden_test_cases: q.hidden_test_cases || emptyVariant.hidden_test_cases,
+      max_marks: q.max_marks || parentExp?.max_marks || 100,
+      viva_questions_count: q.viva_questions_count || 5,
+      is_active: q.is_active !== false,
+      viva_questions: q.viva_questions || emptyVariant.viva_questions,
     });
   };
 
@@ -282,7 +322,6 @@ export default function AdminLabCourseExperiments() {
   const handleToggleExperimentActive = async (expId, currentActive, e) => {
     if (e) e.stopPropagation();
     const nextActive = !currentActive;
-    // Optimistic UI update
     setExperiments((prev) =>
       prev.map((exp) => (exp.id === expId ? { ...exp, is_active: nextActive } : exp))
     );
@@ -290,7 +329,6 @@ export default function AdminLabCourseExperiments() {
       await api.patch(`/admin/labs/experiments/${expId}/status`, { is_active: nextActive });
       showToast(`Experiment #${expId} ${nextActive ? 'activated' : 'deactivated'} successfully!`, 'success');
     } catch (err) {
-      // Revert on error
       setExperiments((prev) =>
         prev.map((exp) => (exp.id === expId ? { ...exp, is_active: currentActive } : exp))
       );
@@ -333,32 +371,73 @@ export default function AdminLabCourseExperiments() {
   };
 
   // ─── Variant CRUD Handlers ────────────────────────────────────────────────
-  const handleAddNewVariant = () => {
-    const nextChar = String.fromCharCode(65 + variants.length); // A, B, C, D...
-    const newVar = {
-      ...emptyVariant,
+  const openCreateVariantModal = () => {
+    const nextChar = String.fromCharCode(65 + variants.length); // A, B, C...
+    setVariantForm({
       id: 0,
-      experiment_id: selectedExp?.id,
-      course_id: Number(courseId),
-      question_code: `EX${selectedExp?.experiment_no || 1}_VAR_${nextChar}`,
-      title: `${selectedExp?.title || 'Experiment'} - Variant ${nextChar}`,
-      aim: selectedExp?.aim || '',
-      max_marks: selectedExp?.max_marks || 100,
-    };
-    const updated = [...variants, newVar];
-    setVariants(updated);
-    openVariantStudio(newVar, updated.length - 1);
+      variant_code: nextChar,
+      title: `Variant ${nextChar}`,
+      description: `Algorithm variant ${nextChar} for Experiment ${selectedExp?.experiment_no || 1}`,
+      is_active: true,
+    });
+    setEditingVariant(null);
+    setVariantModal('create');
   };
 
-  const openDeleteVariantModal = (v, idx) => {
-    if (variants.length <= 1) {
-      showToast('Each experiment must have at least one question variant.', 'error');
+  const openEditVariantModal = (v, e) => {
+    if (e) e.stopPropagation();
+    setVariantForm({
+      id: v.id,
+      variant_code: v.variant_code,
+      title: v.title,
+      description: v.description || '',
+      is_active: v.is_active !== false,
+    });
+    setEditingVariant(v);
+    setVariantModal('edit');
+  };
+
+  const handleSaveVariantModal = async (e) => {
+    e.preventDefault();
+    if (!variantForm.variant_code?.trim() || !variantForm.title?.trim()) {
+      showToast('Variant Code and Title are required.', 'error');
       return;
     }
+    try {
+      setVariantSubmitting(true);
+      const payload = {
+        ...variantForm,
+        experiment_id: selectedExp?.id,
+        course_id: Number(courseId),
+      };
+      await api.post(`/admin/labs/experiments/${selectedExp?.id}/variants`, payload);
+      showToast(variantModal === 'edit' ? 'Variant updated successfully!' : 'Variant created successfully!', 'success');
+      setVariantModal(null);
+      setEditingVariant(null);
+      if (selectedExp) fetchVariants(selectedExp);
+    } catch (err) {
+      showToast(err?.response?.data?.error || 'Failed to save variant.', 'error');
+    } finally {
+      setVariantSubmitting(false);
+    }
+  };
+
+  const openDeleteVariantModal = (v, e) => {
+    if (e) e.stopPropagation();
     setDeleteModal({
       isOpen: true,
       type: 'variant',
-      data: { variant: v, index: idx, title: v.title, code: v.question_code },
+      data: { id: v.id, code: v.variant_code, title: v.title },
+      loading: false,
+    });
+  };
+
+  const openDeleteQuestionModal = (q, e) => {
+    if (e) e.stopPropagation();
+    setDeleteModal({
+      isOpen: true,
+      type: 'question',
+      data: { id: q.id, code: q.question_code, title: q.title },
       loading: false,
     });
   };
@@ -366,26 +445,7 @@ export default function AdminLabCourseExperiments() {
   const handleConfirmDelete = async () => {
     if (!deleteModal.data) return;
 
-    if (deleteModal.type === 'variant') {
-      const { variant: v, index: idx } = deleteModal.data;
-      if (variants.length <= 1) {
-        showToast('Each experiment must have at least one question variant.', 'error');
-        setDeleteModal({ isOpen: false, type: null, data: null, loading: false });
-        return;
-      }
-      try {
-        setDeleteModal((prev) => ({ ...prev, loading: true }));
-        if (v.id > 0) {
-          await api.delete(`/admin/labs/experiments/variants/${v.id}`);
-        }
-        showToast('Question variant removed.', 'success');
-        setVariants((prev) => prev.filter((_, i) => i !== idx));
-        setDeleteModal({ isOpen: false, type: null, data: null, loading: false });
-      } catch {
-        showToast('Failed to delete question variant.', 'error');
-        setDeleteModal((prev) => ({ ...prev, loading: false }));
-      }
-    } else if (deleteModal.type === 'experiment') {
+    if (deleteModal.type === 'experiment') {
       const { expId, expNo } = deleteModal.data;
       try {
         setDeleteModal((prev) => ({ ...prev, loading: true }));
@@ -397,10 +457,35 @@ export default function AdminLabCourseExperiments() {
         showToast('Failed to delete experiment.', 'error');
         setDeleteModal((prev) => ({ ...prev, loading: false }));
       }
+    } else if (deleteModal.type === 'variant') {
+      const { id, code } = deleteModal.data;
+      try {
+        setDeleteModal((prev) => ({ ...prev, loading: true }));
+        await api.delete(`/admin/labs/experiments/variants/${id}`);
+        showToast(`Variant ${code} deleted successfully.`, 'success');
+        if (selectedExp) fetchVariants(selectedExp);
+        setDeleteModal({ isOpen: false, type: null, data: null, loading: false });
+      } catch {
+        showToast('Failed to delete variant.', 'error');
+        setDeleteModal((prev) => ({ ...prev, loading: false }));
+      }
+    } else if (deleteModal.type === 'question') {
+      const { id, code } = deleteModal.data;
+      try {
+        setDeleteModal((prev) => ({ ...prev, loading: true }));
+        await api.delete(`/admin/labs/variants/questions/${id}`);
+        showToast(`Question ${code} deleted successfully.`, 'success');
+        if (selectedVariant) fetchVariantQuestions(selectedVariant);
+        if (selectedExp) fetchVariants(selectedExp);
+        setDeleteModal({ isOpen: false, type: null, data: null, loading: false });
+      } catch {
+        showToast('Failed to delete question.', 'error');
+        setDeleteModal((prev) => ({ ...prev, loading: false }));
+      }
     }
   };
 
-  const handleSaveVariant = async (e) => {
+  const handleSaveQuestionStudio = async (e) => {
     if (e) e.preventDefault();
     if (!formData.title?.trim() || !formData.aim?.trim()) {
       showToast('Question Title and Aim are required.', 'error');
@@ -420,21 +505,16 @@ export default function AdminLabCourseExperiments() {
       const payload = {
         ...formData,
         experiment_id: selectedExp?.id,
+        variant_id: selectedVariant?.id,
         course_id: Number(courseId),
       };
-      const res = await api.post(`/admin/labs/experiments/${selectedExp?.id}/variants`, payload);
-      showToast('Question variant & viva pool saved successfully!', 'success');
-
-      // Refresh variants
-      const updatedVariantsRes = await api.get(`/admin/labs/experiments/${selectedExp?.id}/variants`);
-      const varList = updatedVariantsRes?.variants || [];
-      setVariants(varList);
-      if (res?.variant?.id) {
-        const foundIdx = varList.findIndex((v) => v.id === res.variant.id);
-        if (foundIdx >= 0) setSelectedVariantIndex(foundIdx);
-      }
+      await api.post(`/admin/labs/variants/${selectedVariant?.id}/questions`, payload);
+      showToast('Question & Viva pool saved successfully!', 'success');
+      if (selectedVariant) fetchVariantQuestions(selectedVariant);
+      if (selectedExp) fetchVariants(selectedExp);
+      setCurrentView('questions');
     } catch (err) {
-      showToast(err?.response?.data?.error || 'Failed to save question variant.', 'error');
+      showToast(err?.response?.data?.error || 'Failed to save question.', 'error');
     } finally {
       setSaving(false);
     }
@@ -604,8 +684,16 @@ export default function AdminLabCourseExperiments() {
   const filteredVariants = variants.filter(
     (v) =>
       v.title?.toLowerCase().includes(variantSearch.toLowerCase()) ||
-      v.question_code?.toLowerCase().includes(variantSearch.toLowerCase()) ||
-      v.aim?.toLowerCase().includes(variantSearch.toLowerCase())
+      v.variant_code?.toLowerCase().includes(variantSearch.toLowerCase()) ||
+      v.description?.toLowerCase().includes(variantSearch.toLowerCase())
+  );
+
+  // Filtered questions
+  const filteredQuestions = questions.filter(
+    (q) =>
+      q.title?.toLowerCase().includes(questionSearch.toLowerCase()) ||
+      q.question_code?.toLowerCase().includes(questionSearch.toLowerCase()) ||
+      q.aim?.toLowerCase().includes(questionSearch.toLowerCase())
   );
 
   const parsedSampleCount = getParsedCases(formData.sample_test_cases).length;
@@ -645,7 +733,11 @@ export default function AdminLabCourseExperiments() {
         </button>
         <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
         <button
-          onClick={() => setCurrentView('experiments')}
+          onClick={() => {
+            setCurrentView('experiments');
+            setSelectedVariant(null);
+            setSelectedQuestion(null);
+          }}
           className={`hover:text-[var(--accent)] transition cursor-pointer ${
             currentView === 'experiments' ? 'font-bold text-[var(--accent)]' : ''
           }`}
@@ -657,7 +749,11 @@ export default function AdminLabCourseExperiments() {
           <>
             <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
             <button
-              onClick={() => setCurrentView('variants')}
+              onClick={() => {
+                setCurrentView('variants');
+                setSelectedVariant(null);
+                setSelectedQuestion(null);
+              }}
               className={`hover:text-[var(--accent)] transition cursor-pointer ${
                 currentView === 'variants' ? 'font-bold text-[var(--accent)]' : ''
               }`}
@@ -667,11 +763,28 @@ export default function AdminLabCourseExperiments() {
           </>
         )}
 
+        {selectedVariant && (currentView === 'questions' || currentView === 'studio') && (
+          <>
+            <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+            <button
+              onClick={() => {
+                setCurrentView('questions');
+                setSelectedQuestion(null);
+              }}
+              className={`hover:text-[var(--accent)] transition cursor-pointer ${
+                currentView === 'questions' ? 'font-bold text-[var(--accent)]' : ''
+              }`}
+            >
+              Variant {selectedVariant.variant_code}: {selectedVariant.title}
+            </button>
+          </>
+        )}
+
         {currentView === 'studio' && (
           <>
             <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
             <span className="font-bold text-[var(--accent)]">
-              {formData.question_code || 'Variant Studio'}
+              {formData.question_code || 'Question Studio'}
             </span>
           </>
         )}
@@ -909,7 +1022,7 @@ export default function AdminLabCourseExperiments() {
       )}
 
       {/* ================================================================ */}
-      {/* VIEW 2: QUESTION VARIANTS CARDS (QuestionListView equivalent)    */}
+      {/* VIEW 2: EXPERIMENT VARIANTS CATALOG (Level 2)                     */}
       {/* ================================================================ */}
       {currentView === 'variants' && selectedExp && (
         <div className="space-y-6">
@@ -931,7 +1044,7 @@ export default function AdminLabCourseExperiments() {
                 {selectedExp.title}
               </h1>
               <p className="text-[12px] sm:text-[13px] text-[var(--text-secondary)] line-clamp-2">
-                {selectedExp.aim || 'Configure randomized question variants, algorithms, reference solutions, and viva questions.'}
+                {selectedExp.aim || 'Configure problem variants, individual questions, test cases, and student allocations.'}
               </p>
             </div>
 
@@ -952,19 +1065,20 @@ export default function AdminLabCourseExperiments() {
               </button>
 
               <button
-                onClick={() => setBulkModal({ isOpen: true, mode: 'variants' })}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-bold hover:border-[var(--border-accent)] hover:text-[var(--accent)] transition-all cursor-pointer shadow-[var(--shadow-xs)]"
+                onClick={() => setMappingModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] hover:bg-[var(--accent)] hover:text-white text-xs font-bold transition-all cursor-pointer shadow-[var(--shadow-xs)]"
+                title="Map which students receive Variant A, Variant B, etc."
               >
-                <Upload className="w-3.5 h-3.5 text-[var(--accent)]" />
-                Bulk Upload
+                <Users className="w-3.5 h-3.5" />
+                Student Allocations
               </button>
 
               <button
-                onClick={handleAddNewVariant}
+                onClick={openCreateVariantModal}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
               >
                 <Plus className="w-4 h-4" />
-                Add Question Variant
+                Add Variant
               </button>
             </div>
           </div>
@@ -977,7 +1091,7 @@ export default function AdminLabCourseExperiments() {
                 type="text"
                 value={variantSearch}
                 onChange={(e) => setVariantSearch(e.target.value)}
-                placeholder="Search question variants by code, title, or aim..."
+                placeholder="Search variants by code, title, or description..."
                 className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-9 pr-8 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
               />
               {variantSearch && (
@@ -997,16 +1111,16 @@ export default function AdminLabCourseExperiments() {
           {variantsLoading ? (
             <div className="flex items-center justify-center py-20 text-[var(--text-muted)] gap-3">
               <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
-              <span className="text-sm">Loading question variants...</span>
+              <span className="text-sm">Loading experiment variants...</span>
             </div>
           ) : filteredVariants.length === 0 ? (
             <div className="panel-card p-12 text-center space-y-3">
-              <Sparkles className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
+              <Layers className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
               <p className="text-[14px] font-semibold text-[var(--text-primary)]">
-                No question variants found.
+                {variantSearch ? 'No variants matching your search.' : 'No variants created yet for this experiment.'}
               </p>
               <button
-                onClick={handleAddNewVariant}
+                onClick={openCreateVariantModal}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)] mt-2"
               >
                 <Plus className="w-4 h-4" />
@@ -1015,26 +1129,209 @@ export default function AdminLabCourseExperiments() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredVariants.map((v, idx) => {
-                const sampleCount = getParsedCases(v.sample_test_cases).length;
-                const hiddenCount = getParsedCases(v.hidden_test_cases).length;
-                const vivaCount = v.viva_questions?.length || 0;
-
+              {filteredVariants.map((v) => {
+                const qCount = v.questions_count ?? 0;
                 return (
                   <div
-                    key={v.id || idx}
-                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all"
-                    onClick={() => openVariantStudio(v, idx)}
+                    key={v.id}
+                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all hover:border-[var(--border-accent)]"
+                    onClick={() => openVariantQuestions(v)}
                   >
                     <div className="space-y-3.5">
                       {/* Header row: Variant Code Badge & Actions */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-[12px] px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                            {v.question_code || `Variant ${idx + 1}`}
+                            Variant {v.variant_code}
                           </span>
-                          <span className="font-mono text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)]">
-                            {v.language || 'python'}
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                            {qCount} {qCount === 1 ? 'Question' : 'Questions'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => openEditVariantModal(v, e)}
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition cursor-pointer"
+                            title="Edit Variant"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => openDeleteVariantModal(v, e)}
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] rounded hover:bg-[var(--red-bg)] transition cursor-pointer"
+                            title="Delete Variant"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Title & Description */}
+                      <div>
+                        <h3 className="text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-snug">
+                          {v.title}
+                        </h3>
+                        <p className="text-[12px] text-[var(--text-secondary)] mt-1.5 line-clamp-2 leading-relaxed">
+                          {v.description || 'Custom assessment variant with problem questions and test criteria.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMappingModal(true);
+                        }}
+                        className="text-[var(--text-muted)] hover:text-[var(--accent)] flex items-center gap-1 transition"
+                      >
+                        <Users className="w-3 h-3" />
+                        Map Students
+                      </button>
+
+                      <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        Manage Questions &rarr;
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================================================================ */}
+      {/* VIEW 3: QUESTIONS LIST INSIDE SELECTED VARIANT (Level 3)          */}
+      {/* ================================================================ */}
+      {currentView === 'questions' && selectedVariant && (
+        <div className="space-y-6">
+          {/* Variant Summary Banner */}
+          <div className="panel-card p-5 bg-[var(--bg-raised)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant.variant_code}
+                </span>
+                <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] uppercase">
+                  {selectedExp?.language || 'python'}
+                </span>
+              </div>
+              <h1 className="text-[18px] sm:text-[22px] font-bold text-[var(--text-primary)]">
+                {selectedVariant.title}
+              </h1>
+              <p className="text-[12px] sm:text-[13px] text-[var(--text-secondary)] line-clamp-2">
+                {selectedVariant.description || 'Questions, algorithms, reference solution codes, test suites, and oral viva questions for this variant.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 border-t sm:border-t-0 sm:border-l border-[var(--border)] pt-3 sm:pt-0 sm:pl-6 shrink-0 flex-wrap">
+              <div className="text-center pr-2">
+                <p className="text-[20px] font-bold font-mono text-[var(--text-primary)]">
+                  {questions?.length || 0}
+                </p>
+                <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase">Questions</p>
+              </div>
+
+              <button
+                onClick={() => setCurrentView('variants')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold cursor-pointer transition-all"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                All Variants
+              </button>
+
+              <button
+                onClick={() => setMappingModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)] hover:bg-[var(--accent)] hover:text-white text-xs font-bold transition-all cursor-pointer shadow-[var(--shadow-xs)]"
+              >
+                <Users className="w-3.5 h-3.5" />
+                Map Students
+              </button>
+
+              <button
+                onClick={() => openQuestionStudio(null)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)]"
+              >
+                <Plus className="w-4 h-4" />
+                Add Question
+              </button>
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="panel-card p-4">
+            <div className="relative w-full max-w-md flex items-center">
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={questionSearch}
+                onChange={(e) => setQuestionSearch(e.target.value)}
+                placeholder="Search questions by code, title, or aim..."
+                className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] pl-9 pr-8 py-2 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] transition-all"
+              />
+              {questionSearch && (
+                <button
+                  type="button"
+                  onClick={() => setQuestionSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Questions Grid */}
+          {questionsLoading ? (
+            <div className="flex items-center justify-center py-20 text-[var(--text-muted)] gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
+              <span className="text-sm">Loading questions for Variant {selectedVariant.variant_code}...</span>
+            </div>
+          ) : filteredQuestions.length === 0 ? (
+            <div className="panel-card p-12 text-center space-y-3">
+              <BookOpen className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
+              <p className="text-[14px] font-semibold text-[var(--text-primary)]">
+                {questionSearch
+                  ? 'No questions matching your search.'
+                  : `No questions created in Variant ${selectedVariant.variant_code} yet.`}
+              </p>
+              <button
+                onClick={() => openQuestionStudio(null)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)] mt-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add First Question
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredQuestions.map((q) => {
+                const sampleCount = getParsedCases(q.sample_test_cases).length;
+                const hiddenCount = getParsedCases(q.hidden_test_cases).length;
+                const vivaCount = q.viva_questions?.length || 0;
+
+                return (
+                  <div
+                    key={q.id}
+                    className="data-card data-card-interactive p-5 flex flex-col justify-between group cursor-pointer transition-all hover:border-[var(--border-accent)]"
+                    onClick={() => openQuestionStudio(q)}
+                  >
+                    <div className="space-y-3.5">
+                      {/* Header row: Question Code & Actions */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-[12px] px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
+                            {q.question_code || 'Question'}
+                          </span>
+                          <span className="font-mono text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-raised)] border border-[var(--border)] uppercase">
+                            {q.language || selectedExp?.language || 'python'}
                           </span>
                         </div>
 
@@ -1043,7 +1340,7 @@ export default function AdminLabCourseExperiments() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openVariantStudio(v, idx);
+                              openQuestionStudio(q);
                             }}
                             className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-hover)] transition cursor-pointer"
                             title="Edit in Studio"
@@ -1052,12 +1349,9 @@ export default function AdminLabCourseExperiments() {
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteVariantModal(v, idx);
-                            }}
+                            onClick={(e) => openDeleteQuestionModal(q, e)}
                             className="p-1.5 text-[var(--text-muted)] hover:text-[var(--red)] rounded hover:bg-[var(--red-bg)] transition cursor-pointer"
-                            title="Delete Variant"
+                            title="Delete Question"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1067,10 +1361,10 @@ export default function AdminLabCourseExperiments() {
                       {/* Title & Aim */}
                       <div>
                         <h3 className="text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-snug">
-                          {v.title || `Variant ${String.fromCharCode(65 + idx)}`}
+                          {q.title}
                         </h3>
                         <p className="text-[12px] text-[var(--text-secondary)] mt-1.5 line-clamp-2 leading-relaxed">
-                          {v.aim || 'No specific objective provided.'}
+                          {q.aim || 'No specific objective provided.'}
                         </p>
                       </div>
 
@@ -1090,7 +1384,10 @@ export default function AdminLabCourseExperiments() {
                     {/* Footer */}
                     <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                       <span className="text-[var(--text-secondary)] font-semibold">
-                        {v.max_marks || 100} Marks
+                        {q.max_marks || 100} Marks
+                      </span>
+                      <span className="text-[var(--accent)] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        Studio Editor &rarr;
                       </span>
                     </div>
                   </div>
@@ -1098,27 +1395,11 @@ export default function AdminLabCourseExperiments() {
               })}
             </div>
           )}
-
-          {/* Variants Pagination */}
-          {!variantsLoading && varTotalCount > 0 && (
-            <Pagination
-              page={varPage}
-              totalPages={varTotalPages}
-              totalItems={varTotalCount}
-              limit={varLimit}
-              onPageChange={(newPage) => setVarPage(newPage)}
-              onLimitChange={(newLimit) => {
-                setVarLimit(newLimit);
-                setVarPage(1);
-              }}
-              pageSizeOptions={[5, 10, 20, 50]}
-            />
-          )}
         </div>
       )}
 
       {/* ================================================================ */}
-      {/* VIEW 3: QUESTION VARIANT STUDIO & EDITOR (Full Page Cockpit)     */}
+      {/* VIEW 4: QUESTION STUDIO & EDITOR (Level 4 Cockpit)                */}
       {/* ================================================================ */}
       {currentView === 'studio' && (
         <div className="space-y-6">
@@ -1127,35 +1408,35 @@ export default function AdminLabCourseExperiments() {
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono font-bold text-[12px] px-2.5 py-1 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                  {formData.question_code || 'VARIANT'}
+                  {formData.question_code || 'QUESTION'}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                  Exp {selectedExp?.experiment_no}: {selectedExp?.title}
+                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant?.variant_code}: {selectedVariant?.title}
                 </span>
               </div>
               <h1 className="text-[18px] sm:text-[22px] font-bold text-[var(--text-primary)]">
-                {formData.title || 'Question Variant Studio'}
+                {formData.title || 'Question Studio'}
               </h1>
             </div>
 
             <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
               <button
                 type="button"
-                onClick={() => setCurrentView('variants')}
+                onClick={() => setCurrentView('questions')}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold cursor-pointer transition-all shadow-[var(--shadow-xs)]"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                Back to Variants
+                Back to Questions
               </button>
 
               <button
                 type="button"
-                onClick={handleSaveVariant}
+                onClick={handleSaveQuestionStudio}
                 disabled={saving}
                 className="inline-flex items-center gap-2 px-5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-[var(--shadow-sm)] disabled:opacity-50"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Save Variant
+                Save Question
               </button>
             </div>
           </div>
@@ -1979,6 +2260,121 @@ export default function AdminLabCourseExperiments() {
         </div>
       )}
 
+      {/* ================================================================ */}
+      {/* MODAL: Create / Edit Experiment Variant                          */}
+      {/* ================================================================ */}
+      {variantModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-xl)] shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+              <h3 className="text-[15px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[var(--accent)]" />
+                {variantModal === 'edit' ? `Edit Variant ${editingVariant?.variant_code}` : 'Add Experiment Variant'}
+              </h3>
+              <button
+                onClick={() => setVariantModal(null)}
+                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--red)] cursor-pointer transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveVariantModal} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
+                    Variant Code <span className="text-[var(--red)]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={variantForm.variant_code}
+                    onChange={(e) =>
+                      setVariantForm((p) => ({ ...p, variant_code: e.target.value.toUpperCase() }))
+                    }
+                    placeholder="e.g. A, B, C"
+                    maxLength={10}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-accent)]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
+                    Status
+                  </label>
+                  <select
+                    value={variantForm.is_active ? 'active' : 'inactive'}
+                    onChange={(e) => setVariantForm((p) => ({ ...p, is_active: e.target.value === 'active' }))}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2 text-xs text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--border-accent)]"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
+                  Variant Title <span className="text-[var(--red)]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={variantForm.title}
+                  onChange={(e) => setVariantForm((p) => ({ ...p, title: e.target.value }))}
+                  placeholder="e.g. Variant A - Array Traversal Logic"
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2.5 text-xs text-[var(--text-primary)] font-bold focus:outline-none focus:border-[var(--border-accent)]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-semibold text-[var(--text-secondary)]">
+                  Description / Focus
+                </label>
+                <textarea
+                  value={variantForm.description}
+                  onChange={(e) => setVariantForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={3}
+                  placeholder="Summary of this variant's problem focus or characteristics..."
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border)] rounded-[var(--radius-sm)] p-3 text-xs text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--border-accent)] resize-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={variantSubmitting}
+                  className="flex-1 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all shadow-sm"
+                >
+                  {variantSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {variantModal === 'edit' ? 'Update Variant' : 'Create Variant'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVariantModal(null)}
+                  className="px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-hover)] cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Student Variant Allocation Modal */}
+      {mappingModal && selectedExp && (
+        <LabVariantMappingModal
+          isOpen={mappingModal}
+          onClose={() => setMappingModal(false)}
+          courseId={courseId}
+          experiment={selectedExp}
+          onSuccess={() => {
+            if (selectedExp) fetchVariants(selectedExp);
+          }}
+        />
+      )}
+
       {/* Bulk Upload Modal (Experiments & Question Variants) */}
       {bulkModal.isOpen && (
         <LabBulkModal
@@ -2008,11 +2404,19 @@ export default function AdminLabCourseExperiments() {
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ isOpen: false, type: null, data: null, loading: false })}
         onConfirm={handleConfirmDelete}
-        title={deleteModal.type === 'variant' ? 'Delete Question Variant' : 'Delete Experiment'}
+        title={
+          deleteModal.type === 'variant'
+            ? 'Delete Variant'
+            : deleteModal.type === 'question'
+            ? 'Delete Question'
+            : 'Delete Experiment'
+        }
         message={
           deleteModal.type === 'variant'
-            ? `Are you sure you want to delete question variant "${deleteModal.data?.code || deleteModal.data?.title || 'Variant'}"? This action cannot be undone.`
-            : `Are you sure you want to delete Experiment ${deleteModal.data?.expNo || ''} ("${deleteModal.data?.title || ''}")? This will permanently remove all associated question variants and submissions.`
+            ? `Are you sure you want to delete Variant "${deleteModal.data?.code || deleteModal.data?.title || ''}"? All questions inside this variant will also be removed.`
+            : deleteModal.type === 'question'
+            ? `Are you sure you want to delete Question "${deleteModal.data?.code || deleteModal.data?.title || ''}"? This action cannot be undone.`
+            : `Are you sure you want to delete Experiment ${deleteModal.data?.expNo || ''} ("${deleteModal.data?.title || ''}")? This will permanently remove all associated variants, questions, and submissions.`
         }
         confirmText="Delete"
         cancelText="Cancel"

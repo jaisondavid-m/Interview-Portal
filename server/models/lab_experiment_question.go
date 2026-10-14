@@ -9,8 +9,10 @@ import (
 // LabExperimentQuestion represents a specific question variant under a Lab Experiment
 type LabExperimentQuestion struct {
 	ID                 uint           `gorm:"primaryKey" json:"id"`
-	ExperimentID       uint           `gorm:"not null;index" json:"experiment_id"`
-	CourseID           uint           `gorm:"not null;index" json:"course_id"`
+	ExperimentID       uint                  `gorm:"not null;index" json:"experiment_id"`
+	VariantID          uint                  `gorm:"index" json:"variant_id"`
+	Variant            *LabExperimentVariant `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
+	CourseID           uint                  `gorm:"not null;index" json:"course_id"`
 	QuestionCode       string         `gorm:"size:100;not null" json:"question_code"` // e.g. "VAR_A", "Q1.1"
 	Title              string         `gorm:"size:255;not null" json:"title"`
 	Aim                string         `gorm:"type:text;not null" json:"aim"`

@@ -131,6 +131,7 @@ func EnsureLabTables(db *gorm.DB) error {
 	labModels := []interface{}{
 		&models.LabCourse{},
 		&models.LabExperiment{},
+		&models.LabExperimentVariant{},
 		&models.LabExperimentQuestion{},
 		&models.LabVivaQuestion{},
 		&models.LabQuestionAllocation{},
@@ -145,6 +146,7 @@ func EnsureLabTables(db *gorm.DB) error {
 		}
 	}
 	db.Exec("UPDATE lab_experiments SET is_active = true WHERE is_active IS NULL")
+	backfillLabVariantsAndQuestions(db)
 	return nil
 }
 
@@ -181,6 +183,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.RateLimitConfig{},
 		&models.LabCourse{},
 		&models.LabExperiment{},
+		&models.LabExperimentVariant{},
 		&models.LabExperimentQuestion{},
 		&models.LabVivaQuestion{},
 		&models.LabQuestionAllocation{},
@@ -1038,3 +1041,59 @@ func syncLabQuestionVariantsAndVivas(db *gorm.DB) {
 		}
 	}
 }
+
+// backfillLabVariantsAndQuestions ensures every experiment has variants, and all existing questions without a variant are assigned to 'Variant A'
+func backfillLabVariantsAndQuestions(db *gorm.DB) {
+	var experiments []models.LabExperiment
+	if err := db.Find(&experiments).Error; err != nil {
+		return
+	}
+
+	for _, exp := range experiments {
+		// 1. Check if experiment has any variants
+		var varA models.LabExperimentVariant
+		err := db.Where("experiment_id = ? AND (variant_code = 'A' OR variant_code = 'VAR_A')", exp.ID).First(&varA).Error
+		if err != nil || varA.ID == 0 {
+			var anyVar models.LabExperimentVariant
+			if err2 := db.Where("experiment_id = ?", exp.ID).Order("id asc").First(&anyVar).Error; err2 == nil && anyVar.ID > 0 {
+				varA = anyVar
+			} else {
+				// Create default Variant A
+				varA = models.LabExperimentVariant{
+					ExperimentID: exp.ID,
+					CourseID:     exp.CourseID,
+					VariantCode:  "A",
+					Title:        "Variant A",
+					Description:  "Default Question Variant A",
+					IsActive:     true,
+					CreatedAt:    time.Now(),
+					UpdatedAt:    time.Now(),
+				}
+				if createErr := db.Create(&varA).Error; createErr != nil {
+					log.Printf("[WARN] Failed to create default Variant A for experiment %d: %v\n", exp.ID, createErr)
+					continue
+				}
+			}
+		}
+
+		// 2. Put all questions with variant_id = 0 or NULL into Variant A
+		db.Model(&models.LabExperimentQuestion{}).
+			Where("experiment_id = ? AND (variant_id = 0 OR variant_id IS NULL)", exp.ID).
+			Update("variant_id", varA.ID)
+
+		// 3. Backfill allocations where variant_id is 0
+		var allocations []models.LabQuestionAllocation
+		db.Where("experiment_id = ? AND (variant_id = 0 OR variant_id IS NULL)", exp.ID).Find(&allocations)
+		for _, alloc := range allocations {
+			if alloc.QuestionID > 0 {
+				var q models.LabExperimentQuestion
+				if db.First(&q, alloc.QuestionID).Error == nil && q.VariantID > 0 {
+					db.Model(&models.LabQuestionAllocation{}).Where("id = ?", alloc.ID).Update("variant_id", q.VariantID)
+					continue
+				}
+			}
+			db.Model(&models.LabQuestionAllocation{}).Where("id = ?", alloc.ID).Update("variant_id", varA.ID)
+		}
+	}
+}
+
