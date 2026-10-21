@@ -1063,16 +1063,27 @@ func AdminGetExperimentVariants(c *gin.Context) {
 }
 
 type SaveExperimentVariantReq struct {
-	ID           uint   `json:"id"`
-	ExperimentID uint   `json:"experiment_id"`
-	CourseID     uint   `json:"course_id"`
-	VariantCode  string `json:"variant_code" binding:"required"`
-	Title        string `json:"title" binding:"required"`
-	Description  string `json:"description"`
-	IsActive     bool   `json:"is_active"`
+	ID                 uint                     `json:"id"`
+	ExperimentID       uint                     `json:"experiment_id"`
+	VariantID          uint                     `json:"variant_id"`
+	CourseID           uint                     `json:"course_id"`
+	VariantCode        string                   `json:"variant_code"`
+	QuestionCode       string                   `json:"question_code"`
+	Title              string                   `json:"title"`
+	Description        string                   `json:"description"`
+	Aim                string                   `json:"aim"`
+	ReferenceAlgorithm string                   `json:"reference_algorithm"`
+	SolutionCode       string                   `json:"solution_code"`
+	Language           string                   `json:"language"`
+	SampleTestCases    string                   `json:"sample_test_cases"`
+	HiddenTestCases    string                   `json:"hidden_test_cases"`
+	MaxMarks           int                      `json:"max_marks"`
+	VivaQuestionsCount int                      `json:"viva_questions_count"`
+	IsActive           *bool                    `json:"is_active"`
+	VivaQuestions      []models.LabVivaQuestion `json:"viva_questions"`
 }
 
-// AdminSaveExperimentVariant creates or updates a variant under an experiment
+// AdminSaveExperimentVariant creates or updates a variant under an experiment (and optionally questions under it)
 func AdminSaveExperimentVariant(c *gin.Context) {
 	database.EnsureLabTables(database.DB)
 	var req SaveExperimentVariantReq
@@ -1096,6 +1107,25 @@ func AdminSaveExperimentVariant(c *gin.Context) {
 		}
 	}
 
+	// Normalize variant code
+	vCode := strings.ToUpper(strings.TrimSpace(req.VariantCode))
+	if vCode == "" {
+		vCode = strings.ToUpper(strings.TrimSpace(req.QuestionCode))
+	}
+	if vCode == "" {
+		vCode = "A"
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = "Variant " + vCode
+	}
+
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
 	var variant models.LabExperimentVariant
 	isNew := true
 	if req.ID > 0 {
@@ -1103,13 +1133,27 @@ func AdminSaveExperimentVariant(c *gin.Context) {
 			isNew = false
 		}
 	}
+	if isNew && req.VariantID > 0 {
+		if err := database.DB.First(&variant, req.VariantID).Error; err == nil {
+			isNew = false
+		}
+	}
+	if isNew && req.ExperimentID > 0 {
+		if err := database.DB.Where("experiment_id = ? AND variant_code = ?", req.ExperimentID, vCode).First(&variant).Error; err == nil && variant.ID > 0 {
+			isNew = false
+		}
+	}
 
 	variant.ExperimentID = req.ExperimentID
 	variant.CourseID = req.CourseID
-	variant.VariantCode = strings.ToUpper(strings.TrimSpace(req.VariantCode))
-	variant.Title = strings.TrimSpace(req.Title)
-	variant.Description = strings.TrimSpace(req.Description)
-	variant.IsActive = req.IsActive
+	variant.VariantCode = vCode
+	variant.Title = title
+	if req.Description != "" {
+		variant.Description = strings.TrimSpace(req.Description)
+	} else if variant.Description == "" {
+		variant.Description = "Variant " + vCode
+	}
+	variant.IsActive = isActive
 
 	if isNew {
 		variant.CreatedAt = time.Now()
@@ -1124,6 +1168,82 @@ func AdminSaveExperimentVariant(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update variant: " + err.Error()})
 			return
 		}
+	}
+
+	// If this request also carried question details (e.g. Aim or QuestionCode or SolutionCode):
+	if req.Aim != "" || req.QuestionCode != "" || req.SolutionCode != "" {
+		var question models.LabExperimentQuestion
+		qNew := true
+		if req.ID > 0 && req.Aim != "" {
+			if err := database.DB.First(&question, req.ID).Error; err == nil {
+				qNew = false
+			}
+		}
+		if qNew {
+			if err := database.DB.Where("variant_id = ?", variant.ID).First(&question).Error; err == nil && question.ID > 0 {
+				qNew = false
+			}
+		}
+
+		qCode := strings.TrimSpace(req.QuestionCode)
+		if qCode == "" {
+			qCode = vCode
+		}
+		lang := req.Language
+		if lang == "" {
+			lang = "python"
+		}
+		marks := req.MaxMarks
+		if marks <= 0 {
+			marks = 100
+		}
+		vivaCount := req.VivaQuestionsCount
+		if vivaCount <= 0 {
+			vivaCount = 5
+		}
+
+		question.ExperimentID = variant.ExperimentID
+		question.VariantID = variant.ID
+		question.CourseID = variant.CourseID
+		question.QuestionCode = qCode
+		question.Title = title
+		question.Aim = req.Aim
+		question.ReferenceAlgorithm = req.ReferenceAlgorithm
+		question.SolutionCode = req.SolutionCode
+		question.Language = lang
+		question.SampleTestCases = req.SampleTestCases
+		question.HiddenTestCases = req.HiddenTestCases
+		question.MaxMarks = marks
+		question.VivaQuestionsCount = vivaCount
+		question.IsActive = isActive
+
+		if qNew {
+			question.CreatedAt = time.Now()
+			question.UpdatedAt = time.Now()
+			_ = database.DB.Create(&question)
+		} else {
+			question.UpdatedAt = time.Now()
+			_ = database.DB.Save(&question)
+		}
+
+		if len(req.VivaQuestions) > 0 && question.ID > 0 {
+			database.DB.Where("question_id = ?", question.ID).Delete(&models.LabVivaQuestion{})
+			for idx, vq := range req.VivaQuestions {
+				if strings.TrimSpace(vq.Question) == "" {
+					continue
+				}
+				vq.QuestionID = question.ID
+				vq.OrderIndex = idx + 1
+				database.DB.Create(&vq)
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "Variant and question saved successfully!",
+			"variant":  variant,
+			"question": question,
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1234,8 +1354,8 @@ type SaveQuestionVariantReq struct {
 	VariantID          uint                     `json:"variant_id"`
 	CourseID           uint                     `json:"course_id"`
 	QuestionCode       string                   `json:"question_code"`
-	Title              string                   `json:"title" binding:"required"`
-	Aim                string                   `json:"aim" binding:"required"`
+	Title              string                   `json:"title"`
+	Aim                string                   `json:"aim"`
 	ReferenceAlgorithm string                   `json:"reference_algorithm"`
 	SolutionCode       string                   `json:"solution_code"`
 	Language           string                   `json:"language"`
@@ -1253,6 +1373,14 @@ func AdminSaveExperimentQuestionVariant(c *gin.Context) {
 	var req SaveQuestionVariantReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid question variant payload: " + err.Error()})
+		return
+	}
+
+	if strings.TrimSpace(req.Title) == "" {
+		req.Title = "Question 1"
+	}
+	if strings.TrimSpace(req.Aim) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Question Aim and Problem Statement is required."})
 		return
 	}
 

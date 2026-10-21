@@ -503,13 +503,20 @@ export default function AdminLabCourseExperiments() {
 
     try {
       setSaving(true);
+      const varId = selectedVariant?.id || formData.variant_id;
+      const vCode = selectedVariant?.variant_code || formData.question_code || 'A';
       const payload = {
         ...formData,
+        variant_code: vCode,
         experiment_id: selectedExp?.id,
-        variant_id: selectedVariant?.id,
+        variant_id: varId,
         course_id: Number(courseId),
       };
-      await api.post(`/admin/labs/variants/${selectedVariant?.id}/questions`, payload);
+      if (varId) {
+        await api.post(`/admin/labs/variants/${varId}/questions`, payload);
+      } else {
+        await api.post(`/admin/labs/experiments/${selectedExp?.id}/variants`, payload);
+      }
       showToast('Question & Viva pool saved successfully!', 'success');
       if (selectedVariant) fetchVariantQuestions(selectedVariant);
       if (selectedExp) fetchVariants(selectedExp);
@@ -759,7 +766,7 @@ export default function AdminLabCourseExperiments() {
                 currentView === 'variants' ? 'font-bold text-[var(--accent)]' : ''
               }`}
             >
-              Exp {selectedExp.experiment_no}: {selectedExp.title}
+              Exp {selectedExp?.experiment_no}: {selectedExp?.title}
             </button>
           </>
         )}
@@ -776,7 +783,7 @@ export default function AdminLabCourseExperiments() {
                 currentView === 'questions' ? 'font-bold text-[var(--accent)]' : ''
               }`}
             >
-              Variant {selectedVariant.variant_code}: {selectedVariant.title}
+              Variant {selectedVariant?.variant_code}: {selectedVariant?.title}
             </button>
           </>
         )}
@@ -1217,17 +1224,17 @@ export default function AdminLabCourseExperiments() {
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant.variant_code}
+                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant?.variant_code}
                 </span>
                 <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] uppercase">
                   {selectedExp?.language || 'python'}
                 </span>
               </div>
               <h1 className="text-[18px] sm:text-[22px] font-bold text-[var(--text-primary)]">
-                {selectedVariant.title}
+                {selectedVariant?.title}
               </h1>
               <p className="text-[12px] sm:text-[13px] text-[var(--text-secondary)] line-clamp-2">
-                {selectedVariant.description || 'Questions, algorithms, reference solution codes, test suites, and oral viva questions for this variant.'}
+                {selectedVariant?.description || 'Questions, algorithms, reference solution codes, test suites, and oral viva questions for this variant.'}
               </p>
             </div>
 
@@ -1293,7 +1300,7 @@ export default function AdminLabCourseExperiments() {
           {questionsLoading ? (
             <div className="flex items-center justify-center py-20 text-[var(--text-muted)] gap-3">
               <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
-              <span className="text-sm">Loading questions for Variant {selectedVariant.variant_code}...</span>
+              <span className="text-sm">Loading questions for Variant {selectedVariant?.variant_code}...</span>
             </div>
           ) : filteredQuestions.length === 0 ? (
             <div className="panel-card p-12 text-center space-y-3">
@@ -1301,7 +1308,7 @@ export default function AdminLabCourseExperiments() {
               <p className="text-[14px] font-semibold text-[var(--text-primary)]">
                 {questionSearch
                   ? 'No questions matching your search.'
-                  : `No questions created in Variant ${selectedVariant.variant_code} yet.`}
+                  : `No questions created in Variant ${selectedVariant?.variant_code} yet.`}
               </p>
               <button
                 onClick={() => openQuestionStudio(null)}
@@ -1478,7 +1485,7 @@ export default function AdminLabCourseExperiments() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[12px] font-bold text-[var(--text-secondary)]">
-                    Variant Code Identifier <span className="text-[var(--red)]">*</span>
+                    Question Code Identifier <span className="text-[var(--red)]">*</span>
                   </label>
                   <input
                     type="text"

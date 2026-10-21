@@ -290,7 +290,7 @@ export default function FacultyLabCourseExperiments() {
                   currentView === 'questions' ? 'text-[var(--accent)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                Variant {selectedVariant.variant_code}
+                Variant {selectedVariant?.variant_code}
               </button>
             </>
           )}
@@ -624,17 +624,17 @@ export default function FacultyLabCourseExperiments() {
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-accent)]">
-                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant.variant_code}
+                  Exp {selectedExp?.experiment_no} · Variant {selectedVariant?.variant_code}
                 </span>
                 <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border)] uppercase">
                   {selectedExp?.language || 'python'}
                 </span>
               </div>
               <h2 className="text-[18px] sm:text-[20px] font-bold text-[var(--text-primary)]">
-                {selectedVariant.title}
+                {selectedVariant?.title}
               </h2>
               <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed max-w-3xl">
-                {selectedVariant.description || 'Questions assigned to students allocated to this variant.'}
+                {selectedVariant?.description || 'Questions assigned to students allocated to this variant.'}
               </p>
             </div>
 
@@ -687,7 +687,7 @@ export default function FacultyLabCourseExperiments() {
           {questionsLoading ? (
             <div className="flex items-center justify-center py-20 gap-3 text-[var(--text-muted)]">
               <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
-              <span className="text-sm font-medium">Loading questions for Variant {selectedVariant.variant_code}...</span>
+              <span className="text-sm font-medium">Loading questions for Variant {selectedVariant?.variant_code}...</span>
             </div>
           ) : filteredQuestions.length === 0 ? (
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-12 text-center space-y-3">
@@ -695,7 +695,7 @@ export default function FacultyLabCourseExperiments() {
               <p className="text-[14px] font-semibold text-[var(--text-primary)]">
                 {questionSearch
                   ? 'No questions match your search keyword.'
-                  : `No questions found under Variant ${selectedVariant.variant_code}.`}
+                  : `No questions found under Variant ${selectedVariant?.variant_code}.`}
               </p>
             </div>
           ) : (
