@@ -83,8 +83,11 @@ func Login(c *gin.Context) {
 	})
 
 	// Set HttpOnly JWT Cookie (valid for 3 days = 259200 seconds)
+	// Sets both mockmate_token (isolated from parent domain collisions) and token
+	secure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" || strings.Contains(c.Request.Host, "bitsathy.in")
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("token", token, 72*3600, "/", "", false, true)
+	c.SetCookie("mockmate_token", token, 72*3600, "/", "", secure, true)
+	c.SetCookie("token", token, 72*3600, "/", "", secure, true)
 
 	// Fetch role's configured default page
 	var userRole models.Role
@@ -310,8 +313,10 @@ func GoogleLogin(c *gin.Context) {
 	database.DB.Model(&user).Update("active_token", token)
 
 	// Set HttpOnly JWT Cookie
+	secureGoogle := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" || strings.Contains(c.Request.Host, "bitsathy.in")
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("token", token, 72*3600, "/", "", false, true)
+	c.SetCookie("mockmate_token", token, 72*3600, "/", "", secureGoogle, true)
+	c.SetCookie("token", token, 72*3600, "/", "", secureGoogle, true)
 
 	// Fetch role's configured default page
 	var userRole models.Role
@@ -340,19 +345,21 @@ func GoogleLogin(c *gin.Context) {
 
 // Logout clears the JWT authentication cookie and invalidates the database session token
 func Logout(c *gin.Context) {
-	// Clear cookie
+	// Clear cookies
+	secureLogout := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" || strings.Contains(c.Request.Host, "bitsathy.in")
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("token", "", -1, "/", "", false, true)
+	c.SetCookie("mockmate_token", "", -1, "/", "", secureLogout, true)
+	c.SetCookie("token", "", -1, "/", "", secureLogout, true)
 
 	// Extract token if present and clear active_token in DB
 	var tokenString string
-	if cookieToken, err := c.Cookie("token"); err == nil && cookieToken != "" {
+	authHeader := c.GetHeader("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+	} else if cookieToken, err := c.Cookie("mockmate_token"); err == nil && cookieToken != "" {
 		tokenString = cookieToken
-	} else {
-		authHeader := c.GetHeader("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
-		}
+	} else if cookieToken, err := c.Cookie("token"); err == nil && cookieToken != "" {
+		tokenString = cookieToken
 	}
 
 	if tokenString != "" {

@@ -60,24 +60,33 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var tokenString string
 
-		// 1. Try to read JWT token from HTTP Cookie "token"
-		cookieToken, err := c.Cookie("token")
-		if err == nil && cookieToken != "" {
-			tokenString = cookieToken
-		} else {
-			// 2. Fallback to Authorization Header: Bearer <token>
-			authHeader := c.GetHeader("Authorization")
-			if authHeader != "" {
-				parts := strings.Split(authHeader, " ")
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					tokenString = parts[1]
-				}
+		// 1. Try Authorization Header first (Bearer <token>)
+		// This takes precedence to ensure isolated, conflict-free API calls across subdomains
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenString = parts[1]
 			}
+		}
 
-			// 3. Fallback to URL Query parameter "token" (for WebSocket handshakes)
-			if tokenString == "" {
-				tokenString = c.Query("token")
+		// 2. Try application-specific cookie "mockmate_token" (avoids parent .bitsathy.in cookie collisions)
+		if tokenString == "" {
+			if cookieToken, err := c.Cookie("mockmate_token"); err == nil && cookieToken != "" {
+				tokenString = cookieToken
 			}
+		}
+
+		// 3. Fallback to generic "token" cookie
+		if tokenString == "" {
+			if cookieToken, err := c.Cookie("token"); err == nil && cookieToken != "" {
+				tokenString = cookieToken
+			}
+		}
+
+		// 4. Fallback to URL Query parameter "token" (for WebSocket handshakes)
+		if tokenString == "" {
+			tokenString = c.Query("token")
 		}
 
 		if tokenString == "" {
@@ -105,8 +114,10 @@ func AuthMiddleware() gin.HandlerFunc {
 		var dbUser models.User
 		if err := database.DB.Select("id, active_token").First(&dbUser, claims.UserID).Error; err != nil || dbUser.ActiveToken == "" || dbUser.ActiveToken != tokenString {
 			// Clear cookie on invalid session
+			secure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" || strings.Contains(c.Request.Host, "bitsathy.in")
 			c.SetSameSite(http.SameSiteLaxMode)
-			c.SetCookie("token", "", -1, "/", "", false, true)
+			c.SetCookie("mockmate_token", "", -1, "/", "", secure, true)
+			c.SetCookie("token", "", -1, "/", "", secure, true)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"status":  "error",
 				"message": "Session invalidated. You have logged in from another device or were logged out by an administrator.",

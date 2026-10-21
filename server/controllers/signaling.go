@@ -153,7 +153,9 @@ func HandleWebRTCSignaling(c *gin.Context) {
 		}
 	}
 	if tokenStr == "" {
-		if cookie, err := c.Cookie("token"); err == nil {
+		if cookie, err := c.Cookie("mockmate_token"); err == nil && cookie != "" {
+			tokenStr = cookie
+		} else if cookie, err := c.Cookie("token"); err == nil {
 			tokenStr = cookie
 		}
 	}

@@ -38,10 +38,14 @@ export function AuthProvider({ children }) {
       setError(null);
       const res = await api.get('/auth/me');
       if (res && res.user) {
+        if (res.token) {
+          localStorage.setItem('token', res.token);
+        }
         setUser(res.user);
         await fetchPermissions(true);
         return res.user;
       }
+      localStorage.removeItem('token');
       setUser(null);
       setPermissions({ allowedKeys: [], pages: [] });
       return null;
@@ -66,6 +70,7 @@ export function AuthProvider({ children }) {
     };
 
     const handleSessionInvalidated = (e) => {
+      localStorage.removeItem('token');
       setUser(null);
       setPermissions({ allowedKeys: [], pages: [] });
       if (e.detail?.message) {
@@ -104,6 +109,9 @@ export function AuthProvider({ children }) {
       });
 
       if (res && res.user) {
+        if (res.token) {
+          localStorage.setItem('token', res.token);
+        }
         setUser(res.user);
         await fetchPermissions();
         return { success: true, user: res.user };
@@ -131,6 +139,9 @@ export function AuthProvider({ children }) {
       const res = await api.post('/auth/google', body);
 
       if (res && res.user) {
+        if (res.token) {
+          localStorage.setItem('token', res.token);
+        }
         setUser(res.user);
         await fetchPermissions();
         return { success: true, user: res.user };
@@ -148,10 +159,12 @@ export function AuthProvider({ children }) {
   // Logout handler
   const logout = async () => {
     try {
+      localStorage.removeItem('token');
       await api.post('/auth/logout');
     } catch (e) {
       console.warn('Logout API error:', e);
     } finally {
+      localStorage.removeItem('token');
       setUser(null);
       setPermissions({ allowedKeys: [], pages: [] });
     }

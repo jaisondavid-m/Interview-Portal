@@ -9,6 +9,18 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// Request interceptor to attach Authorization header if token exists in storage
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token && !config.headers['Authorization']) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Response interceptor
 api.interceptors.response.use(
   (response) => response.data,
