@@ -4,7 +4,7 @@ import { ArrowRight, AlertCircle, ShieldCheck, GraduationCap, Eye, EyeOff, Zap, 
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
-const DEFAULT_GOOGLE_CLIENT_ID = '956639761791-ihog9nl42s3og1b77u4t47mnb0pfo0op.apps.googleusercontent.com';
+const DEFAULT_GOOGLE_CLIENT_ID = '956639761791-ooo2p9kmj35nfekt5s6hli3maokv73qc.apps.googleusercontent.com';
 
 // Role → icon + badge style mapping (used when rendering dynamic accounts from the backend)
 const ROLE_STYLES = {

@@ -18,6 +18,8 @@ COPY . .
 # Build Vite application with relative or custom API path
 ARG VITE_API_URL=/api/v1
 ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_GOOGLE_CLIENT_ID=956639761791-ooo2p9kmj35nfekt5s6hli3maokv73qc.apps.googleusercontent.com
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 
 RUN npm run build
 
