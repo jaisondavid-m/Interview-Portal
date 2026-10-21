@@ -19,6 +19,7 @@ import {
   HelpCircle,
   FileCode,
   Terminal,
+  Server,
 } from 'lucide-react';
 import { getModeMeta, formatLevelName } from './constants';
 
