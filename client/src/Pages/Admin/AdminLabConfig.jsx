@@ -38,26 +38,16 @@ export default function AdminLabConfig() {
 
       const batchStatsRes = await api.get('/admin/labs/batch-students/stats').catch(() => ({ stats: [] }));
       const batchStats = batchStatsRes?.stats || [];
-      const totalAssignedStudents = batchStats.reduce((acc, curr) => acc + (curr.count || 0), 0);
+      const totalAssignedStudents = batchStats
+        .filter((curr) => curr.section && curr.section !== 'Unassigned')
+        .reduce((acc, curr) => acc + (curr.count || 0), 0);
 
-      let storedBatches = [];
-      try {
-        const raw = localStorage.getItem('lab_batches_v2');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            const defaultNames = ['CSE-A', 'CSE-B', 'AI&DS-A', 'AI&DS-B'];
-            const isOnlyLegacySeeded = parsed.length === 4 && parsed.every((b) => defaultNames.includes(b.name));
-            if (!isOnlyLegacySeeded) storedBatches = parsed;
-          }
-        }
-      } catch {
-        storedBatches = [];
-      }
+      const batchesRes = await api.get('/admin/labs/batches').catch(() => ({ data: [] }));
+      const liveBatches = Array.isArray(batchesRes?.data) ? batchesRes.data : [];
 
       setStats({
         coursesCount: courses.length,
-        batchesCount: storedBatches.length,
+        batchesCount: liveBatches.length,
         studentsCount: totalAssignedStudents,
         mappingsCount: mappings.length,
       });

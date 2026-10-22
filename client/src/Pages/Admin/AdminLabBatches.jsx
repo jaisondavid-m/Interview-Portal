@@ -118,25 +118,35 @@ export default function AdminLabBatches() {
   };
   const saveStored = (key, val) => localStorage.setItem(key, JSON.stringify(val));
 
-  // Batches state (User-managed, no dummy seedings)
+  // Batches state (Database-backed with localStorage fallback)
   const [batches, setBatches] = useState(() => {
-    const raw = loadStored('lab_batches_v2', null);
-    if (raw && Array.isArray(raw)) {
-      const defaultNames = ['CSE-A', 'CSE-B', 'AI&DS-A', 'AI&DS-B'];
-      const isOnlyLegacySeeded = raw.length === 4 && raw.every((b) => defaultNames.includes(b.name));
-      if (isOnlyLegacySeeded) {
-        saveStored('lab_batches_v2', []);
-        return [];
-      }
-      return raw;
-    }
-    return [];
+    const raw = loadStored('lab_batches_v2', []);
+    return Array.isArray(raw) ? raw : [];
   });
+  const [batchesLoading, setBatchesLoading] = useState(false);
 
   const saveBatches = (newBatches) => {
     setBatches(newBatches);
     saveStored('lab_batches_v2', newBatches);
   };
+
+  const fetchBatches = useCallback(async () => {
+    try {
+      setBatchesLoading(true);
+      const res = await api.get('/admin/labs/batches');
+      if (res?.data && Array.isArray(res.data)) {
+        setBatches(res.data);
+        saveStored('lab_batches_v2', res.data);
+        if (res.data.length > 0) {
+          setTargetSection((prev) => prev || res.data[0].name);
+        }
+      }
+    } catch {
+      // Keep existing
+    } finally {
+      setBatchesLoading(false);
+    }
+  }, []);
 
   // Batch Stats
   const [batchStats, setBatchStats] = useState({});
@@ -149,7 +159,7 @@ export default function AdminLabBatches() {
     name: '',
     semester: 'Semester III',
     academic_year: '2025-2026',
-    department: 'CSE',
+    department: 'Computer Science and Engineering',
   };
   const [batchForm, setBatchForm] = useState(emptyBatch);
 
@@ -282,8 +292,9 @@ export default function AdminLabBatches() {
   }, [drawerPage, drawerSearch, drawerDept]);
 
   useEffect(() => {
+    fetchBatches();
     fetchBatchStats();
-  }, [fetchBatchStats]);
+  }, [fetchBatches, fetchBatchStats]);
 
   useEffect(() => {
     fetchDynamicDepartments();
@@ -341,12 +352,17 @@ export default function AdminLabBatches() {
   }, [drawerSearch]);
 
   // Batch creation & modification
-  const openCreateBatch = () => {
+  const openCreateBatch = (preselectedDept = null) => {
+    const defaultDept =
+      preselectedDept ||
+      (filterDept !== 'ALL' ? filterDept : dynamicDepartments[0]?.name || 'Computer Science and Engineering');
+    const deptObj = dynamicDepartments.find((d) => d.name === defaultDept);
+    const code = deptObj?.code || (defaultDept ? defaultDept.slice(0, 4).toUpperCase() : 'BATCH');
     setBatchForm({
-      name: '',
+      name: `${code}-A`,
       semester: 'Semester III',
       academic_year: '2025-2026',
-      department: 'CSE',
+      department: defaultDept,
     });
     setEditingBatch(null);
     setBatchModal('create');
@@ -358,55 +374,66 @@ export default function AdminLabBatches() {
     setBatchModal('edit');
   };
 
-  const handleSaveBatch = (e) => {
+  const handleSaveBatch = async (e) => {
     e.preventDefault();
     if (!batchForm.name.trim()) {
       showToast('Batch name is required.', 'error');
       return;
     }
-    const cleanName = batchForm.name.trim();
-    if (batchModal === 'create') {
-      if (batches.some((b) => b.name.toLowerCase() === cleanName.toLowerCase())) {
-        showToast('A batch with this name already exists.', 'error');
-        return;
+    const cleanName = batchForm.name.trim().toUpperCase();
+    const payload = {
+      name: cleanName,
+      department: batchForm.department,
+      semester: batchForm.semester,
+      academic_year: batchForm.academic_year,
+      regulation: '2022',
+    };
+
+    try {
+      if (batchModal === 'create') {
+        const res = await api.post('/admin/labs/batches', payload);
+        showToast(res?.message || `Batch "${cleanName}" created successfully!`);
+      } else if (batchModal === 'edit' && editingBatch) {
+        const res = await api.put(`/admin/labs/batches/${editingBatch.id}`, payload);
+        showToast(res?.message || `Batch "${cleanName}" updated successfully!`);
       }
-      const newEntry = {
-        id: String(Date.now()),
-        name: cleanName,
-        semester: batchForm.semester,
-        academic_year: batchForm.academic_year,
-        department: batchForm.department,
-      };
-      saveBatches([...batches, newEntry]);
-      showToast(`Batch "${cleanName}" created successfully!`);
-    } else if (batchModal === 'edit' && editingBatch) {
-      const updated = batches.map((b) =>
-        b.id === editingBatch.id
-          ? {
-              ...b,
-              name: cleanName,
-              semester: batchForm.semester,
-              academic_year: batchForm.academic_year,
-              department: batchForm.department,
-            }
-          : b
-      );
-      saveBatches(updated);
-      showToast(`Batch "${cleanName}" updated successfully!`);
+      setBatchModal(null);
+      setEditingBatch(null);
+      await fetchBatches();
+      await fetchBatchStats();
+      await fetchStudents();
+    } catch (err) {
+      showToast(err.response?.data?.error || err.message || 'Failed to save batch', 'error');
     }
-    setBatchModal(null);
-    setEditingBatch(null);
   };
 
   const [deletingBatch, setDeletingBatch] = useState(null);
 
-  const executeDeleteBatch = () => {
+  const executeDeleteBatch = async () => {
     if (!deletingBatch) return;
     const { id, name } = deletingBatch;
     setDeletingBatch(null);
-    const filtered = batches.filter((b) => b.id !== id);
-    saveBatches(filtered);
-    showToast(`Batch "${name}" deleted.`);
+    try {
+      await api.delete(`/admin/labs/batches/${id}?unassign=false`);
+      showToast(`Batch "${name}" deleted.`);
+      await fetchBatches();
+      await fetchBatchStats();
+      await fetchStudents();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to delete batch', 'error');
+    }
+  };
+
+  const handleAutoDiscover = async () => {
+    try {
+      const res = await api.post('/admin/labs/batches/auto-discover');
+      showToast(res?.message || 'Batches auto-discovered successfully!');
+      await fetchBatches();
+      await fetchBatchStats();
+      await fetchStudents();
+    } catch {
+      showToast('Failed to auto-discover batches.', 'error');
+    }
   };
 
   // Student selection & assignment
@@ -782,7 +809,10 @@ export default function AdminLabBatches() {
     }
   };
 
-  const totalAssignedStudents = Object.values(batchStats).reduce((a, b) => a + b, 0);
+  const totalAssignedStudents = Object.entries(batchStats)
+    .filter(([sec]) => sec && sec !== 'Unassigned')
+    .reduce((a, [, b]) => a + b, 0);
+  const totalUnassignedStudents = batchStats['Unassigned'] || 0;
 
   return (
     <div className="space-y-6">
@@ -879,13 +909,13 @@ export default function AdminLabBatches() {
       {/* TAB 1: Configured Batches & Cohorts */}
       {activeTab === 'batches' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[var(--accent)]" />
                 Configured Batches &amp; Cohorts
                 <span className="text-[11px] font-mono text-[var(--text-muted)] ml-1">
-                  ({batches.length} Batches · {totalAssignedStudents} Students Allocated)
+                  ({batches.length} Batches · {totalAssignedStudents} Assigned · {totalUnassignedStudents} Unassigned)
                 </span>
               </h2>
               <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
@@ -895,7 +925,15 @@ export default function AdminLabBatches() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={openCreateBatch}
+                onClick={handleAutoDiscover}
+                className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer flex items-center gap-1.5"
+                title="Scan all registered students and auto-create batches for existing sections"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+                Auto-Discover
+              </button>
+              <button
+                onClick={() => openCreateBatch()}
                 className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -904,78 +942,115 @@ export default function AdminLabBatches() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {batches.map((b) => {
-              const count = batchStats[b.name] || 0;
-              const isFiltering = filterSection === b.name;
-
-              return (
-                <div
-                  key={b.id}
-                  onClick={() => {
-                    setFilterSection(b.name);
-                    setPage(1);
-                    setActiveTab('roster');
-                  }}
-                  className={`group relative bg-[var(--bg-card)] border rounded-[var(--radius-md)] p-4 space-y-3 transition-all cursor-pointer hover:shadow-sm ${
-                    isFiltering
-                      ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/20 shadow-sm'
-                      : 'border-[var(--border)] hover:border-[var(--border-accent)]'
-                  }`}
+          {batchesLoading ? (
+            <div className="flex items-center justify-center py-16 gap-2 text-[var(--text-muted)]">
+              <Loader2 className="w-5 h-5 animate-spin text-[var(--accent)]" />
+              <span className="text-xs">Loading batches...</span>
+            </div>
+          ) : batches.length === 0 ? (
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-xl)] p-10 text-center space-y-4 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--accent-dim)] text-[var(--accent)] flex items-center justify-center mx-auto shadow-inner">
+                <Layers className="w-7 h-7" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1">
+                <h3 className="text-base font-bold text-[var(--text-primary)]">
+                  No Student Batches Configured Yet
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Batches organize your student cohort into lab sections (e.g. CSE-A, MCT-B). Configure batches to start allocating students and assigning lab faculty.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+                <button
+                  onClick={() => openCreateBatch()}
+                  className="px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="font-mono font-bold text-[16px] text-[var(--accent)] group-hover:underline">
-                        {b.name}
-                      </span>
-                      {b.department && (
-                        <span className="block text-[10px] text-[var(--text-muted)] font-medium">
-                          {b.department}
+                  <Plus className="w-4 h-4" />
+                  Create First Batch
+                </button>
+                <button
+                  onClick={handleAutoDiscover}
+                  className="px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-[var(--accent)]" />
+                  Auto-Discover from Students
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {batches.map((b) => {
+                const count = batchStats[b.name] !== undefined ? batchStats[b.name] : (b.student_count || 0);
+                const isFiltering = filterSection === b.name;
+
+                return (
+                  <div
+                    key={b.id}
+                    onClick={() => {
+                      setFilterSection(b.name);
+                      setPage(1);
+                      setActiveTab('roster');
+                    }}
+                    className={`group relative bg-[var(--bg-card)] border rounded-[var(--radius-md)] p-4 space-y-3 transition-all cursor-pointer hover:shadow-sm ${
+                      isFiltering
+                        ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/20 shadow-sm'
+                        : 'border-[var(--border)] hover:border-[var(--border-accent)]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-mono font-bold text-[16px] text-[var(--accent)] group-hover:underline">
+                          {b.name}
                         </span>
-                      )}
+                        {b.department && (
+                          <span className="block text-[10px] text-[var(--text-muted)] font-medium line-clamp-1">
+                            {b.department}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => openEditBatch(b)}
+                          className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                          title="Edit batch semester & year"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingBatch({ id: b.id, name: b.name })}
+                          className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] transition-colors cursor-pointer"
+                          title="Delete batch"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => openEditBatch(b)}
-                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
-                        title="Edit batch semester & year"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setDeletingBatch({ id: b.id, name: b.name })}
-                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--red)] transition-colors cursor-pointer"
-                        title="Delete batch"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    {/* Linked Semester & Academic Year Badges */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
+                        <GraduationCap className="w-3 h-3 text-[var(--accent)]" />
+                        {b.semester}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
+                        <Calendar className="w-3 h-3 text-[var(--accent)]" />
+                        {b.academic_year}
+                      </span>
+                    </div>
+
+                    {/* Footer Count & Filter Action */}
+                    <div className="pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
+                      <span className="text-[var(--text-muted)]">Enrolled:</span>
+                      <span className="font-mono font-bold text-[var(--accent)]">
+                        {count} student{count === 1 ? '' : 's'} &rarr;
+                      </span>
                     </div>
                   </div>
-
-                  {/* Linked Semester & Academic Year Badges */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
-                      <GraduationCap className="w-3 h-3 text-[var(--accent)]" />
-                      {b.semester}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]">
-                      <Calendar className="w-3 h-3 text-[var(--accent)]" />
-                      {b.academic_year}
-                    </span>
-                  </div>
-
-                  {/* Footer Count & Filter Action */}
-                  <div className="pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
-                    <span className="text-[var(--text-muted)]">Enrolled:</span>
-                    <span className="font-mono font-bold text-[var(--accent)]">
-                      {count} student{count === 1 ? '' : 's'} &rarr;
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1273,6 +1348,9 @@ export default function AdminLabBatches() {
                               className="bg-[var(--bg-input)] border border-[var(--border)] rounded px-2 py-1 text-[11px] text-[var(--text-primary)] font-medium focus:outline-none cursor-pointer"
                             >
                               <option value="">Unassigned</option>
+                              {s.section && !batches.some((b) => b.name === s.section) && (
+                                <option value={s.section}>{s.section} (Active)</option>
+                              )}
                               {batches.map((b) => (
                                 <option key={b.id} value={b.name}>
                                   {b.name}

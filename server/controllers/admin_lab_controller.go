@@ -203,6 +203,7 @@ type BatchAssignSectionReq struct {
 
 // BatchAssignStudentSection updates section/batch for multiple students
 func BatchAssignStudentSection(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
 	var req BatchAssignSectionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload format"})
@@ -210,7 +211,7 @@ func BatchAssignStudentSection(c *gin.Context) {
 	}
 
 	trimmedSection := strings.TrimSpace(req.Section)
-	query := database.DB.Model(&models.User{}).Where("role = 'student'")
+	query := database.DB.Model(&models.User{}).Where("LOWER(role) IN ?", []string{"student", "user"})
 
 	if req.AssignAllInDept {
 		dept := strings.TrimSpace(req.Department)
@@ -235,6 +236,36 @@ func BatchAssignStudentSection(c *gin.Context) {
 		return
 	}
 
+	// If assigned to a new batch name, ensure the batch exists in lab_batches
+	if trimmedSection != "" {
+		var bCount int64
+		database.DB.Model(&models.LabBatch{}).Where("LOWER(name) = ?", strings.ToLower(trimmedSection)).Count(&bCount)
+		if bCount == 0 {
+			dept := strings.TrimSpace(req.Department)
+			if dept == "" || strings.EqualFold(dept, "all") {
+				if len(req.StudentIDs) > 0 {
+					var u models.User
+					if err := database.DB.First(&u, req.StudentIDs[0]).Error; err == nil && u.Department != "" {
+						dept = u.Department
+					}
+				}
+			}
+			if dept == "" {
+				dept = "General"
+			}
+			b := models.LabBatch{
+				Name:         trimmedSection,
+				Department:   dept,
+				Semester:     "Semester III",
+				AcademicYear: "2025-2026",
+				Regulation:   "2022",
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			database.DB.Create(&b)
+		}
+	}
+
 	msg := fmt.Sprintf("Successfully assigned %d student(s) to %s", res.RowsAffected, trimmedSection)
 	if trimmedSection == "" {
 		msg = fmt.Sprintf("Successfully removed %d student(s) from batch", res.RowsAffected)
@@ -246,6 +277,306 @@ func BatchAssignStudentSection(c *gin.Context) {
 		"section": trimmedSection,
 	})
 }
+
+// AdminGetBatches returns all configured batches with their student counts
+func AdminGetBatches(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	dept := strings.TrimSpace(c.Query("department"))
+
+	var batches []models.LabBatch
+	query := database.DB.Model(&models.LabBatch{})
+	if dept != "" && !strings.EqualFold(dept, "all") {
+		query = query.Where("LOWER(department) = ?", strings.ToLower(dept))
+	}
+	if err := query.Order("department ASC, name ASC").Find(&batches).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch batches: " + err.Error()})
+		return
+	}
+
+	// If lab_batches table is empty, auto-discover from users table
+	if len(batches) == 0 {
+		type Discovered struct {
+			Section    string `gorm:"column:section"`
+			Department string `gorm:"column:department"`
+		}
+		var disc []Discovered
+		database.DB.Model(&models.User{}).
+			Select("TRIM(section) as section, TRIM(department) as department").
+			Where("section IS NOT NULL AND TRIM(section) != '' AND LOWER(role) IN ('student', 'user')").
+			Group("TRIM(section), TRIM(department)").
+			Scan(&disc)
+
+		for _, d := range disc {
+			sName := strings.TrimSpace(d.Section)
+			if sName == "" {
+				continue
+			}
+			sDept := strings.TrimSpace(d.Department)
+			if sDept == "" {
+				sDept = "General"
+			}
+			nb := models.LabBatch{
+				Name:         sName,
+				Department:   sDept,
+				Semester:     "Semester III",
+				AcademicYear: "2025-2026",
+				Regulation:   "2022",
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			database.DB.Create(&nb)
+		}
+
+		reQuery := database.DB.Model(&models.LabBatch{})
+		if dept != "" && !strings.EqualFold(dept, "all") {
+			reQuery = reQuery.Where("LOWER(department) = ?", strings.ToLower(dept))
+		}
+		reQuery.Order("department ASC, name ASC").Find(&batches)
+	}
+
+	// Fetch student counts for each batch
+	type BatchCount struct {
+		Section string `gorm:"column:section"`
+		Count   int64  `gorm:"column:count"`
+	}
+	var counts []BatchCount
+	countQuery := database.DB.Model(&models.User{}).
+		Select("TRIM(section) as section, COUNT(*) as count").
+		Where("section IS NOT NULL AND TRIM(section) != '' AND LOWER(role) IN ('student', 'user')")
+	if dept != "" && !strings.EqualFold(dept, "all") {
+		countQuery = countQuery.Where("LOWER(department) = ?", strings.ToLower(dept))
+	}
+	countQuery.Group("TRIM(section)").Scan(&counts)
+
+	countMap := make(map[string]int64)
+	for _, cnt := range counts {
+		countMap[strings.ToLower(cnt.Section)] = cnt.Count
+	}
+
+	for i := range batches {
+		batches[i].StudentCount = countMap[strings.ToLower(batches[i].Name)]
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   batches,
+	})
+}
+
+// LabBatchInput represents batch creation and update payload
+type LabBatchInput struct {
+	Name         string `json:"name" binding:"required"`
+	Department   string `json:"department" binding:"required"`
+	Semester     string `json:"semester"`
+	AcademicYear string `json:"academic_year"`
+	Regulation   string `json:"regulation"`
+}
+
+// AdminCreateBatch creates a new batch in the database
+func AdminCreateBatch(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	var input LabBatchInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Batch name and department are required"})
+		return
+	}
+
+	cleanName := strings.TrimSpace(strings.ToUpper(input.Name))
+	cleanDept := strings.TrimSpace(input.Department)
+	if cleanName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Batch name cannot be empty"})
+		return
+	}
+	if cleanDept == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Department cannot be empty"})
+		return
+	}
+
+	// Check if already exists in same department
+	var existing models.LabBatch
+	if err := database.DB.Where("LOWER(name) = ? AND LOWER(department) = ?", strings.ToLower(cleanName), strings.ToLower(cleanDept)).First(&existing).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Batch '%s' already exists in %s", cleanName, cleanDept)})
+		return
+	}
+
+	sem := strings.TrimSpace(input.Semester)
+	if sem == "" {
+		sem = "Semester III"
+	}
+	ay := strings.TrimSpace(input.AcademicYear)
+	if ay == "" {
+		ay = "2025-2026"
+	}
+	reg := strings.TrimSpace(input.Regulation)
+	if reg == "" {
+		reg = "2022"
+	}
+
+	newBatch := models.LabBatch{
+		Name:         cleanName,
+		Department:   cleanDept,
+		Semester:     sem,
+		AcademicYear: ay,
+		Regulation:   reg,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	if err := database.DB.Create(&newBatch).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": fmt.Sprintf("Batch '%s' created successfully", cleanName),
+		"data":    newBatch,
+	})
+}
+
+// AdminUpdateBatch updates an existing batch
+func AdminUpdateBatch(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid batch ID"})
+		return
+	}
+
+	var batch models.LabBatch
+	if err := database.DB.First(&batch, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Batch not found"})
+		return
+	}
+
+	var input LabBatchInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload format"})
+		return
+	}
+
+	cleanName := strings.TrimSpace(strings.ToUpper(input.Name))
+	cleanDept := strings.TrimSpace(input.Department)
+	oldName := batch.Name
+
+	if cleanName != "" && cleanName != oldName {
+		// Update student allocations and faculty mappings if batch was renamed
+		database.DB.Model(&models.User{}).Where("section = ?", oldName).Update("section", cleanName)
+		database.DB.Model(&models.LabMapping{}).Where("section = ?", oldName).Update("section", cleanName)
+		database.DB.Model(&models.LabExperimentUnlock{}).Where("section = ?", oldName).Update("section", cleanName)
+		batch.Name = cleanName
+	}
+
+	if cleanDept != "" {
+		batch.Department = cleanDept
+	}
+	if input.Semester != "" {
+		batch.Semester = strings.TrimSpace(input.Semester)
+	}
+	if input.AcademicYear != "" {
+		batch.AcademicYear = strings.TrimSpace(input.AcademicYear)
+	}
+	if input.Regulation != "" {
+		batch.Regulation = strings.TrimSpace(input.Regulation)
+	}
+	batch.UpdatedAt = time.Now()
+
+	if err := database.DB.Save(&batch).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update batch: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Batch '%s' updated successfully", batch.Name),
+		"data":    batch,
+	})
+}
+
+// AdminDeleteBatch deletes a batch and optionally unassigns enrolled students
+func AdminDeleteBatch(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid batch ID"})
+		return
+	}
+
+	var batch models.LabBatch
+	if err := database.DB.First(&batch, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Batch not found"})
+		return
+	}
+
+	unassign := c.Query("unassign") == "true"
+	if unassign {
+		database.DB.Model(&models.User{}).Where("section = ?", batch.Name).Update("section", "")
+	}
+
+	if err := database.DB.Delete(&batch).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete batch: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Batch '%s' deleted successfully", batch.Name),
+	})
+}
+
+// AdminAutoDiscoverBatches inspects students and generates batch entries for any existing sections
+func AdminAutoDiscoverBatches(c *gin.Context) {
+	database.EnsureLabTables(database.DB)
+
+	type DistinctSection struct {
+		Section    string `gorm:"column:section"`
+		Department string `gorm:"column:department"`
+		Count      int64  `gorm:"column:count"`
+	}
+	var results []DistinctSection
+	database.DB.Model(&models.User{}).
+		Select("TRIM(section) as section, TRIM(department) as department, COUNT(*) as count").
+		Where("section IS NOT NULL AND TRIM(section) != '' AND LOWER(role) IN ('student', 'user')").
+		Group("TRIM(section), TRIM(department)").
+		Scan(&results)
+
+	created := 0
+	for _, r := range results {
+		sec := strings.TrimSpace(r.Section)
+		if sec == "" {
+			continue
+		}
+		dept := strings.TrimSpace(r.Department)
+		if dept == "" {
+			dept = "General"
+		}
+		var count int64
+		database.DB.Model(&models.LabBatch{}).Where("LOWER(name) = ?", strings.ToLower(sec)).Count(&count)
+		if count == 0 {
+			b := models.LabBatch{
+				Name:         sec,
+				Department:   dept,
+				Semester:     "Semester III",
+				AcademicYear: "2025-2026",
+				Regulation:   "2022",
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			if err := database.DB.Create(&b).Error; err == nil {
+				created++
+			}
+		}
+	}
+
+	var allBatches []models.LabBatch
+	database.DB.Order("department ASC, name ASC").Find(&allBatches)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Auto-discovered %d new batches", created),
+		"created": created,
+		"data":    allBatches,
+	})
+}
+
 
 // GetBatchStudentStats returns student count breakdown across all sections
 func GetBatchStudentStats(c *gin.Context) {
@@ -1711,8 +2042,23 @@ func AdminBulkCreateExperiments(c *gin.Context) {
 				var vCount int64
 				tx.Model(&models.LabExperimentQuestion{}).Where("experiment_id = ?", newExp.ID).Count(&vCount)
 				if vCount == 0 {
+					var varA models.LabExperimentVariant
+					if err := tx.Where("experiment_id = ?", newExp.ID).Order("id asc").First(&varA).Error; err != nil || varA.ID == 0 {
+						varA = models.LabExperimentVariant{
+							ExperimentID: newExp.ID,
+							CourseID:     uint(courseID),
+							VariantCode:  "A",
+							Title:        "Variant A",
+							Description:  "Default Variant A",
+							IsActive:     true,
+							CreatedAt:    time.Now(),
+							UpdatedAt:    time.Now(),
+						}
+						tx.Create(&varA)
+					}
 					defVariant := models.LabExperimentQuestion{
 						ExperimentID:       newExp.ID,
+						VariantID:          varA.ID,
 						CourseID:           uint(courseID),
 						QuestionCode:       fmt.Sprintf("EX%d_VAR_A", newExp.ExperimentNo),
 						Title:              newExp.Title,
@@ -1789,6 +2135,30 @@ func AdminBulkCreateQuestionVariants(c *gin.Context) {
 	var errors []string
 
 	tx := database.DB.Begin()
+
+	// Ensure a default variant container exists for this experiment
+	var defaultVariant models.LabExperimentVariant
+	if err := tx.Where("experiment_id = ?", exp.ID).Order("id asc").First(&defaultVariant).Error; err != nil || defaultVariant.ID == 0 {
+		defaultVariant = models.LabExperimentVariant{
+			ExperimentID: exp.ID,
+			CourseID:     exp.CourseID,
+			VariantCode:  "A",
+			Title:        "Variant A",
+			Description:  "Default Variant A",
+			IsActive:     true,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		}
+		if err := tx.Create(&defaultVariant).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to initialize experiment variant: " + err.Error(),
+				"details": []string{err.Error()},
+			})
+			return
+		}
+	}
+
 	for i, input := range inputs {
 		if strings.TrimSpace(input.Title) == "" {
 			errors = append(errors, fmt.Sprintf("Variant %d: Title is required", i+1))
@@ -1839,7 +2209,16 @@ func AdminBulkCreateQuestionVariants(c *gin.Context) {
 			}
 		}
 
+		targetVariantID := defaultVariant.ID
+		if input.VariantID > 0 {
+			var checkVar models.LabExperimentVariant
+			if err := tx.First(&checkVar, input.VariantID).Error; err == nil && checkVar.ID > 0 {
+				targetVariantID = checkVar.ID
+			}
+		}
+
 		variant.ExperimentID = exp.ID
+		variant.VariantID = targetVariantID
 		variant.CourseID = exp.CourseID
 		variant.QuestionCode = qCode
 		variant.Title = strings.TrimSpace(input.Title)

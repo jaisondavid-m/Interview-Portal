@@ -99,13 +99,17 @@ export default function AdminLabFacultyMapping() {
   const fetchCoursesAndAdminData = async () => {
     try {
       setMappingsLoading(true);
-      const [coursesRes, adminDataRes] = await Promise.all([
+      const [coursesRes, adminDataRes, batchesRes] = await Promise.all([
         api.get('/labs/courses'),
         api.get('/admin/labs/data'),
+        api.get('/admin/labs/batches').catch(() => ({ data: [] })),
       ]);
       setCourses(coursesRes?.courses || []);
       setMappings(adminDataRes?.mappings || []);
       setFaculty(adminDataRes?.faculty || []);
+      if (batchesRes?.data && Array.isArray(batchesRes.data) && batchesRes.data.length > 0) {
+        setBatches(batchesRes.data);
+      }
     } catch {
       showToast('Failed to load mapping data.', 'error');
     } finally {

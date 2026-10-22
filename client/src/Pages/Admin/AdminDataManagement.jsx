@@ -186,37 +186,17 @@ export default function AdminDataManagement() {
     }
     setBatchSubmitting(true);
     try {
-      // Load current batches
-      let currentBatches = [];
-      try {
-        const raw = localStorage.getItem('lab_batches_v2');
-        if (raw) currentBatches = JSON.parse(raw);
-      } catch {
-        currentBatches = [];
-      }
-
-      // Check if duplicate
-      const exists = currentBatches.some(
-        (b) => b.name.toLowerCase() === batchForm.name.trim().toLowerCase()
-      );
-      if (exists) {
-        showToast(`Batch "${batchForm.name}" already exists`, 'error');
-        setBatchSubmitting(false);
-        return;
-      }
-
-      const newBatch = {
-        id: String(Date.now()),
+      const payload = {
         name: batchForm.name.trim().toUpperCase(),
         department: batchForm.department,
         semester: batchForm.semester,
         academic_year: batchForm.academic_year,
+        regulation: '2022',
       };
 
-      currentBatches.push(newBatch);
-      localStorage.setItem('lab_batches_v2', JSON.stringify(currentBatches));
+      await api.post('/admin/labs/batches', payload);
 
-      showToast(`Batch "${newBatch.name}" created successfully!`);
+      showToast(`Batch "${payload.name}" created successfully!`);
       setCreateBatchModal(null);
       // Optional navigate
       setTimeout(() => {
@@ -224,7 +204,7 @@ export default function AdminDataManagement() {
       }, 700);
     } catch (err) {
       console.error('Error saving batch:', err);
-      showToast('Failed to save batch', 'error');
+      showToast(err.response?.data?.error || 'Failed to save batch', 'error');
     } finally {
       setBatchSubmitting(false);
     }

@@ -391,6 +391,11 @@ func SetupRouter() *gin.Engine {
 			adminLabs.GET("/pdf-preview/:courseId/student/:studentId", controllers.AdminPreviewStudentRecordPDF)
 			adminLabs.POST("/batch-students/assign", controllers.BatchAssignStudentSection)
 			adminLabs.GET("/batch-students/stats", controllers.GetBatchStudentStats)
+			adminLabs.GET("/batches", controllers.AdminGetBatches)
+			adminLabs.POST("/batches", controllers.AdminCreateBatch)
+			adminLabs.PUT("/batches/:id", controllers.AdminUpdateBatch)
+			adminLabs.DELETE("/batches/:id", controllers.AdminDeleteBatch)
+			adminLabs.POST("/batches/auto-discover", controllers.AdminAutoDiscoverBatches)
 		}
 
 		// Faculty Portal & Live In-Venue Attendance (Require JWT + Faculty/Admin Permissions)

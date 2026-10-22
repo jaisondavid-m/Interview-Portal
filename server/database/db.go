@@ -139,6 +139,7 @@ func EnsureLabTables(db *gorm.DB) error {
 		&models.LabMapping{},
 		&models.LabSubmission{},
 		&models.LabRecord{},
+		&models.LabBatch{},
 	}
 	for _, m := range labModels {
 		if err := db.AutoMigrate(m); err != nil {
@@ -191,6 +192,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.LabMapping{},
 		&models.LabSubmission{},
 		&models.LabRecord{},
+		&models.LabBatch{},
 	}
 
 	for _, m := range modelsToMigrate {
@@ -208,6 +210,7 @@ func runMigrations(db *gorm.DB) error {
 	db.Model(&models.LabCourse{}).Where("regulation IS NULL OR regulation = ''").Update("regulation", "2022")
 	seedLabCourseAndExperiments(db)
 	syncLabQuestionVariantsAndVivas(db)
+	syncExistingBatchesFromUsers(db)
 	return nil
 }
 
@@ -1093,6 +1096,45 @@ func backfillLabVariantsAndQuestions(db *gorm.DB) {
 				}
 			}
 			db.Model(&models.LabQuestionAllocation{}).Where("id = ?", alloc.ID).Update("variant_id", varA.ID)
+		}
+	}
+}
+
+// syncExistingBatchesFromUsers auto-discovers student sections from users table and creates batch records if missing
+func syncExistingBatchesFromUsers(db *gorm.DB) {
+	type DistinctSection struct {
+		Section    string `gorm:"column:section"`
+		Department string `gorm:"column:department"`
+	}
+	var results []DistinctSection
+	db.Model(&models.User{}).
+		Select("TRIM(section) as section, TRIM(department) as department").
+		Where("section IS NOT NULL AND TRIM(section) != '' AND LOWER(role) IN ('student', 'user')").
+		Group("TRIM(section), TRIM(department)").
+		Scan(&results)
+
+	for _, r := range results {
+		sec := strings.TrimSpace(r.Section)
+		if sec == "" {
+			continue
+		}
+		dept := strings.TrimSpace(r.Department)
+		if dept == "" {
+			dept = "General"
+		}
+		var count int64
+		db.Model(&models.LabBatch{}).Where("LOWER(name) = ?", strings.ToLower(sec)).Count(&count)
+		if count == 0 {
+			b := models.LabBatch{
+				Name:         sec,
+				Department:   dept,
+				Semester:     "Semester III",
+				AcademicYear: "2025-2026",
+				Regulation:   "2022",
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			db.Create(&b)
 		}
 	}
 }
