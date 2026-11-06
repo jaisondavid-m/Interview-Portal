@@ -1,6 +1,6 @@
-# MockMate Backend Server (Go + Gin + GORM + MySQL)
+# Interview Portal Backend Server (Go + Gin + GORM + MySQL)
 
-A structured backend server for **MockMate** — a Student-to-Student Live Audio Mock Interview Platform built with [Gin Web Framework](https://github.com/gin-gonic/gin), [GORM](https://gorm.io/), and [MySQL](https://github.com/go-sql-driver/mysql).
+A structured backend server for **Interview Portal** — a Student-to-Student Live Audio Technical Interview Platform built with [Gin Web Framework](https://github.com/gin-gonic/gin), [GORM](https://gorm.io/), and [MySQL](https://github.com/go-sql-driver/mysql).
 
 ---
 

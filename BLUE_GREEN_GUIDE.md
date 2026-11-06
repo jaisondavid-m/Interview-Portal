@@ -1,6 +1,6 @@
-# 🚀 Mock-Mate Blue-Green Deployment Guide
+# 🚀 Interview Portal Blue-Green Deployment Guide
 
-This document explains the **Blue-Green Deployment Architecture** for Mock-Mate, how zero-downtime traffic switching works through **Nginx** and **Cloudflare Tunnel**, how to deploy new versions, execute instant rollbacks, and simulate failure scenarios.
+This document explains the **Blue-Green Deployment Architecture** for Interview Portal, how zero-downtime traffic switching works through **Nginx** and **Cloudflare Tunnel**, how to deploy new versions, execute instant rollbacks, and simulate failure scenarios.
 
 ---
 

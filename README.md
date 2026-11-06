@@ -1,4 +1,4 @@
-# 🚀 MockMate — Distributed Peer-to-Peer Technical Interview & Lab Engineering Platform
+# 🚀 Interview Portal — Distributed Peer-to-Peer Technical Interview & Lab Engineering Platform
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
@@ -9,11 +9,11 @@
 [![Zero Downtime](https://img.shields.io/badge/Deploy-Blue--Green_Zero_Downtime-brightgreen?style=for-the-badge)](./BLUE_GREEN_GUIDE.md)
 [![WebRTC](https://img.shields.io/badge/WebRTC-Audio_Signaling-333333?style=for-the-badge&logo=webrtc&logoColor=white)](https://webrtc.org)
 
-> **Enterprise-grade, distributed mock interview and academic evaluation platform engineered with Go, React 19, MySQL Primary-Replica Clustering, Automated GTID Failover, and Zero-Downtime Blue-Green Deployment.**
+> **Enterprise-grade, distributed technical interview and academic evaluation platform engineered with Go, React 19, MySQL Primary-Replica Clustering, Automated GTID Failover, and Zero-Downtime Blue-Green Deployment.**
 
 ---
 
-## 📌 Executive Summary: What Problem Does MockMate Solve?
+## 📌 Executive Summary: What Problem Does Interview Portal Solve?
 
 Preparing for top-tier technical interviews is traditionally broken:
 - **One-Sided Practice:** Students usually practice alone or pay expensive fees for single mock sessions without understanding the interviewer’s evaluation mindset.
@@ -22,7 +22,7 @@ Preparing for top-tier technical interviews is traditionally broken:
 - **Academic Evaluation Bottlenecks:** University computer science departments struggle to conduct scalable, authenticated, anti-cheat lab examinations with individual question randomization.
 
 ### The Solution:
-**MockMate** is a high-availability, double-blind peer interview and lab engineering platform featuring:
+**Interview Portal** is a high-availability, double-blind peer interview and lab engineering platform featuring:
 1. **Automated Peer Role-Reversal:** Every interview session splits into two balanced rounds. In Round 1, Student A interviews Student B; at the halfway mark, the platform triggers an automatic **Role Swap**, turning Student B into the interviewer and Student A into the candidate.
 2. **Anonymous Double-Blind Collaboration:** Real-time WebRTC audio without video or personally identifiable names, removing bias while simulating realistic remote phone/voice technical screenings.
 3. **Four Domain-Specific Interactive Workspaces:**
@@ -34,9 +34,23 @@ Preparing for top-tier technical interviews is traditionally broken:
 
 ---
 
+## 📸 Product & Workspace Showcase
+
+| **Student Performance Dashboard** | **System Design Architecture Studio** |
+|:---:|:---:|
+| ![Student Dashboard](images/Screenshot%202026-09-20%20141426.png) | ![System Design Studio](images/Screenshot%202026-09-20%20142116.png) |
+| *Track competencies, past peer feedback, and scheduled slots* | *Drag-and-drop cloud nodes with live WebRTC peer collaboration* |
+
+| **Interactive SQL Query Sandbox** | **Multi-Language Algorithm Lab** |
+|:---:|:---:|
+| ![SQL Query Sandbox](images/Screenshot%202026-09-20%20142247.png) | ![Algorithm Lab](images/Screenshot%202026-09-20%20142521.png) |
+| *Run live queries against an isolated sandboxed MySQL instance* | *Real-time code evaluation across C++, Java, Python, and JavaScript* |
+
+---
+
 ## 🏛️ System Architecture & Distributed Design
 
-MockMate is architected with strict separation of concerns, high-concurrency stateless services, read/write splitting, and self-healing infrastructure.
+Interview Portal is architected with strict separation of concerns, high-concurrency stateless services, read/write splitting, and self-healing infrastructure.
 
 ```
                               [ Public Clients / University Labs ]
@@ -102,9 +116,9 @@ MockMate is architected with strict separation of concerns, high-concurrency sta
 ## 💎 Professional Engineering Highlights
 
 ### 1. 🔄 Zero-Downtime Blue-Green Deployment Engine
-MockMate uses a custom containerized Blue-Green deployment architecture that eliminates release downtime and prevents broken builds from hitting production users.
+Interview Portal uses a custom containerized Blue-Green deployment architecture that eliminates release downtime and prevents broken builds from hitting production users.
 
-- **Dual Parallel Environments:** Two identical Go backend containers (`mockmate-app-blue` on port 8081 and `mockmate-app-green` on port 8082) run concurrently.
+- **Dual Parallel Environments:** Two identical Go backend containers (`app-blue` on port 8081 and `app-green` on port 8082) run concurrently.
 - **Atomic Nginx Upstream Switching:** Nginx routes traffic via an included configuration snippet (`active_upstream.conf`). During deployment, traffic shifts instantaneously via an in-memory worker reload (`nginx -s reload`) without terminating in-flight connections.
 - **Automated Pre-Flight Health Probing:** The [`deploy.sh`](./deploy.sh) script builds and boots the idle environment, then executes automated health probes (`/health`) over 30 retries. If the candidate fails to respond or database ping fails, deployment halts immediately and the active version remains untouched.
 - **Sub-Second Instant Rollback:** If an anomaly is observed post-deployment, [`rollback.sh`](./rollback.sh) re-points Nginx to the standby container within **< 1 second** without rebuilding Docker images.
@@ -113,7 +127,7 @@ MockMate uses a custom containerized Blue-Green deployment architecture that eli
 ---
 
 ### 2. 🛡️ High-Availability MySQL Cluster with Read/Write Splitting & Auto-Failover
-To handle intensive query loads from synchronous interview sessions and institutional lab cohorts, MockMate implements an enterprise data architecture:
+To handle intensive query loads from synchronous interview sessions and institutional lab cohorts, Interview Portal implements an enterprise data architecture:
 
 #### A. Intelligent Read/Write Splitting (`GORM DBResolver`)
 - **Master / Primary Node (`:3306`):** Dedicated exclusively to write operations (`INSERT`, `UPDATE`, `DELETE`, schema migrations, and transactional locks).
@@ -138,7 +152,7 @@ A standalone Python supervisor daemon monitors the health of the database cluste
 
 ### 3. 🧪 Isolated Database Sandbox Engine
 Candidates practicing database engineering must be free to create tables, alter schemas, and run complex SQL joins without jeopardizing the core application database.
-- MockMate spins up an **isolated MySQL sandbox container (`:3309`)** dedicated solely to candidate runtime queries.
+- Interview Portal spins up an **isolated MySQL sandbox container (`:3309`)** dedicated solely to candidate runtime queries.
 - Each interview session dynamically generates an ephemeral schema namespace.
 - High-risk operations (e.g. attempting to read host configuration or access system tables) are isolated inside the sandbox boundary.
 
@@ -178,7 +192,7 @@ Candidates practicing database engineering must be free to create tables, alter 
 ## 📂 Project Directory Layout
 
 ```
-mock-mate/
+Interview-Portal/
 ├── .env.example                     # Environment template for ports, secrets & DB credentials
 ├── docker-compose.yml               # Complete orchestration: Primary, 2 Replicas, Redis, Blue, Green, Client
 ├── docker-compose.db-cluster.yml    # Standalone DB cluster configuration
@@ -234,8 +248,8 @@ mock-mate/
 
 ### 2. Clone & Setup Configuration
 ```bash
-git clone https://github.com/jaisondavid-m/Interview-Portal.git mock-mate
-cd mock-mate
+git clone https://github.com/jaisondavid-m/Interview-Portal.git
+cd Interview-Portal
 
 # Copy example environment configuration
 cp .env.example .env
@@ -279,7 +293,7 @@ chmod +x deploy.sh rollback.sh
 ```
 **What happens under the hood:**
 1. Detects `app-blue` is active; sets target to `app-green`.
-2. Builds and starts `mockmate-app-green`.
+2. Builds and starts `app-green`.
 3. Polls `http://localhost:8082/health` until HTTP 200 is confirmed.
 4. Updates `active_upstream.conf` to target `app-green`.
 5. Signals Nginx with `nginx -s reload`. Active traffic is now on Green with **0 lost requests**.
@@ -292,11 +306,11 @@ chmod +x deploy.sh rollback.sh
 
 ### C. Simulate Database Primary Failure (Auto-Failover Test)
 ```bash
-# 1. Stop the Primary MySQL container
-docker stop mockmate-mysql-primary
+# 1. Stop the Primary MySQL service
+docker compose stop mysql-primary
 
 # 2. Inspect the Failover Manager logs in real time
-docker logs -f mockmate-failover-manager
+docker compose logs -f db-failover-manager
 ```
 **Expected Behavior:**
 - The daemon detects loss of node 3306.

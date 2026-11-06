@@ -1,15 +1,15 @@
-# 🎓 MockMate - Project Flow & Interview Modes Guide
+# 🎓 Interview Portal - Project Flow & Interview Modes Guide
 
 ## 1. Core MVP Concept & How Peer Interviews Work
 
-### What is MockMate? (MVP Overview)
-**MockMate** is an anonymous peer-to-peer technical mock interview platform for campus students. The MVP (Minimum Viable Product) enables students to practice technical interviews in real-time with fellow peers while maintaining double-blind anonymity, structured evaluation rubrics, and real-time interactive workspaces.
+### What is Interview Portal? (MVP Overview)
+**Interview Portal** is an anonymous peer-to-peer technical interview platform for campus students. The MVP enables students to practice technical interviews in real-time with fellow peers while maintaining double-blind anonymity, structured evaluation rubrics, and real-time interactive workspaces.
 
 ---
 
 ### How a Peer Interview Session Works (Rounds & Role Swapping)
 
-Every MockMate peer interview session consists of **2 distinct rounds** with an automatic **Role Swap**:
+Every Interview Portal peer interview session consists of **2 distinct rounds** with an automatic **Role Swap**:
 
 ```
  ┌─────────────────────────────────────────────────────────────────────────┐
@@ -56,7 +56,7 @@ Every MockMate peer interview session consists of **2 distinct rounds** with an 
 
 ## 3. Interactive Interview Modes (Mode Breakdown)
 
-MockMate provides **4 distinct interview modes**, each tailored to a specific domain with dedicated live workspace tools:
+Interview Portal provides **4 distinct interview modes**, each tailored to a specific domain with dedicated live workspace tools:
 
 ---
 
